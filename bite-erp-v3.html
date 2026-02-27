@@ -2888,13 +2888,13 @@ function App(){
     return await res.json();
   };
 
-  const syncCoreData=async(tokenOverride)=>{
+  const syncCoreData=async(tokenOverride,userOverride)=>{
     const tk=tokenOverride!==undefined?tokenOverride:authToken;
     if(!tk) return;
     try{
       setSyncingCore(true);
       setApiError('');
-      const userRole=(authUser?.ruolo||'').toUpperCase();
+      const userRole=((userOverride?.ruolo||authUser?.ruolo)||'').toUpperCase();
       const canReadManagement=userRole==='ADMIN'||userRole==='PM';
       const requests=[
         {key:'me',run:()=>apiFetch('/auth/me',{tokenOverride:tk})},
@@ -2921,10 +2921,7 @@ function App(){
         }
       });
 
-      if(data.me){
-        updateAuthUser(data.me);
-        dispatch({type:'UPSERT',entity:'users',item:normalizeUserFromApi(data.me)});
-      }
+      if(data.me) updateAuthUser(data.me);
 
       if(data.clienti){
         const clientiSorted=[...(data.clienti||[])].sort((a,b)=>(a.ragione_sociale||'').localeCompare(b.ragione_sociale||''));
@@ -2948,6 +2945,8 @@ function App(){
       }
       if(data.users){
         dispatch({type:'SET_ENTITY',entity:'users',items:(data.users||[]).map(normalizeUserFromApi)});
+      }else if(data.me){
+        dispatch({type:'SET_ENTITY',entity:'users',items:[normalizeUserFromApi(data.me)]});
       }
       if(data.timesheet){
         const commesseMap=Object.fromEntries((commesseSynced||state.commesse).map(cm=>[cm.id,cm]));
@@ -2956,6 +2955,11 @@ function App(){
           entity:'timesheet',
           items:(data.timesheet||[]).map(t=>normalizeTimesheetFromApi(t,{commesseMap,existingTimesheet:state.timesheet})),
         });
+      }
+      if(!canReadManagement){
+        dispatch({type:'SET_ENTITY',entity:'clienti',items:[]});
+        dispatch({type:'SET_ENTITY',entity:'progetti',items:[]});
+        dispatch({type:'SET_ENTITY',entity:'commesse',items:[]});
       }
 
       if(errors.length>0){
@@ -2978,7 +2982,7 @@ function App(){
       updateAuthUser(data.user||null);
       localStorage.setItem(TOKEN_KEY,data.access_token);
       setShowConnectModal(false);
-      await syncCoreData(data.access_token);
+      await syncCoreData(data.access_token,data.user);
     }catch(err){
       setApiError(`Login API fallito: ${err.message||'errore sconosciuto'}`);
       throw err;
@@ -3000,8 +3004,8 @@ function App(){
 
   useEffect(()=>{
     if(!authToken) return;
-    syncCoreData(authToken);
-  },[authToken,apiBaseUrl]);
+    syncCoreData(authToken,authUser);
+  },[authToken,apiBaseUrl,authUser?.ruolo]);
 
   const commesseApi={
     enabled:!!authToken,
