@@ -20,6 +20,7 @@ from app.schemas.schemas import (
     ProgettoCreate, ProgettoUpdate, ProgettoOut, ProgettoWithCliente,
     CommessaCreate, CommessaUpdate, CommessaOut,
     TimesheetCreate, TimesheetOut, TimesheetApprova,
+    FornitoreOut, FatturaAttivaOut, FatturaPassivaOut, FicSyncStatusOut,
 )
 from app.services.services import (
     get_user_by_email, create_user, list_users, update_user,
@@ -29,6 +30,7 @@ from app.services.services import (
     create_timesheet, list_timesheet, approva_timesheet,
     calcola_metriche_commessa,
     get_dashboard_kpi, get_marginalita_clienti,
+    sync_fic_data, get_last_fic_sync_status, list_fornitori, list_fatture_attive, list_fatture_passive,
 )
 
 router = APIRouter()
@@ -299,3 +301,49 @@ async def report_marginalita(
     current_user: User = Depends(require_roles(UserRole.ADMIN))
 ):
     return await get_marginalita_clienti(db, mese)
+
+
+# ═══════════════════════════════════════════════════════
+# FATTURE IN CLOUD (SYNC MONODIREZIONALE)
+# ═══════════════════════════════════════════════════════
+@router.post("/fic/sync", response_model=FicSyncStatusOut, tags=["FIC"])
+async def run_fic_sync(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN))
+):
+    return await sync_fic_data(db, current_user.id)
+
+
+@router.get("/fic/sync/status", response_model=FicSyncStatusOut, tags=["FIC"])
+async def fic_sync_status(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    status_obj = await get_last_fic_sync_status(db)
+    if not status_obj:
+        raise HTTPException(status_code=404, detail="Nessun sync FIC eseguito")
+    return status_obj
+
+
+@router.get("/fatture-attive", response_model=List[FatturaAttivaOut], tags=["FIC"])
+async def get_fatture_attive(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    return await list_fatture_attive(db)
+
+
+@router.get("/fatture-passive", response_model=List[FatturaPassivaOut], tags=["FIC"])
+async def get_fatture_passive(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    return await list_fatture_passive(db)
+
+
+@router.get("/fornitori", response_model=List[FornitoreOut], tags=["FIC"])
+async def get_fornitori(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    return await list_fornitori(db)

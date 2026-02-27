@@ -1,11 +1,15 @@
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, func, text
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from app.core.config import settings
 from app.core.security import hash_password
-from app.db.session import AsyncSessionLocal
+from app.db.session import AsyncSessionLocal, engine, Base
 from app.models.models import User, UserRole
 from app.api.v1.router import router
+from app.services.services import sync_fic_data
 
 
 def _parse_cors_origins(origins_raw: str) -> list[str]:
@@ -23,6 +27,8 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url=None,
 )
+logger = logging.getLogger(__name__)
+scheduler: AsyncIOScheduler | None = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -65,6 +71,55 @@ async def bootstrap_admin_on_startup():
         )
         db.add(admin)
         await db.commit()
+
+
+@app.on_event("startup")
+async def ensure_schema_tables_on_startup():
+    if not settings.AUTO_CREATE_MISSING_TABLES:
+        return
+    # Crea eventuali tabelle mancanti (utile in ambienti gia avviati senza migrazioni).
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+
+@app.on_event("startup")
+async def setup_fic_scheduler():
+    global scheduler
+    if not settings.FIC_SYNC_SCHEDULE_ENABLED:
+        return
+    if scheduler and scheduler.running:
+        return
+
+    scheduler = AsyncIOScheduler(timezone=settings.FIC_SYNC_TIMEZONE)
+
+    async def scheduled_fic_sync() -> None:
+        async with AsyncSessionLocal() as db:
+            try:
+                await sync_fic_data(db, triggered_by=None)
+            except Exception:
+                logger.exception("Errore sync FIC schedulata")
+
+    scheduler.add_job(
+        scheduled_fic_sync,
+        trigger=CronTrigger(
+            hour=settings.FIC_SYNC_HOUR,
+            minute=settings.FIC_SYNC_MINUTE,
+            timezone=settings.FIC_SYNC_TIMEZONE,
+        ),
+        id="fic_nightly_sync",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    scheduler.start()
+
+
+@app.on_event("shutdown")
+async def shutdown_fic_scheduler():
+    global scheduler
+    if scheduler and scheduler.running:
+        scheduler.shutdown(wait=False)
+    scheduler = None
 
 
 @app.get("/health")

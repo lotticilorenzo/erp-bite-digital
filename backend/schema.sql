@@ -46,6 +46,9 @@ CREATE TABLE clienti (
     created_at           TIMESTAMPTZ DEFAULT NOW(),
     updated_at           TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE UNIQUE INDEX idx_clienti_fic_cliente_id_unique
+    ON clienti(fic_cliente_id)
+    WHERE fic_cliente_id IS NOT NULL;
 
 -- ── PROGETTI ──────────────────────────────────────────────
 CREATE TABLE progetti (
@@ -193,6 +196,81 @@ CREATE TABLE fattura_righe (
     importo     NUMERIC(10,2) NOT NULL
 );
 
+-- ── FORNITORI (SYNC FIC) ─────────────────────────────────
+CREATE TABLE fornitori (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    fic_id          VARCHAR(100) UNIQUE NOT NULL,
+    ragione_sociale VARCHAR(255) NOT NULL,
+    piva            VARCHAR(20),
+    codice_fiscale  VARCHAR(20),
+    pec             VARCHAR(255),
+    indirizzo       TEXT,
+    email           VARCHAR(255),
+    telefono        VARCHAR(50),
+    attivo          BOOLEAN DEFAULT TRUE,
+    fic_raw_data    JSONB,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ── FATTURE ATTIVE/PASSIVE (SYNC FIC) ────────────────────
+CREATE TABLE fatture_attive (
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    fic_id              VARCHAR(100) UNIQUE NOT NULL,
+    cliente_id          UUID REFERENCES clienti(id),
+    fic_cliente_id      VARCHAR(100),
+    numero              VARCHAR(50),
+    data_emissione      DATE,
+    data_scadenza       DATE,
+    importo_totale      NUMERIC(10,2) DEFAULT 0,
+    importo_pagato      NUMERIC(10,2) DEFAULT 0,
+    importo_residuo     NUMERIC(10,2) DEFAULT 0,
+    stato_pagamento     VARCHAR(20) DEFAULT 'ATTESA',
+    data_ultimo_incasso DATE,
+    valuta              VARCHAR(10),
+    payments_raw        JSONB,
+    fic_raw_data        JSONB,
+    created_at          TIMESTAMPTZ DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE fatture_passive (
+    id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    fic_id                VARCHAR(100) UNIQUE NOT NULL,
+    fornitore_id          UUID REFERENCES fornitori(id),
+    fic_fornitore_id      VARCHAR(100),
+    numero                VARCHAR(50),
+    data_emissione        DATE,
+    data_scadenza         DATE,
+    importo_totale        NUMERIC(10,2) DEFAULT 0,
+    importo_pagato        NUMERIC(10,2) DEFAULT 0,
+    importo_residuo       NUMERIC(10,2) DEFAULT 0,
+    stato_pagamento       VARCHAR(20) DEFAULT 'ATTESA',
+    data_ultimo_pagamento DATE,
+    valuta                VARCHAR(10),
+    categoria             VARCHAR(100),
+    payments_raw          JSONB,
+    fic_raw_data          JSONB,
+    created_at            TIMESTAMPTZ DEFAULT NOW(),
+    updated_at            TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ── LOG SYNC FIC ──────────────────────────────────────────
+CREATE TABLE fic_sync_runs (
+    id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    started_at              TIMESTAMPTZ DEFAULT NOW(),
+    completed_at            TIMESTAMPTZ,
+    status                  VARCHAR(20) NOT NULL DEFAULT 'RUNNING',
+    imported_clienti        INTEGER NOT NULL DEFAULT 0,
+    imported_fornitori      INTEGER NOT NULL DEFAULT 0,
+    imported_fatture_attive INTEGER NOT NULL DEFAULT 0,
+    imported_fatture_passive INTEGER NOT NULL DEFAULT 0,
+    error_count             INTEGER NOT NULL DEFAULT 0,
+    errors                  JSONB,
+    triggered_by            UUID REFERENCES users(id),
+    created_at              TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ── MOVIMENTI FINANZIARI ──────────────────────────────────
 CREATE TABLE movimenti_finanziari (
     id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -231,6 +309,12 @@ CREATE INDEX idx_tasks_assegnatario   ON tasks(assegnatario_id);
 CREATE INDEX idx_tasks_commessa       ON tasks(commessa_id);
 CREATE INDEX idx_costi_competenza     ON costi(mese_competenza);
 CREATE INDEX idx_audit_record         ON audit_log(tabella, record_id);
+CREATE INDEX idx_fornitori_fic_id     ON fornitori(fic_id);
+CREATE INDEX idx_fatture_attive_fic_id ON fatture_attive(fic_id);
+CREATE INDEX idx_fatture_attive_scadenza ON fatture_attive(data_scadenza);
+CREATE INDEX idx_fatture_passive_fic_id ON fatture_passive(fic_id);
+CREATE INDEX idx_fatture_passive_scadenza ON fatture_passive(data_scadenza);
+CREATE INDEX idx_fic_sync_runs_started_at ON fic_sync_runs(started_at DESC);
 
 -- ── TRIGGER: aggiorna costo_manodopera su approvazione ────
 CREATE OR REPLACE FUNCTION aggiorna_costo_manodopera()

@@ -341,6 +341,96 @@ class FatturaRiga(Base):
     fattura: Mapped["Fattura"] = relationship(back_populates="righe")
 
 
+# ── FORNITORE (SYNC FIC) ──────────────────────────────────
+class Fornitore(Base):
+    __tablename__ = "fornitori"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    fic_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    ragione_sociale: Mapped[str] = mapped_column(String(255))
+    piva: Mapped[Optional[str]] = mapped_column(String(20))
+    codice_fiscale: Mapped[Optional[str]] = mapped_column(String(20))
+    pec: Mapped[Optional[str]] = mapped_column(String(255))
+    indirizzo: Mapped[Optional[str]] = mapped_column(Text)
+    email: Mapped[Optional[str]] = mapped_column(String(255))
+    telefono: Mapped[Optional[str]] = mapped_column(String(50))
+    attivo: Mapped[bool] = mapped_column(Boolean, default=True)
+    fic_raw_data: Mapped[Optional[dict]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    fatture_passive: Mapped[List["FatturaPassiva"]] = relationship(back_populates="fornitore")
+
+
+# ── FATTURA ATTIVA (SYNC FIC) ─────────────────────────────
+class FatturaAttiva(Base):
+    __tablename__ = "fatture_attive"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    fic_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    cliente_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("clienti.id"))
+    fic_cliente_id: Mapped[Optional[str]] = mapped_column(String(100))
+    numero: Mapped[Optional[str]] = mapped_column(String(50))
+    data_emissione: Mapped[Optional[date]] = mapped_column(Date)
+    data_scadenza: Mapped[Optional[date]] = mapped_column(Date)
+    importo_totale: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    importo_pagato: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    importo_residuo: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    stato_pagamento: Mapped[str] = mapped_column(String(20), default="ATTESA")
+    data_ultimo_incasso: Mapped[Optional[date]] = mapped_column(Date)
+    valuta: Mapped[Optional[str]] = mapped_column(String(10))
+    payments_raw: Mapped[Optional[dict]] = mapped_column(JSON)
+    fic_raw_data: Mapped[Optional[dict]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    cliente: Mapped[Optional["Cliente"]] = relationship()
+
+
+# ── FATTURA PASSIVA (SYNC FIC) ────────────────────────────
+class FatturaPassiva(Base):
+    __tablename__ = "fatture_passive"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    fic_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    fornitore_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("fornitori.id"))
+    fic_fornitore_id: Mapped[Optional[str]] = mapped_column(String(100))
+    numero: Mapped[Optional[str]] = mapped_column(String(50))
+    data_emissione: Mapped[Optional[date]] = mapped_column(Date)
+    data_scadenza: Mapped[Optional[date]] = mapped_column(Date)
+    importo_totale: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    importo_pagato: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    importo_residuo: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    stato_pagamento: Mapped[str] = mapped_column(String(20), default="ATTESA")
+    data_ultimo_pagamento: Mapped[Optional[date]] = mapped_column(Date)
+    valuta: Mapped[Optional[str]] = mapped_column(String(10))
+    categoria: Mapped[Optional[str]] = mapped_column(String(100))
+    payments_raw: Mapped[Optional[dict]] = mapped_column(JSON)
+    fic_raw_data: Mapped[Optional[dict]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    fornitore: Mapped[Optional["Fornitore"]] = relationship(back_populates="fatture_passive")
+
+
+# ── FIC SYNC RUN ───────────────────────────────────────────
+class FicSyncRun(Base):
+    __tablename__ = "fic_sync_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(20), default="RUNNING")
+    imported_clienti: Mapped[int] = mapped_column(Integer, default=0)
+    imported_fornitori: Mapped[int] = mapped_column(Integer, default=0)
+    imported_fatture_attive: Mapped[int] = mapped_column(Integer, default=0)
+    imported_fatture_passive: Mapped[int] = mapped_column(Integer, default=0)
+    error_count: Mapped[int] = mapped_column(Integer, default=0)
+    errors: Mapped[Optional[dict]] = mapped_column(JSON)
+    triggered_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 # ── AUDIT LOG ─────────────────────────────────────────────
 class AuditLog(Base):
     __tablename__ = "audit_log"

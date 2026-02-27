@@ -2,16 +2,19 @@
 services.py — Tutta la business logic separata dagli endpoint.
 """
 import uuid
-from datetime import date, datetime
+import logging
+from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Optional, List
+from typing import Any, Optional, List
+import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, text
 from sqlalchemy.orm import selectinload
 
 from app.models.models import (
     User, Cliente, Progetto, Commessa, CommessaProgetto, Timesheet, Task,
     Costo, AuditLog, CoefficienteAllocazione,
+    Fornitore, FatturaAttiva, FatturaPassiva, FicSyncRun,
     UserRole, CommessaStatus, TimesheetStatus
 )
 from app.schemas.schemas import (
@@ -19,9 +22,13 @@ from app.schemas.schemas import (
     ProgettoCreate, ProgettoUpdate, CommessaCreate, CommessaUpdate,
     TimesheetCreate, CostoCreate, CoefficienteCreate, TimesheetApprova
 )
+from app.core.config import settings
 from app.core.security import hash_password
 
 DEFAULT_COEFFICIENTE_ALLOCAZIONE = Decimal("0.30")
+FIC_SYNC_LOCK_KEY = "fic_sync_lock_v1"
+FIC_PAGE_SIZE = 100
+logger = logging.getLogger(__name__)
 
 
 async def get_coefficiente_allocazione(db: AsyncSession, mese: date) -> Decimal:
@@ -619,3 +626,648 @@ async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None)
             "num_commesse": row.num_commesse,
         })
     return result
+
+
+# ── FIC SYNC SERVICE ───────────────────────────────────────
+class FicApiRequestError(Exception):
+    def __init__(self, status_code: int, message: str):
+        self.status_code = status_code
+        super().__init__(message)
+
+
+def _to_decimal(value: Any) -> Decimal:
+    if value is None or value == "":
+        return Decimal("0")
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value))
+
+
+def _parse_date(value: Any) -> Optional[date]:
+    if not value:
+        return None
+    if isinstance(value, date):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    text_value = str(value).strip()
+    if not text_value:
+        return None
+    # Formato FIC piu comune: YYYY-MM-DD.
+    try:
+        return date.fromisoformat(text_value[:10])
+    except ValueError:
+        return None
+
+
+def _extract_list_payload(payload: Any, expected_keys: list[str]) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        return [x for x in payload if isinstance(x, dict)]
+
+    if not isinstance(payload, dict):
+        return []
+
+    data = payload.get("data")
+    if isinstance(data, list):
+        return [x for x in data if isinstance(x, dict)]
+    if isinstance(data, dict):
+        for key in expected_keys:
+            value = data.get(key)
+            if isinstance(value, list):
+                return [x for x in value if isinstance(x, dict)]
+        for value in data.values():
+            if isinstance(value, list):
+                return [x for x in value if isinstance(x, dict)]
+
+    for key in expected_keys:
+        value = payload.get(key)
+        if isinstance(value, list):
+            return [x for x in value if isinstance(x, dict)]
+
+    for value in payload.values():
+        if isinstance(value, list):
+            return [x for x in value if isinstance(x, dict)]
+
+    return []
+
+
+def _extract_pagination(payload: Any) -> tuple[Optional[int], Optional[int]]:
+    if not isinstance(payload, dict):
+        return (None, None)
+
+    candidates = [payload]
+    data = payload.get("data")
+    if isinstance(data, dict):
+        candidates.append(data)
+
+    for candidate in candidates:
+        pagination = candidate.get("pagination")
+        if isinstance(pagination, dict):
+            current = pagination.get("current_page")
+            last = pagination.get("last_page")
+            if isinstance(current, int) and isinstance(last, int):
+                return (current, last)
+        current = candidate.get("current_page")
+        last = candidate.get("last_page")
+        if isinstance(current, int) and isinstance(last, int):
+            return (current, last)
+
+    return (None, None)
+
+
+def _extract_payments(document: dict[str, Any]) -> list[dict[str, Any]]:
+    payments = document.get("payments")
+    if isinstance(payments, list):
+        return [p for p in payments if isinstance(p, dict)]
+    if isinstance(payments, dict):
+        for key in ("items", "data", "payments"):
+            value = payments.get(key)
+            if isinstance(value, list):
+                return [p for p in value if isinstance(p, dict)]
+    return []
+
+
+def _sum_payments(payments: list[dict[str, Any]]) -> tuple[Decimal, Optional[date]]:
+    total = Decimal("0")
+    last_date: Optional[date] = None
+    for payment in payments:
+        amount = (
+            payment.get("amount")
+            or payment.get("paid_amount")
+            or payment.get("amount_paid")
+            or payment.get("net")
+            or payment.get("gross")
+        )
+        total += _to_decimal(amount)
+        paid_on = _parse_date(payment.get("paid_date") or payment.get("date"))
+        if paid_on and (last_date is None or paid_on > last_date):
+            last_date = paid_on
+    return total, last_date
+
+
+def _payment_status(total: Decimal, paid: Decimal, due_date: Optional[date], paid_label: str) -> str:
+    if total > 0 and paid >= total:
+        return paid_label
+    if due_date and due_date < date.today():
+        return "SCADUTA"
+    return "ATTESA"
+
+
+def _extract_party(document: dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
+    party = (
+        document.get("entity")
+        or document.get("client")
+        or document.get("supplier")
+        or document.get("customer")
+    )
+    if isinstance(party, dict):
+        party_id = party.get("id")
+        party_name = party.get("name") or party.get("business_name")
+        return (str(party_id) if party_id is not None else None, party_name)
+    party_id = document.get("entity_id") or document.get("client_id") or document.get("supplier_id")
+    return (str(party_id) if party_id is not None else None, None)
+
+
+def _extract_amount_total(document: dict[str, Any]) -> Decimal:
+    raw_amount = (
+        document.get("amount_gross")
+        or document.get("amount")
+        or document.get("total_amount")
+        or document.get("gross")
+    )
+    return _to_decimal(raw_amount)
+
+
+def _extract_due_date(document: dict[str, Any]) -> Optional[date]:
+    return _parse_date(
+        document.get("due_date")
+        or document.get("date_due")
+        or document.get("date_valid_until")
+    )
+
+
+def _extract_doc_date(document: dict[str, Any]) -> Optional[date]:
+    return _parse_date(document.get("date") or document.get("document_date"))
+
+
+def _extract_number(document: dict[str, Any]) -> Optional[str]:
+    num = document.get("numeration") or document.get("number")
+    if num is None:
+        return None
+    return str(num)
+
+
+def _build_address(entity: dict[str, Any]) -> Optional[str]:
+    parts = [
+        entity.get("address_street"),
+        entity.get("address_city"),
+        entity.get("address_postal_code"),
+        entity.get("address_province"),
+        entity.get("country"),
+    ]
+    flat = [str(p).strip() for p in parts if p]
+    return ", ".join(flat) if flat else None
+
+
+class FicApiClient:
+    def __init__(self) -> None:
+        self.base_url = settings.FIC_BASE_URL.rstrip("/")
+        self.api_key = settings.FIC_API_KEY.strip()
+        self.company_id = settings.FIC_COMPANY_ID.strip()
+        self.headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        if self.api_key:
+            # Compatibile con i diversi schemi autorizzativi FIC.
+            self.headers["Authorization"] = f"Bearer {self.api_key}"
+            self.headers["X-API-KEY"] = self.api_key
+
+    async def _get(self, client: httpx.AsyncClient, path: str, params: dict[str, Any]) -> Any:
+        url = f"{self.base_url}{path}"
+        response = await client.get(url, headers=self.headers, params=params)
+        if response.status_code >= 400:
+            message = f"HTTP {response.status_code} su {path}: {response.text[:300]}"
+            raise FicApiRequestError(response.status_code, message)
+        return response.json()
+
+    async def _get_with_fallback_paths(
+        self,
+        client: httpx.AsyncClient,
+        paths: list[str],
+        params: dict[str, Any],
+    ) -> Any:
+        last_error: Optional[Exception] = None
+        for path in paths:
+            try:
+                return await self._get(client, path, params)
+            except FicApiRequestError as exc:
+                last_error = exc
+                # 404: prova path alternativi; per gli altri errori interrompe.
+                if exc.status_code != 404:
+                    break
+        if last_error:
+            raise last_error
+        raise RuntimeError("Nessun endpoint FIC configurato")
+
+    async def fetch_collection(
+        self,
+        paths: list[str],
+        expected_keys: list[str],
+        extra_params: Optional[dict[str, Any]] = None,
+    ) -> list[dict[str, Any]]:
+        params_base = dict(extra_params or {})
+        if self.company_id:
+            params_base.setdefault("company_id", self.company_id)
+
+        items_all: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        page = 1
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            while True:
+                params = {
+                    **params_base,
+                    "page": page,
+                    "per_page": FIC_PAGE_SIZE,
+                }
+                payload = await self._get_with_fallback_paths(client, paths, params)
+                items = _extract_list_payload(payload, expected_keys)
+                if not items:
+                    break
+
+                page_ids = {
+                    str(x.get("id"))
+                    for x in items
+                    if isinstance(x, dict) and x.get("id") is not None
+                }
+                if page > 1 and page_ids and page_ids.issubset(seen_ids):
+                    break
+
+                for row in items:
+                    row_id = row.get("id")
+                    if row_id is not None:
+                        seen_ids.add(str(row_id))
+                    items_all.append(row)
+
+                current_page, last_page = _extract_pagination(payload)
+                if current_page and last_page and current_page >= last_page:
+                    break
+
+                if len(items) < FIC_PAGE_SIZE or page >= 200:
+                    break
+                page += 1
+        return items_all
+
+
+async def _acquire_fic_sync_lock(db: AsyncSession) -> bool:
+    try:
+        result = await db.execute(
+            text("SELECT pg_try_advisory_lock(hashtext(:k)) AS locked"),
+            {"k": FIC_SYNC_LOCK_KEY},
+        )
+        return bool(result.scalar_one())
+    except Exception:
+        logger.exception("Impossibile acquisire advisory lock FIC; continuo senza lock.")
+        return True
+
+
+async def _release_fic_sync_lock(db: AsyncSession) -> None:
+    try:
+        await db.execute(
+            text("SELECT pg_advisory_unlock(hashtext(:k))"),
+            {"k": FIC_SYNC_LOCK_KEY},
+        )
+    except Exception:
+        logger.exception("Errore rilascio advisory lock FIC")
+
+
+async def _upsert_fic_clienti(
+    db: AsyncSession,
+    items: list[dict[str, Any]],
+    errors: list[str],
+) -> int:
+    imported = 0
+    for raw in items:
+        try:
+            fic_id_raw = raw.get("id")
+            if fic_id_raw is None:
+                continue
+            fic_id = str(fic_id_raw)
+            result = await db.execute(select(Cliente).where(Cliente.fic_cliente_id == fic_id))
+            cliente = result.scalar_one_or_none()
+            if not cliente:
+                cliente = Cliente(
+                    ragione_sociale=raw.get("name") or raw.get("business_name") or f"Cliente FIC {fic_id}",
+                    fic_cliente_id=fic_id,
+                    attivo=True,
+                )
+                db.add(cliente)
+
+            cliente.ragione_sociale = raw.get("name") or raw.get("business_name") or cliente.ragione_sociale
+            cliente.piva = raw.get("vat_number") or cliente.piva
+            cliente.codice_fiscale = raw.get("tax_code") or cliente.codice_fiscale
+            cliente.sdi = raw.get("ei_code") or cliente.sdi
+            cliente.pec = raw.get("certified_email") or raw.get("pec") or cliente.pec
+            cliente.indirizzo = _build_address(raw) or cliente.indirizzo
+            imported += 1
+        except Exception as exc:
+            errors.append(f"cliente:{raw.get('id')} -> {exc}")
+    return imported
+
+
+async def _upsert_fic_fornitori(
+    db: AsyncSession,
+    items: list[dict[str, Any]],
+    errors: list[str],
+) -> int:
+    imported = 0
+    for raw in items:
+        try:
+            fic_id_raw = raw.get("id")
+            if fic_id_raw is None:
+                continue
+            fic_id = str(fic_id_raw)
+            result = await db.execute(select(Fornitore).where(Fornitore.fic_id == fic_id))
+            fornitore = result.scalar_one_or_none()
+            if not fornitore:
+                fornitore = Fornitore(
+                    fic_id=fic_id,
+                    ragione_sociale=raw.get("name") or raw.get("business_name") or f"Fornitore FIC {fic_id}",
+                    attivo=True,
+                )
+                db.add(fornitore)
+
+            fornitore.ragione_sociale = raw.get("name") or raw.get("business_name") or fornitore.ragione_sociale
+            fornitore.piva = raw.get("vat_number") or fornitore.piva
+            fornitore.codice_fiscale = raw.get("tax_code") or fornitore.codice_fiscale
+            fornitore.pec = raw.get("certified_email") or raw.get("pec") or fornitore.pec
+            fornitore.indirizzo = _build_address(raw) or fornitore.indirizzo
+            fornitore.email = raw.get("email") or fornitore.email
+            fornitore.telefono = raw.get("phone") or raw.get("phone_number") or fornitore.telefono
+            fornitore.fic_raw_data = raw
+            imported += 1
+        except Exception as exc:
+            errors.append(f"fornitore:{raw.get('id')} -> {exc}")
+    return imported
+
+
+async def _find_cliente_by_fic_id(
+    db: AsyncSession,
+    cache: dict[str, Optional[Cliente]],
+    fic_cliente_id: Optional[str],
+) -> Optional[Cliente]:
+    if not fic_cliente_id:
+        return None
+    if fic_cliente_id in cache:
+        return cache[fic_cliente_id]
+    result = await db.execute(select(Cliente).where(Cliente.fic_cliente_id == fic_cliente_id))
+    cliente = result.scalar_one_or_none()
+    cache[fic_cliente_id] = cliente
+    return cliente
+
+
+async def _find_fornitore_by_fic_id(
+    db: AsyncSession,
+    cache: dict[str, Optional[Fornitore]],
+    fic_fornitore_id: Optional[str],
+) -> Optional[Fornitore]:
+    if not fic_fornitore_id:
+        return None
+    if fic_fornitore_id in cache:
+        return cache[fic_fornitore_id]
+    result = await db.execute(select(Fornitore).where(Fornitore.fic_id == fic_fornitore_id))
+    fornitore = result.scalar_one_or_none()
+    cache[fic_fornitore_id] = fornitore
+    return fornitore
+
+
+async def _upsert_fic_fatture_attive(
+    db: AsyncSession,
+    items: list[dict[str, Any]],
+    errors: list[str],
+) -> int:
+    imported = 0
+    clienti_cache: dict[str, Optional[Cliente]] = {}
+    for raw in items:
+        try:
+            fic_id_raw = raw.get("id")
+            if fic_id_raw is None:
+                continue
+            fic_id = str(fic_id_raw)
+            result = await db.execute(select(FatturaAttiva).where(FatturaAttiva.fic_id == fic_id))
+            fattura = result.scalar_one_or_none()
+            if not fattura:
+                fattura = FatturaAttiva(fic_id=fic_id)
+                db.add(fattura)
+
+            fic_cliente_id, _ = _extract_party(raw)
+            cliente = await _find_cliente_by_fic_id(db, clienti_cache, fic_cliente_id)
+            payments = _extract_payments(raw)
+            importo_totale = _extract_amount_total(raw)
+            importo_pagato, ultimo_incasso = _sum_payments(payments)
+            importo_residuo = _to_decimal(raw.get("amount_due")) or (importo_totale - importo_pagato)
+            due_date = _extract_due_date(raw)
+
+            fattura.cliente_id = cliente.id if cliente else None
+            fattura.fic_cliente_id = fic_cliente_id
+            fattura.numero = _extract_number(raw)
+            fattura.data_emissione = _extract_doc_date(raw)
+            fattura.data_scadenza = due_date
+            fattura.importo_totale = importo_totale
+            fattura.importo_pagato = importo_pagato
+            fattura.importo_residuo = max(importo_residuo, Decimal("0"))
+            fattura.stato_pagamento = _payment_status(
+                total=importo_totale,
+                paid=importo_pagato,
+                due_date=due_date,
+                paid_label="INCASSATA",
+            )
+            fattura.data_ultimo_incasso = ultimo_incasso
+            fattura.valuta = raw.get("currency", {}).get("code") if isinstance(raw.get("currency"), dict) else None
+            fattura.payments_raw = {"payments": payments}
+            fattura.fic_raw_data = raw
+            imported += 1
+        except Exception as exc:
+            errors.append(f"fattura_attiva:{raw.get('id')} -> {exc}")
+    return imported
+
+
+async def _upsert_fic_fatture_passive(
+    db: AsyncSession,
+    items: list[dict[str, Any]],
+    errors: list[str],
+) -> int:
+    imported = 0
+    fornitori_cache: dict[str, Optional[Fornitore]] = {}
+    for raw in items:
+        try:
+            fic_id_raw = raw.get("id")
+            if fic_id_raw is None:
+                continue
+            fic_id = str(fic_id_raw)
+            result = await db.execute(select(FatturaPassiva).where(FatturaPassiva.fic_id == fic_id))
+            fattura = result.scalar_one_or_none()
+            if not fattura:
+                fattura = FatturaPassiva(fic_id=fic_id)
+                db.add(fattura)
+
+            fic_fornitore_id, _ = _extract_party(raw)
+            fornitore = await _find_fornitore_by_fic_id(db, fornitori_cache, fic_fornitore_id)
+            payments = _extract_payments(raw)
+            importo_totale = _extract_amount_total(raw)
+            importo_pagato, ultimo_pagamento = _sum_payments(payments)
+            importo_residuo = _to_decimal(raw.get("amount_due")) or (importo_totale - importo_pagato)
+            due_date = _extract_due_date(raw)
+
+            fattura.fornitore_id = fornitore.id if fornitore else None
+            fattura.fic_fornitore_id = fic_fornitore_id
+            fattura.numero = _extract_number(raw)
+            fattura.data_emissione = _extract_doc_date(raw)
+            fattura.data_scadenza = due_date
+            fattura.importo_totale = importo_totale
+            fattura.importo_pagato = importo_pagato
+            fattura.importo_residuo = max(importo_residuo, Decimal("0"))
+            fattura.stato_pagamento = _payment_status(
+                total=importo_totale,
+                paid=importo_pagato,
+                due_date=due_date,
+                paid_label="PAGATA",
+            )
+            fattura.data_ultimo_pagamento = ultimo_pagamento
+            fattura.categoria = raw.get("type")
+            fattura.valuta = raw.get("currency", {}).get("code") if isinstance(raw.get("currency"), dict) else None
+            fattura.payments_raw = {"payments": payments}
+            fattura.fic_raw_data = raw
+            imported += 1
+        except Exception as exc:
+            errors.append(f"fattura_passiva:{raw.get('id')} -> {exc}")
+    return imported
+
+
+async def sync_fic_data(db: AsyncSession, triggered_by: Optional[uuid.UUID] = None) -> FicSyncRun:
+    """Sync monodirezionale: FIC master, ERP in sola lettura/salvataggio locale."""
+    locked = await _acquire_fic_sync_lock(db)
+    if not locked:
+        skipped = FicSyncRun(
+            status="SKIPPED",
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+            error_count=1,
+            errors={"items": ["Sync gia in corso"]},
+            triggered_by=triggered_by,
+        )
+        db.add(skipped)
+        await db.commit()
+        return skipped
+
+    run = FicSyncRun(
+        status="RUNNING",
+        started_at=datetime.now(timezone.utc),
+        triggered_by=triggered_by,
+    )
+    db.add(run)
+    await db.flush()
+
+    errors: list[str] = []
+    try:
+        if not settings.FIC_API_KEY.strip():
+            errors.append("FIC_API_KEY non configurata")
+        if not settings.FIC_COMPANY_ID.strip():
+            errors.append("FIC_COMPANY_ID non configurata")
+
+        if not errors:
+            fic = FicApiClient()
+
+            # Clienti
+            try:
+                clienti_raw = await fic.fetch_collection(
+                    paths=[
+                        f"/c/{settings.FIC_COMPANY_ID}/entities/clients",
+                        f"/c/companies/{settings.FIC_COMPANY_ID}/clients",
+                        "/c/companies/clients",
+                    ],
+                    expected_keys=["clients", "items", "data"],
+                )
+                run.imported_clienti = await _upsert_fic_clienti(db, clienti_raw, errors)
+                await db.flush()
+            except Exception as exc:
+                errors.append(f"sync_clienti -> {exc}")
+
+            # Fornitori
+            try:
+                fornitori_raw = await fic.fetch_collection(
+                    paths=[
+                        f"/c/{settings.FIC_COMPANY_ID}/entities/suppliers",
+                        f"/c/companies/{settings.FIC_COMPANY_ID}/suppliers",
+                        "/c/companies/suppliers",
+                    ],
+                    expected_keys=["suppliers", "items", "data"],
+                )
+                run.imported_fornitori = await _upsert_fic_fornitori(db, fornitori_raw, errors)
+                await db.flush()
+            except Exception as exc:
+                errors.append(f"sync_fornitori -> {exc}")
+
+            # Fatture attive
+            try:
+                fatture_attive_raw = await fic.fetch_collection(
+                    paths=[
+                        f"/c/{settings.FIC_COMPANY_ID}/issued_documents",
+                        "/c/issued_documents",
+                    ],
+                    expected_keys=["documents", "items", "data"],
+                    extra_params={"type": "invoice"},
+                )
+                run.imported_fatture_attive = await _upsert_fic_fatture_attive(db, fatture_attive_raw, errors)
+                await db.flush()
+            except Exception as exc:
+                errors.append(f"sync_fatture_attive -> {exc}")
+
+            # Fatture passive
+            try:
+                fatture_passive_raw = await fic.fetch_collection(
+                    paths=[
+                        f"/c/{settings.FIC_COMPANY_ID}/received_documents",
+                        "/c/received_documents",
+                    ],
+                    expected_keys=["documents", "items", "data"],
+                    extra_params={"type": "expense"},
+                )
+                run.imported_fatture_passive = await _upsert_fic_fatture_passive(db, fatture_passive_raw, errors)
+                await db.flush()
+            except Exception as exc:
+                errors.append(f"sync_fatture_passive -> {exc}")
+
+        run.completed_at = datetime.now(timezone.utc)
+        run.error_count = len(errors)
+        run.errors = {"items": errors} if errors else None
+        imported_total = (
+            run.imported_clienti
+            + run.imported_fornitori
+            + run.imported_fatture_attive
+            + run.imported_fatture_passive
+        )
+        if errors and imported_total == 0:
+            run.status = "ERROR"
+        elif errors:
+            run.status = "PARTIAL"
+        else:
+            run.status = "OK"
+
+        await db.commit()
+        await db.refresh(run)
+        return run
+    finally:
+        await _release_fic_sync_lock(db)
+
+
+async def get_last_fic_sync_status(db: AsyncSession) -> Optional[FicSyncRun]:
+    result = await db.execute(
+        select(FicSyncRun).order_by(FicSyncRun.started_at.desc()).limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def list_fornitori(db: AsyncSession) -> List[Fornitore]:
+    result = await db.execute(select(Fornitore).order_by(Fornitore.ragione_sociale))
+    return result.scalars().all()
+
+
+async def list_fatture_attive(db: AsyncSession) -> List[FatturaAttiva]:
+    result = await db.execute(
+        select(FatturaAttiva).order_by(
+            FatturaAttiva.data_emissione.desc().nullslast(),
+            FatturaAttiva.created_at.desc(),
+        )
+    )
+    return result.scalars().all()
+
+
+async def list_fatture_passive(db: AsyncSession) -> List[FatturaPassiva]:
+    result = await db.execute(
+        select(FatturaPassiva).order_by(
+            FatturaPassiva.data_emissione.desc().nullslast(),
+            FatturaPassiva.created_at.desc(),
+        )
+    )
+    return result.scalars().all()

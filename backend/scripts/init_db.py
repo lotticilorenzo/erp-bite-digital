@@ -30,6 +30,10 @@ CORE_TABLES = (
     "timesheet",
     "costi",
     "fatture",
+    "fornitori",
+    "fatture_attive",
+    "fatture_passive",
+    "fic_sync_runs",
     "audit_log",
 )
 

@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     BOOTSTRAP_ADMIN_PASSWORD: str = ""
     BOOTSTRAP_ADMIN_NOME: str = "Admin"
     BOOTSTRAP_ADMIN_COGNOME: str = "Bite"
+    AUTO_CREATE_MISSING_TABLES: bool = True
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://bite:bite_secret@db:5432/bite_erp"
@@ -34,6 +35,10 @@ class Settings(BaseSettings):
     FIC_COMPANY_ID: str = ""
     FIC_ACCESS_TOKEN: str = ""
     FIC_REFRESH_TOKEN: str = ""
+    FIC_SYNC_SCHEDULE_ENABLED: bool = True
+    FIC_SYNC_HOUR: int = 2
+    FIC_SYNC_MINUTE: int = 0
+    FIC_SYNC_TIMEZONE: str = "Europe/Rome"
 
     # ClickUp
     CLICKUP_API_TOKEN: str = ""

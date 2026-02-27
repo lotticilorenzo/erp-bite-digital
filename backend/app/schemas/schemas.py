@@ -304,6 +304,71 @@ class CostoOut(OrmBase):
     created_at: datetime
 
 
+# ── FIC SYNC / FINANZA ────────────────────────────────────
+class FornitoreOut(OrmBase):
+    id: uuid.UUID
+    fic_id: str
+    ragione_sociale: str
+    piva: Optional[str]
+    codice_fiscale: Optional[str]
+    pec: Optional[str]
+    indirizzo: Optional[str]
+    email: Optional[str]
+    telefono: Optional[str]
+    attivo: bool
+    created_at: datetime
+    updated_at: datetime
+
+class FatturaAttivaOut(OrmBase):
+    id: uuid.UUID
+    fic_id: str
+    cliente_id: Optional[uuid.UUID]
+    fic_cliente_id: Optional[str]
+    numero: Optional[str]
+    data_emissione: Optional[date]
+    data_scadenza: Optional[date]
+    importo_totale: Decimal
+    importo_pagato: Decimal
+    importo_residuo: Decimal
+    stato_pagamento: str
+    data_ultimo_incasso: Optional[date]
+    valuta: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+class FatturaPassivaOut(OrmBase):
+    id: uuid.UUID
+    fic_id: str
+    fornitore_id: Optional[uuid.UUID]
+    fic_fornitore_id: Optional[str]
+    numero: Optional[str]
+    data_emissione: Optional[date]
+    data_scadenza: Optional[date]
+    importo_totale: Decimal
+    importo_pagato: Decimal
+    importo_residuo: Decimal
+    stato_pagamento: str
+    data_ultimo_pagamento: Optional[date]
+    valuta: Optional[str]
+    categoria: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+class FicSyncStatusOut(OrmBase):
+    id: uuid.UUID
+    started_at: datetime
+    completed_at: Optional[datetime]
+    status: str
+    imported_clienti: int
+    imported_fornitori: int
+    imported_fatture_attive: int
+    imported_fatture_passive: int
+    error_count: int
+    errors: Optional[dict]
+    triggered_by: Optional[uuid.UUID]
+    created_at: datetime
+
+
 # ── REPORT ────────────────────────────────────────────────
 class MarginalitaCliente(BaseModel):
     cliente_id: uuid.UUID
