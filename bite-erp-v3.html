@@ -92,11 +92,35 @@ const normalizeClienteFromApi = (c,idx=0) => ({
   attivo:c.attivo!==false,
 });
 
-const normalizeProgettoFromApi = p => {
+const normalizeClienteFromApiWithState = (c,currentClienti=[]) => {
+  const existing=currentClienti.find(x=>x.id===c.id);
+  const nextNum=currentClienti.length>0?Math.max(...currentClienti.map(x=>x.numero||0))+1:1;
+  return {
+    id:c.id,
+    codice:existing?.codice||deriveCodiceCliente(c.ragione_sociale,currentClienti.length),
+    numero:existing?.numero||nextNum,
+    ragione_sociale:c.ragione_sociale,
+    piva:c.piva||'',
+    sdi:c.sdi||'',
+    pec:c.pec||'',
+    condizioni:c.condizioni_pagamento||'',
+    attivo:c.attivo!==false,
+  };
+};
+
+const categoriaToTipo = categoria => categoria==='WEB'?'ONE_OFF':'RETAINER';
+const withCategoriaNote = (note,categoria) => {
+  const clean=(note||'').replace(/\s*\[CAT:MARKETING\]\s*/gi,'').trim();
+  return categoria==='MARKETING'
+    ? `${clean}${clean?' ':''}[CAT:MARKETING]`.trim()
+    : clean;
+};
+
+const normalizeProgettoFromApi = (p,existing) => {
   const note=(p.note||'').toUpperCase();
-  let categoria='SOCIAL';
+  let categoria=existing?.categoria||'SOCIAL';
   if(p.tipo==='ONE_OFF') categoria='WEB';
-  if(note.includes('MARKETING')) categoria='MARKETING';
+  else if(note.includes('MARKETING')||note.includes('[CAT:MARKETING]')) categoria='MARKETING';
   return {
     id:p.id,
     cliente_id:p.cliente_id,
@@ -107,11 +131,11 @@ const normalizeProgettoFromApi = p => {
     importo_fisso:safeNum(p.importo_fisso),
     importo_variabile:safeNum(p.importo_variabile),
     delivery_attesa:parseInt(p.delivery_attesa)||0,
-    milestone:[],
-    budget_campagna:0,
-    speso_campagna:0,
+    milestone:[...(existing?.milestone||[])],
+    budget_campagna:safeNum(existing?.budget_campagna),
+    speso_campagna:safeNum(existing?.speso_campagna),
     note:p.note||'',
-    soglia_margine:30,
+    soglia_margine:safeNum(existing?.soglia_margine)||30,
   };
 };
 
@@ -143,6 +167,36 @@ const normalizeCommessaFromApi = cm => {
     valore_fatturabile:safeNum(cm.valore_fatturabile),
     margine_percentuale:safeNum(cm.margine_percentuale),
     righe_progetto:righe,
+  };
+};
+
+const normalizeUserFromApi = u => ({
+  id:u.id,
+  nome:u.nome||'',
+  cognome:u.cognome||'',
+  email:u.email||'',
+  ruolo:u.ruolo||'DIPENDENTE',
+  costo_orario:safeNum(u.costo_orario),
+  attivo:u.attivo!==false,
+  data_inizio:u.data_inizio||null,
+});
+
+const normalizeTimesheetFromApi = (t,{commesseMap={},existingTimesheet=[]}={}) => {
+  const existing=existingTimesheet.find(x=>x.id===t.id);
+  const commessa=commesseMap[t.commessa_id];
+  const progettoFromCommessa=commessa?.progetti_ids?.[0]||'';
+  return {
+    id:t.id,
+    user_id:t.user_id,
+    commessa_id:t.commessa_id||null,
+    progetto_id:existing?.progetto_id||progettoFromCommessa,
+    clickup_task_id:existing?.clickup_task_id||'',
+    data_attivita:t.data_attivita,
+    mese_competenza:monthFromApi(t.mese_competenza),
+    durata_minuti:parseInt(t.durata_minuti)||0,
+    stato:t.stato||'PENDING',
+    servizio:t.servizio||existing?.servizio||'',
+    note:t.note||'',
   };
 };
 
@@ -553,12 +607,13 @@ function DashboardScreen({state,setPage,setDrillCliente,setDrillCommessa}) {
 // ─────────────────────────────────────────────────────────
 // SCREEN: CLIENTI
 // ─────────────────────────────────────────────────────────
-function ClientiScreen({state,dispatch,setPage,setDrillCliente}) {
+function ClientiScreen({state,dispatch,setPage,setDrillCliente,api}) {
   const [search,setSearch]=useState('');
   const [modal,setModal]=useState(null);
   const [confirm,setConfirm]=useState(null);
   const [form,setForm]=useState({});
   const [codicErr,setCodicErr]=useState('');
+  const [saving,setSaving]=useState(false);
 
   const nextNum=()=>state.clienti.length>0?Math.max(...state.clienti.map(c=>c.numero||0))+1:1;
 
@@ -577,18 +632,56 @@ function ClientiScreen({state,dispatch,setPage,setDrillCliente}) {
     return '';
   };
 
-  const save=e=>{
+  const save=async e=>{
     e.preventDefault();
     const cod=(form.codice||'').toUpperCase();
     const err=validateCodice(cod,modal==='new'?null:modal.id);
     if(err){setCodicErr(err);return;}
     const item={...form,codice:cod,numero:parseInt(form.numero)||nextNum()};
+    if(api?.enabled){
+      try{
+        setSaving(true);
+        const payload={
+          ragione_sociale:item.ragione_sociale,
+          piva:item.piva||null,
+          sdi:item.sdi||null,
+          pec:item.pec||null,
+          condizioni_pagamento:item.condizioni||null,
+        };
+        let saved;
+        if(modal==='new'){
+          saved=await api.createCliente(payload);
+        }else{
+          saved=await api.updateCliente(modal.id,{...payload,attivo:item.attivo});
+        }
+        dispatch({type:'UPSERT',entity:'clienti',item:saved});
+        closeModal();
+      }catch(errApi){
+        alert(`Errore salvataggio cliente: ${errApi.message||'operazione non riuscita'}`);
+      }finally{
+        setSaving(false);
+      }
+      return;
+    }
     if(modal==='new') dispatch({type:'ADD',entity:'clienti',item:{...item,id:uid()}});
     else dispatch({type:'UPDATE',entity:'clienti',item:{...modal,...item}});
     closeModal();
   };
 
-  const del=id=>{dispatch({type:'DELETE',entity:'clienti',id});setConfirm(null);};
+  const del=async id=>{
+    if(api?.enabled){
+      try{
+        const updated=await api.updateCliente(id,{attivo:false});
+        dispatch({type:'UPSERT',entity:'clienti',item:updated});
+      }catch(errApi){
+        alert(`Errore disattivazione cliente: ${errApi.message||'operazione non riuscita'}`);
+      }finally{
+        setConfirm(null);
+      }
+      return;
+    }
+    dispatch({type:'DELETE',entity:'clienti',id});setConfirm(null);
+  };
   const fil=state.clienti.filter(c=>c.ragione_sociale.toLowerCase().includes(search.toLowerCase())||c.codice?.toLowerCase().includes(search.toLowerCase()));
 
   const progettiPerCliente=id=>state.progetti.filter(p=>p.cliente_id===id).length;
@@ -614,7 +707,7 @@ function ClientiScreen({state,dispatch,setPage,setDrillCliente}) {
         <FRow label='PEC'><input type='email' value={form.pec||''} onChange={e=>setForm({...form,pec:e.target.value})}/></FRow>
         <FRow label='Condizioni di pagamento'><input value={form.condizioni||''} onChange={e=>setForm({...form,condizioni:e.target.value})} placeholder='es. 30gg DFFM'/></FRow>
         <FRow label='Stato'><select value={form.attivo?'true':'false'} onChange={e=>setForm({...form,attivo:e.target.value==='true'})}><option value='true'>Attivo</option><option value='false'>Inattivo</option></select></FRow>
-        <FActions onCancel={closeModal}/>
+        <FActions onCancel={closeModal} submitLabel={saving?'Salvataggio...':'Salva'}/>
       </form>
     </Modal>}
 
@@ -765,11 +858,12 @@ function ClienteDetailScreen({state,dispatch,clienteId,setPage,setDrillProgetto}
 // ─────────────────────────────────────────────────────────
 // SCREEN: PROGETTI
 // ─────────────────────────────────────────────────────────
-function ProgettiScreen({state,dispatch,setPage,setDrillProgetto}) {
+function ProgettiScreen({state,dispatch,setPage,setDrillProgetto,api}) {
   const [modal,setModal]=useState(null);
   const [confirm,setConfirm]=useState(null);
   const [form,setForm]=useState({});
   const [milestoneInput,setMilestoneInput]=useState('');
+  const [saving,setSaving]=useState(false);
   const clienteMap=useMemo(()=>Object.fromEntries(state.clienti.map(c=>[c.id,c])),[state.clienti]);
 
   const openNew=()=>{setForm({cliente_id:state.clienti[0]?.id||'',nome:'',categoria:'SOCIAL',stato:'ATTIVO',importo_fisso:0,importo_variabile:0,delivery_attesa:0,milestone:[],budget_campagna:0,note:''});setMilestoneInput('');setModal('new');};
@@ -790,14 +884,65 @@ function ProgettiScreen({state,dispatch,setPage,setDrillProgetto}) {
   };
   const removeMilestone=mid=>setForm(f=>({...f,milestone:f.milestone.filter(m=>m.id!==mid)}));
 
-  const save=e=>{
+  const save=async e=>{
     e.preventDefault();
     const item={...form,importo_fisso:parseFloat(form.importo_fisso)||0,importo_variabile:parseFloat(form.importo_variabile)||0,delivery_attesa:parseInt(form.delivery_attesa)||0,budget_campagna:parseFloat(form.budget_campagna)||0};
+    if(api?.enabled){
+      try{
+        setSaving(true);
+        const payload={
+          cliente_id:item.cliente_id,
+          nome:item.nome,
+          tipo:categoriaToTipo(item.categoria||'SOCIAL'),
+          importo_fisso:item.importo_fisso,
+          importo_variabile:item.importo_variabile,
+          delivery_attesa:item.delivery_attesa,
+          note:withCategoriaNote(item.note,item.categoria||'SOCIAL'),
+        };
+        let saved;
+        if(modal==='new'){
+          saved=await api.createProgetto(payload,{local:item});
+          if(item.stato&&item.stato!=='ATTIVO'){
+            saved=await api.updateProgetto(saved.id,{stato:item.stato},{local:item});
+          }
+        }else{
+          saved=await api.updateProgetto(modal.id,{
+            nome:payload.nome,
+            tipo:payload.tipo,
+            stato:item.stato,
+            importo_fisso:payload.importo_fisso,
+            importo_variabile:payload.importo_variabile,
+            delivery_attesa:payload.delivery_attesa,
+            note:payload.note,
+          },{local:item});
+        }
+        dispatch({type:'UPSERT',entity:'progetti',item:saved});
+        closeModal();
+      }catch(errApi){
+        alert(`Errore salvataggio progetto: ${errApi.message||'operazione non riuscita'}`);
+      }finally{
+        setSaving(false);
+      }
+      return;
+    }
     if(modal==='new') dispatch({type:'ADD',entity:'progetti',item:{...item,id:uid()}});
     else dispatch({type:'UPDATE',entity:'progetti',item:{...modal,...item}});
     closeModal();
   };
-  const del=id=>{dispatch({type:'DELETE',entity:'progetti',id});setConfirm(null);};
+  const del=async id=>{
+    if(api?.enabled){
+      try{
+        const saved=await api.updateProgetto(id,{stato:'CHIUSO'});
+        dispatch({type:'UPSERT',entity:'progetti',item:saved});
+      }catch(errApi){
+        alert(`Errore chiusura progetto: ${errApi.message||'operazione non riuscita'}`);
+      }finally{
+        setConfirm(null);
+      }
+      return;
+    }
+    dispatch({type:'DELETE',entity:'progetti',id});setConfirm(null);
+  };
 
   return <div className='fu'>
     {confirm&&<Confirm msg={`Eliminare "${confirm.nome}"?`} onConfirm={()=>del(confirm.id)} onClose={()=>setConfirm(null)}/>}
@@ -873,7 +1018,7 @@ function ProgettiScreen({state,dispatch,setPage,setDrillProgetto}) {
         </>}
 
         <FRow label='Note'><textarea value={form.note||''} onChange={e=>setForm({...form,note:e.target.value})}/></FRow>
-        <FActions onCancel={closeModal}/>
+        <FActions onCancel={closeModal} submitLabel={saving?'Salvataggio...':'Salva'}/>
       </form>
     </Modal>}
 
@@ -1261,11 +1406,13 @@ function CommessaDetailScreen({state,commessaId,setPage,onChiudi}) {
 // ─────────────────────────────────────────────────────────
 // SCREEN: TIMESHEET (con task ClickUp simulati)
 // ─────────────────────────────────────────────────────────
-function TimesheetScreen({state,dispatch}) {
+function TimesheetScreen({state,dispatch,api,authUser}) {
   const [filterStato,setFilterStato]=useState('TUTTI');
   const [modal,setModal]=useState(false);
   const [form,setForm]=useState({});
   const [taskFil,setTaskFil]=useState('');
+  const [saving,setSaving]=useState(false);
+  const [processing,setProcessing]=useState(null);
 
   const userMap    =useMemo(()=>Object.fromEntries(state.users.map(u=>[u.id,u])),[state.users]);
   const progettoMap=useMemo(()=>Object.fromEntries(state.progetti.map(p=>[p.id,p])),[state.progetti]);
@@ -1278,18 +1425,59 @@ function TimesheetScreen({state,dispatch}) {
   },[form.progetto_id]);
   const tasksFil=useMemo(()=>tasksDisp.filter(t=>!taskFil||t.name.toLowerCase().includes(taskFil.toLowerCase())),[tasksDisp,taskFil]);
 
-  const openNew=()=>{setForm({user_id:state.users[0]?.id||'',progetto_id:'',clickup_task_id:'',data_attivita:nowDate(),mese_competenza:currMese(),durata_ore:1,durata_min:0,note:''});setTaskFil('');setModal(true);};
+  const openNew=()=>{setForm({user_id:authUser?.id||state.users[0]?.id||'',progetto_id:'',clickup_task_id:'',data_attivita:nowDate(),mese_competenza:currMese(),durata_ore:1,durata_min:0,note:''});setTaskFil('');setModal(true);};
   const closeModal=()=>{setModal(false);setForm({});setTaskFil('');};
 
-  const save=e=>{
+  const save=async e=>{
     e.preventDefault();
     const durata_minuti=(parseInt(form.durata_ore)||0)*60+(parseInt(form.durata_min)||0);
     if(durata_minuti<=0) return;
+    if(api?.enabled){
+      try{
+        setSaving(true);
+        const commessa=state.commesse.find(cm=>cm.mese_competenza===form.mese_competenza && (cm.progetti_ids||[]).includes(form.progetto_id));
+        if(!commessa){
+          throw new Error('Nessuna commessa trovata per progetto/mese selezionati');
+        }
+        const task=CLICKUP_TASKS.find(t=>t.id===form.clickup_task_id);
+        const saved=await api.createTimesheet({
+          commessa_id:commessa.id,
+          data_attivita:form.data_attivita,
+          mese_competenza:monthToApi(form.mese_competenza),
+          durata_minuti,
+          servizio:task?.name||'',
+          note:form.note||'',
+        },{
+          progetto_id:form.progetto_id,
+          clickup_task_id:form.clickup_task_id,
+          servizio:task?.name||'',
+        });
+        dispatch({type:'UPSERT',entity:'timesheet',item:saved});
+        closeModal();
+      }catch(errApi){
+        alert(`Errore registrazione ore: ${errApi.message||'operazione non riuscita'}`);
+      }finally{
+        setSaving(false);
+      }
+      return;
+    }
     dispatch({type:'ADD',entity:'timesheet',item:{id:uid(),user_id:form.user_id,progetto_id:form.progetto_id,clickup_task_id:form.clickup_task_id,data_attivita:form.data_attivita,mese_competenza:form.mese_competenza,durata_minuti,stato:'PENDING',note:form.note||''}});
     closeModal();
   };
 
-  const approva=(id,stato)=>{
+  const approva=async(id,stato)=>{
+    if(api?.enabled){
+      try{
+        setProcessing(id);
+        const savedList=await api.approveTimesheet(id,stato);
+        (savedList||[]).forEach(item=>dispatch({type:'UPSERT',entity:'timesheet',item}));
+      }catch(errApi){
+        alert(`Errore approvazione timesheet: ${errApi.message||'operazione non riuscita'}`);
+      }finally{
+        setProcessing(null);
+      }
+      return;
+    }
     const t=state.timesheet.find(x=>x.id===id);
     if(t) dispatch({type:'UPDATE',entity:'timesheet',item:{...t,stato}});
   };
@@ -1297,6 +1485,7 @@ function TimesheetScreen({state,dispatch}) {
   const fil=state.timesheet.filter(t=>filterStato==='TUTTI'||t.stato===filterStato);
   const pending=state.timesheet.filter(t=>t.stato==='PENDING').length;
   const oreAppr=state.timesheet.filter(t=>t.stato==='APPROVATO').reduce((s,t)=>s+t.durata_minuti,0);
+  const canApprove=(authUser?.ruolo==='ADMIN'||authUser?.ruolo==='PM');
 
   const selectedTask=CLICKUP_TASKS.find(t=>t.id===form.clickup_task_id);
 
@@ -1304,9 +1493,12 @@ function TimesheetScreen({state,dispatch}) {
     {modal&&<Modal title='Registra ore' onClose={closeModal} width={520}>
       <form onSubmit={save}>
         <FRow label='Risorsa'>
-          <select value={form.user_id||''} onChange={e=>setForm({...form,user_id:e.target.value})} required>
-            {state.users.filter(u=>u.attivo).map(u=><option key={u.id} value={u.id}>{u.nome} {u.cognome} ({u.ruolo})</option>)}
-          </select>
+          {api?.enabled
+            ? <input value={`${authUser?.nome||''} ${authUser?.cognome||''} (${authUser?.ruolo||'USER'})`.trim()} readOnly/>
+            : <select value={form.user_id||''} onChange={e=>setForm({...form,user_id:e.target.value})} required>
+                {state.users.filter(u=>u.attivo).map(u=><option key={u.id} value={u.id}>{u.nome} {u.cognome} ({u.ruolo})</option>)}
+              </select>
+          }
         </FRow>
 
         <FRow label='Progetto ClickUp'>
@@ -1349,7 +1541,7 @@ function TimesheetScreen({state,dispatch}) {
           </div>
         </FRow>
         <FRow label='Note'><textarea value={form.note||''} onChange={e=>setForm({...form,note:e.target.value})}/></FRow>
-        <FActions onCancel={closeModal} submitLabel='Registra'/>
+        <FActions onCancel={closeModal} submitLabel={saving?'Salvataggio...':'Registra'}/>
       </form>
     </Modal>}
 
@@ -1387,9 +1579,9 @@ function TimesheetScreen({state,dispatch}) {
                 <Td mono muted>{t.data_attivita}</Td>
                 <Td mono>{fmtMin(t.durata_minuti)}</Td>
                 <Td><Badge s={t.stato}/></Td>
-                <Td>{t.stato==='PENDING'&&<div style={{display:'flex',gap:6}}>
-                  <Btn v='success' onClick={()=>approva(t.id,'APPROVATO')} s={{padding:'4px 8px',fontSize:11}}>✓</Btn>
-                  <Btn v='danger' onClick={()=>approva(t.id,'RIFIUTATO')} s={{padding:'4px 8px',fontSize:11}}>✕</Btn>
+                <Td>{t.stato==='PENDING'&&canApprove&&<div style={{display:'flex',gap:6}}>
+                  <Btn v='success' onClick={()=>approva(t.id,'APPROVATO')} disabled={processing===t.id} s={{padding:'4px 8px',fontSize:11}}>✓</Btn>
+                  <Btn v='danger' onClick={()=>approva(t.id,'RIFIUTATO')} disabled={processing===t.id} s={{padding:'4px 8px',fontSize:11}}>✕</Btn>
                 </div>}</Td>
               </TR>;
             })}
@@ -1648,25 +1840,158 @@ function FinanziariaScreen({state,dispatch}) {
 }
 
 // ─────────────────────────────────────────────────────────
+// SCREEN: PROFILO
+// ─────────────────────────────────────────────────────────
+function ProfiloScreen({authUser,api,onAuthUserUpdate}) {
+  const [password,setPassword]=useState('');
+  const [confirmPassword,setConfirmPassword]=useState('');
+  const [saving,setSaving]=useState(false);
+  const [msg,setMsg]=useState('');
+  const [err,setErr]=useState('');
+
+  const changePassword=async e=>{
+    e.preventDefault();
+    setMsg('');
+    setErr('');
+    if(!password || password.length<8){
+      setErr('La nuova password deve avere almeno 8 caratteri');
+      return;
+    }
+    if(password!==confirmPassword){
+      setErr('Le password non coincidono');
+      return;
+    }
+    if(!api?.enabled){
+      setErr('Connetti prima il backend API');
+      return;
+    }
+    try{
+      setSaving(true);
+      const updated=await api.updateUser(authUser.id,{password});
+      onAuthUserUpdate&&onAuthUserUpdate(updated||authUser);
+      setPassword('');
+      setConfirmPassword('');
+      setMsg('Password aggiornata con successo');
+    }catch(error){
+      setErr(`Errore aggiornamento password: ${error.message||'operazione non riuscita'}`);
+    }finally{
+      setSaving(false);
+    }
+  };
+
+  return <div className='fu'>
+    <Topbar title='Profilo utente' sub='Dati account e sicurezza'/>
+    <div style={{padding:'22px 26px',display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+      <Card>
+        <CH title='Dati personali'/>
+        <div style={{padding:'16px 18px'}}>
+          <FRow label='Nome'><input value={authUser?.nome||''} readOnly/></FRow>
+          <FRow label='Cognome'><input value={authUser?.cognome||''} readOnly/></FRow>
+          <FRow label='Email'><input value={authUser?.email||''} readOnly/></FRow>
+          <FRow label='Ruolo'><input value={authUser?.ruolo||''} readOnly/></FRow>
+        </div>
+      </Card>
+      <Card>
+        <CH title='Sicurezza'/>
+        <form onSubmit={changePassword} style={{padding:'16px 18px'}}>
+          <FRow label='Nuova password' hint='Minimo 8 caratteri'>
+            <input type='password' value={password} onChange={e=>setPassword(e.target.value)} required minLength={8}/>
+          </FRow>
+          <FRow label='Conferma password'>
+            <input type='password' value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} required minLength={8}/>
+          </FRow>
+          {msg&&<div style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--green)',marginBottom:10}}>{msg}</div>}
+          {err&&<div style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--red)',marginBottom:10}}>{err}</div>}
+          <FActions onCancel={()=>{setPassword('');setConfirmPassword('');setMsg('');setErr('');}} submitLabel={saving?'Aggiornamento...':'Aggiorna password'}/>
+        </form>
+      </Card>
+    </div>
+  </div>;
+}
+
+// ─────────────────────────────────────────────────────────
 // SCREEN: TEAM (semplificato)
 // ─────────────────────────────────────────────────────────
-function TeamScreen({state,dispatch}) {
+function TeamScreen({state,dispatch,api,isAdmin}) {
   const [modal,setModal]=useState(null);
   const [confirm,setConfirm]=useState(null);
   const [form,setForm]=useState({});
+  const [saving,setSaving]=useState(false);
 
-  const openNew=()=>{setForm({nome:'',cognome:'',email:'',ruolo:'DIPENDENTE',costo_orario:30,attivo:true});setModal('new');};
+  if(!isAdmin){
+    return <div className='fu'>
+      <Topbar title='Utenti' sub='Accesso riservato ADMIN'/>
+      <div style={{padding:'32px 26px'}}>
+        <Card>
+          <div style={{padding:'24px 20px',fontFamily:'var(--fm)',fontSize:12,color:'var(--g4)'}}>
+            Accesso non autorizzato a questa sezione.
+          </div>
+        </Card>
+      </div>
+    </div>;
+  }
+
+  const openNew=()=>{setForm({nome:'',cognome:'',email:'',password:'',ruolo:'DIPENDENTE',costo_orario:30,attivo:true});setModal('new');};
   const openEdit=u=>{setForm({...u});setModal(u);};
   const closeModal=()=>{setModal(null);setForm({});};
 
-  const save=e=>{
+  const save=async e=>{
     e.preventDefault();
     const item={...form,costo_orario:parseFloat(form.costo_orario)||0};
+    if(api?.enabled){
+      try{
+        setSaving(true);
+        let saved;
+        if(modal==='new'){
+          if(!item.password||item.password.length<8){
+            throw new Error('Password minima 8 caratteri');
+          }
+          saved=await api.createUser({
+            nome:item.nome,
+            cognome:item.cognome,
+            email:item.email,
+            password:item.password,
+            ruolo:item.ruolo,
+            costo_orario:item.costo_orario||0,
+          });
+        }else{
+          const payload={
+            nome:item.nome,
+            cognome:item.cognome,
+            ruolo:item.ruolo,
+            costo_orario:item.costo_orario||0,
+            attivo:item.attivo!==false,
+          };
+          if(item.password) payload.password=item.password;
+          saved=await api.updateUser(modal.id,payload);
+        }
+        dispatch({type:'UPSERT',entity:'users',item:saved});
+        closeModal();
+      }catch(errApi){
+        alert(`Errore salvataggio utente: ${errApi.message||'operazione non riuscita'}`);
+      }finally{
+        setSaving(false);
+      }
+      return;
+    }
     if(modal==='new') dispatch({type:'ADD',entity:'users',item:{...item,id:uid()}});
     else dispatch({type:'UPDATE',entity:'users',item:{...modal,...item}});
     closeModal();
   };
-  const del=id=>{dispatch({type:'DELETE',entity:'users',id});setConfirm(null);};
+  const del=async id=>{
+    if(api?.enabled){
+      try{
+        const saved=await api.updateUser(id,{attivo:false});
+        dispatch({type:'UPSERT',entity:'users',item:saved});
+      }catch(errApi){
+        alert(`Errore disattivazione utente: ${errApi.message||'operazione non riuscita'}`);
+      }finally{
+        setConfirm(null);
+      }
+      return;
+    }
+    dispatch({type:'DELETE',entity:'users',id});setConfirm(null);
+  };
 
   const orePerUser=useMemo(()=>{
     const map={};
@@ -1675,20 +2000,23 @@ function TeamScreen({state,dispatch}) {
   },[state.timesheet]);
 
   return <div className='fu'>
-    {confirm&&<Confirm msg={`Eliminare "${confirm.nome} ${confirm.cognome}"?`} onConfirm={()=>del(confirm.id)} onClose={()=>setConfirm(null)}/>}
-    {modal&&<Modal title={modal==='new'?'Nuova risorsa':'Modifica risorsa'} onClose={closeModal}>
+    {confirm&&<Confirm msg={`Disattivare "${confirm.nome} ${confirm.cognome}"?`} onConfirm={()=>del(confirm.id)} onClose={()=>setConfirm(null)}/>}
+    {modal&&<Modal title={modal==='new'?'Nuovo utente':'Modifica utente'} onClose={closeModal}>
       <form onSubmit={save}>
         <FGrid><FRow label='Nome'><input required value={form.nome||''} onChange={e=>setForm({...form,nome:e.target.value})}/></FRow><FRow label='Cognome'><input required value={form.cognome||''} onChange={e=>setForm({...form,cognome:e.target.value})}/></FRow></FGrid>
         <FRow label='Email'><input type='email' required value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></FRow>
+        <FRow label={modal==='new'?'Password':'Nuova password (opzionale)'}>
+          <input type='password' value={form.password||''} onChange={e=>setForm({...form,password:e.target.value})} required={modal==='new'} minLength={8}/>
+        </FRow>
         <FGrid>
           <FRow label='Ruolo'><select value={form.ruolo||'DIPENDENTE'} onChange={e=>setForm({...form,ruolo:e.target.value})}>{['ADMIN','PM','DIPENDENTE','FREELANCER'].map(r=><option key={r} value={r}>{r}</option>)}</select></FRow>
           <FRow label='€/ora'><input type='number' min='0' step='0.5' value={form.costo_orario||0} onChange={e=>setForm({...form,costo_orario:e.target.value})}/></FRow>
         </FGrid>
         <FRow label='Stato'><select value={form.attivo?'true':'false'} onChange={e=>setForm({...form,attivo:e.target.value==='true'})}><option value='true'>Attivo</option><option value='false'>Inattivo</option></select></FRow>
-        <FActions onCancel={closeModal}/>
+        <FActions onCancel={closeModal} submitLabel={saving?'Salvataggio...':'Salva'}/>
       </form>
     </Modal>}
-    <Topbar title='Team'><Btn v='primary' onClick={openNew}>+ Nuova risorsa</Btn></Topbar>
+    <Topbar title='Utenti'><Btn v='primary' onClick={openNew}>+ Nuovo utente</Btn></Topbar>
     <div style={{padding:'22px 26px'}}>
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:22}}>
         <KPI label='Risorse attive' value={state.users.filter(u=>u.attivo).length} delay={.05}/>
@@ -1697,7 +2025,7 @@ function TeamScreen({state,dispatch}) {
         <KPI label='Costo orario medio' value={`€ ${state.users.length>0?(state.users.reduce((s,u)=>s+(u.costo_orario||0),0)/state.users.length).toFixed(0):0}`} delay={.14}/>
       </div>
       <Card>
-        <CH title='Risorse' action={<Btn v='primary' onClick={openNew} s={{fontSize:11,padding:'5px 10px'}}>+ Nuova</Btn>}/>
+        <CH title='Anagrafica utenti' action={<Btn v='primary' onClick={openNew} s={{fontSize:11,padding:'5px 10px'}}>+ Nuovo</Btn>}/>
         {state.users.length===0?<Empty msg='Nessuna risorsa'/>:
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
           <thead><tr><Th c='Risorsa'/><Th c='Email'/><Th c='Ruolo'/><Th c='€/ora'/><Th c='Ore (approv.)'/><Th c='Stato'/><Th c=''/></tr></thead>
@@ -1711,7 +2039,7 @@ function TeamScreen({state,dispatch}) {
               <Td><Badge s={u.attivo?'ATTIVO':'INATTIVO'}/></Td>
               <Td><div onClick={e=>e.stopPropagation()} style={{display:'flex',gap:6}}>
                 <Btn v='ghost' onClick={()=>openEdit(u)} s={{padding:'4px 8px',fontSize:11}}>Modifica</Btn>
-                <Btn v='danger' onClick={()=>setConfirm(u)} s={{padding:'4px 8px',fontSize:11}}>✕</Btn>
+                {u.attivo&&<Btn v='danger' onClick={()=>setConfirm(u)} s={{padding:'4px 8px',fontSize:11}}>Disattiva</Btn>}
               </div></Td>
             </TR>)}
           </tbody>
@@ -2503,13 +2831,14 @@ function ReportMensileScreen({state,setPage}) {
 const NAV=[
   {id:'dashboard',label:'Dashboard',icon:'⊞',section:'Generale'},
   {id:'report',label:'Report mensile',icon:'⎙',section:'Generale'},
+  {id:'profilo',label:'Profilo',icon:'👤',section:'Generale'},
   {id:'clienti',label:'Clienti',icon:'◎',section:'Gestione'},
   {id:'progetti',label:'Progetti',icon:'▤',section:'Gestione'},
   {id:'commesse',label:'Commesse',icon:'◷',section:'Gestione'},
   {id:'timesheet',label:'Timesheet',icon:'⏱',section:'Gestione'},
   {id:'marginalita',label:'Marginalità',icon:'◈',section:'Economia'},
   {id:'finanziaria',label:'Finanziaria',icon:'₿',section:'Economia'},
-  {id:'team',label:'Team',icon:'◉',section:'Economia'},
+  {id:'team',label:'Utenti',icon:'◉',section:'Economia'},
 ];
 
 function App(){
@@ -2527,9 +2856,15 @@ function App(){
     try{return JSON.parse(localStorage.getItem(USER_KEY)||'null');}
     catch{return null;}
   });
+  const isAdmin=authUser?.ruolo==='ADMIN';
   const [apiError,setApiError]=useState('');
   const [syncingCore,setSyncingCore]=useState(false);
   const [loginLoading,setLoginLoading]=useState(false);
+
+  const updateAuthUser=user=>{
+    setAuthUser(user||null);
+    localStorage.setItem(USER_KEY,JSON.stringify(user||null));
+  };
 
   const apiFetch=async(path,{method='GET',body,tokenOverride}={})=>{
     const token=tokenOverride!==undefined?tokenOverride:authToken;
@@ -2559,15 +2894,73 @@ function App(){
     try{
       setSyncingCore(true);
       setApiError('');
-      const [clientiApi,progettiApi,commesseApi]=await Promise.all([
-        apiFetch('/clienti',{tokenOverride:tk}),
-        apiFetch('/progetti',{tokenOverride:tk}),
-        apiFetch('/commesse',{tokenOverride:tk}),
-      ]);
-      const clientiSorted=[...(clientiApi||[])].sort((a,b)=>(a.ragione_sociale||'').localeCompare(b.ragione_sociale||''));
-      dispatch({type:'SET_ENTITY',entity:'clienti',items:clientiSorted.map((c,idx)=>normalizeClienteFromApi(c,idx))});
-      dispatch({type:'SET_ENTITY',entity:'progetti',items:(progettiApi||[]).map(normalizeProgettoFromApi)});
-      dispatch({type:'SET_ENTITY',entity:'commesse',items:(commesseApi||[]).map(normalizeCommessaFromApi)});
+      const userRole=(authUser?.ruolo||'').toUpperCase();
+      const canReadManagement=userRole==='ADMIN'||userRole==='PM';
+      const requests=[
+        {key:'me',run:()=>apiFetch('/auth/me',{tokenOverride:tk})},
+        {key:'timesheet',run:()=>apiFetch('/timesheet',{tokenOverride:tk})},
+      ];
+      if(canReadManagement){
+        requests.push(
+          {key:'clienti',run:()=>apiFetch('/clienti',{tokenOverride:tk})},
+          {key:'progetti',run:()=>apiFetch('/progetti',{tokenOverride:tk})},
+          {key:'commesse',run:()=>apiFetch('/commesse',{tokenOverride:tk})},
+          {key:'users',run:()=>apiFetch('/users',{tokenOverride:tk})},
+        );
+      }
+
+      const settled=await Promise.allSettled(requests.map(r=>r.run()));
+      const data={};
+      const errors=[];
+      settled.forEach((res,idx)=>{
+        const key=requests[idx].key;
+        if(res.status==='fulfilled'){
+          data[key]=res.value;
+        }else{
+          errors.push(`${key}: ${res.reason?.message||'errore'}`);
+        }
+      });
+
+      if(data.me){
+        updateAuthUser(data.me);
+        dispatch({type:'UPSERT',entity:'users',item:normalizeUserFromApi(data.me)});
+      }
+
+      if(data.clienti){
+        const clientiSorted=[...(data.clienti||[])].sort((a,b)=>(a.ragione_sociale||'').localeCompare(b.ragione_sociale||''));
+        dispatch({
+          type:'SET_ENTITY',
+          entity:'clienti',
+          items:clientiSorted.map(c=>normalizeClienteFromApiWithState(c,state.clienti)),
+        });
+      }
+      if(data.progetti){
+        dispatch({
+          type:'SET_ENTITY',
+          entity:'progetti',
+          items:(data.progetti||[]).map(p=>normalizeProgettoFromApi(p,state.progetti.find(x=>x.id===p.id))),
+        });
+      }
+      let commesseSynced=state.commesse;
+      if(data.commesse){
+        commesseSynced=(data.commesse||[]).map(normalizeCommessaFromApi);
+        dispatch({type:'SET_ENTITY',entity:'commesse',items:commesseSynced});
+      }
+      if(data.users){
+        dispatch({type:'SET_ENTITY',entity:'users',items:(data.users||[]).map(normalizeUserFromApi)});
+      }
+      if(data.timesheet){
+        const commesseMap=Object.fromEntries((commesseSynced||state.commesse).map(cm=>[cm.id,cm]));
+        dispatch({
+          type:'SET_ENTITY',
+          entity:'timesheet',
+          items:(data.timesheet||[]).map(t=>normalizeTimesheetFromApi(t,{commesseMap,existingTimesheet:state.timesheet})),
+        });
+      }
+
+      if(errors.length>0){
+        setApiError(`Sync API parziale: ${errors.join(' · ')}`);
+      }
     }catch(err){
       setApiError(`Sync API fallita: ${err.message||'errore sconosciuto'}`);
     }finally{
@@ -2582,9 +2975,8 @@ function App(){
       const data=await apiFetch('/auth/login',{method:'POST',body:{email,password},tokenOverride:''});
       if(!data?.access_token) throw new Error('Token non ricevuto');
       setAuthToken(data.access_token);
-      setAuthUser(data.user||null);
+      updateAuthUser(data.user||null);
       localStorage.setItem(TOKEN_KEY,data.access_token);
-      localStorage.setItem(USER_KEY,JSON.stringify(data.user||null));
       setShowConnectModal(false);
       await syncCoreData(data.access_token);
     }catch(err){
@@ -2597,10 +2989,9 @@ function App(){
 
   const logout=()=>{
     setAuthToken('');
-    setAuthUser(null);
+    updateAuthUser(null);
     setApiError('');
     localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
   };
 
   useEffect(()=>{
@@ -2624,6 +3015,62 @@ function App(){
     },
   };
 
+  const clientiApi={
+    enabled:!!authToken,
+    listClienti:async()=>await apiFetch('/clienti'),
+    createCliente:async payload=>{
+      const data=await apiFetch('/clienti',{method:'POST',body:payload});
+      return normalizeClienteFromApiWithState(data,state.clienti);
+    },
+    updateCliente:async(id,payload)=>{
+      const data=await apiFetch(`/clienti/${id}`,{method:'PATCH',body:payload});
+      return normalizeClienteFromApiWithState(data,state.clienti);
+    },
+  };
+
+  const progettiApi={
+    enabled:!!authToken,
+    listProgetti:async()=>await apiFetch('/progetti'),
+    createProgetto:async(payload,{local}={})=>{
+      const data=await apiFetch('/progetti',{method:'POST',body:payload});
+      return normalizeProgettoFromApi(data,local);
+    },
+    updateProgetto:async(id,payload,{local}={})=>{
+      const data=await apiFetch(`/progetti/${id}`,{method:'PATCH',body:payload});
+      return normalizeProgettoFromApi(data,local||state.progetti.find(p=>p.id===id));
+    },
+  };
+
+  const usersApi={
+    enabled:!!authToken,
+    listUsers:async()=>await apiFetch('/users'),
+    createUser:async payload=>{
+      const data=await apiFetch('/users',{method:'POST',body:payload});
+      return normalizeUserFromApi(data);
+    },
+    updateUser:async(id,payload)=>{
+      const data=await apiFetch(`/users/${id}`,{method:'PATCH',body:payload});
+      return normalizeUserFromApi(data);
+    },
+  };
+
+  const timesheetApi={
+    enabled:!!authToken,
+    listTimesheet:async()=>await apiFetch('/timesheet'),
+    createTimesheet:async(payload,localMeta={})=>{
+      const data=await apiFetch('/timesheet',{method:'POST',body:payload});
+      const commesseMap=Object.fromEntries(state.commesse.map(cm=>[cm.id,cm]));
+      const normalized=normalizeTimesheetFromApi(data,{commesseMap,existingTimesheet:state.timesheet});
+      return {...normalized,...localMeta};
+    },
+    approveTimesheet:async(id,targetStatus)=>{
+      const azione=targetStatus==='APPROVATO'?'APPROVA':'RIFIUTA';
+      const list=await apiFetch('/timesheet/approva',{method:'POST',body:{ids:[id],azione}});
+      const commesseMap=Object.fromEntries(state.commesse.map(cm=>[cm.id,cm]));
+      return (list||[]).map(item=>normalizeTimesheetFromApi(item,{commesseMap,existingTimesheet:state.timesheet}));
+    },
+  };
+
   const pending=state.timesheet.filter(t=>t.stato==='PENDING').length;
   const fatScadute=state.fatture_attive.filter(f=>f.stato==='SCADUTA').length;
   const alerts=state.commesse.filter(cm=>{
@@ -2633,22 +3080,28 @@ function App(){
     return f>0&&Math.round((f-mo)/f*100)<30;
   }).length;
 
-  const sections=[...new Set(NAV.map(n=>n.section))];
+  const visibleNav=useMemo(()=>NAV.filter(item=>{
+    if(item.id==='profilo'&&!authToken) return false;
+    if(item.id==='team'&&!isAdmin) return false;
+    return true;
+  }),[authToken,isAdmin]);
+  const sections=[...new Set(visibleNav.map(n=>n.section))];
 
   const renderPage=()=>{
     switch(page){
       case 'dashboard':        return <DashboardScreen state={state} setPage={setPage} setDrillCliente={setDrillCliente} setDrillCommessa={setDrillCommessa}/>;
       case 'report':           return <ReportMensileScreen state={state} setPage={setPage}/>;
-      case 'clienti':          return <ClientiScreen state={state} dispatch={dispatch} setPage={setPage} setDrillCliente={setDrillCliente}/>;
+      case 'profilo':          return <ProfiloScreen authUser={authUser} api={usersApi} onAuthUserUpdate={updateAuthUser}/>;
+      case 'clienti':          return <ClientiScreen state={state} dispatch={dispatch} setPage={setPage} setDrillCliente={setDrillCliente} api={clientiApi}/>;
       case 'cliente_detail':   return <ClienteDetailScreen state={state} dispatch={dispatch} clienteId={drillCliente} setPage={setPage} setDrillProgetto={setDrillProgetto}/>;
-      case 'progetti':         return <ProgettiScreen state={state} dispatch={dispatch} setPage={setPage} setDrillProgetto={setDrillProgetto}/>;
+      case 'progetti':         return <ProgettiScreen state={state} dispatch={dispatch} setPage={setPage} setDrillProgetto={setDrillProgetto} api={progettiApi}/>;
       case 'progetto_detail':  return <ProgettoDetailScreen state={state} progettoId={drillProgetto} setPage={setPage}/>;
       case 'commesse':         return <CommesseScreen state={state} dispatch={dispatch} setPage={setPage} setDrillCommessa={setDrillCommessa} onChiudi={id=>{setChiusuraCommessaId(id);}} api={commesseApi}/>;
       case 'commessa_detail':  return <CommessaDetailScreen state={state} commessaId={drillCommessa} setPage={setPage} onChiudi={id=>{setChiusuraCommessaId(id);}}/>;
-      case 'timesheet':        return <TimesheetScreen state={state} dispatch={dispatch}/>;
+      case 'timesheet':        return <TimesheetScreen state={state} dispatch={dispatch} api={timesheetApi} authUser={authUser}/>;
       case 'marginalita':      return <MarginalitaScreen state={state}/>;
       case 'finanziaria':      return <FinanziariaScreen state={state} dispatch={dispatch}/>;
-      case 'team':             return <TeamScreen state={state} dispatch={dispatch}/>;
+      case 'team':             return <TeamScreen state={state} dispatch={dispatch} api={usersApi} isAdmin={isAdmin}/>;
       default: return null;
     }
   };
@@ -2677,7 +3130,7 @@ function App(){
         {sections.map(sec=>(
           <div key={sec}>
             <div style={{fontFamily:'var(--fm)',fontSize:9,color:'var(--g4)',letterSpacing:'.1em',textTransform:'uppercase',padding:'10px 10px 5px'}}>{sec}</div>
-            {NAV.filter(n=>n.section===sec).map(item=>{
+            {visibleNav.filter(n=>n.section===sec).map(item=>{
               const active=item.id===page||(item.id==='clienti'&&page==='cliente_detail')||(item.id==='progetti'&&page==='progetto_detail')||(item.id==='commesse'&&page==='commessa_detail');
               const badge=item.id==='timesheet'?pending:item.id==='finanziaria'?fatScadute:item.id==='marginalita'?alerts:0;
               return <div key={item.id} onClick={()=>setPage(item.id)}
@@ -2702,7 +3155,7 @@ function App(){
         </div>
         {syncingCore&&<div style={{fontFamily:'var(--fm)',fontSize:9,color:'var(--amber)',padding:'2px 10px 6px'}}>Sincronizzazione API...</div>}
         {apiError&&<div style={{fontFamily:'var(--fm)',fontSize:9,color:'var(--red)',padding:'2px 10px 6px'}}>{apiError}</div>}
-        <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:8,background:'var(--vdim)',border:'1px solid rgba(176,96,224,.15)'}}>
+        <div onClick={()=>authToken&&setPage('profilo')} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:8,background:'var(--vdim)',border:'1px solid rgba(176,96,224,.15)',cursor:authToken?'pointer':'default'}}>
           <div style={{width:26,height:26,borderRadius:'50%',background:'linear-gradient(135deg,var(--purple),var(--violet))',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:'white',flexShrink:0}}>{profileInitial}</div>
           <div><div style={{fontSize:12,fontWeight:600}}>{profileName}</div><div style={{fontFamily:'var(--fm)',fontSize:9,color:'var(--violet)'}}>{profileRole} · {authToken?'api':'demo'}</div></div>
         </div>

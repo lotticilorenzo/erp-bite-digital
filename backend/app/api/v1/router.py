@@ -79,8 +79,22 @@ async def patch_user(
     user_id: uuid.UUID,
     data: UserUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(get_current_user)
 ):
+    payload = data.model_dump(exclude_none=True)
+    is_admin = current_user.ruolo == UserRole.ADMIN
+    is_self = current_user.id == user_id
+
+    if not is_admin and not is_self:
+        raise HTTPException(status_code=403, detail="Non autorizzato a modificare questo utente")
+
+    # Utenti non ADMIN: consentito solo aggiornare il proprio profilo base/password.
+    if is_self and not is_admin:
+        allowed_fields = {"nome", "cognome", "password"}
+        blocked = [k for k in payload.keys() if k not in allowed_fields]
+        if blocked:
+            raise HTTPException(status_code=403, detail="Solo ADMIN può modificare ruolo/costi/stato")
+
     user = await update_user(db, user_id, data, current_user.id)
     if not user:
         raise HTTPException(status_code=404, detail="Utente non trovato")

@@ -28,6 +28,7 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     nome: Optional[str] = None
     cognome: Optional[str] = None
+    password: Optional[str] = None
     ruolo: Optional[UserRole] = None
     costo_orario: Optional[Decimal] = None
     attivo: Optional[bool] = None

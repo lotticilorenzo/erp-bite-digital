@@ -124,8 +124,12 @@ async def update_user(db: AsyncSession, user_id: uuid.UUID, data: UserUpdate, by
     if not user:
         return None
     prima = {"ruolo": user.ruolo, "costo_orario": str(user.costo_orario), "attivo": user.attivo}
-    for field, val in data.model_dump(exclude_none=True).items():
+    payload = data.model_dump(exclude_none=True)
+    new_password = payload.pop("password", None)
+    for field, val in payload.items():
         setattr(user, field, val)
+    if new_password:
+        user.password_hash = hash_password(new_password)
     await write_audit(db, by_user_id, "users", user_id, "UPDATE", prima)
     await db.flush()
     return user
