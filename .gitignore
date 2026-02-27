@@ -1,6 +1,22 @@
-.venv/
-__pycache__/
-*.pyc
+# Variabili d'ambiente
 .env
 .env.*
+!.env.example
+
+# Dipendenze Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Dipendenze Node
+node_modules/
+
+# Build frontend
+dist/
+build/
+
+# File inutili sul server
 .DS_Store
+*.zip
+*.docx
