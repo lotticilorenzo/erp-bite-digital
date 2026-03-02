@@ -22,15 +22,16 @@ from app.schemas.schemas import (
     TimesheetCreate, TimesheetOut, TimesheetApprova,
     FornitoreOut, FatturaAttivaOut, FatturaPassivaOut, FicSyncStatusOut,
 )
+from app.schemas.schemas import FatturaIncassaRequest
 from app.services.services import (
     get_user_by_email, create_user, list_users, update_user,
-    list_clienti, get_cliente, create_cliente, update_cliente,
+    list_clienti, get_cliente, create_cliente, update_cliente, delete_cliente,
     list_progetti, get_progetto, create_progetto, update_progetto,
     list_commesse, get_commessa, create_commessa, update_commessa,
     create_timesheet, list_timesheet, approva_timesheet,
     calcola_metriche_commessa,
     get_dashboard_kpi, get_marginalita_clienti,
-    sync_fic_data, get_last_fic_sync_status, list_fornitori, list_fatture_attive, list_fatture_passive,
+    sync_fic_data, get_last_fic_sync_status, list_fornitori, list_fatture_attive, list_fatture_passive, incassa_fattura,
 )
 
 router = APIRouter()
@@ -149,6 +150,16 @@ async def patch_cliente(
 # ═══════════════════════════════════════════════════════
 # PROGETTI
 # ═══════════════════════════════════════════════════════
+@router.delete("/clienti/{cliente_id}", status_code=204, tags=["Clienti"])
+async def remove_cliente(
+    cliente_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles('ADMIN'))
+):
+    ok = await delete_cliente(db, cliente_id, current_user.id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Cliente non trovato")
+
 @router.get("/progetti", response_model=List[ProgettoWithCliente], tags=["Progetti"])
 async def get_progetti(
     cliente_id: Optional[uuid.UUID] = Query(None),
@@ -308,10 +319,11 @@ async def report_marginalita(
 # ═══════════════════════════════════════════════════════
 @router.post("/fic/sync", response_model=FicSyncStatusOut, tags=["FIC"])
 async def run_fic_sync(
-    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN))
 ):
-    return await sync_fic_data(db, current_user.id)
+    from app.db.session import AsyncSessionLocal
+    async with AsyncSessionLocal() as db:
+        return await sync_fic_data(db, current_user.id)
 
 
 @router.get("/fic/sync/status", response_model=FicSyncStatusOut, tags=["FIC"])
@@ -331,6 +343,18 @@ async def get_fatture_attive(
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
 ):
     return await list_fatture_attive(db)
+
+@router.patch("/fatture-attive/{fattura_id}/incassa", response_model=FatturaAttivaOut, tags=["FIC"])
+async def patch_incassa_fattura(
+    fattura_id: uuid.UUID,
+    body: FatturaIncassaRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    fattura = await incassa_fattura(db, fattura_id, body.data_incasso)
+    if not fattura:
+        raise HTTPException(status_code=404, detail="Fattura non trovata")
+    return fattura
 
 
 @router.get("/fatture-passive", response_model=List[FatturaPassivaOut], tags=["FIC"])

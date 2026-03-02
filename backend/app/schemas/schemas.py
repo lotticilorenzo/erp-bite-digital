@@ -59,6 +59,20 @@ class TokenResponse(BaseModel):
 
 # ── CLIENTE ───────────────────────────────────────────────
 class ClienteCreate(BaseModel):
+    codice_cliente: Optional[str] = None
+    numero_progressivo: Optional[int] = None
+    paese: Optional[str] = None
+    tipologia: Optional[str] = None
+    indirizzo: Optional[str] = None
+    comune: Optional[str] = None
+    cap: Optional[str] = None
+    provincia: Optional[str] = None
+    codice_fiscale: Optional[str] = None
+    telefono: Optional[str] = None
+    referente: Optional[str] = None
+    note: Optional[str] = None
+    note_indirizzo: Optional[str] = None
+    email: Optional[str] = None
     ragione_sociale: str
     piva: Optional[str] = None
     codice_fiscale: Optional[str] = None
@@ -68,31 +82,56 @@ class ClienteCreate(BaseModel):
     condizioni_pagamento: Optional[str] = None
 
 class ClienteUpdate(BaseModel):
+    codice_cliente: Optional[str] = None
+    numero_progressivo: Optional[int] = None
     ragione_sociale: Optional[str] = None
     piva: Optional[str] = None
+    codice_fiscale: Optional[str] = None
     sdi: Optional[str] = None
     pec: Optional[str] = None
+    email: Optional[str] = None
+    telefono: Optional[str] = None
+    referente: Optional[str] = None
     indirizzo: Optional[str] = None
+    comune: Optional[str] = None
+    cap: Optional[str] = None
+    provincia: Optional[str] = None
+    paese: Optional[str] = None
+    tipologia: Optional[str] = None
+    note: Optional[str] = None
+    note_indirizzo: Optional[str] = None
     condizioni_pagamento: Optional[str] = None
     attivo: Optional[bool] = None
 
 class ClienteOut(OrmBase):
     id: uuid.UUID
-    ragione_sociale: str
-    piva: Optional[str]
-    codice_fiscale: Optional[str]
-    sdi: Optional[str]
-    pec: Optional[str]
-    indirizzo: Optional[str]
-    condizioni_pagamento: Optional[str]
-    fic_cliente_id: Optional[str]
-    attivo: bool
-    created_at: datetime
+    codice_cliente: Optional[str] = None
+    numero_progressivo: Optional[int] = None
+    ragione_sociale: str = ''
+    piva: Optional[str] = None
+    codice_fiscale: Optional[str] = None
+    sdi: Optional[str] = None
+    pec: Optional[str] = None
+    email: Optional[str] = None
+    telefono: Optional[str] = None
+    referente: Optional[str] = None
+    indirizzo: Optional[str] = None
+    comune: Optional[str] = None
+    cap: Optional[str] = None
+    provincia: Optional[str] = None
+    paese: Optional[str] = None
+    tipologia: Optional[str] = None
+    note: Optional[str] = None
+    note_indirizzo: Optional[str] = None
+    condizioni_pagamento: Optional[str] = None
+    fic_cliente_id: Optional[str] = None
+    attivo: bool = True
+    created_at: Optional[datetime] = None
 
 
 # ── PROGETTO ──────────────────────────────────────────────
 class ProgettoCreate(BaseModel):
-    cliente_id: uuid.UUID
+    cliente_id: Optional[uuid.UUID] = None
     nome: str
     tipo: ProjectType
     importo_fisso: Decimal = Decimal("0")
@@ -113,7 +152,7 @@ class ProgettoUpdate(BaseModel):
 
 class ProgettoOut(OrmBase):
     id: uuid.UUID
-    cliente_id: uuid.UUID
+    cliente_id: Optional[uuid.UUID]
     nome: str
     tipo: ProjectType
     stato: ProjectStatus
@@ -125,7 +164,7 @@ class ProgettoOut(OrmBase):
     created_at: datetime
 
 class ProgettoWithCliente(ProgettoOut):
-    cliente: ClienteOut
+    cliente: Optional[ClienteOut] = None
 
 
 # ── COMMESSA ──────────────────────────────────────────────
@@ -389,3 +428,6 @@ class DashboardKpi(BaseModel):
     margine_medio_percentuale: Optional[float]
     commesse_pronte_chiusura: int
     timesheet_pending: int
+
+class FatturaIncassaRequest(BaseModel):
+    data_incasso: date

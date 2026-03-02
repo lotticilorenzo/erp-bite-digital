@@ -172,6 +172,15 @@ async def update_cliente(db: AsyncSession, cliente_id: uuid.UUID, data: ClienteU
     return c
 
 
+async def delete_cliente(db: AsyncSession, cliente_id: uuid.UUID, by_user_id: uuid.UUID) -> bool:
+    c = await get_cliente(db, cliente_id)
+    if not c:
+        return False
+    await write_audit(db, by_user_id, "clienti", cliente_id, "DELETE", {"ragione_sociale": c.ragione_sociale})
+    await db.delete(c)
+    await db.flush()
+    return True
+
 # ── PROGETTO SERVICE ──────────────────────────────────────
 async def list_progetti(
     db: AsyncSession,
@@ -949,6 +958,17 @@ async def _upsert_fic_clienti(
             cliente.sdi = raw.get("ei_code") or cliente.sdi
             cliente.pec = raw.get("certified_email") or raw.get("pec") or cliente.pec
             cliente.indirizzo = _build_address(raw) or cliente.indirizzo
+            cliente.numero_progressivo = int(raw["code"]) if raw.get("code") and str(raw["code"]).isdigit() else cliente.numero_progressivo
+            cliente.paese = raw.get("country") or cliente.paese
+            cliente.tipologia = raw.get("type") or cliente.tipologia
+            cliente.comune = raw.get("address_city") or raw.get("city") or cliente.comune
+            cliente.cap = raw.get("address_zip") or raw.get("zip") or cliente.cap
+            cliente.provincia = raw.get("address_province") or raw.get("province") or cliente.provincia
+            cliente.indirizzo = raw.get("address_street") or cliente.indirizzo
+            cliente.telefono = raw.get("phone") or cliente.telefono
+            cliente.referente = raw.get("contact_person") or cliente.referente
+            cliente.note = raw.get("extra") or cliente.note
+            cliente.email = raw.get("email") or cliente.email
             imported += 1
         except Exception as exc:
             errors.append(f"cliente:{raw.get('id')} -> {exc}")
@@ -987,6 +1007,8 @@ async def _upsert_fic_fornitori(
             fornitore.fic_raw_data = raw
             imported += 1
         except Exception as exc:
+            import logging
+            logging.getLogger(__name__).error(f"FORNITORE_ERROR {raw.get('id')}: {exc}", exc_info=True)
             errors.append(f"fornitore:{raw.get('id')} -> {exc}")
     return imported
 
@@ -1056,13 +1078,17 @@ async def _upsert_fic_fatture_attive(
             fattura.importo_totale = importo_totale
             fattura.importo_pagato = importo_pagato
             fattura.importo_residuo = max(importo_residuo, Decimal("0"))
-            fattura.stato_pagamento = _payment_status(
+            # Non sovrascrivere se già marcata pagata nel nostro DB
+            fic_stato = _payment_status(
                 total=importo_totale,
                 paid=importo_pagato,
                 due_date=due_date,
                 paid_label="INCASSATA",
             )
-            fattura.data_ultimo_incasso = ultimo_incasso
+            if fattura.stato_pagamento != 'paid':
+                fattura.stato_pagamento = fic_stato
+            if not fattura.data_ultimo_incasso:
+                fattura.data_ultimo_incasso = ultimo_incasso
             fattura.valuta = raw.get("currency", {}).get("code") if isinstance(raw.get("currency"), dict) else None
             fattura.payments_raw = {"payments": payments}
             fattura.fic_raw_data = raw
@@ -1161,12 +1187,9 @@ async def sync_fic_data(db: AsyncSession, triggered_by: Optional[uuid.UUID] = No
             # Clienti
             try:
                 clienti_raw = await fic.fetch_collection(
-                    paths=[
-                        f"/c/{settings.FIC_COMPANY_ID}/entities/clients",
-                        f"/c/companies/{settings.FIC_COMPANY_ID}/clients",
-                        "/c/companies/clients",
-                    ],
-                    expected_keys=["clients", "items", "data"],
+                    paths=[f"/c/{settings.FIC_COMPANY_ID}/entities/clients"],
+                    expected_keys=["data"],
+                    extra_params={"per_page": 100, "fieldset": "detailed"},
                 )
                 run.imported_clienti = await _upsert_fic_clienti(db, clienti_raw, errors)
                 await db.flush()
@@ -1176,12 +1199,9 @@ async def sync_fic_data(db: AsyncSession, triggered_by: Optional[uuid.UUID] = No
             # Fornitori
             try:
                 fornitori_raw = await fic.fetch_collection(
-                    paths=[
-                        f"/c/{settings.FIC_COMPANY_ID}/entities/suppliers",
-                        f"/c/companies/{settings.FIC_COMPANY_ID}/suppliers",
-                        "/c/companies/suppliers",
-                    ],
-                    expected_keys=["suppliers", "items", "data"],
+                    paths=[f"/c/{settings.FIC_COMPANY_ID}/entities/suppliers"],
+                    expected_keys=["data"],
+                    extra_params={"per_page": 100, "fieldset": "detailed"},
                 )
                 run.imported_fornitori = await _upsert_fic_fornitori(db, fornitori_raw, errors)
                 await db.flush()
@@ -1191,12 +1211,9 @@ async def sync_fic_data(db: AsyncSession, triggered_by: Optional[uuid.UUID] = No
             # Fatture attive
             try:
                 fatture_attive_raw = await fic.fetch_collection(
-                    paths=[
-                        f"/c/{settings.FIC_COMPANY_ID}/issued_documents",
-                        "/c/issued_documents",
-                    ],
-                    expected_keys=["documents", "items", "data"],
-                    extra_params={"type": "invoice"},
+                    paths=[f"/c/{settings.FIC_COMPANY_ID}/issued_documents"],
+                    expected_keys=["data"],
+                    extra_params={"type": "invoice", "per_page": 100},
                 )
                 run.imported_fatture_attive = await _upsert_fic_fatture_attive(db, fatture_attive_raw, errors)
                 await db.flush()
@@ -1206,12 +1223,9 @@ async def sync_fic_data(db: AsyncSession, triggered_by: Optional[uuid.UUID] = No
             # Fatture passive
             try:
                 fatture_passive_raw = await fic.fetch_collection(
-                    paths=[
-                        f"/c/{settings.FIC_COMPANY_ID}/received_documents",
-                        "/c/received_documents",
-                    ],
-                    expected_keys=["documents", "items", "data"],
-                    extra_params={"type": "expense"},
+                    paths=[f"/c/{settings.FIC_COMPANY_ID}/received_documents"],
+                    expected_keys=["data"],
+                    extra_params={"per_page": 100},
                 )
                 run.imported_fatture_passive = await _upsert_fic_fatture_passive(db, fatture_passive_raw, errors)
                 await db.flush()
@@ -1237,6 +1251,12 @@ async def sync_fic_data(db: AsyncSession, triggered_by: Optional[uuid.UUID] = No
         await db.commit()
         await db.refresh(run)
         return run
+    except Exception as outer_exc:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        raise outer_exc
     finally:
         await _release_fic_sync_lock(db)
 
@@ -1271,3 +1291,32 @@ async def list_fatture_passive(db: AsyncSession) -> List[FatturaPassiva]:
         )
     )
     return result.scalars().all()
+
+async def incassa_fattura(db: AsyncSession, fattura_id: uuid.UUID, data_incasso) -> Optional[FatturaAttiva]:
+    result = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == fattura_id))
+    fattura = result.scalar_one_or_none()
+    if not fattura:
+        return None
+    fattura.stato_pagamento = 'paid'
+    fattura.data_ultimo_incasso = data_incasso
+    fattura.importo_pagato = fattura.importo_totale
+    fattura.importo_residuo = 0
+    await db.commit()
+    await db.refresh(fattura)
+
+    # Push a FIC
+    import httpx, os
+    fic_key = os.getenv('FIC_API_KEY','')
+    company_id = os.getenv('FIC_COMPANY_ID','')
+    if fic_key and company_id and fattura.fic_id:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                await client.put(
+                    f"https://api-v2.fattureincloud.it/c/{company_id}/issued_documents/{fattura.fic_id}",
+                    headers={"Authorization": f"Bearer {fic_key}"},
+                    json={"data": {"payment_method": {"id": 0}, "payments": [{"amount": float(fattura.importo_totale), "date": str(data_incasso), "paid": True}]}}
+                )
+        except Exception as e:
+            print(f"FIC push error: {e}")
+
+    return fattura
