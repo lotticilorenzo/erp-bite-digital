@@ -375,6 +375,13 @@ class FatturaAttivaOut(OrmBase):
     created_at: datetime
     updated_at: datetime
 
+class FatturaPassivaUpdate(BaseModel):
+    ricorrente: Optional[bool] = None
+    periodicita: Optional[str] = None
+    commessa_id: Optional[uuid.UUID] = None
+    categoria: Optional[str] = None
+    note: Optional[str] = None
+
 class FatturaPassivaOut(OrmBase):
     id: uuid.UUID
     fic_id: str
@@ -390,7 +397,11 @@ class FatturaPassivaOut(OrmBase):
     stato_pagamento: str
     data_ultimo_pagamento: Optional[date]
     valuta: Optional[str]
-    categoria: Optional[str]
+    categoria: Optional[str] = None
+    ricorrente: Optional[bool] = None
+    periodicita: Optional[str] = None
+    commessa_id: Optional[uuid.UUID] = None
+    note: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

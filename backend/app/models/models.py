@@ -335,6 +335,10 @@ class Fattura(Base):
     data_incasso: Mapped[Optional[date]] = mapped_column(Date)
     stato_fic: Mapped[Optional[str]] = mapped_column(String(50))
     fic_raw_data: Mapped[Optional[dict]] = mapped_column(JSON)
+    ricorrente: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    periodicita: Mapped[Optional[str]] = mapped_column(String(20))
+    commessa_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("commesse.id"))
+    note: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

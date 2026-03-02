@@ -1283,14 +1283,23 @@ async def list_fatture_attive(db: AsyncSession) -> List[FatturaAttiva]:
     return result.scalars().all()
 
 
-async def list_fatture_passive(db: AsyncSession) -> List[FatturaPassiva]:
+async def list_fatture_passive(db: AsyncSession):
+    from app.models.models import Fornitore
     result = await db.execute(
-        select(FatturaPassiva).order_by(
+        select(FatturaPassiva, Fornitore.ragione_sociale)
+        .outerjoin(Fornitore, FatturaPassiva.fornitore_id == Fornitore.id)
+        .order_by(
             FatturaPassiva.data_emissione.desc().nullslast(),
             FatturaPassiva.created_at.desc(),
         )
     )
-    return result.scalars().all()
+    rows = result.all()
+    fatture = []
+    for fp, ragione_sociale in rows:
+        d = {c.name: getattr(fp, c.name) for c in fp.__table__.columns}
+        d['fornitore_nome'] = ragione_sociale
+        fatture.append(d)
+    return fatture
 
 async def incassa_fattura(db: AsyncSession, fattura_id: uuid.UUID, data_incasso) -> Optional[FatturaAttiva]:
     result = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == fattura_id))
@@ -1319,4 +1328,17 @@ async def incassa_fattura(db: AsyncSession, fattura_id: uuid.UUID, data_incasso)
         except Exception as e:
             print(f"FIC push error: {e}")
 
+    return fattura
+
+async def update_fattura_passiva(db: AsyncSession, fattura_id: uuid.UUID, data: dict):
+    from app.models.models import FatturaPassiva
+    result = await db.execute(select(FatturaPassiva).where(FatturaPassiva.id == fattura_id))
+    fattura = result.scalar_one_or_none()
+    if not fattura:
+        return None
+    for k, v in data.items():
+        if v is not None:
+            setattr(fattura, k, v)
+    await db.commit()
+    await db.refresh(fattura)
     return fattura

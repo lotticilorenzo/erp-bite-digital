@@ -22,7 +22,7 @@ from app.schemas.schemas import (
     TimesheetCreate, TimesheetOut, TimesheetApprova,
     FornitoreOut, FatturaAttivaOut, FatturaPassivaOut, FicSyncStatusOut,
 )
-from app.schemas.schemas import FatturaIncassaRequest
+from app.schemas.schemas import FatturaIncassaRequest, FatturaPassivaUpdate
 from app.services.services import (
     get_user_by_email, create_user, list_users, update_user,
     list_clienti, get_cliente, create_cliente, update_cliente, delete_cliente,
@@ -31,7 +31,7 @@ from app.services.services import (
     create_timesheet, list_timesheet, approva_timesheet,
     calcola_metriche_commessa,
     get_dashboard_kpi, get_marginalita_clienti,
-    sync_fic_data, get_last_fic_sync_status, list_fornitori, list_fatture_attive, list_fatture_passive, incassa_fattura,
+    sync_fic_data, get_last_fic_sync_status, list_fornitori, list_fatture_attive, list_fatture_passive, incassa_fattura, update_fattura_passiva,
 )
 
 router = APIRouter()
@@ -357,13 +357,25 @@ async def patch_incassa_fattura(
     return fattura
 
 
-@router.get("/fatture-passive", response_model=List[FatturaPassivaOut], tags=["FIC"])
+@router.get("/fatture-passive", tags=["FIC"])
 async def get_fatture_passive(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
 ):
     return await list_fatture_passive(db)
 
+
+@router.patch("/fatture-passive/{fattura_id}", response_model=FatturaPassivaOut, tags=["FIC"])
+async def patch_fattura_passiva(
+    fattura_id: uuid.UUID,
+    body: FatturaPassivaUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    fattura = await update_fattura_passiva(db, fattura_id, body.model_dump(exclude_none=True))
+    if not fattura:
+        raise HTTPException(status_code=404, detail="Fattura non trovata")
+    return fattura
 
 @router.get("/fornitori", response_model=List[FornitoreOut], tags=["FIC"])
 async def get_fornitori(
