@@ -412,6 +412,12 @@ class FatturaPassiva(Base):
 
     fornitore: Mapped[Optional["Fornitore"]] = relationship(back_populates="fatture_passive")
 
+    @property
+    def fornitore_nome(self) -> Optional[str]:
+        if self.fornitore:
+            return self.fornitore.ragione_sociale
+        return None
+
 
 # ── FIC SYNC RUN ───────────────────────────────────────────
 class FicSyncRun(Base):

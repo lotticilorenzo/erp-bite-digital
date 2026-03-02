@@ -20,7 +20,8 @@ from app.models.models import (
 from app.schemas.schemas import (
     UserCreate, UserUpdate, ClienteCreate, ClienteUpdate,
     ProgettoCreate, ProgettoUpdate, CommessaCreate, CommessaUpdate,
-    TimesheetCreate, CostoCreate, CoefficienteCreate, TimesheetApprova
+    TimesheetCreate, CostoCreate, CoefficienteCreate, TimesheetApprova,
+    FatturaPassivaUpdate
 )
 from app.core.config import settings
 from app.core.security import hash_password
@@ -1265,9 +1266,97 @@ async def list_fatture_attive(db: AsyncSession) -> List[FatturaAttiva]:
 
 async def list_fatture_passive(db: AsyncSession) -> List[FatturaPassiva]:
     result = await db.execute(
-        select(FatturaPassiva).order_by(
+        select(FatturaPassiva)
+        .options(selectinload(FatturaPassiva.fornitore))
+        .order_by(
             FatturaPassiva.data_emissione.desc().nullslast(),
             FatturaPassiva.created_at.desc(),
         )
     )
     return result.scalars().all()
+
+
+async def get_fattura_passiva(db: AsyncSession, fattura_id: uuid.UUID) -> Optional[FatturaPassiva]:
+    result = await db.execute(
+        select(FatturaPassiva)
+        .options(selectinload(FatturaPassiva.fornitore))
+        .where(FatturaPassiva.id == fattura_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def update_fattura_passiva(
+    db: AsyncSession,
+    fattura_id: uuid.UUID,
+    data: FatturaPassivaUpdate,
+    by_user_id: uuid.UUID,
+) -> Optional[FatturaPassiva]:
+    from fastapi import HTTPException
+
+    fattura = await get_fattura_passiva(db, fattura_id)
+    if not fattura:
+        return None
+
+    payload = data.model_dump(exclude_none=True)
+    if not payload:
+        return fattura
+
+    prima = {
+        "fornitore_id": str(fattura.fornitore_id) if fattura.fornitore_id else None,
+        "numero": fattura.numero,
+        "data_scadenza": str(fattura.data_scadenza) if fattura.data_scadenza else None,
+        "importo_totale": str(fattura.importo_totale or 0),
+        "stato_pagamento": fattura.stato_pagamento,
+        "categoria": fattura.categoria,
+    }
+
+    if "fornitore_id" in payload:
+        fornitore_id = payload["fornitore_id"]
+        if fornitore_id is None:
+            fattura.fornitore_id = None
+        else:
+            fornitore_result = await db.execute(
+                select(Fornitore.id).where(Fornitore.id == fornitore_id)
+            )
+            if not fornitore_result.scalar_one_or_none():
+                raise HTTPException(status_code=422, detail="Fornitore non trovato")
+            fattura.fornitore_id = fornitore_id
+
+    if "stato_pagamento" in payload:
+        stato = str(payload["stato_pagamento"]).upper().strip()
+        allowed = {"ATTESA", "PAGATA", "SCADUTA"}
+        if stato not in allowed:
+            raise HTTPException(status_code=422, detail="stato_pagamento non valido")
+        fattura.stato_pagamento = stato
+
+    for field in (
+        "numero",
+        "data_emissione",
+        "data_scadenza",
+        "importo_totale",
+        "importo_pagato",
+        "importo_residuo",
+        "valuta",
+        "categoria",
+    ):
+        if field in payload:
+            setattr(fattura, field, payload[field])
+
+    # Se importo totale/pagato cambia e residuo non e passato, lo ricalcola.
+    if (
+        ("importo_totale" in payload or "importo_pagato" in payload)
+        and "importo_residuo" not in payload
+    ):
+        total = Decimal(fattura.importo_totale or 0)
+        paid = Decimal(fattura.importo_pagato or 0)
+        fattura.importo_residuo = max(total - paid, Decimal("0"))
+
+    # Se stato diventa PAGATA, forza residuo a zero e allinea il pagato.
+    if fattura.stato_pagamento == "PAGATA":
+        total = Decimal(fattura.importo_totale or 0)
+        fattura.importo_pagato = total
+        fattura.importo_residuo = Decimal("0")
+
+    await write_audit(db, by_user_id, "fatture_passive", fattura_id, "UPDATE", prima, payload)
+    await db.flush()
+    return await get_fattura_passiva(db, fattura_id)
