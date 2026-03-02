@@ -379,6 +379,7 @@ class FatturaPassivaOut(OrmBase):
     id: uuid.UUID
     fic_id: str
     fornitore_id: Optional[uuid.UUID]
+    fornitore_nome: Optional[str] = None
     fic_fornitore_id: Optional[str]
     numero: Optional[str]
     data_emissione: Optional[date]
@@ -392,6 +393,19 @@ class FatturaPassivaOut(OrmBase):
     categoria: Optional[str]
     created_at: datetime
     updated_at: datetime
+
+class FatturaPassivaUpdate(BaseModel):
+    fornitore_id: Optional[uuid.UUID] = None
+    numero: Optional[str] = None
+    data_emissione: Optional[date] = None
+    data_scadenza: Optional[date] = None
+    importo_totale: Optional[Decimal] = None
+    importo_pagato: Optional[Decimal] = None
+    importo_residuo: Optional[Decimal] = None
+    stato_pagamento: Optional[str] = None
+    valuta: Optional[str] = None
+    categoria: Optional[str] = None
+
 
 class FicSyncStatusOut(OrmBase):
     id: uuid.UUID
