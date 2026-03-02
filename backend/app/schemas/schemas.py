@@ -375,6 +375,32 @@ class FatturaAttivaOut(OrmBase):
     created_at: datetime
     updated_at: datetime
 
+class FornitoreUpdate(BaseModel):
+    categoria: Optional[str] = None
+    competenze: Optional[list] = None
+    tariffa: Optional[Decimal] = None
+    tariffa_tipo: Optional[str] = None
+    note: Optional[str] = None
+
+class FornitoreOut(OrmBase):
+    id: uuid.UUID
+    fic_id: str
+    ragione_sociale: str
+    piva: Optional[str] = None
+    codice_fiscale: Optional[str] = None
+    pec: Optional[str] = None
+    indirizzo: Optional[str] = None
+    email: Optional[str] = None
+    telefono: Optional[str] = None
+    attivo: bool
+    categoria: Optional[str] = None
+    competenze: Optional[list] = None
+    tariffa: Optional[Decimal] = None
+    tariffa_tipo: Optional[str] = None
+    note: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
 class FatturaPassivaUpdate(BaseModel):
     ricorrente: Optional[bool] = None
     periodicita: Optional[str] = None

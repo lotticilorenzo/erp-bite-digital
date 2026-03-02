@@ -22,7 +22,7 @@ from app.schemas.schemas import (
     TimesheetCreate, TimesheetOut, TimesheetApprova,
     FornitoreOut, FatturaAttivaOut, FatturaPassivaOut, FicSyncStatusOut,
 )
-from app.schemas.schemas import FatturaIncassaRequest, FatturaPassivaUpdate
+from app.schemas.schemas import FatturaIncassaRequest, FatturaPassivaUpdate, FornitoreUpdate, FornitoreOut
 from app.services.services import (
     get_user_by_email, create_user, list_users, update_user,
     list_clienti, get_cliente, create_cliente, update_cliente, delete_cliente,
@@ -31,7 +31,7 @@ from app.services.services import (
     create_timesheet, list_timesheet, approva_timesheet,
     calcola_metriche_commessa,
     get_dashboard_kpi, get_marginalita_clienti,
-    sync_fic_data, get_last_fic_sync_status, list_fornitori, list_fatture_attive, list_fatture_passive, incassa_fattura, update_fattura_passiva,
+    sync_fic_data, get_last_fic_sync_status, list_fornitori, list_fatture_attive, list_fatture_passive, incassa_fattura, update_fattura_passiva, list_fornitori_full, update_fornitore,
 )
 
 router = APIRouter()
@@ -356,6 +356,25 @@ async def patch_incassa_fattura(
         raise HTTPException(status_code=404, detail="Fattura non trovata")
     return fattura
 
+
+@router.get("/fornitori-full", tags=["Fornitori"])
+async def get_fornitori_full(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    return await list_fornitori_full(db)
+
+@router.patch("/fornitori/{fornitore_id}", response_model=FornitoreOut, tags=["Fornitori"])
+async def patch_fornitore(
+    fornitore_id: uuid.UUID,
+    body: FornitoreUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    forn = await update_fornitore(db, fornitore_id, body.model_dump(exclude_none=True))
+    if not forn:
+        raise HTTPException(status_code=404, detail="Fornitore non trovato")
+    return forn
 
 @router.get("/fatture-passive", tags=["FIC"])
 async def get_fatture_passive(

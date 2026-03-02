@@ -1330,6 +1330,42 @@ async def incassa_fattura(db: AsyncSession, fattura_id: uuid.UUID, data_incasso)
 
     return fattura
 
+async def list_fornitori_full(db: AsyncSession):
+    from app.models.models import Fornitore, FatturaPassiva
+    from sqlalchemy import func
+    result = await db.execute(
+        select(
+            Fornitore,
+            func.count(FatturaPassiva.id).label('num_fatture'),
+            func.coalesce(func.sum(FatturaPassiva.importo_totale), 0).label('spesa_totale'),
+            func.max(FatturaPassiva.data_emissione).label('ultima_fattura'),
+        )
+        .outerjoin(FatturaPassiva, FatturaPassiva.fornitore_id == Fornitore.id)
+        .group_by(Fornitore.id)
+        .order_by(Fornitore.ragione_sociale)
+    )
+    rows = result.all()
+    out = []
+    for forn, num_fatture, spesa_totale, ultima_fattura in rows:
+        d = {c.name: getattr(forn, c.name) for c in forn.__table__.columns}
+        d['num_fatture'] = num_fatture
+        d['spesa_totale'] = float(spesa_totale or 0)
+        d['ultima_fattura'] = str(ultima_fattura) if ultima_fattura else None
+        out.append(d)
+    return out
+
+async def update_fornitore(db: AsyncSession, fornitore_id: uuid.UUID, data: dict):
+    from app.models.models import Fornitore
+    result = await db.execute(select(Fornitore).where(Fornitore.id == fornitore_id))
+    forn = result.scalar_one_or_none()
+    if not forn:
+        return None
+    for k, v in data.items():
+        setattr(forn, k, v)
+    await db.commit()
+    await db.refresh(forn)
+    return forn
+
 async def update_fattura_passiva(db: AsyncSession, fattura_id: uuid.UUID, data: dict):
     from app.models.models import FatturaPassiva
     result = await db.execute(select(FatturaPassiva).where(FatturaPassiva.id == fattura_id))

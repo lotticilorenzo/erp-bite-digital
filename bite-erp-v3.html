@@ -618,6 +618,178 @@ function DashboardScreen({state,setPage,setDrillCliente,setDrillCommessa}) {
 // ─────────────────────────────────────────────────────────
 // SCREEN: CLIENTI
 // ─────────────────────────────────────────────────────────
+function FornitoriScreen({state,dispatch}){
+  const [fornitori,setFornitori]=React.useState([]);
+  const [loading,setLoading]=React.useState(true);
+  const [filtroCategoria,setFiltroCategoria]=React.useState('TUTTI');
+  const [ricerca,setRicerca]=React.useState('');
+  const [modal,setModal]=React.useState(null);
+  const [form,setForm]=React.useState({});
+  const [saving,setSaving]=React.useState(false);
+
+  const CATEGORIE=['FREELANCER','SAAS','STRUTTURA','CONSULENTE','ALTRO'];
+  const CAT_COLOR={FREELANCER:'var(--violet)',SAAS:'var(--amber)',STRUTTURA:'var(--green)',CONSULENTE:'var(--blue,#3B82F6)',ALTRO:'var(--g4)'};
+
+  const load=React.useCallback(async()=>{
+    setLoading(true);
+    try{
+      const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+      const res=await fetch('/api/v1/fornitori-full',{headers:{'Authorization':'Bearer '+token}});
+      if(res.ok){const d=await res.json();setFornitori(d);}
+    }catch(e){console.error(e);}
+    setLoading(false);
+  },[]);
+
+  React.useEffect(()=>{load();},[load]);
+
+  const openEdit=(f)=>{
+    setForm({...f,competenze_str:(f.competenze||[]).join(', ')});
+    setModal('edit');
+  };
+
+  const saveEdit=async e=>{
+    e.preventDefault();
+    setSaving(true);
+    try{
+      const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+      const payload={
+        categoria:form.categoria||null,
+        competenze:form.competenze_str?form.competenze_str.split(',').map(s=>s.trim()).filter(Boolean):[],
+        tariffa:form.tariffa?parseFloat(form.tariffa):null,
+        tariffa_tipo:form.tariffa_tipo||null,
+        note:form.note||null,
+      };
+      const res=await fetch('/api/v1/fornitori/'+form.id,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(payload)});
+      if(res.ok){
+        setFornitori(prev=>prev.map(f=>f.id===form.id?{...f,...payload}:f));
+        setModal(null);
+      }else{const err=await res.json().catch(()=>({}));alert('Errore: '+JSON.stringify(err));}
+    }catch(e){console.error(e);}
+    setSaving(false);
+  };
+
+  const filtered=fornitori
+    .filter(f=>filtroCategoria==='TUTTI'||f.categoria===filtroCategoria)
+    .filter(f=>!ricerca||f.ragione_sociale?.toLowerCase().includes(ricerca.toLowerCase()));
+
+  const totSpesa=filtered.reduce((s,f)=>s+(f.spesa_totale||0),0);
+
+  return <div style={{padding:'28px 32px',minHeight:'100vh',background:'var(--g1)'}}>
+    <div style={{marginBottom:24}}>
+      <h1 style={{fontSize:26,fontWeight:800,color:'var(--white)',margin:0}}>Fornitori</h1>
+      <p style={{color:'var(--g4)',fontSize:13,margin:'4px 0 0'}}>{fornitori.length} fornitori · spesa periodo filtrato: {fmtEuro(totSpesa)}</p>
+    </div>
+
+    {/* KPI */}
+    <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20}}>
+      {CATEGORIE.slice(0,4).map(cat=>{
+        const n=fornitori.filter(f=>f.categoria===cat).length;
+        const s=fornitori.filter(f=>f.categoria===cat).reduce((a,f)=>a+(f.spesa_totale||0),0);
+        return <div key={cat} style={{background:'var(--g2)',borderRadius:12,padding:'14px 16px',border:'1px solid var(--g3)'}}>
+          <div style={{fontSize:11,color:'var(--g4)',fontFamily:'var(--fm)',marginBottom:4}}>{cat}</div>
+          <div style={{fontSize:20,fontWeight:700,color:CAT_COLOR[cat]||'var(--g5)'}}>{n}</div>
+          <div style={{fontSize:11,color:'var(--g4)',marginTop:2}}>{fmtEuro(s)}</div>
+        </div>;
+      })}
+    </div>
+
+    {/* FILTRI */}
+    <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap',alignItems:'center'}}>
+      <input value={ricerca} onChange={e=>setRicerca(e.target.value)} placeholder='Cerca fornitore...' style={{padding:'7px 12px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12,width:220}}/>
+      <select value={filtroCategoria} onChange={e=>setFiltroCategoria(e.target.value)} style={{padding:'7px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12}}>
+        <option value='TUTTI'>Tutte le categorie</option>
+        {CATEGORIE.map(c=><option key={c} value={c}>{c}</option>)}
+      </select>
+      <span style={{fontSize:12,color:'var(--g4)',marginLeft:4}}>{filtered.length} risultati</span>
+    </div>
+
+    {/* TABELLA */}
+    {loading?<div style={{color:'var(--g4)',padding:40,textAlign:'center'}}>Caricamento...</div>:
+    <div style={{background:'var(--g2)',borderRadius:14,border:'1px solid var(--g3)',overflow:'hidden'}}>
+      <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
+        <thead><tr style={{background:'var(--g1)'}}>
+          {['Fornitore','Categoria','Competenze','Tariffa','Fatture','Spesa totale','Ultima fattura',''].map(h=>
+            <th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:11,color:'var(--g4)',fontFamily:'var(--fm)',fontWeight:600,borderBottom:'1px solid var(--g3)'}}>{h}</th>
+          )}
+        </tr></thead>
+        <tbody>
+          {filtered.map(f=><tr key={f.id} style={{borderBottom:'1px solid var(--g3)'}}>
+            <td style={{padding:'10px 14px'}}>
+              <div style={{fontWeight:700,color:'var(--white)'}}>{f.ragione_sociale}</div>
+              {f.email&&<div style={{fontSize:11,color:'var(--g4)',marginTop:2}}>{f.email}</div>}
+            </td>
+            <td style={{padding:'10px 14px'}}>
+              {f.categoria?<span style={{padding:'3px 8px',borderRadius:6,fontSize:11,fontWeight:600,background:CAT_COLOR[f.categoria]+'22',color:CAT_COLOR[f.categoria]||'var(--g4)'}}>{f.categoria}</span>
+              :<span style={{fontSize:11,color:'var(--g4)'}}>—</span>}
+            </td>
+            <td style={{padding:'10px 14px',maxWidth:200}}>
+              {(f.competenze||[]).length>0
+                ?<div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                    {(f.competenze||[]).map((c,i)=><span key={i} style={{padding:'2px 7px',borderRadius:5,fontSize:10,background:'var(--g3)',color:'var(--g5)'}}>{c}</span>)}
+                  </div>
+                :<span style={{fontSize:11,color:'var(--g4)'}}>—</span>}
+            </td>
+            <td style={{padding:'10px 14px',fontFamily:'var(--fm)',fontSize:12}}>
+              {f.tariffa?<span>{fmtEuro(f.tariffa)}<span style={{fontSize:10,color:'var(--g4)',marginLeft:3}}>{f.tariffa_tipo||''}</span></span>:<span style={{color:'var(--g4)'}}>—</span>}
+            </td>
+            <td style={{padding:'10px 14px',fontFamily:'var(--fm)',fontSize:12,color:'var(--g5)',textAlign:'center'}}>{f.num_fatture||0}</td>
+            <td style={{padding:'10px 14px',fontFamily:'var(--fm)',fontSize:12,color:'var(--red)',fontWeight:600}}>−{fmtEuro(f.spesa_totale||0)}</td>
+            <td style={{padding:'10px 14px',fontSize:11,color:'var(--g4)'}}>{f.ultima_fattura?fmtDate(f.ultima_fattura):'—'}</td>
+            <td style={{padding:'10px 14px'}}>
+              <button onClick={()=>openEdit(f)} style={{padding:'4px 10px',borderRadius:7,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',fontSize:11,cursor:'pointer'}}>✎ Modifica</button>
+            </td>
+          </tr>)}
+        </tbody>
+      </table>
+      {filtered.length===0&&<div style={{padding:40,textAlign:'center',color:'var(--g4)'}}>Nessun fornitore trovato</div>}
+    </div>}
+
+    {/* MODAL MODIFICA */}
+    {modal==='edit'&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={()=>setModal(null)}>
+      <div style={{background:'var(--g2)',borderRadius:16,padding:28,width:480,maxWidth:'90vw',border:'1px solid var(--g3)'}} onClick={e=>e.stopPropagation()}>
+        <h3 style={{margin:'0 0 20px',color:'var(--white)',fontSize:16}}>{form.ragione_sociale}</h3>
+        <form onSubmit={saveEdit}>
+          <div style={{marginBottom:14}}>
+            <label style={{fontSize:12,color:'var(--g4)',display:'block',marginBottom:4}}>Categoria</label>
+            <select value={form.categoria||''} onChange={e=>setForm({...form,categoria:e.target.value})} style={{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:13}}>
+              <option value=''>— Seleziona —</option>
+              {CATEGORIE.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={{marginBottom:14}}>
+            <label style={{fontSize:12,color:'var(--g4)',display:'block',marginBottom:4}}>Competenze <span style={{color:'var(--g4)',fontStyle:'italic'}}>(separate da virgola)</span></label>
+            <input value={form.competenze_str||''} onChange={e=>setForm({...form,competenze_str:e.target.value})} placeholder='es. grafica, social media, copywriting' style={{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:13,boxSizing:'border-box'}}/>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
+            <div>
+              <label style={{fontSize:12,color:'var(--g4)',display:'block',marginBottom:4}}>Tariffa (€)</label>
+              <input type='number' step='0.01' value={form.tariffa||''} onChange={e=>setForm({...form,tariffa:e.target.value})} placeholder='0.00' style={{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:13,boxSizing:'border-box'}}/>
+            </div>
+            <div>
+              <label style={{fontSize:12,color:'var(--g4)',display:'block',marginBottom:4}}>Tipo tariffa</label>
+              <select value={form.tariffa_tipo||''} onChange={e=>setForm({...form,tariffa_tipo:e.target.value})} style={{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:13}}>
+                <option value=''>—</option>
+                <option value='oraria'>/ora</option>
+                <option value='giornaliera'>/giorno</option>
+                <option value='mensile'>/mese</option>
+                <option value='progetto'>a progetto</option>
+              </select>
+            </div>
+          </div>
+          <div style={{marginBottom:20}}>
+            <label style={{fontSize:12,color:'var(--g4)',display:'block',marginBottom:4}}>Note</label>
+            <textarea value={form.note||''} onChange={e=>setForm({...form,note:e.target.value})} rows={3} style={{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:13,boxSizing:'border-box',resize:'vertical'}}/>
+          </div>
+          <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+            <button type='button' onClick={()=>setModal(null)} style={{padding:'8px 16px',borderRadius:8,border:'1px solid var(--g3)',background:'transparent',color:'var(--g5)',cursor:'pointer'}}>Annulla</button>
+            <button type='submit' disabled={saving} style={{padding:'8px 16px',borderRadius:8,border:'none',background:'var(--purple)',color:'white',fontWeight:600,cursor:'pointer'}}>{saving?'Salvataggio...':'Salva'}</button>
+          </div>
+        </form>
+      </div>
+    </div>}
+  </div>;
+}
+
 function ClientiScreen({state,dispatch,setPage,setDrillCliente,api}) {
   const [search,setSearch]=useState('');
   const [modal,setModal]=useState(null);
@@ -3060,6 +3232,7 @@ const NAV=[
   {id:'report',label:'Report mensile',icon:'⎙',section:'Generale'},
   {id:'profilo',label:'Profilo',icon:'👤',section:'Generale'},
   {id:'clienti',label:'Clienti',icon:'◎',section:'Gestione'},
+  {id:'fornitori',label:'Fornitori',icon:'🏭',section:'Gestione'},
   {id:'progetti',label:'Progetti',icon:'▤',section:'Gestione'},
   {id:'commesse',label:'Commesse',icon:'◷',section:'Gestione'},
   {id:'timesheet',label:'Timesheet',icon:'⏱',section:'Gestione'},
@@ -3370,7 +3543,8 @@ function App(){
       case 'dashboard':        return <DashboardScreen state={state} setPage={setPage} setDrillCliente={setDrillCliente} setDrillCommessa={setDrillCommessa}/>;
       case 'report':           return <ReportMensileScreen state={state} setPage={setPage}/>;
       case 'profilo':          return <ProfiloScreen authUser={authUser} api={usersApi} onAuthUserUpdate={updateAuthUser}/>;
-      case 'clienti':          return <ClientiScreen state={state} dispatch={dispatch} setPage={setPage} setDrillCliente={setDrillCliente} api={clientiApi}/>;
+      case 'clienti':          return <ClientiScreen state={state} dispatch={dispatch} setPage={setPage} setDrillCliente={setDrillCliente} api={clientiApi}/>
+      case 'fornitori':         return <FornitoriScreen state={state} dispatch={dispatch}/>;
       case 'cliente_detail':   return <ClienteDetailScreen state={state} dispatch={dispatch} clienteId={drillCliente} setPage={setPage} setDrillProgetto={setDrillProgetto}/>;
       case 'progetti':         return <ProgettiScreen state={state} dispatch={dispatch} setPage={setPage} setDrillProgetto={setDrillProgetto} api={progettiApi}/>;
       case 'progetto_detail':  return <ProgettoDetailScreen state={state} progettoId={drillProgetto} setPage={setPage}/>;
