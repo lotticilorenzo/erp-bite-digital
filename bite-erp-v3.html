@@ -1878,9 +1878,15 @@ function FinanziariaScreen({state,dispatch}) {
         .reduce((s,f)=>s+(f.importo_residuo||f.importo||0),0):0;
 
       // USCITE: fatture passive per data_scadenza + costi fissi
-      const uscitePass=state.fatture_passive
-        .filter(f=>f.data_scadenza?.substring(0,7)===mKey)
+      // Uscite consuntive: fatture pagate (data_ultimo_pagamento)
+      const uscitePassPagate=state.fatture_passive
+        .filter(f=>f.stato==='PAGATA'&&f.data_ultimo_pagamento?.substring(0,7)===mKey)
         .reduce((s,f)=>s+(f.importo||0),0);
+      // Uscite previsionali: fatture non pagate (data_emissione, solo mesi futuri/corrente)
+      const uscitePassPrev=(isFuture||isCurrent)?state.fatture_passive
+        .filter(f=>f.stato!=='PAGATA'&&f.data_emissione?.substring(0,7)===mKey)
+        .reduce((s,f)=>s+(f.importo||0),0):0;
+      const uscitePass=uscitePassPagate+uscitePassPrev;
       const usciteCosti=state.costi_fissi
         .filter(c=>c.mese===mKey)
         .reduce((s,c)=>s+(c.importo||0),0);
@@ -2104,7 +2110,7 @@ function FinanziariaScreen({state,dispatch}) {
         <CH title='Fatture da fornitori' meta={`${state.fatture_passive.length} fatture`}/>
         {state.fatture_passive.length===0?<Empty msg='Nessuna fattura passiva'/>:
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
-          <thead><tr><Th c='Fornitore'/><Th c='Categoria'/><Th c='Importo'/><Th c='Scadenza'/><Th c='Ricorrente'/><Th c='Stato'/><Th c='Azioni'/></tr></thead>
+          <thead><tr><Th c='Fornitore'/><Th c='Categoria'/><Th c='Importo'/><Th c='Scadenza'/><Th c='Ricorrente'/><Th c='Stato'/><Th c='Pagamento'/><Th c='Azioni'/></tr></thead>
           <tbody>
             {state.fatture_passive.map(fp=><TR key={fp.id}>
               <Td><div style={{fontWeight:700}}>{fp.fornitore}</div></Td>
@@ -2113,6 +2119,11 @@ function FinanziariaScreen({state,dispatch}) {
               <Td mono muted>{fmtDate(fp.data_scadenza)}</Td>
               <Td><span style={{fontFamily:'var(--fm)',fontSize:11,color:fp.ricorrente?'var(--amber)':'var(--g5)'}}>{fp.ricorrente?'↻ mensile':'una tantum'}</span></Td>
               <Td><Badge s={fp.stato}/></Td>
+              <Td>
+                {fp.data_ultimo_pagamento&&<div style={{fontSize:11,color:'var(--green)'}}>{fmtDate(fp.data_ultimo_pagamento)}</div>}
+                {fp.metodo_pagamento&&<div style={{fontSize:10,color:'var(--g4)'}}>{fp.metodo_pagamento}</div>}
+                {!fp.data_ultimo_pagamento&&<span style={{color:'var(--g4)',fontSize:11}}>—</span>}
+              </Td>
               <Td style={{display:'flex',gap:4}}>
                 {fp.stato==='ATTESA'&&<Btn v='success' onClick={()=>cambiaStatoFattPassiva(fp.id,'PAGATA')} s={{padding:'4px 8px',fontSize:11}}>✓ Pagata</Btn>}
                 <Btn v='ghost' onClick={()=>openEditFattPassiva(fp)} s={{padding:'4px 8px',fontSize:11}}>✎ Modifica</Btn>
@@ -3391,6 +3402,8 @@ function App(){
             stato, categoria:cat, valuta:f.valuta||'EUR',
             ricorrente:existing?.ricorrente||false,
             note:existing?.note||f.note||'',
+            metodo_pagamento:f.metodo_pagamento||null,
+            data_ultimo_pagamento:f.data_ultimo_pagamento||null,
           };
         })});
       }

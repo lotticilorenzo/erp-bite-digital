@@ -1127,23 +1127,27 @@ async def _upsert_fic_fatture_passive(
 
             fattura.fornitore_id = fornitore.id if fornitore else None
             fattura.fic_fornitore_id = fic_fornitore_id
-            fattura.numero = _extract_number(raw)
             fattura.data_emissione = _extract_doc_date(raw)
             fattura.data_scadenza = due_date
             fattura.importo_totale = importo_totale
             fattura.importo_pagato = importo_pagato
             fattura.importo_residuo = max(importo_residuo, Decimal("0"))
-            fattura.stato_pagamento = _payment_status(
-                total=importo_totale,
-                paid=importo_pagato,
-                due_date=due_date,
-                paid_label="PAGATA",
-            )
-            fattura.data_ultimo_pagamento = ultimo_pagamento
             fattura.categoria = raw.get("type")
             fattura.valuta = raw.get("currency", {}).get("code") if isinstance(raw.get("currency"), dict) else None
             fattura.payments_raw = {"payments": payments}
             fattura.fic_raw_data = raw
+            # Preserva dati inseriti manualmente — non sovrascrivere se già presenti
+            if not fattura.numero:
+                fattura.numero = _extract_number(raw)
+            if fattura.stato_pagamento not in ('paid', 'PAGATA'):
+                fattura.stato_pagamento = _payment_status(
+                    total=importo_totale,
+                    paid=importo_pagato,
+                    due_date=due_date,
+                    paid_label="PAGATA",
+                )
+            if not fattura.data_ultimo_pagamento:
+                fattura.data_ultimo_pagamento = ultimo_pagamento
             imported += 1
         except Exception as exc:
             errors.append(f"fattura_passiva:{raw.get('id')} -> {exc}")
