@@ -2070,7 +2070,7 @@ function FinanziariaScreen({state,dispatch}) {
         </div>
         {state.fatture_attive.length===0?<Empty msg='Nessuna fattura'/>:
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
-          <thead><tr><Th c='N°'/><Th c='Cliente'/><Th c='Importo'/><Th c='Emissione'/><Th c='Scadenza'/><Th c='Stato'/><Th c='Azioni'/></tr></thead>
+          <thead><tr><Th c='N°'/><Th c='Cliente'/><Th c='Importo'/><Th c='Emissione'/><Th c='Scadenza'/><Th c='Incasso'/><Th c='Stato'/><Th c='Azioni'/></tr></thead>
           <tbody>
             {[...state.fatture_attive]
               .filter(fa=>{
@@ -2088,6 +2088,7 @@ function FinanziariaScreen({state,dispatch}) {
                 <Td mono style={{color:'var(--green)',fontWeight:700}}>{fmtEuro(fa.importo)}</Td>
                 <Td mono muted>{fmtDate(fa.data_emissione)}</Td>
                 <Td mono>{fmtDate(fa.data_scadenza)}{gg!==null&&<span style={{color:'var(--red)',marginLeft:6,fontFamily:'var(--fm)',fontSize:10}}>+{gg}gg</span>}</Td>
+                <Td mono style={{color:'var(--green)'}}>{fa.data_ultimo_incasso?fmtDate(fa.data_ultimo_incasso):<span style={{color:'var(--g4)'}}>—</span>}</Td>
                 <Td><Badge s={fa.stato}/></Td>
                 <Td><div style={{display:'flex',gap:5}}>
                   {fa.stato==='ATTESA'&&<><Btn v='success' onClick={()=>cambiaStatoFattAttiva(fa.id,'INCASSATA')} s={{padding:'4px 8px',fontSize:11}}>✓ Incassata</Btn><Btn v='danger' onClick={()=>cambiaStatoFattAttiva(fa.id,'SCADUTA')} s={{padding:'4px 8px',fontSize:11}}>Scaduta</Btn></>}

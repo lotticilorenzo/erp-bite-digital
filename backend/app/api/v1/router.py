@@ -384,7 +384,7 @@ async def get_fatture_passive(
     return await list_fatture_passive(db)
 
 
-@router.patch("/fatture-passive/{fattura_id}", response_model=FatturaPassivaOut, tags=["FIC"])
+@router.patch("/fatture-passive/{fattura_id}", tags=["FIC"])
 async def patch_fattura_passiva(
     fattura_id: uuid.UUID,
     body: FatturaPassivaUpdate,
