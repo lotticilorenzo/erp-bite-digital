@@ -279,6 +279,7 @@ const INIT = {
     {id:'cf3',descrizione:'Software e tools',importo:320,categoria:'SOFTWARE',mese:currMese(),ricorrente:true},
     {id:'cf4',descrizione:'Commercialista',importo:250,categoria:'CONSULENZE',mese:currMese(),ricorrente:true},
   ],
+  movimenti_cassa: [],
 };
 
 // ─────────────────────────────────────────────────────────
@@ -1828,6 +1829,12 @@ function TimesheetScreen({state,dispatch,api,authUser}) {
 // ─────────────────────────────────────────────────────────
 function FinanziariaScreen({state,dispatch}) {
   const [tab,setTab]=useState('fatture_attive');
+  const [insightAnno,setInsightAnno]=useState(String(new Date().getFullYear()));
+  const [insightPeriodo,setInsightPeriodo]=useState('anno');
+  const [fpSearch,setFpSearch]=useState('');
+  const [fpDal,setFpDal]=useState('');
+  const [fpAl,setFpAl]=useState('');
+  const [fpStato,setFpStato]=useState('TUTTI');
   const [filtroStato,setFiltroStato]=useState('TUTTI');
   const [filtroDal,setFiltroDal]=useState('');
   const [filtroAl,setFiltroAl]=useState('');
@@ -1836,10 +1843,23 @@ function FinanziariaScreen({state,dispatch}) {
   const [form,setForm]=useState({});
   const clienteMap=useMemo(()=>Object.fromEntries(state.clienti.map(c=>[c.id,c])),[state.clienti]);
 
-  // FATTURE ATTIVE
-  const totAttese=state.fatture_attive.filter(f=>f.stato==='ATTESA').reduce((s,f)=>s+f.importo,0);
-  const totScadute=state.fatture_attive.filter(f=>f.stato==='SCADUTA').reduce((s,f)=>s+f.importo,0);
-  const totIncassate=state.fatture_attive.filter(f=>f.stato==='INCASSATA').reduce((s,f)=>s+f.importo,0);
+  // FATTURE ATTIVE — stato effettivo (scaduta se data_scadenza < oggi e non incassata)
+  const todayStr=nowDate();
+  const fattureAttiveEffettive=state.fatture_attive.map(f=>{
+    if(f.stato!=='INCASSATA'&&f.data_scadenza&&f.data_scadenza<todayStr)
+      return {...f,stato:'SCADUTA'};
+    return f;
+  });
+  // Totali filtrati (rispettano filtroStato, filtroDal, filtroAl)
+  const fattureFiltrate=fattureAttiveEffettive.filter(fa=>{
+    if(filtroStato!=='TUTTI'&&fa.stato!==filtroStato)return false;
+    if(filtroDal&&fa.data_emissione&&fa.data_emissione<filtroDal)return false;
+    if(filtroAl&&fa.data_emissione&&fa.data_emissione>filtroAl)return false;
+    return true;
+  });
+  const totAttese=fattureFiltrate.filter(f=>f.stato==='ATTESA').reduce((s,f)=>s+f.importo,0);
+  const totScadute=fattureFiltrate.filter(f=>f.stato==='SCADUTA').reduce((s,f)=>s+f.importo,0);
+  const totIncassate=fattureFiltrate.filter(f=>f.stato==='INCASSATA').reduce((s,f)=>s+f.importo,0);
   // FATTURE PASSIVE
   const totPassiveAttese=state.fatture_passive.filter(f=>f.stato==='ATTESA').reduce((s,f)=>s+f.importo,0);
   const totPagate=state.fatture_passive.filter(f=>f.stato==='PAGATA').reduce((s,f)=>s+f.importo,0);
@@ -1906,6 +1926,11 @@ function FinanziariaScreen({state,dispatch}) {
   const openEditFattPassiva=(fp)=>setForm({...fp,_editId:fp.id})||setModal('edit_fatt_passiva');
   const saveEditFattPassiva=async e=>{
     e.preventDefault();
+    // Validazione numero duplicato
+    if(form.numero&&state.fatture_passive.some(f=>f.numero===form.numero&&f.id!==form._editId)){
+      alert('Numero fattura già utilizzato. Scegli un numero diverso.');
+      return;
+    }
     const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
     const payload={
       ricorrente:form.ricorrente||false,
@@ -1913,6 +1938,7 @@ function FinanziariaScreen({state,dispatch}) {
       categoria:form.categoria||null,
       commessa_id:form.commessa_id||null,
       note:form.note||null,
+      numero:form.numero||null,
     };
     try{
       const res=await fetch('/api/v1/fatture-passive/'+form._editId,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(payload)});
@@ -1947,8 +1973,24 @@ function FinanziariaScreen({state,dispatch}) {
     }
     const f=state.fatture_attive.find(x=>x.id===id);if(f)dispatch({type:'UPDATE',entity:'fatture_attive',item:{...f,stato}});
   };
-  const cambiaStatoFattPassiva=(id,stato)=>{const f=state.fatture_passive.find(x=>x.id===id);if(f)dispatch({type:'UPDATE',entity:'fatture_passive',item:{...f,stato}});};
-  const TABS=[{id:'fatture_attive',label:'Fatture attive'},{id:'fatture_passive',label:'Fatture passive'},{id:'costi_fissi',label:'Costi fissi'},{id:'cashflow',label:'Cash flow'}];
+  const cambiaStatoFattPassiva=async(id,stato)=>{
+    if(stato==='PAGATA'){
+      const raw=window.prompt('Data di pagamento (DD/MM/YYYY):',new Date().toLocaleDateString('it-IT'));
+      if(!raw)return;
+      let data=raw.trim();
+      if(/^\d{2}\/\d{2}\/\d{4}$/.test(data)){const p=data.split('/');data=p[2]+'-'+p[1]+'-'+p[0];}
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(data)){alert('Formato data non valido');return;}
+      try{
+        const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+        const res=await fetch('/api/v1/fatture-passive/'+id,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({stato_pagamento:'paid',data_ultimo_pagamento:data})});
+        if(res.ok){const f=state.fatture_passive.find(x=>x.id===id);if(f)dispatch({type:'UPDATE',entity:'fatture_passive',item:{...f,stato:'PAGATA',data_ultimo_pagamento:data}});}
+        else{const err=await res.json().catch(()=>({}));alert('Errore: '+JSON.stringify(err));}
+      }catch(e){console.error(e);}
+      return;
+    }
+    const f=state.fatture_passive.find(x=>x.id===id);if(f)dispatch({type:'UPDATE',entity:'fatture_passive',item:{...f,stato}});
+  };
+  const TABS=[{id:'fatture_attive',label:'Fatture attive'},{id:'fatture_passive',label:'Fatture passive'},{id:'costi_fissi',label:'Costi fissi'},{id:'cashflow',label:'Cash flow'},{id:'insight',label:'Insight'}];
 
   return <div className='fu'>
     {modal==='fatt_attiva'&&<Modal title='Nuova fattura attiva' onClose={closeModal}>
@@ -1969,6 +2011,12 @@ function FinanziariaScreen({state,dispatch}) {
       <form onSubmit={saveEditFattPassiva}>
         <FRow label='Fornitore'><input disabled value={form.fornitore||'—'} style={{opacity:.6}}/></FRow>
         <FRow label='Importo'><input disabled value={fmtEuro(form.importo||0)} style={{opacity:.6}}/></FRow>
+        <FRow label='N° Fattura'>
+          <input value={form.numero||''} onChange={e=>setForm({...form,numero:e.target.value})} placeholder='es. 2026/0047'/>
+          {form.numero&&state.fatture_passive.some(f=>f.numero===form.numero&&f.id!==form._editId)&&
+            <span style={{color:'var(--red)',fontSize:11,marginTop:4,display:'block'}}>⚠ Numero già utilizzato da {state.fatture_passive.find(f=>f.numero===form.numero&&f.id!==form._editId)?.fornitore}</span>
+          }
+        </FRow>
         <FRow label='Categoria'>
           <select value={form.categoria||'ALTRO'} onChange={e=>setForm({...form,categoria:e.target.value})}>
             {['SOFTWARE','STRUTTURA','PERSONALE','CONSULENZE','MARKETING','UTILITIES','BANCHE','ALTRO'].map(c=><option key={c} value={c}>{c}</option>)}
@@ -2070,9 +2118,9 @@ function FinanziariaScreen({state,dispatch}) {
         </div>
         {state.fatture_attive.length===0?<Empty msg='Nessuna fattura'/>:
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
-          <thead><tr><Th c='N°'/><Th c='Cliente'/><Th c='Importo'/><Th c='Emissione'/><Th c='Scadenza'/><Th c='Incasso'/><Th c='Stato'/><Th c='Azioni'/></tr></thead>
+          <thead><tr><Th c='N°'/><Th c='Cliente'/><Th c='Importo Netto'/><Th c='Importo Totale'/><Th c='Emissione'/><Th c='Scadenza'/><Th c='Incasso'/><Th c='Stato'/><Th c='Azioni'/></tr></thead>
           <tbody>
-            {[...state.fatture_attive]
+            {[...fattureAttiveEffettive]
               .filter(fa=>{
                 if(filtroStato!=='TUTTI'&&fa.stato!==filtroStato)return false;
                 if(filtroDal&&fa.data_emissione&&fa.data_emissione<filtroDal)return false;
@@ -2085,6 +2133,7 @@ function FinanziariaScreen({state,dispatch}) {
               return <TR key={fa.id}>
                 <Td mono muted>{fa.numero}</Td>
                 <Td><div style={{fontWeight:700}}>{cl?.ragione_sociale||'—'}</div></Td>
+                <Td mono style={{color:'var(--g5)',fontWeight:600}}>{fmtEuro(fa.importo/1.22)}</Td>
                 <Td mono style={{color:'var(--green)',fontWeight:700}}>{fmtEuro(fa.importo)}</Td>
                 <Td mono muted>{fmtDate(fa.data_emissione)}</Td>
                 <Td mono>{fmtDate(fa.data_scadenza)}{gg!==null&&<span style={{color:'var(--red)',marginLeft:6,fontFamily:'var(--fm)',fontSize:10}}>+{gg}gg</span>}</Td>
@@ -2109,14 +2158,39 @@ function FinanziariaScreen({state,dispatch}) {
       {/* FATTURE PASSIVE */}
       {tab==='fatture_passive'&&<Card>
         <CH title='Fatture da fornitori' meta={`${state.fatture_passive.length} fatture`}/>
+        {/* FILTRI */}
+        <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap',alignItems:'center'}}>
+          <input placeholder='Cerca fornitore...' value={fpSearch} onChange={e=>setFpSearch(e.target.value)}
+            style={{padding:'6px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12,minWidth:180}}/>
+          <input type='date' value={fpDal} onChange={e=>setFpDal(e.target.value)}
+            style={{padding:'6px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12}}/>
+          <input type='date' value={fpAl} onChange={e=>setFpAl(e.target.value)}
+            style={{padding:'6px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12}}/>
+          <select value={fpStato} onChange={e=>setFpStato(e.target.value)}
+            style={{padding:'6px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12}}>
+            <option value='TUTTI'>Tutti gli stati</option>
+            <option value='ATTESA'>In attesa</option>
+            <option value='paid'>Pagate</option>
+          </select>
+          {(fpSearch||fpDal||fpAl||fpStato!=='TUTTI')&&<button onClick={()=>{setFpSearch('');setFpDal('');setFpAl('');setFpStato('TUTTI');}}
+            style={{padding:'6px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g4)',fontSize:12,cursor:'pointer'}}>✕ Reset</button>}
+        </div>
         {state.fatture_passive.length===0?<Empty msg='Nessuna fattura passiva'/>:
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
-          <thead><tr><Th c='Fornitore'/><Th c='Categoria'/><Th c='Importo'/><Th c='Scadenza'/><Th c='Ricorrente'/><Th c='Stato'/><Th c='Pagamento'/><Th c='Azioni'/></tr></thead>
+          <thead><tr><Th c='N°'/><Th c='Fornitore'/><Th c='Categoria'/><Th c='Importo'/><Th c='Emissione'/><Th c='Scadenza'/><Th c='Ricorrente'/><Th c='Stato'/><Th c='Pagamento'/><Th c='Azioni'/></tr></thead>
           <tbody>
-            {state.fatture_passive.map(fp=><TR key={fp.id}>
+            {state.fatture_passive.filter(fp=>{
+              if(fpSearch&&!fp.fornitore?.toLowerCase().includes(fpSearch.toLowerCase()))return false;
+              if(fpStato!=='TUTTI'&&fp.stato!==fpStato)return false;
+              if(fpDal&&fp.data_emissione&&fp.data_emissione<fpDal)return false;
+              if(fpAl&&fp.data_emissione&&fp.data_emissione>fpAl)return false;
+              return true;
+            }).map(fp=><TR key={fp.id}>
+              <Td mono muted>{fp.numero||'—'}</Td>
               <Td><div style={{fontWeight:700}}>{fp.fornitore}</div></Td>
               <Td muted>{fp.categoria}</Td>
               <Td mono style={{color:'var(--red)',fontWeight:700}}>−{fmtEuro(fp.importo)}</Td>
+              <Td mono muted>{fmtDate(fp.data_emissione)}</Td>
               <Td mono muted>{fmtDate(fp.data_scadenza)}</Td>
               <Td><span style={{fontFamily:'var(--fm)',fontSize:11,color:fp.ricorrente?'var(--amber)':'var(--g5)'}}>{fp.ricorrente?'↻ mensile':'una tantum'}</span></Td>
               <Td><Badge s={fp.stato}/></Td>
@@ -2127,6 +2201,13 @@ function FinanziariaScreen({state,dispatch}) {
               </Td>
               <Td style={{display:'flex',gap:4}}>
                 {fp.stato==='ATTESA'&&<Btn v='success' onClick={()=>cambiaStatoFattPassiva(fp.id,'PAGATA')} s={{padding:'4px 8px',fontSize:11}}>✓ Pagata</Btn>}
+                {fp.stato==='PAGATA'&&<Btn v='danger' onClick={async()=>{
+                  if(!window.confirm('Annullare il pagamento di questa fattura?'))return;
+                  const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+                  const res=await fetch('/api/v1/fatture-passive/'+fp.id,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({stato_pagamento:'ATTESA',data_ultimo_pagamento:null,metodo_pagamento:null})});
+                  if(res.ok){dispatch({type:'UPDATE',entity:'fatture_passive',item:{...fp,stato:'ATTESA',data_ultimo_pagamento:null,metodo_pagamento:null}});}
+                  else{alert('Errore durante annullamento');}
+                }} s={{padding:'4px 8px',fontSize:11}}>✕ Annulla</Btn>}
                 <Btn v='ghost' onClick={()=>openEditFattPassiva(fp)} s={{padding:'4px 8px',fontSize:11}}>✎ Modifica</Btn>
               </Td>
             </TR>)}
@@ -2246,6 +2327,128 @@ function FinanziariaScreen({state,dispatch}) {
           </table>
         </Card>
       </div>}
+
+      {/* INSIGHT */}
+      {tab==='insight'&&(()=>{
+
+        const fattureFiltrate=state.fatture_attive.filter(fa=>{
+          const anno=fa.data_emissione?.substring(0,4);
+          if(insightAnno&&anno!==insightAnno)return false;
+          if(insightPeriodo!=='anno'){
+            const mese=parseInt(fa.data_emissione?.substring(5,7)||'0');
+            const q=Math.ceil(mese/3);
+            if(insightPeriodo==='Q1'&&q!==1)return false;
+            if(insightPeriodo==='Q2'&&q!==2)return false;
+            if(insightPeriodo==='Q3'&&q!==3)return false;
+            if(insightPeriodo==='Q4'&&q!==4)return false;
+          }
+          return true;
+        });
+
+        const lordo=fattureFiltrate.reduce((s,f)=>s+(f.importo||0),0);
+        const netto=lordo/1.22;
+        const iva=lordo-netto;
+        const incassato=fattureFiltrate.filter(f=>f.stato==='INCASSATA').reduce((s,f)=>s+(f.importo||0),0);
+        const incassatoNetto=incassato/1.22;
+        const daIncassare=fattureFiltrate.filter(f=>f.stato!=='INCASSATA').reduce((s,f)=>s+(f.importo||0),0);
+        const percIncassato=lordo>0?Math.round((incassato/lordo)*100):0;
+
+        return <div>
+          {/* FILTRI */}
+          <div style={{display:'flex',gap:8,marginBottom:20,alignItems:'center',flexWrap:'wrap'}}>
+            <span style={{fontSize:12,color:'var(--g4)'}}>Anno:</span>
+            <select value={insightAnno} onChange={e=>setInsightAnno(e.target.value)} style={{padding:'6px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12}}>
+              {['2024','2025','2026'].map(a=><option key={a} value={a}>{a}</option>)}
+            </select>
+            <div style={{display:'flex',gap:4}}>
+              {[{l:'Anno intero',v:'anno'},{l:'Q1',v:'Q1'},{l:'Q2',v:'Q2'},{l:'Q3',v:'Q3'},{l:'Q4',v:'Q4'}].map(p=>
+                <button key={p.v} onClick={()=>setInsightPeriodo(p.v)} style={{padding:'4px 10px',borderRadius:6,border:'1px solid var(--g3)',background:insightPeriodo===p.v?'var(--purple)':'var(--g2)',color:insightPeriodo===p.v?'white':'var(--g5)',fontSize:11,cursor:'pointer'}}>{p.l}</button>
+              )}
+            </div>
+          </div>
+
+          {/* KPI PRINCIPALI */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:20}}>
+            <div style={{background:'var(--g2)',borderRadius:14,padding:'20px 24px',border:'1px solid var(--g3)'}}>
+              <div style={{fontSize:11,color:'var(--g4)',fontFamily:'var(--fm)',marginBottom:6}}>FATTURATO LORDO</div>
+              <div style={{fontSize:28,fontWeight:800,color:'var(--green)'}}>{fmtEuro(lordo)}</div>
+              <div style={{fontSize:11,color:'var(--g4)',marginTop:4}}>{fattureFiltrate.length} fatture emesse</div>
+            </div>
+            <div style={{background:'var(--g2)',borderRadius:14,padding:'20px 24px',border:'1px solid var(--g3)'}}>
+              <div style={{fontSize:11,color:'var(--g4)',fontFamily:'var(--fm)',marginBottom:6}}>FATTURATO NETTO</div>
+              <div style={{fontSize:28,fontWeight:800,color:'var(--violet)'}}>{fmtEuro(netto)}</div>
+              <div style={{fontSize:11,color:'var(--g4)',marginTop:4}}>Imponibile (÷ 1,22)</div>
+            </div>
+            <div style={{background:'var(--g2)',borderRadius:14,padding:'20px 24px',border:'1px solid var(--g3)'}}>
+              <div style={{fontSize:11,color:'var(--g4)',fontFamily:'var(--fm)',marginBottom:6}}>IVA A DEBITO</div>
+              <div style={{fontSize:28,fontWeight:800,color:'var(--amber)'}}>{fmtEuro(iva)}</div>
+              <div style={{fontSize:11,color:'var(--g4)',marginTop:4}}>22% sul netto</div>
+            </div>
+          </div>
+
+          {/* KPI INCASSO */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:20}}>
+            <div style={{background:'var(--g2)',borderRadius:14,padding:'20px 24px',border:'1px solid var(--g3)'}}>
+              <div style={{fontSize:11,color:'var(--g4)',fontFamily:'var(--fm)',marginBottom:6}}>INCASSATO</div>
+              <div style={{fontSize:28,fontWeight:800,color:'var(--green)'}}>{fmtEuro(incassato)}</div>
+              <div style={{fontSize:11,color:'var(--g4)',marginTop:4}}>Netto: {fmtEuro(incassatoNetto)}</div>
+            </div>
+            <div style={{background:'var(--g2)',borderRadius:14,padding:'20px 24px',border:'1px solid var(--g3)'}}>
+              <div style={{fontSize:11,color:'var(--g4)',fontFamily:'var(--fm)',marginBottom:6}}>DA INCASSARE</div>
+              <div style={{fontSize:28,fontWeight:800,color:'var(--amber)'}}>{fmtEuro(daIncassare)}</div>
+              <div style={{fontSize:11,color:'var(--g4)',marginTop:4}}>Crediti aperti</div>
+            </div>
+            <div style={{background:'var(--g2)',borderRadius:14,padding:'20px 24px',border:'1px solid var(--g3)'}}>
+              <div style={{fontSize:11,color:'var(--g4)',fontFamily:'var(--fm)',marginBottom:6}}>% INCASSATO</div>
+              <div style={{fontSize:28,fontWeight:800,color:percIncassato>=80?'var(--green)':percIncassato>=50?'var(--amber)':'var(--red)'}}>{percIncassato}%</div>
+              <div style={{width:'100%',height:6,background:'var(--g3)',borderRadius:3,marginTop:8}}>
+                <div style={{width:percIncassato+'%',height:'100%',background:percIncassato>=80?'var(--green)':percIncassato>=50?'var(--amber)':'var(--red)',borderRadius:3,transition:'width .4s'}}/>
+              </div>
+            </div>
+          </div>
+
+          {/* DETTAGLIO PER MESE */}
+          <Card>
+            <CH title='Dettaglio mensile' meta={`Anno ${insightAnno}`}/>
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
+              <thead><tr>
+                <Th c='Mese'/><Th c='N° Fatture'/><Th c='Lordo'/><Th c='Netto'/><Th c='IVA'/><Th c='Incassato'/><Th c='Da incassare'/>
+              </tr></thead>
+              <tbody>
+                {Array.from({length:12},(_,i)=>{
+                  const m=`${insightAnno}-${String(i+1).padStart(2,'0')}`;
+                  const ff=fattureFiltrate.filter(f=>f.data_emissione?.startsWith(m));
+                  if(ff.length===0)return null;
+                  const ml=ff.reduce((s,f)=>s+(f.importo||0),0);
+                  const mn=ml/1.22;
+                  const mi=ml-mn;
+                  const minc=ff.filter(f=>f.stato==='INCASSATA').reduce((s,f)=>s+(f.importo||0),0);
+                  const mdinc=ff.filter(f=>f.stato!=='INCASSATA').reduce((s,f)=>s+(f.importo||0),0);
+                  const isCurr=m===currMese();
+                  return <TR key={m} style={isCurr?{background:'rgba(124,58,237,.07)'}:{}}>
+                    <Td><span style={{fontWeight:isCurr?700:500,color:isCurr?'var(--violet)':'var(--white)'}}>{meseFmt(m)}{isCurr?' ◀':''}</span></Td>
+                    <Td mono muted style={{textAlign:'center'}}>{ff.length}</Td>
+                    <Td mono style={{color:'var(--green)',fontWeight:600}}>{fmtEuro(ml)}</Td>
+                    <Td mono style={{color:'var(--violet)'}}>{fmtEuro(mn)}</Td>
+                    <Td mono style={{color:'var(--amber)'}}>{fmtEuro(mi)}</Td>
+                    <Td mono style={{color:'var(--green)'}}>{minc>0?fmtEuro(minc):'—'}</Td>
+                    <Td mono style={{color:mdinc>0?'var(--amber)':'var(--g4)'}}>{mdinc>0?fmtEuro(mdinc):'—'}</Td>
+                  </TR>;
+                }).filter(Boolean)}
+                <TR style={{background:'rgba(124,58,237,.1)'}}>
+                  <Td><span style={{fontWeight:700,color:'var(--violet)'}}>TOTALE</span></Td>
+                  <Td mono style={{textAlign:'center',fontWeight:700}}>{fattureFiltrate.length}</Td>
+                  <Td mono style={{color:'var(--green)',fontWeight:700}}>{fmtEuro(lordo)}</Td>
+                  <Td mono style={{color:'var(--violet)',fontWeight:700}}>{fmtEuro(netto)}</Td>
+                  <Td mono style={{color:'var(--amber)',fontWeight:700}}>{fmtEuro(iva)}</Td>
+                  <Td mono style={{color:'var(--green)',fontWeight:700}}>{fmtEuro(incassato)}</Td>
+                  <Td mono style={{color:'var(--amber)',fontWeight:700}}>{fmtEuro(daIncassare)}</Td>
+                </TR>
+              </tbody>
+            </table>
+          </Card>
+        </div>;
+      })()}
     </div>
   </div>;
 }
@@ -3250,8 +3453,245 @@ const NAV=[
   {id:'timesheet',label:'Timesheet',icon:'⏱',section:'Gestione'},
   {id:'marginalita',label:'Marginalità',icon:'◈',section:'Economia'},
   {id:'finanziaria',label:'Finanziaria',icon:'₿',section:'Economia'},
+  {id:'cassa',label:'Cassa',icon:'⬡',section:'Economia'},
   {id:'team',label:'Utenti',icon:'◉',section:'Economia'},
 ];
+
+
+function CassaScreen({state,dispatch}){
+  const oggi = new Date();
+  const [dal,setDal]=useState(`${oggi.getFullYear()}-01-01`);
+  const [al,setAl]=useState(oggi.toISOString().substring(0,10));
+  const [tipoFiltro,setTipoFiltro]=useState('TUTTI');
+  const [ricFiltro,setRicFiltro]=useState('TUTTI');
+  const [searchText,setSearchText]=useState('');
+  const [modalMov,setModalMov]=useState(null);
+  const [ricTipo,setRicTipo]=useState('ENTRATA');
+  const [ricSearch,setRicSearch]=useState('');
+  const [ricSoggetto,setRicSoggetto]=useState('');
+  const [saving,setSaving]=useState(false);
+
+  const movimenti = state.movimenti_cassa||[];
+
+  const filtered = movimenti.filter(m=>{
+    if(dal && m.data_valuta < dal) return false;
+    if(al && m.data_valuta > al) return false;
+    if(tipoFiltro!=='TUTTI' && m.tipo!==tipoFiltro) return false;
+    if(ricFiltro==='SI' && !m.riconciliato) return false;
+    if(ricFiltro==='NO' && m.riconciliato) return false;
+    if(searchText && !m.descrizione?.toLowerCase().includes(searchText.toLowerCase()) && !m.categoria?.toLowerCase().includes(searchText.toLowerCase())) return false;
+    return true;
+  });
+
+  const totEntrate = filtered.filter(m=>m.tipo==='ENTRATA').reduce((s,m)=>s+m.importo,0);
+  const totUscite = filtered.filter(m=>m.tipo==='USCITA').reduce((s,m)=>s+Math.abs(m.importo),0);
+  const saldo = totEntrate - totUscite;
+  const daRiconciliare = movimenti.filter(m=>!m.riconciliato).length;
+
+  const openRiconcilia = (m) => {
+    setModalMov(m);
+    setRicTipo(m.tipo==='ENTRATA'?'ATTIVA':'PASSIVA');
+    setRicSearch('');
+    setRicSoggetto('');
+  };
+
+  // Riconciliati per movimento
+  const fattureAttivaRic = new Set(movimenti.filter(m=>m.fattura_attiva_id).map(m=>m.fattura_attiva_id));
+  const fatturePassivaRic = new Set(movimenti.filter(m=>m.fattura_passiva_id).map(m=>m.fattura_passiva_id));
+
+  // Fatture attive non riconciliate filtrate per cliente
+  const faDisponibili = (state.fatture_attive||[]).filter(fa=>{
+    if(fattureAttivaRic.has(fa.id)) return false;
+    if(ricSoggetto && fa.cliente_id!==ricSoggetto) return false;
+    if(ricSearch && !fa.numero?.toString().includes(ricSearch) && !(state.clienti||[]).find(c=>c.id===fa.cliente_id)?.ragione_sociale?.toLowerCase().includes(ricSearch.toLowerCase())) return false;
+    return true;
+  });
+
+  // Fatture passive non riconciliate filtrate per fornitore
+  const fpDisponibili = (state.fatture_passive||[]).filter(fp=>{
+    if(fatturePassivaRic.has(fp.id)) return false;
+    if(ricSoggetto && fp.fornitore!==ricSoggetto) return false;
+    if(ricSearch && !fp.numero?.includes(ricSearch) && !fp.fornitore?.toLowerCase().includes(ricSearch.toLowerCase())) return false;
+    return true;
+  });
+
+  const clientiConFatture = [...new Set((state.fatture_attive||[]).filter(fa=>!fattureAttivaRic.has(fa.id)).map(fa=>fa.cliente_id))].map(id=>(state.clienti||[]).find(c=>c.id===id)).filter(Boolean);
+  const fornitoriConFatture = [...new Set((state.fatture_passive||[]).filter(fp=>!fatturePassivaRic.has(fp.id)).map(fp=>fp.fornitore))].filter(Boolean).sort();
+
+  const eseguiRiconcilia = async(fattura, tipo) => {
+    if(!modalMov) return;
+    setSaving(true);
+    try{
+      const token = localStorage.getItem('BITE_ERP_TOKEN')||'';
+      const body = tipo==='ATTIVA'
+        ? {fattura_attiva_id: fattura.id, riconciliato: true}
+        : {fattura_passiva_id: fattura.id, riconciliato: true};
+      const res = await fetch(`/api/v1/movimenti-cassa/${modalMov.id}`, {
+        method:'PATCH',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+        body: JSON.stringify(body)
+      });
+      if(res.ok){
+        dispatch({type:'UPDATE',entity:'movimenti_cassa',item:{...modalMov,...body}});
+        setModalMov(null);
+      } else {
+        alert('Errore durante la riconciliazione');
+      }
+    } catch(e){ console.error(e); }
+    finally{ setSaving(false); }
+  };
+
+  const annullaRiconciliazione = async(m) => {
+    if(!window.confirm('Annullare la riconciliazione di questo movimento?')) return;
+    const token = localStorage.getItem('BITE_ERP_TOKEN')||'';
+    const body = {fattura_attiva_id:null, fattura_passiva_id:null, riconciliato:false};
+    const res = await fetch(`/api/v1/movimenti-cassa/${m.id}`, {
+      method:'PATCH',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+      body: JSON.stringify(body)
+    });
+    if(res.ok) dispatch({type:'UPDATE',entity:'movimenti_cassa',item:{...m,...body}});
+    else alert('Errore annullamento');
+  };
+
+  const inpStyle = {padding:'6px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12};
+
+  return <div className="fu">
+    {modalMov&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setModalMov(null)}>
+      <div style={{background:'var(--g1)',borderRadius:14,padding:28,minWidth:560,maxWidth:720,maxHeight:'80vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:13,fontWeight:700,color:'var(--g6)',marginBottom:4}}>{modalMov.descrizione}</div>
+          <div style={{display:'flex',gap:16}}>
+            <span style={{fontFamily:'var(--fm)',fontSize:12,color:modalMov.tipo==='ENTRATA'?'var(--green)':'var(--red)',fontWeight:700}}>
+              {modalMov.tipo==='ENTRATA'?'+':'-'}{fmtEuro(Math.abs(modalMov.importo))}
+            </span>
+            <span style={{fontFamily:'var(--fm)',fontSize:12,color:'var(--g4)'}}>{fmtDate(modalMov.data_valuta)}</span>
+            <span style={{fontFamily:'var(--fm)',fontSize:12,color:'var(--g4)'}}>{modalMov.categoria}</span>
+          </div>
+        </div>
+        <div style={{display:'flex',gap:8,marginBottom:14}}>
+          <button onClick={()=>{setRicTipo('ATTIVA');setRicSoggetto('');}} style={{...inpStyle,cursor:'pointer',background:ricTipo==='ATTIVA'?'var(--violet)':'var(--g2)',color:ricTipo==='ATTIVA'?'#fff':'var(--g5)'}}>Fattura Attiva</button>
+          <button onClick={()=>{setRicTipo('PASSIVA');setRicSoggetto('');}} style={{...inpStyle,cursor:'pointer',background:ricTipo==='PASSIVA'?'var(--violet)':'var(--g2)',color:ricTipo==='PASSIVA'?'#fff':'var(--g5)'}}>Fattura Passiva</button>
+        </div>
+        <div style={{display:'flex',gap:8,marginBottom:12}}>
+          <select value={ricSoggetto} onChange={e=>setRicSoggetto(e.target.value)} style={{...inpStyle,flex:1}}>
+            <option value="">{ricTipo==='ATTIVA'?'— Tutti i clienti —':'— Tutti i fornitori —'}</option>
+            {ricTipo==='ATTIVA'
+              ? clientiConFatture.map(c=><option key={c.id} value={c.id}>{c.ragione_sociale}</option>)
+              : fornitoriConFatture.map(f=><option key={f} value={f}>{f}</option>)
+            }
+          </select>
+          <input placeholder="Cerca numero o nome..." value={ricSearch} onChange={e=>setRicSearch(e.target.value)} style={{...inpStyle,flex:1}}/>
+        </div>
+        <div style={{maxHeight:280,overflowY:'auto'}}>
+          {ricTipo==='ATTIVA'
+            ? faDisponibili.length===0
+              ? <div style={{color:'var(--g4)',fontSize:12,padding:12}}>Nessuna fattura attiva disponibile</div>
+              : faDisponibili.map(fa=>{
+                  const cliente = (state.clienti||[]).find(c=>c.id===fa.cliente_id);
+                  const match = Math.abs(fa.importo - Math.abs(modalMov.importo)) < 0.01;
+                  return <div key={fa.id} onClick={()=>eseguiRiconcilia(fa,'ATTIVA')}
+                    style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 12px',borderRadius:8,marginBottom:4,cursor:'pointer',background:'var(--g2)',border:`1px solid ${match?'var(--green)':'var(--g3)'}`,transition:'background .15s'}}
+                    onMouseEnter={e=>e.currentTarget.style.background='var(--g3)'}
+                    onMouseLeave={e=>e.currentTarget.style.background='var(--g2)'}>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:12}}>N° {fa.numero} — {cliente?.ragione_sociale||'Cliente'}</div>
+                      <div style={{fontSize:11,color:'var(--g4)'}}>{fmtDate(fa.data_emissione)}</div>
+                    </div>
+                    <div style={{display:'flex',alignItems:'center',gap:8}}>
+                      <span style={{fontFamily:'var(--fm)',fontWeight:700,color:match?'var(--green)':'var(--g5)'}}>{fmtEuro(fa.importo)}</span>
+                      {match&&<span style={{fontSize:10,color:'var(--green)'}}>✓ match</span>}
+                    </div>
+                  </div>;
+                })
+            : fpDisponibili.length===0
+              ? <div style={{color:'var(--g4)',fontSize:12,padding:12}}>Nessuna fattura passiva disponibile</div>
+              : fpDisponibili.map(fp=>{
+                  const match = Math.abs(Math.abs(fp.importo) - Math.abs(modalMov.importo)) < 0.01;
+                  return <div key={fp.id} onClick={()=>eseguiRiconcilia(fp,'PASSIVA')}
+                    style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 12px',borderRadius:8,marginBottom:4,cursor:'pointer',background:'var(--g2)',border:`1px solid ${match?'var(--green)':'var(--g3)'}`,transition:'background .15s'}}
+                    onMouseEnter={e=>e.currentTarget.style.background='var(--g3)'}
+                    onMouseLeave={e=>e.currentTarget.style.background='var(--g2)'}>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:12}}>{fp.numero||'—'} — {fp.fornitore}</div>
+                      <div style={{fontSize:11,color:'var(--g4)'}}>{fmtDate(fp.data_emissione)}</div>
+                    </div>
+                    <div style={{display:'flex',alignItems:'center',gap:8}}>
+                      <span style={{fontFamily:'var(--fm)',fontWeight:700,color:match?'var(--green)':'var(--red)'}}>{fmtEuro(Math.abs(fp.importo))}</span>
+                      {match&&<span style={{fontSize:10,color:'var(--green)'}}>✓ match</span>}
+                    </div>
+                  </div>;
+                })
+          }
+        </div>
+        <div style={{display:'flex',justifyContent:'flex-end',marginTop:16}}>
+          <button onClick={()=>setModalMov(null)} style={{...inpStyle,cursor:'pointer'}}>Annulla</button>
+        </div>
+      </div>
+    </div>}
+
+    <div style={{display:'flex',gap:16,marginBottom:20,flexWrap:'wrap'}}>
+      <KPI label="Entrate periodo" value={fmtEuro(totEntrate)} color="var(--green)"/>
+      <KPI label="Uscite periodo" value={fmtEuro(totUscite)} color="var(--red)"/>
+      <KPI label="Saldo periodo" value={fmtEuro(saldo)} color={saldo>=0?'var(--green)':'var(--red)'} warn={saldo<0}/>
+      <KPI label="Da riconciliare" value={daRiconciliare} warn={daRiconciliare>0}/>
+    </div>
+
+    <Card>
+      <CH title="Movimenti di cassa" meta={`${filtered.length} movimenti`}/>
+      <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap',alignItems:'center'}}>
+        <input type="date" value={dal} onChange={e=>setDal(e.target.value)} style={inpStyle}/>
+        <input type="date" value={al} onChange={e=>setAl(e.target.value)} style={inpStyle}/>
+        <select value={tipoFiltro} onChange={e=>setTipoFiltro(e.target.value)} style={inpStyle}>
+          <option value="TUTTI">Entrate + Uscite</option>
+          <option value="ENTRATA">Solo entrate</option>
+          <option value="USCITA">Solo uscite</option>
+        </select>
+        <select value={ricFiltro} onChange={e=>setRicFiltro(e.target.value)} style={inpStyle}>
+          <option value="TUTTI">Tutti</option>
+          <option value="SI">Riconciliati</option>
+          <option value="NO">Da riconciliare</option>
+        </select>
+        <input placeholder="Cerca descrizione..." value={searchText} onChange={e=>setSearchText(e.target.value)} style={{...inpStyle,minWidth:200}}/>
+        {(tipoFiltro!=='TUTTI'||ricFiltro!=='TUTTI'||searchText)&&
+          <button onClick={()=>{setTipoFiltro('TUTTI');setRicFiltro('TUTTI');setSearchText('');}}
+            style={{...inpStyle,cursor:'pointer',color:'var(--g4)'}}>✕ Reset</button>}
+      </div>
+
+      {filtered.length===0?<Empty msg="Nessun movimento trovato"/>:
+      <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
+        <thead><tr>
+          <Th c="Data"/><Th c="Descrizione"/><Th c="Categoria"/><Th c="Importo"/><Th c="Stato"/><Th c="Azioni"/>
+        </tr></thead>
+        <tbody>
+          {filtered.map(m=><TR key={m.id}>
+            <Td mono muted>{fmtDate(m.data_valuta)}</Td>
+            <Td><div style={{fontWeight:600,maxWidth:300}}>{m.descrizione}</div></Td>
+            <Td muted>{m.categoria}</Td>
+            <Td mono style={{color:m.tipo==='ENTRATA'?'var(--green)':'var(--red)',fontWeight:700}}>
+              {m.tipo==='ENTRATA'?'+':'-'}{fmtEuro(Math.abs(m.importo))}
+            </Td>
+            <Td>
+              {m.riconciliato
+                ?<span style={{color:'var(--green)',fontSize:11}}>✓ Riconciliato</span>
+                :<span style={{color:'var(--amber)',fontSize:11}}>⚠ Da riconciliare</span>}
+            </Td>
+            <Td style={{display:'flex',gap:4}}>
+              {!m.riconciliato&&<Btn v="primary" onClick={()=>openRiconcilia(m)} s={{padding:'4px 8px',fontSize:11}}>Riconcilia</Btn>}
+              {m.riconciliato&&<Btn v="danger" onClick={()=>annullaRiconciliazione(m)} s={{padding:'4px 8px',fontSize:11}}>✕ Annulla</Btn>}
+            </Td>
+          </TR>)}
+        </tbody>
+      </table>}
+
+      <div style={{display:'flex',gap:20,marginTop:12,padding:'8px 0',borderTop:'1px solid var(--g3)'}}>
+        <span style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)'}}>Entrate: <b style={{color:'var(--green)'}}>{fmtEuro(totEntrate)}</b></span>
+        <span style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)'}}>Uscite: <b style={{color:'var(--red)'}}>{fmtEuro(totUscite)}</b></span>
+        <span style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)'}}>Saldo: <b style={{color:saldo>=0?'var(--green)':'var(--red)'}}>{fmtEuro(saldo)}</b></span>
+      </div>
+    </Card>
+  </div>;
+}
 
 function App(){
   const [state,dispatch]=useReducer(reducer,INIT);
@@ -3326,6 +3766,7 @@ function App(){
           {key:'fatture_attive',run:()=>apiFetch('/fatture-attive',{tokenOverride:tk})},
           {key:'fatture_passive',run:()=>apiFetch('/fatture-passive',{tokenOverride:tk})},
           {key:'fornitori',run:()=>apiFetch('/fornitori',{tokenOverride:tk})},
+          {key:'movimenti_cassa',run:()=>apiFetch('/movimenti-cassa',{tokenOverride:tk})},
         );
       }
 
@@ -3412,6 +3853,21 @@ function App(){
         dispatch({type:'SET_ENTITY',entity:'fornitori',items:(data.fornitori||[]).map(f=>({
           id:f.id, fic_id:f.fic_id, ragione_sociale:f.ragione_sociale,
           piva:f.piva, email:f.email, telefono:f.telefono, attivo:f.attivo,
+        }))});
+      }
+      if(data.movimenti_cassa){
+        dispatch({type:'SET_ENTITY',entity:'movimenti_cassa',items:((data.movimenti_cassa?.movimenti_cassa)||data.movimenti_cassa||[]).map(m=>({
+          id:m.id,
+          data_valuta:m.data_valuta,
+          data_contabile:m.data_contabile,
+          descrizione:m.descrizione,
+          categoria:m.categoria,
+          importo:parseFloat(m.importo)||0,
+          tipo:m.tipo,
+          fattura_attiva_id:m.fattura_attiva_id||null,
+          fattura_passiva_id:m.fattura_passiva_id||null,
+          riconciliato:m.riconciliato||false,
+          note:m.note||null,
         }))});
       }
       if(!canReadManagement){
@@ -3567,6 +4023,7 @@ function App(){
       case 'timesheet':        return <TimesheetScreen state={state} dispatch={dispatch} api={timesheetApi} authUser={authUser}/>;
       case 'marginalita':      return <MarginalitaScreen state={state}/>;
       case 'finanziaria':      return <FinanziariaScreen state={state} dispatch={dispatch}/>;
+      case 'cassa':            return <CassaScreen state={state} dispatch={dispatch}/>;
       case 'team':             return <TeamScreen state={state} dispatch={dispatch} api={usersApi} isAdmin={isAdmin}/>;
       default: return null;
     }

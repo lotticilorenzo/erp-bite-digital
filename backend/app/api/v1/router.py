@@ -31,7 +31,7 @@ from app.services.services import (
     create_timesheet, list_timesheet, approva_timesheet,
     calcola_metriche_commessa,
     get_dashboard_kpi, get_marginalita_clienti,
-    sync_fic_data, get_last_fic_sync_status, list_fornitori, list_fatture_attive, list_fatture_passive, incassa_fattura, update_fattura_passiva, list_fornitori_full, update_fornitore,
+    sync_fic_data, get_last_fic_sync_status, list_fornitori, list_fatture_attive, list_fatture_passive, incassa_fattura, update_fattura_passiva, list_fornitori_full, update_fornitore, list_movimenti_cassa,
 )
 
 router = APIRouter()
@@ -402,3 +402,69 @@ async def get_fornitori(
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
 ):
     return await list_fornitori(db)
+
+
+@router.get("/movimenti-cassa", tags=["Cassa"])
+async def get_movimenti_cassa(
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    movimenti = await list_movimenti_cassa(db)
+    return {"movimenti_cassa": movimenti}
+
+
+@router.patch("/movimenti-cassa/{movimento_id}", tags=["Cassa"])
+async def patch_movimento_cassa(
+    movimento_id: uuid.UUID,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from app.models.models import MovimentoCassa, FatturaAttiva, FatturaPassiva
+    from sqlalchemy import select
+    from fastapi import HTTPException
+
+    result = await db.execute(select(MovimentoCassa).where(MovimentoCassa.id == movimento_id))
+    mov = result.scalar_one_or_none()
+    if not mov:
+        raise HTTPException(status_code=404, detail="Movimento non trovato")
+
+    # Aggiorna campi movimento
+    for k, v in payload.items():
+        if hasattr(mov, k):
+            setattr(mov, k, v)
+
+    # Se si sta riconciliando con fattura attiva -> aggiorna fattura se ancora in ATTESA
+    if payload.get('fattura_attiva_id') and payload.get('riconciliato'):
+        fa_res = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == payload['fattura_attiva_id']))
+        fa = fa_res.scalar_one_or_none()
+        if fa and fa.stato not in ('INCASSATA',):
+            fa.stato = 'INCASSATA'
+            fa.data_ultimo_incasso = mov.data_valuta
+
+    # Se si sta riconciliando con fattura passiva -> aggiorna fattura se ancora in ATTESA
+    if payload.get('fattura_passiva_id') and payload.get('riconciliato'):
+        fp_res = await db.execute(select(FatturaPassiva).where(FatturaPassiva.id == payload['fattura_passiva_id']))
+        fp = fp_res.scalar_one_or_none()
+        if fp and fp.stato_pagamento not in ('paid', 'PAGATA'):
+            fp.stato_pagamento = 'paid'
+            fp.data_ultimo_pagamento = mov.data_valuta
+
+    # Se si sta annullando la riconciliazione -> riporta fattura ad ATTESA solo se era stata marcata da noi
+    if payload.get('riconciliato') == False:
+        if mov.fattura_attiva_id:
+            fa_res = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == mov.fattura_attiva_id))
+            fa = fa_res.scalar_one_or_none()
+            if fa and fa.stato == 'INCASSATA':
+                fa.stato = 'ATTESA'
+                fa.data_ultimo_incasso = None
+        if mov.fattura_passiva_id:
+            fp_res = await db.execute(select(FatturaPassiva).where(FatturaPassiva.id == mov.fattura_passiva_id))
+            fp = fp_res.scalar_one_or_none()
+            if fp and fp.stato_pagamento in ('paid', 'PAGATA'):
+                fp.stato_pagamento = 'ATTESA'
+                fp.data_ultimo_pagamento = None
+
+    await db.commit()
+    await db.refresh(mov)
+    return {c.name: getattr(mov, c.name) for c in mov.__table__.columns}

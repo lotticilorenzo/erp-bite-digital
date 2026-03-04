@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, func, text
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.session import AsyncSessionLocal, engine, Base
@@ -101,12 +102,8 @@ async def setup_fic_scheduler():
 
     scheduler.add_job(
         scheduled_fic_sync,
-        trigger=CronTrigger(
-            hour=settings.FIC_SYNC_HOUR,
-            minute=settings.FIC_SYNC_MINUTE,
-            timezone=settings.FIC_SYNC_TIMEZONE,
-        ),
-        id="fic_nightly_sync",
+        trigger=IntervalTrigger(minutes=5),
+        id="fic_sync_interval",
         max_instances=1,
         coalesce=True,
         replace_existing=True,

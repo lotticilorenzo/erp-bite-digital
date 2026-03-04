@@ -787,12 +787,21 @@ def _extract_amount_total(document: dict[str, Any]) -> Decimal:
     return _to_decimal(raw_amount)
 
 
-def _extract_due_date(document: dict[str, Any]) -> Optional[date]:
-    return _parse_date(
+def _extract_due_date(document: dict[str, Any], fallback_days: int = 30) -> Optional[date]:
+    from datetime import timedelta
+    due = _parse_date(
         document.get("due_date")
         or document.get("date_due")
+        or document.get("next_due_date")
         or document.get("date_valid_until")
     )
+    if due:
+        return due
+    # Fallback: data emissione + 30 giorni
+    doc_date = _parse_date(document.get("date") or document.get("document_date"))
+    if doc_date:
+        return doc_date + timedelta(days=fallback_days)
+    return None
 
 
 def _extract_doc_date(document: dict[str, Any]) -> Optional[date]:
@@ -1098,6 +1107,21 @@ async def _upsert_fic_fatture_attive(
     return imported
 
 
+async def _next_numero_passiva(db: AsyncSession, anno: int) -> str:
+    result = await db.execute(
+        select(FatturaPassiva.numero)
+        .where(FatturaPassiva.numero.like(f"{anno}/%"))
+    )
+    numeri = result.scalars().all()
+    max_n = 0
+    for n in numeri:
+        try:
+            max_n = max(max_n, int(n.split("/")[1]))
+        except:
+            pass
+    return f"{anno}/{str(max_n + 1).zfill(4)}"
+
+
 async def _upsert_fic_fatture_passive(
     db: AsyncSession,
     items: list[dict[str, Any]],
@@ -1113,6 +1137,7 @@ async def _upsert_fic_fatture_passive(
             fic_id = str(fic_id_raw)
             result = await db.execute(select(FatturaPassiva).where(FatturaPassiva.fic_id == fic_id))
             fattura = result.scalar_one_or_none()
+            is_new = fattura is None
             if not fattura:
                 fattura = FatturaPassiva(fic_id=fic_id)
                 db.add(fattura)
@@ -1138,7 +1163,13 @@ async def _upsert_fic_fatture_passive(
             fattura.fic_raw_data = raw
             # Preserva dati inseriti manualmente — non sovrascrivere se già presenti
             if not fattura.numero:
-                fattura.numero = _extract_number(raw)
+                fic_num = _extract_number(raw)
+                if fic_num:
+                    fattura.numero = fic_num
+                elif is_new:
+                    doc_date = _extract_doc_date(raw)
+                    anno = doc_date.year if doc_date else date.today().year
+                    fattura.numero = await _next_numero_passiva(db, anno)
             if fattura.stato_pagamento not in ('paid', 'PAGATA'):
                 fattura.stato_pagamento = _payment_status(
                     total=importo_totale,
@@ -1382,3 +1413,12 @@ async def update_fattura_passiva(db: AsyncSession, fattura_id: uuid.UUID, data: 
     await db.commit()
     await db.refresh(fattura)
     return fattura
+
+
+async def list_movimenti_cassa(db: AsyncSession):
+    from app.models.models import MovimentoCassa
+    result = await db.execute(
+        select(MovimentoCassa).order_by(MovimentoCassa.data_valuta.desc())
+    )
+    rows = result.scalars().all()
+    return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
