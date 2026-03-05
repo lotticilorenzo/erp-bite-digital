@@ -1608,3 +1608,130 @@ async def suggest_riconciliazione(db: AsyncSession, movimento_id: uuid.UUID):
         })
 
     return {'regola': regola_match, 'fatture_importo': fatture_match}
+
+
+# ── IMPUTAZIONI FATTURE PASSIVE ───────────────────────────
+async def get_imputazioni(db: AsyncSession, fattura_passiva_id: uuid.UUID):
+    from app.models.models import FatturaPassivaImputazione, Cliente, Progetto
+    result = await db.execute(
+        select(FatturaPassivaImputazione, Cliente.ragione_sociale, Progetto.nome)
+        .outerjoin(Cliente, FatturaPassivaImputazione.cliente_id == Cliente.id)
+        .outerjoin(Progetto, FatturaPassivaImputazione.progetto_id == Progetto.id)
+        .where(FatturaPassivaImputazione.fattura_passiva_id == fattura_passiva_id)
+        .order_by(FatturaPassivaImputazione.created_at)
+    )
+    rows = result.all()
+    out = []
+    for imp, cliente_nome, progetto_nome in rows:
+        d = {c.name: getattr(imp, c.name) for c in imp.__table__.columns}
+        d['cliente_nome'] = cliente_nome
+        d['progetto_nome'] = progetto_nome
+        out.append(d)
+    return out
+
+
+async def save_imputazioni(db: AsyncSession, fattura_passiva_id: uuid.UUID, imputazioni: list[dict]):
+    from app.models.models import FatturaPassivaImputazione, FatturaPassiva
+    from sqlalchemy import delete
+
+    # Verifica che la fattura esista
+    fp_res = await db.execute(select(FatturaPassiva).where(FatturaPassiva.id == fattura_passiva_id))
+    fp = fp_res.scalar_one_or_none()
+    if not fp:
+        return None
+
+    # Elimina imputazioni esistenti e ricrea
+    await db.execute(delete(FatturaPassivaImputazione).where(FatturaPassivaImputazione.fattura_passiva_id == fattura_passiva_id))
+
+    totale = float(fp.importo_totale or 0)
+    for imp in imputazioni:
+        perc = float(imp.get('percentuale', 0))
+        importo_imp = round(totale * perc / 100, 2)
+        obj = FatturaPassivaImputazione(
+            fattura_passiva_id=fattura_passiva_id,
+            cliente_id=uuid.UUID(imp['cliente_id']) if imp.get('cliente_id') else None,
+            progetto_id=uuid.UUID(imp['progetto_id']) if imp.get('progetto_id') else None,
+            tipo=imp.get('tipo', 'PROGETTO'),
+            percentuale=perc,
+            importo=importo_imp,
+            note=imp.get('note'),
+        )
+        db.add(obj)
+
+    await db.commit()
+    return await get_imputazioni(db, fattura_passiva_id)
+
+
+# ── IMPUTAZIONI MOVIMENTI CASSA ───────────────────────────
+async def get_imputazioni_movimento(db: AsyncSession, movimento_id: uuid.UUID):
+    from app.models.models import MovimentoCassaImputazione, Cliente, Progetto
+    result = await db.execute(
+        select(MovimentoCassaImputazione, Cliente.ragione_sociale, Progetto.nome)
+        .outerjoin(Cliente, MovimentoCassaImputazione.cliente_id == Cliente.id)
+        .outerjoin(Progetto, MovimentoCassaImputazione.progetto_id == Progetto.id)
+        .where(MovimentoCassaImputazione.movimento_id == movimento_id)
+        .order_by(MovimentoCassaImputazione.created_at)
+    )
+    rows = result.all()
+    out = []
+    for imp, cliente_nome, progetto_nome in rows:
+        d = {c.name: getattr(imp, c.name) for c in imp.__table__.columns}
+        d['cliente_nome'] = cliente_nome
+        d['progetto_nome'] = progetto_nome
+        out.append(d)
+    return out
+
+
+async def save_imputazioni_movimento(db: AsyncSession, movimento_id: uuid.UUID, imputazioni: list[dict]):
+    from app.models.models import MovimentoCassaImputazione, MovimentoCassa, FatturaPassivaImputazione
+    from sqlalchemy import delete
+
+    res = await db.execute(select(MovimentoCassa).where(MovimentoCassa.id == movimento_id))
+    mov = res.scalar_one_or_none()
+    if not mov:
+        return None
+
+    # Se riconciliato con fattura passiva — verifica congruenza
+    if mov.fattura_passiva_id:
+        fp_imps = await db.execute(
+            select(FatturaPassivaImputazione)
+            .where(FatturaPassivaImputazione.fattura_passiva_id == mov.fattura_passiva_id)
+        )
+        fp_imps_list = fp_imps.scalars().all()
+        if fp_imps_list:
+            # Eredita automaticamente dalla fattura
+            await db.execute(delete(MovimentoCassaImputazione).where(MovimentoCassaImputazione.movimento_id == movimento_id))
+            importo_mov = abs(float(mov.importo or 0))
+            for fi in fp_imps_list:
+                obj = MovimentoCassaImputazione(
+                    movimento_id=movimento_id,
+                    cliente_id=fi.cliente_id,
+                    progetto_id=fi.progetto_id,
+                    tipo=fi.tipo,
+                    percentuale=fi.percentuale,
+                    importo=round(importo_mov * float(fi.percentuale) / 100, 2),
+                    ereditata_da_fattura=True,
+                    note=fi.note,
+                )
+                db.add(obj)
+            await db.commit()
+            return await get_imputazioni_movimento(db, movimento_id)
+
+    # Movimento senza fattura — salva imputazioni proprie
+    await db.execute(delete(MovimentoCassaImputazione).where(MovimentoCassaImputazione.movimento_id == movimento_id))
+    importo_mov = abs(float(mov.importo or 0))
+    for imp in imputazioni:
+        perc = float(imp.get('percentuale', 0))
+        obj = MovimentoCassaImputazione(
+            movimento_id=movimento_id,
+            cliente_id=uuid.UUID(imp['cliente_id']) if imp.get('cliente_id') else None,
+            progetto_id=uuid.UUID(imp['progetto_id']) if imp.get('progetto_id') else None,
+            tipo=imp.get('tipo', 'PROGETTO'),
+            percentuale=perc,
+            importo=round(importo_mov * perc / 100, 2),
+            ereditata_da_fattura=False,
+            note=imp.get('note'),
+        )
+        db.add(obj)
+    await db.commit()
+    return await get_imputazioni_movimento(db, movimento_id)

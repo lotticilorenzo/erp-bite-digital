@@ -529,3 +529,34 @@ class RegolaRiconciliazione(Base):
     attiva: Mapped[bool] = mapped_column(Boolean, default=True)
     contatore_match: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# ── IMPUTAZIONI FATTURE PASSIVE ───────────────────────────
+class FatturaPassivaImputazione(Base):
+    __tablename__ = "fatture_passive_imputazioni"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    fattura_passiva_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("fatture_passive.id", ondelete="CASCADE"), nullable=False)
+    cliente_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("clienti.id", ondelete="SET NULL"))
+    progetto_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id", ondelete="SET NULL"))
+    tipo: Mapped[str] = mapped_column(String(20), default="PROGETTO")
+    percentuale: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=100)
+    importo: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# ── IMPUTAZIONI MOVIMENTI CASSA ───────────────────────────
+class MovimentoCassaImputazione(Base):
+    __tablename__ = "movimenti_cassa_imputazioni"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    movimento_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("movimenti_cassa.id", ondelete="CASCADE"), nullable=False)
+    cliente_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("clienti.id", ondelete="SET NULL"))
+    progetto_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id", ondelete="SET NULL"))
+    tipo: Mapped[str] = mapped_column(String(20), default="PROGETTO")
+    percentuale: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=100)
+    importo: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    ereditata_da_fattura: Mapped[bool] = mapped_column(Boolean, default=False)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -586,3 +586,37 @@ async def applica_regole(db: AsyncSession = Depends(get_db), current_user=Depend
 async def suggest_mov(movimento_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     from app.services.services import suggest_riconciliazione
     return await suggest_riconciliazione(db, movimento_id)
+
+
+# ── IMPUTAZIONI FATTURE PASSIVE ───────────────────────────
+@router.get("/fatture-passive/{fattura_id}/imputazioni", tags=["Imputazioni"])
+async def get_imputazioni_fattura(fattura_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from app.services.services import get_imputazioni
+    return await get_imputazioni(db, fattura_id)
+
+
+@router.post("/fatture-passive/{fattura_id}/imputazioni", tags=["Imputazioni"])
+async def save_imputazioni_fattura(fattura_id: uuid.UUID, payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from app.services.services import save_imputazioni
+    from fastapi import HTTPException
+    result = await save_imputazioni(db, fattura_id, payload.get('imputazioni', []))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Fattura non trovata")
+    return {"imputazioni": result}
+
+
+# ── IMPUTAZIONI MOVIMENTI CASSA ───────────────────────────
+@router.get("/movimenti-cassa/{movimento_id}/imputazioni", tags=["Imputazioni"])
+async def get_imputazioni_mov(movimento_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from app.services.services import get_imputazioni_movimento
+    return await get_imputazioni_movimento(db, movimento_id)
+
+
+@router.post("/movimenti-cassa/{movimento_id}/imputazioni", tags=["Imputazioni"])
+async def save_imputazioni_mov(movimento_id: uuid.UUID, payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from app.services.services import save_imputazioni_movimento
+    from fastapi import HTTPException
+    result = await save_imputazioni_movimento(db, movimento_id, payload.get('imputazioni', []))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Movimento non trovato")
+    return {"imputazioni": result}

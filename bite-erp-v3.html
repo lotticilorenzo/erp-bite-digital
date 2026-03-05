@@ -2088,7 +2088,21 @@ function FinanziariaScreen({state,dispatch}) {
 
   const openFattAttiva=()=>setForm({cliente_id:state.clienti[0]?.id||'',numero:'FT-2025-00'+uid().slice(0,3),data_emissione:nowDate(),data_scadenza:addDays(nowDate(),30),importo:0,stato:'ATTESA',note:''})||setModal('fatt_attiva');
   const openFattPassiva=()=>setForm({fornitore:'',categoria:'SOFTWARE',data_emissione:nowDate(),data_scadenza:addDays(nowDate(),30),importo:0,stato:'ATTESA',ricorrente:false,note:''})||setModal('fatt_passiva');
-  const openEditFattPassiva=(fp)=>setForm({...fp,_editId:fp.id})||setModal('edit_fatt_passiva');
+  const [imputazioni,setImputazioni]=React.useState([]);
+  const [imputazioniLoading,setImputazioniLoading]=React.useState(false);
+
+  const openEditFattPassiva=async(fp)=>{
+    setForm({...fp,_editId:fp.id});
+    setModal('edit_fatt_passiva');
+    setImputazioni([]);
+    setImputazioniLoading(true);
+    const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+    try{
+      const res=await fetch(`/api/v1/fatture-passive/${fp.id}/imputazioni`,{headers:{'Authorization':'Bearer '+token}});
+      if(res.ok) setImputazioni(await res.json());
+    }catch(e){}
+    setImputazioniLoading(false);
+  };
   const saveEditFattPassiva=async e=>{
     e.preventDefault();
     // Validazione numero duplicato
@@ -2108,7 +2122,12 @@ function FinanziariaScreen({state,dispatch}) {
     try{
       const res=await fetch('/api/v1/fatture-passive/'+form._editId,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(payload)});
       if(res.ok){
-        dispatch({type:'UPDATE',entity:'fatture_passive',item:{...form,...payload,id:form._editId}});
+        // Salva imputazioni
+        const impValide=imputazioni.filter(i=>i.tipo==='STRUTTURA'||(i.tipo==='CLIENTE'&&i.cliente_id)||(i.tipo==='PROGETTO'&&i.progetto_id));
+        await fetch(`/api/v1/fatture-passive/${form._editId}/imputazioni`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({imputazioni:impValide})});
+        const totPerc=impValide.reduce((s,i)=>s+(parseFloat(i.percentuale)||0),0);
+        const stato_imputazione=impValide.length===0?'NON_IMPUTATA':Math.abs(totPerc-100)<0.1?'COMPLETA':'PARZIALE';
+        dispatch({type:'UPDATE',entity:'fatture_passive',item:{...form,...payload,id:form._editId,stato_imputazione,imputazioni:impValide}});
         closeModal();
       }else{const err=await res.json().catch(()=>({}));alert('Errore: '+JSON.stringify(err));}
     }catch(e){console.error(e);}
@@ -2235,12 +2254,82 @@ function FinanziariaScreen({state,dispatch}) {
             {['mensile','bimestrale','trimestrale','semestrale','annuale'].map(p=><option key={p} value={p}>{p.charAt(0).toUpperCase()+p.slice(1)}</option>)}
           </select>
         </FRow>}
-        <FRow label='Costo di progetto'>
-          <select value={form.commessa_id||''} onChange={e=>setForm({...form,commessa_id:e.target.value||null})}>
-            <option value=''>— Nessuna commessa —</option>
-            {state.commesse.map(c=><option key={c.id} value={c.id}>{c.nome||c.codice||c.id}</option>)}
-          </select>
-        </FRow>
+        {/* IMPUTAZIONI */}
+        <div style={{background:'var(--g2)',borderRadius:8,padding:'12px 14px',marginBottom:14}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+            <span style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',letterSpacing:'0.06em'}}>IMPUTAZIONE COSTI</span>
+            <div style={{display:'flex',gap:6,alignItems:'center'}}>
+              {(()=>{const tot=imputazioni.reduce((s,i)=>s+(parseFloat(i.percentuale)||0),0);
+                return <span style={{fontSize:11,fontWeight:700,color:Math.abs(tot-100)<0.1?'var(--green)':tot>100?'var(--red)':'var(--amber)'}}>{tot.toFixed(0)}% imputato</span>;
+              })()}
+              <button type='button' onClick={()=>setImputazioni([...imputazioni,{id:'new_'+Date.now(),tipo:'PROGETTO',cliente_id:'',progetto_id:'',percentuale:'',note:''}])}
+                style={{padding:'3px 8px',borderRadius:5,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',fontSize:11,cursor:'pointer'}}>+ Aggiungi</button>
+            </div>
+          </div>
+          {imputazioniLoading?<div style={{fontSize:12,color:'var(--g4)',textAlign:'center',padding:8}}>Caricamento...</div>:
+          imputazioni.length===0?<div style={{fontSize:11,color:'var(--g4)',textAlign:'center',padding:'8px 0'}}>Nessuna imputazione — tutta la spesa va in Struttura</div>:
+          imputazioni.map((imp,idx)=><div key={imp.id||idx} style={{borderTop:'1px solid var(--g3)',paddingTop:10,marginTop:10}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 80px 28px',gap:8,alignItems:'end'}}>
+              <div>
+                <label style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',display:'block',marginBottom:4}}>TIPO</label>
+                <select value={imp.tipo||'PROGETTO'} onChange={e=>{const n=[...imputazioni];n[idx]={...n[idx],tipo:e.target.value,progetto_id:'',cliente_id:''};setImputazioni(n);}}
+                  style={{width:'100%',padding:'6px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:12}}>
+                  <option value='PROGETTO'>Progetto</option>
+                  <option value='CLIENTE'>Cliente (generico)</option>
+                  <option value='STRUTTURA'>Struttura</option>
+                </select>
+              </div>
+              <div>
+                {imp.tipo==='STRUTTURA'?
+                  <div style={{paddingTop:20,fontSize:11,color:'var(--g4)'}}>Costo generale agenzia</div>:
+                imp.tipo==='CLIENTE'?
+                  <div>
+                    <label style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',display:'block',marginBottom:4}}>CLIENTE</label>
+                    <select value={imp.cliente_id||''} onChange={e=>{const n=[...imputazioni];n[idx]={...n[idx],cliente_id:e.target.value};setImputazioni(n);}}
+                      style={{width:'100%',padding:'6px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:12}}>
+                      <option value=''>— Seleziona cliente —</option>
+                      {(state.clienti||[]).sort((a,b)=>a.ragione_sociale?.localeCompare(b.ragione_sociale)).map(c=><option key={c.id} value={c.id}>{c.codice?c.codice+' — ':''}{c.ragione_sociale}</option>)}
+                    </select>
+                  </div>:
+                  <div>
+                    <label style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',display:'block',marginBottom:4}}>PROGETTO</label>
+                    <select value={imp.progetto_id||''} onChange={e=>{const n=[...imputazioni];n[idx]={...n[idx],progetto_id:e.target.value,cliente_id:(state.progetti||[]).find(p=>p.id===e.target.value)?.cliente_id||''};setImputazioni(n);}}
+                      style={{width:'100%',padding:'6px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:12}}>
+                      <option value=''>— Seleziona progetto —</option>
+                      {(state.progetti||[]).sort((a,b)=>a.nome?.localeCompare(b.nome)).map(p=>{
+                        const cl=(state.clienti||[]).find(c=>c.id===p.cliente_id);
+                        return <option key={p.id} value={p.id}>{cl?.codice?cl.codice+' · ':''}{p.nome}</option>;
+                      })}
+                    </select>
+                  </div>
+                }
+              </div>
+              <div>
+                <label style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',display:'block',marginBottom:4}}>% QUOTA</label>
+                <input type='number' min='1' max='100' value={imp.percentuale||''} onChange={e=>{const n=[...imputazioni];n[idx]={...n[idx],percentuale:e.target.value};setImputazioni(n);}}
+                  placeholder='es. 50' style={{width:'100%',padding:'6px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:12}}/>
+              </div>
+              <button type='button' onClick={()=>setImputazioni(imputazioni.filter((_,i)=>i!==idx))}
+                style={{padding:'6px 8px',borderRadius:6,border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.1)',color:'var(--red)',fontSize:12,cursor:'pointer',marginBottom:1}}>✕</button>
+            </div>
+            {imp.tipo!=='STRUTTURA'&&<div style={{marginTop:6}}>
+              <input placeholder='Note (opzionale)' value={imp.note||''} onChange={e=>{const n=[...imputazioni];n[idx]={...n[idx],note:e.target.value};setImputazioni(n);}}
+                style={{width:'100%',padding:'5px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:11,boxSizing:'border-box'}}/>
+            </div>}
+          </div>)}
+          {/* Barra progresso imputazione */}
+          {imputazioni.length>0&&(()=>{
+            const tot=imputazioni.reduce((s,i)=>s+(parseFloat(i.percentuale)||0),0);
+            return <div style={{marginTop:10}}>
+              <div style={{width:'100%',height:6,background:'var(--g3)',borderRadius:3,overflow:'hidden'}}>
+                <div style={{width:Math.min(tot,100)+'%',height:'100%',background:Math.abs(tot-100)<0.1?'var(--green)':tot>100?'var(--red)':'var(--amber)',borderRadius:3,transition:'width .3s'}}/>
+              </div>
+              {Math.abs(tot-100)>0.1&&<div style={{fontSize:10,color:tot>100?'var(--red)':'var(--amber)',marginTop:3}}>
+                {tot>100?`⚠ Supera del ${(tot-100).toFixed(0)}%`:`⚠ Mancano ${(100-tot).toFixed(0)}% — il restante va in Struttura`}
+              </div>}
+            </div>;
+          })()}
+        </div>
         <FRow label='Note'><textarea value={form.note||''} onChange={e=>setForm({...form,note:e.target.value})} rows={3}/></FRow>
         <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:16}}>
           <Btn v='ghost' onClick={closeModal} type='button'>Annulla</Btn>
@@ -2391,7 +2480,7 @@ function FinanziariaScreen({state,dispatch}) {
         </div>
         {state.fatture_passive.length===0?<Empty msg='Nessuna fattura passiva'/>:
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
-          <thead><tr><Th c='N°'/><Th c='Fornitore'/><Th c='Categoria'/><Th c='Netto'/><Th c='IVA'/><Th c='Lordo'/><Th c='Emissione'/><Th c='Scadenza'/><Th c='Stato'/><Th c='Pagamento'/><Th c='Azioni'/></tr></thead>
+          <thead><tr><Th c='N°'/><Th c='Fornitore'/><Th c='Categoria'/><Th c='Imp.'/><Th c='Netto'/><Th c='IVA'/><Th c='Lordo'/><Th c='Emissione'/><Th c='Scadenza'/><Th c='Stato'/><Th c='Pagamento'/><Th c='Azioni'/></tr></thead>
           <tbody>
             {state.fatture_passive.filter(fp=>{
               if(fpSearch&&!fp.fornitore?.toLowerCase().includes(fpSearch.toLowerCase()))return false;
@@ -2403,6 +2492,11 @@ function FinanziariaScreen({state,dispatch}) {
               <Td mono muted>{fp.numero||'—'}</Td>
               <Td><div style={{fontWeight:700}}>{fp.fornitore}</div></Td>
               <Td muted>{fp.categoria}</Td>
+              <Td>
+                {fp.stato_imputazione==='COMPLETA'?<span style={{fontSize:10,color:'var(--green)',fontFamily:'var(--fm)'}}>● 100%</span>:
+                 fp.stato_imputazione==='PARZIALE'?<span style={{fontSize:10,color:'var(--amber)',fontFamily:'var(--fm)'}}>◑ parz.</span>:
+                 <span style={{fontSize:10,color:'var(--g4)',fontFamily:'var(--fm)'}}>○ —</span>}
+              </Td>
               <Td mono style={{color:'var(--g5)'}}>{fp.importo_netto>0?fmtEuro(fp.importo_netto):'—'}</Td>
               <Td mono style={{color:'var(--amber)'}}>{fp.importo_iva>0?fmtEuro(fp.importo_iva):'—'}</Td>
               <Td mono style={{color:'var(--red)',fontWeight:700}}>−{fmtEuro(fp.importo)}</Td>
@@ -3749,6 +3843,10 @@ function CassaScreen({state,dispatch}){
   const [saving,setSaving]=useState(false);
   const [selected,setSelected]=useState(new Set());
   const [bulkSaving,setBulkSaving]=useState(false);
+  const [movImputazioni,setMovImputazioni]=useState([]);
+  const [movImpLoading,setMovImpLoading]=useState(false);
+  const [showImpModal,setShowImpModal]=useState(false);
+  const [impMovTarget,setImpMovTarget]=useState(null);
 
   const movimenti = state.movimenti_cassa||[];
 
@@ -3811,6 +3909,37 @@ function CassaScreen({state,dispatch}){
     setRicSoggetto('');
   };
 
+  const openImputazioneMovimento = async(m) => {
+    setImpMovTarget(m);
+    setMovImputazioni([]);
+    setMovImpLoading(true);
+    setShowImpModal(true);
+    const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+    try{
+      const res=await fetch(`/api/v1/movimenti-cassa/${m.id}/imputazioni`,{headers:{'Authorization':'Bearer '+token}});
+      if(res.ok){
+        const data=await res.json();
+        setMovImputazioni(data.imputazioni||data||[]);
+      }
+    }catch(e){}
+    setMovImpLoading(false);
+  };
+
+  const saveImputazioneMovimento = async() => {
+    if(!impMovTarget) return;
+    const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+    // Se riconciliato con fattura — usa ereditarietà automatica
+    if(impMovTarget.fattura_passiva_id){
+      const res=await fetch(`/api/v1/movimenti-cassa/${impMovTarget.id}/imputazioni`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({imputazioni:[]})});
+      if(res.ok){ alert('✓ Imputazioni ereditate dalla fattura passiva associata'); setShowImpModal(false); }
+      return;
+    }
+    const impValide=movImputazioni.filter(i=>i.tipo==='STRUTTURA'||(i.tipo==='CLIENTE'&&i.cliente_id)||(i.tipo==='PROGETTO'&&i.progetto_id));
+    const res=await fetch(`/api/v1/movimenti-cassa/${impMovTarget.id}/imputazioni`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({imputazioni:impValide})});
+    if(res.ok){ setShowImpModal(false); }
+    else alert('Errore salvataggio imputazioni');
+  };
+
   // Riconciliati per movimento
   const fattureAttivaRic = new Set(movimenti.filter(m=>m.fattura_attiva_id).map(m=>m.fattura_attiva_id));
   const fatturePassivaRic = new Set(movimenti.filter(m=>m.fattura_passiva_id).map(m=>m.fattura_passiva_id));
@@ -3849,6 +3978,10 @@ function CassaScreen({state,dispatch}){
       });
       if(res.ok){
         dispatch({type:'UPDATE',entity:'movimenti_cassa',item:{...modalMov,...body}});
+        // Se fattura passiva — eredita imputazioni automaticamente
+        if(tipo==='PASSIVA'){
+          await fetch(`/api/v1/movimenti-cassa/${modalMov.id}/imputazioni`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({imputazioni:[]})});
+        }
         setModalMov(null);
       } else {
         alert('Errore durante la riconciliazione');
@@ -4013,6 +4146,7 @@ function CassaScreen({state,dispatch}){
             <Td style={{display:'flex',gap:4}}>
               {!m.riconciliato&&<Btn v="primary" onClick={()=>openRiconcilia(m)} s={{padding:'4px 8px',fontSize:11}}>Riconcilia</Btn>}
               {m.riconciliato&&<Btn v="danger" onClick={()=>annullaRiconciliazione(m)} s={{padding:'4px 8px',fontSize:11}}>✕ Annulla</Btn>}
+              <Btn v="ghost" onClick={()=>openImputazioneMovimento(m)} s={{padding:'4px 8px',fontSize:11,color:'var(--violet)'}} title="Gestisci imputazione">⊕</Btn>
             </Td>
           </TR>)}
         </tbody>
@@ -4024,6 +4158,94 @@ function CassaScreen({state,dispatch}){
         <span style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)'}}>Saldo: <b style={{color:saldo>=0?'var(--green)':'var(--red)'}}>{fmtEuro(saldo)}</b></span>
       </div>
     </Card>
+
+    {showImpModal&&impMovTarget&&<Modal title={impMovTarget.fattura_passiva_id?'Imputazioni (da fattura)':'Imputazione movimento'} onClose={()=>setShowImpModal(false)} width={580}>
+      <div style={{marginBottom:12,padding:'8px 12px',background:'var(--g2)',borderRadius:8,fontSize:12}}>
+        <div style={{fontWeight:700,color:'var(--g6)'}}>{impMovTarget.descrizione}</div>
+        <div style={{color:impMovTarget.tipo==='ENTRATA'?'var(--green)':'var(--red)',fontWeight:700,marginTop:2}}>
+          {impMovTarget.tipo==='ENTRATA'?'+':'-'}{fmtEuro(Math.abs(impMovTarget.importo))} · {fmtDate(impMovTarget.data_valuta)}
+        </div>
+      </div>
+      {impMovTarget.fattura_passiva_id?
+        <div style={{padding:'8px 12px',background:'rgba(124,58,237,.08)',border:'1px solid rgba(124,58,237,.2)',borderRadius:8,marginBottom:12,fontSize:11,color:'var(--violet)'}}>
+          ℹ Movimento riconciliato con fattura passiva — le imputazioni vengono ereditate automaticamente dalla fattura.
+          <button onClick={saveImputazioneMovimento} style={{marginLeft:8,padding:'3px 8px',borderRadius:5,border:'none',background:'var(--violet)',color:'white',fontSize:11,cursor:'pointer'}}>Sincronizza ora</button>
+        </div>:
+        movImpLoading?<div style={{textAlign:'center',padding:20,color:'var(--g4)'}}>Caricamento...</div>:
+        <div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+            <span style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)'}}>IMPUTAZIONE COSTI</span>
+            <div style={{display:'flex',gap:6,alignItems:'center'}}>
+              {(()=>{const tot=movImputazioni.reduce((s,i)=>s+(parseFloat(i.percentuale)||0),0);
+                return <span style={{fontSize:11,fontWeight:700,color:Math.abs(tot-100)<0.1?'var(--green)':tot>100?'var(--red)':'var(--amber)'}}>{tot.toFixed(0)}% imputato</span>;
+              })()}
+              <button type='button' onClick={()=>setMovImputazioni([...movImputazioni,{id:'new_'+Date.now(),tipo:'PROGETTO',cliente_id:'',progetto_id:'',percentuale:'',note:''}])}
+                style={{padding:'3px 8px',borderRadius:5,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',fontSize:11,cursor:'pointer'}}>+ Aggiungi</button>
+            </div>
+          </div>
+          {movImputazioni.length===0?<div style={{fontSize:11,color:'var(--g4)',textAlign:'center',padding:'8px 0'}}>Nessuna imputazione — tutta la spesa va in Struttura</div>:
+          movImputazioni.map((imp,idx)=><div key={imp.id||idx} style={{borderTop:'1px solid var(--g3)',paddingTop:10,marginTop:10}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 80px 28px',gap:8,alignItems:'end'}}>
+              <div>
+                <label style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',display:'block',marginBottom:4}}>TIPO</label>
+                <select value={imp.tipo||'PROGETTO'} onChange={e=>{const n=[...movImputazioni];n[idx]={...n[idx],tipo:e.target.value,progetto_id:'',cliente_id:''};setMovImputazioni(n);}}
+                  style={{width:'100%',padding:'6px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:12}}>
+                  <option value='PROGETTO'>Progetto</option>
+                  <option value='CLIENTE'>Cliente (generico)</option>
+                  <option value='STRUTTURA'>Struttura</option>
+                </select>
+              </div>
+              <div>
+                {imp.tipo==='STRUTTURA'?<div style={{paddingTop:20,fontSize:11,color:'var(--g4)'}}>Costo generale agenzia</div>:
+                imp.tipo==='CLIENTE'?
+                  <div>
+                    <label style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',display:'block',marginBottom:4}}>CLIENTE</label>
+                    <select value={imp.cliente_id||''} onChange={e=>{const n=[...movImputazioni];n[idx]={...n[idx],cliente_id:e.target.value};setMovImputazioni(n);}}
+                      style={{width:'100%',padding:'6px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:12}}>
+                      <option value=''>— Seleziona cliente —</option>
+                      {(state.clienti||[]).sort((a,b)=>a.ragione_sociale?.localeCompare(b.ragione_sociale)).map(c=><option key={c.id} value={c.id}>{c.codice?c.codice+' — ':''}{c.ragione_sociale}</option>)}
+                    </select>
+                  </div>:
+                  <div>
+                    <label style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',display:'block',marginBottom:4}}>PROGETTO</label>
+                    <select value={imp.progetto_id||''} onChange={e=>{const n=[...movImputazioni];n[idx]={...n[idx],progetto_id:e.target.value,cliente_id:(state.progetti||[]).find(p=>p.id===e.target.value)?.cliente_id||''};setMovImputazioni(n);}}
+                      style={{width:'100%',padding:'6px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:12}}>
+                      <option value=''>— Seleziona progetto —</option>
+                      {(state.progetti||[]).sort((a,b)=>a.nome?.localeCompare(b.nome)).map(p=>{
+                        const cl=(state.clienti||[]).find(c=>c.id===p.cliente_id);
+                        return <option key={p.id} value={p.id}>{cl?.codice?cl.codice+' · ':''}{p.nome}</option>;
+                      })}
+                    </select>
+                  </div>
+                }
+              </div>
+              <div>
+                <label style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',display:'block',marginBottom:4}}>% QUOTA</label>
+                <input type='number' min='1' max='100' value={imp.percentuale||''} onChange={e=>{const n=[...movImputazioni];n[idx]={...n[idx],percentuale:e.target.value};setMovImputazioni(n);}}
+                  placeholder='es. 50' style={{width:'100%',padding:'6px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:12}}/>
+              </div>
+              <button type='button' onClick={()=>setMovImputazioni(movImputazioni.filter((_,i)=>i!==idx))}
+                style={{padding:'6px 8px',borderRadius:6,border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.1)',color:'var(--red)',fontSize:12,cursor:'pointer',marginBottom:1}}>✕</button>
+            </div>
+          </div>)}
+          {movImputazioni.length>0&&(()=>{
+            const tot=movImputazioni.reduce((s,i)=>s+(parseFloat(i.percentuale)||0),0);
+            return <div style={{marginTop:10}}>
+              <div style={{width:'100%',height:6,background:'var(--g3)',borderRadius:3,overflow:'hidden'}}>
+                <div style={{width:Math.min(tot,100)+'%',height:'100%',background:Math.abs(tot-100)<0.1?'var(--green)':tot>100?'var(--red)':'var(--amber)',borderRadius:3,transition:'width .3s'}}/>
+              </div>
+              {Math.abs(tot-100)>0.1&&<div style={{fontSize:10,color:tot>100?'var(--red)':'var(--amber)',marginTop:3}}>
+                {tot>100?`⚠ Supera del ${(tot-100).toFixed(0)}%`:`⚠ Mancano ${(100-tot).toFixed(0)}% — il restante va in Struttura`}
+              </div>}
+            </div>;
+          })()}
+          <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:16,paddingTop:12,borderTop:'1px solid var(--g2)'}}>
+            <Btn v='ghost' onClick={()=>setShowImpModal(false)} type='button'>Annulla</Btn>
+            <Btn v='primary' onClick={saveImputazioneMovimento}>Salva imputazione</Btn>
+          </div>
+        </div>
+      }
+    </Modal>}
   </div>;
 }
 
