@@ -413,6 +413,25 @@ async def get_movimenti_cassa(
     return {"movimenti_cassa": movimenti}
 
 
+@router.post("/movimenti-cassa/{movimento_id}/riconcilia", tags=["Cassa"])
+async def riconcilia_movimento(
+    movimento_id: uuid.UUID,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from app.models.models import MovimentoCassa
+    from sqlalchemy import select
+    from fastapi import HTTPException
+    result = await db.execute(select(MovimentoCassa).where(MovimentoCassa.id == movimento_id))
+    mov = result.scalar_one_or_none()
+    if not mov:
+        raise HTTPException(status_code=404, detail="Movimento non trovato")
+    mov.riconciliato = payload.get('riconciliato', True)
+    await db.commit()
+    return {"id": str(mov.id), "riconciliato": mov.riconciliato}
+
+
 @router.patch("/movimenti-cassa/{movimento_id}", tags=["Cassa"])
 async def patch_movimento_cassa(
     movimento_id: uuid.UUID,

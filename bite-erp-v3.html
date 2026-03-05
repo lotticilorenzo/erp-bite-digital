@@ -3747,6 +3747,8 @@ function CassaScreen({state,dispatch}){
   const [ricSearch,setRicSearch]=useState('');
   const [ricSoggetto,setRicSoggetto]=useState('');
   const [saving,setSaving]=useState(false);
+  const [selected,setSelected]=useState(new Set());
+  const [bulkSaving,setBulkSaving]=useState(false);
 
   const movimenti = state.movimenti_cassa||[];
 
@@ -3759,6 +3761,43 @@ function CassaScreen({state,dispatch}){
     if(searchText && !m.descrizione?.toLowerCase().includes(searchText.toLowerCase()) && !m.categoria?.toLowerCase().includes(searchText.toLowerCase())) return false;
     return true;
   });
+
+  const toggleSelect = (id) => setSelected(prev => {
+    const n = new Set(prev);
+    n.has(id) ? n.delete(id) : n.add(id);
+    return n;
+  });
+  const toggleAll = () => {
+    const nonRic = filtered.filter(m=>!m.riconciliato).map(m=>m.id);
+    if(selected.size === nonRic.length) setSelected(new Set());
+    else setSelected(new Set(nonRic));
+  };
+  const bulkRiconcilia = async() => {
+    if(selected.size===0) return;
+    if(!window.confirm(`Riconciliare ${selected.size} movimenti selezionati senza associarli a fatture?`)) return;
+    setBulkSaving(true);
+    const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+    let ok=0;
+    for(const id of selected){
+      const res=await fetch(`/api/v1/movimenti-cassa/${id}/riconcilia`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({riconciliato:true})});
+      if(res.ok){ dispatch({type:'UPDATE',entity:'movimenti_cassa',item:{...movimenti.find(m=>m.id===id),riconciliato:true}}); ok++; }
+    }
+    setSelected(new Set());
+    setBulkSaving(false);
+    alert(`✓ ${ok} movimenti riconciliati`);
+  };
+  const bulkCategoria = async(categoria) => {
+    if(selected.size===0) return;
+    setBulkSaving(true);
+    const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+    let ok=0;
+    for(const id of selected){
+      const res=await fetch(`/api/v1/movimenti-cassa/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({categoria})});
+      if(res.ok){ dispatch({type:'UPDATE',entity:'movimenti_cassa',item:{...movimenti.find(m=>m.id===id),categoria}}); ok++; }
+    }
+    setSelected(new Set());
+    setBulkSaving(false);
+  };
 
   const totEntrate = filtered.filter(m=>m.tipo==='ENTRATA').reduce((s,m)=>s+m.importo,0);
   const totUscite = filtered.filter(m=>m.tipo==='USCITA').reduce((s,m)=>s+Math.abs(m.importo),0);
@@ -3935,13 +3974,31 @@ function CassaScreen({state,dispatch}){
             style={{...inpStyle,cursor:'pointer',color:'var(--g4)'}}>✕ Reset</button>}
       </div>
 
+      {selected.size>0&&<div style={{display:'flex',gap:8,alignItems:'center',padding:'10px 14px',background:'rgba(124,58,237,.1)',border:'1px solid rgba(124,58,237,.3)',borderRadius:8,marginBottom:12}}>
+        <span style={{fontSize:12,fontWeight:700,color:'var(--violet)'}}>{selected.size} selezionati</span>
+        <span style={{color:'var(--g3)',fontSize:12}}>|</span>
+        <button onClick={bulkRiconcilia} disabled={bulkSaving} style={{padding:'5px 12px',borderRadius:6,border:'none',background:'var(--green)',color:'white',fontSize:11,fontWeight:600,cursor:'pointer'}}>
+          {bulkSaving?'..':'✓ Segna riconciliati'}
+        </button>
+        <span style={{fontSize:11,color:'var(--g4)'}}>Assegna categoria:</span>
+        {['Banca','Software','Advertising','Personale','Struttura','Utilities','Fiscale','Mobilità'].map(cat=>
+          <button key={cat} onClick={()=>bulkCategoria(cat)} disabled={bulkSaving} style={{padding:'4px 10px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',fontSize:11,cursor:'pointer'}}>{cat}</button>
+        )}
+        <button onClick={()=>setSelected(new Set())} style={{marginLeft:'auto',padding:'4px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'none',color:'var(--g4)',fontSize:11,cursor:'pointer'}}>✕ Deseleziona</button>
+      </div>}
       {filtered.length===0?<Empty msg="Nessun movimento trovato"/>:
       <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
         <thead><tr>
+          <th style={{width:36,padding:'8px 6px',textAlign:'center'}}>
+            <input type="checkbox" onChange={toggleAll} checked={selected.size>0&&selected.size===filtered.filter(m=>!m.riconciliato).length} style={{cursor:'pointer'}}/>
+          </th>
           <Th c="Data"/><Th c="Descrizione"/><Th c="Categoria"/><Th c="Importo"/><Th c="Stato"/><Th c="Azioni"/>
         </tr></thead>
         <tbody>
-          {filtered.map(m=><TR key={m.id}>
+          {filtered.map(m=><TR key={m.id} style={selected.has(m.id)?{background:'rgba(124,58,237,.08)'}:{}}>
+            <td style={{padding:'8px 6px',textAlign:'center',borderBottom:'1px solid var(--g2)'}}>
+              {!m.riconciliato&&<input type="checkbox" checked={selected.has(m.id)} onChange={()=>toggleSelect(m.id)} style={{cursor:'pointer'}}/>}
+            </td>
             <Td mono muted>{fmtDate(m.data_valuta)}</Td>
             <Td><div style={{fontWeight:600,maxWidth:300}}>{m.descrizione}</div></Td>
             <Td muted>{m.categoria}</Td>
