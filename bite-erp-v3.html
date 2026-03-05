@@ -402,13 +402,13 @@ const Divider=({m=16})=><div style={{height:1,background:'var(--g2)',margin:`${m
 // MODAL
 // ─────────────────────────────────────────────────────────
 const Modal=({title,onClose,children,width=480})=>(
-  <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.8)',zIndex:300,display:'flex',alignItems:'flex-start',justifyContent:'center',padding:'16px',overflowY:'auto'}}>
-    <div onClick={e=>e.stopPropagation()} style={{position:'relative',background:'var(--g1)',border:'1px solid var(--g2)',borderRadius:12,width:'100%',maxWidth:width,margin:'auto',animation:'scaleIn .2s ease'}}>
-      <div style={{padding:'18px 22px',borderBottom:'1px solid var(--g2)',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,background:'var(--g1)',zIndex:10}}>
+  <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.8)',zIndex:300,display:'flex',alignItems:'flex-start',justifyContent:'center',padding:'20px'}}>
+    <div onClick={e=>e.stopPropagation()} style={{position:'relative',background:'var(--g1)',border:'1px solid var(--g2)',borderRadius:12,width:'100%',maxWidth:width,maxHeight:'calc(100vh - 40px)',display:'flex',flexDirection:'column',animation:'scaleIn .2s ease'}}>
+      <div style={{padding:'18px 22px',borderBottom:'1px solid var(--g2)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,borderRadius:'12px 12px 0 0'}}>
         <div style={{fontSize:15,fontWeight:700}}>{title}</div>
-        <button onClick={onClose} style={{background:'var(--g2)',border:'1px solid var(--g3)',borderRadius:6,width:28,height:28,color:'var(--g5)',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>×</button>
+        <button onClick={onClose} style={{background:'var(--g2)',border:'1px solid var(--g3)',borderRadius:6,width:28,height:28,color:'var(--g5)',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}}>×</button>
       </div>
-      <div style={{padding:'20px 22px'}}>{children}</div>
+      <div style={{padding:'20px 22px',overflowY:'auto',flex:'1 1 auto',minHeight:0}}>{children}</div>
     </div>
   </div>
 );
@@ -627,9 +627,11 @@ function FornitoriScreen({state,dispatch}){
   const [modal,setModal]=React.useState(null);
   const [form,setForm]=React.useState({});
   const [saving,setSaving]=React.useState(false);
+  const [drillFornitore,setDrillFornitore]=React.useState(null);
 
-  const CATEGORIE=['FREELANCER','SAAS','STRUTTURA','CONSULENTE','ALTRO'];
-  const CAT_COLOR={FREELANCER:'var(--violet)',SAAS:'var(--amber)',STRUTTURA:'var(--green)',CONSULENTE:'var(--blue,#3B82F6)',ALTRO:'var(--g4)'};
+  const CATEGORIE=['Marketing','Mobilità e trasporti','Struttura','Spese ufficio','Servizi professionali',
+    'Team & Welfare','Formazione','Produzione progetto','Investimenti','Imposte e contributi',
+    'Collaboratori esterni','Software operativo','Infrastruttura digitale','Servizi amministrativi','Altro'];
 
   const load=React.useCallback(async()=>{
     setLoading(true);
@@ -643,7 +645,8 @@ function FornitoriScreen({state,dispatch}){
 
   React.useEffect(()=>{load();},[load]);
 
-  const openEdit=(f)=>{
+  const openEdit=(f,e)=>{
+    e.stopPropagation();
     setForm({...f,competenze_str:(f.competenze||[]).join(', ')});
     setModal('edit');
   };
@@ -659,10 +662,12 @@ function FornitoriScreen({state,dispatch}){
         tariffa:form.tariffa?parseFloat(form.tariffa):null,
         tariffa_tipo:form.tariffa_tipo||null,
         note:form.note||null,
+        codice_cliente:form.codice_cliente||null,
       };
       const res=await fetch('/api/v1/fornitori/'+form.id,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(payload)});
       if(res.ok){
         setFornitori(prev=>prev.map(f=>f.id===form.id?{...f,...payload}:f));
+        if(drillFornitore?.id===form.id) setDrillFornitore(prev=>({...prev,...payload}));
         setModal(null);
       }else{const err=await res.json().catch(()=>({}));alert('Errore: '+JSON.stringify(err));}
     }catch(e){console.error(e);}
@@ -675,30 +680,148 @@ function FornitoriScreen({state,dispatch}){
 
   const totSpesa=filtered.reduce((s,f)=>s+(f.spesa_totale||0),0);
 
+  // Scheda fornitore drill-down
+  if(drillFornitore){
+    const f=drillFornitore;
+    const fpFornitore=(state.fatture_passive||[]).filter(fp=>
+      fp.fornitore?.toLowerCase()===f.ragione_sociale?.toLowerCase()
+    ).sort((a,b)=>(b.data_emissione||'').localeCompare(a.data_emissione||''));
+    const movFornitore=(state.movimenti_cassa||[]).filter(m=>
+      m.descrizione?.toLowerCase().includes(f.ragione_sociale?.toLowerCase().substring(0,10)||'XXXXXX')
+    ).sort((a,b)=>(b.data_valuta||'').localeCompare(a.data_valuta||''));
+    const totPagato=fpFornitore.filter(fp=>fp.stato_pagamento==='paid'||fp.stato_pagamento==='PAGATA').reduce((s,fp)=>s+Math.abs(fp.importo||0),0);
+    const totDaPagare=fpFornitore.filter(fp=>fp.stato_pagamento!=='paid'&&fp.stato_pagamento!=='PAGATA').reduce((s,fp)=>s+Math.abs(fp.importo||0),0);
+
+    return <div style={{padding:'28px 32px',minHeight:'100vh',background:'var(--g1)'}}>
+      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:24}}>
+        <button onClick={()=>setDrillFornitore(null)} style={{padding:'6px 12px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',fontSize:12,cursor:'pointer'}}>← Fornitori</button>
+        <div>
+          <h1 style={{fontSize:22,fontWeight:800,color:'var(--white)',margin:0}}>{f.ragione_sociale}</h1>
+          <span style={{fontSize:12,color:'var(--g4)'}}>{f.categoria||'—'}</span>
+        </div>
+        <button onClick={e=>openEdit(f,e)} style={{marginLeft:'auto',padding:'6px 14px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',fontSize:12,cursor:'pointer'}}>✎ Modifica</button>
+      </div>
+
+      {/* KPI */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:20}}>
+        <KPI label="Fatture totali" value={fpFornitore.length}/>
+        <KPI label="Totale pagato" value={fmtEuro(totPagato)} color="var(--red)"/>
+        <KPI label="Da pagare" value={fmtEuro(totDaPagare)} color="var(--amber)" warn={totDaPagare>0}/>
+        <KPI label="Movimenti cassa" value={movFornitore.length}/>
+      </div>
+
+      {/* ANAGRAFICA */}
+      <Card style={{marginBottom:16}}>
+        <CH title="Anagrafica"/>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16,padding:'4px 0'}}>
+          {[
+            {l:'P.IVA',v:f.piva},
+            {l:'Cod. Fiscale',v:f.codice_fiscale},
+            {l:'Email',v:f.email},
+            {l:'Telefono',v:f.telefono},
+            {l:'Indirizzo',v:f.indirizzo},
+            {l:'Categoria',v:f.categoria},
+            {l:'Tariffa',v:f.tariffa?`${fmtEuro(f.tariffa)} ${f.tariffa_tipo||''}`:null},
+            {l:'Competenze',v:(f.competenze||[]).join(', ')||null},
+            {l:'Note',v:f.note},
+          ].map(({l,v})=><div key={l}>
+            <div style={{fontSize:10,color:'var(--g4)',fontFamily:'var(--fm)',marginBottom:2}}>{l}</div>
+            <div style={{fontSize:12,color:v?'var(--g6)':'var(--g4)'}}>{v||'—'}</div>
+          </div>)}
+        </div>
+      </Card>
+
+      {/* FATTURE PASSIVE */}
+      <Card style={{marginBottom:16}}>
+        <CH title="Fatture passive" meta={`${fpFornitore.length} fatture`}/>
+        {fpFornitore.length===0?<Empty msg="Nessuna fattura"/>:
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
+          <thead><tr><Th c="N°"/><Th c="Data emissione"/><Th c="Scadenza"/><Th c="Importo"/><Th c="Stato"/></tr></thead>
+          <tbody>
+            {fpFornitore.map(fp=>{
+              const pagata=fp.stato_pagamento==='paid'||fp.stato_pagamento==='PAGATA';
+              return <TR key={fp.id}>
+                <Td mono muted>{fp.numero||'—'}</Td>
+                <Td muted>{fmtDate(fp.data_emissione)}</Td>
+                <Td muted>{fmtDate(fp.data_scadenza)}</Td>
+                <Td mono style={{color:'var(--red)',fontWeight:700}}>−{fmtEuro(Math.abs(fp.importo||0))}</Td>
+                <Td>
+                  {pagata
+                    ?<span style={{color:'var(--green)',fontSize:11}}>✓ Pagata {fp.data_ultimo_pagamento?fmtDate(fp.data_ultimo_pagamento):''}</span>
+                    :<span style={{color:'var(--amber)',fontSize:11}}>⚠ Da pagare</span>}
+                </Td>
+              </TR>;
+            })}
+          </tbody>
+        </table>}
+      </Card>
+
+      {/* MOVIMENTI CASSA */}
+      {movFornitore.length>0&&<Card>
+        <CH title="Movimenti cassa collegati" meta={`${movFornitore.length} movimenti`}/>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
+          <thead><tr><Th c="Data"/><Th c="Descrizione"/><Th c="Importo"/><Th c="Riconciliato"/></tr></thead>
+          <tbody>
+            {movFornitore.map(m=><TR key={m.id}>
+              <Td mono muted>{fmtDate(m.data_valuta)}</Td>
+              <Td>{m.descrizione}</Td>
+              <Td mono style={{color:'var(--red)',fontWeight:700}}>−{fmtEuro(Math.abs(m.importo))}</Td>
+              <Td><span style={{fontSize:11,color:m.riconciliato?'var(--green)':'var(--amber)'}}>{m.riconciliato?'✓ Sì':'⚠ No'}</span></Td>
+            </TR>)}
+          </tbody>
+        </table>
+      </Card>}
+
+      {/* MODAL MODIFICA */}
+      {modal==='edit'&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={()=>setModal(null)}>
+        <div style={{background:'var(--g2)',borderRadius:16,padding:28,width:480,maxWidth:'90vw',border:'1px solid var(--g3)'}} onClick={e=>e.stopPropagation()}>
+          <h3 style={{margin:'0 0 20px',fontSize:16,fontWeight:700}}>Modifica fornitore</h3>
+          <form onSubmit={saveEdit}>
+            <FGrid>
+              <FRow label="Codice fornitore">
+                <input value={form.codice_cliente||''} onChange={e=>setForm({...form,codice_cliente:e.target.value})} placeholder="es. 001"/>
+              </FRow>
+              <FRow label="Categoria">
+                <select value={form.categoria||''} onChange={e=>setForm({...form,categoria:e.target.value})}>
+                  <option value="">— Nessuna —</option>
+                  {CATEGORIE.map(c=><option key={c} value={c}>{c}</option>)}
+                </select>
+              </FRow>
+            </FGrid>
+            <FRow label="Competenze (separate da virgola)">
+              <input value={form.competenze_str||''} onChange={e=>setForm({...form,competenze_str:e.target.value})} placeholder="es. Social Media, Copywriting"/>
+            </FRow>
+            <FGrid>
+              <FRow label="Tariffa (€)"><input type="number" min="0" step="0.01" value={form.tariffa||''} onChange={e=>setForm({...form,tariffa:e.target.value})}/></FRow>
+              <FRow label="Tipo tariffa">
+                <select value={form.tariffa_tipo||''} onChange={e=>setForm({...form,tariffa_tipo:e.target.value})}>
+                  <option value="">—</option>
+                  <option value="/ora">/ora</option>
+                  <option value="/giorno">/giorno</option>
+                  <option value="/mese">/mese</option>
+                  <option value="fisso">fisso</option>
+                </select>
+              </FRow>
+            </FGrid>
+            <FRow label="Note"><textarea value={form.note||''} onChange={e=>setForm({...form,note:e.target.value})} rows={3}/></FRow>
+            <FActions onCancel={()=>setModal(null)} submitLabel={saving?'Salvataggio...':'Salva'} disabled={saving}/>
+          </form>
+        </div>
+      </div>}
+    </div>;
+  }
+
   return <div style={{padding:'28px 32px',minHeight:'100vh',background:'var(--g1)'}}>
     <div style={{marginBottom:24}}>
       <h1 style={{fontSize:26,fontWeight:800,color:'var(--white)',margin:0}}>Fornitori</h1>
       <p style={{color:'var(--g4)',fontSize:13,margin:'4px 0 0'}}>{fornitori.length} fornitori · spesa periodo filtrato: {fmtEuro(totSpesa)}</p>
     </div>
 
-    {/* KPI */}
-    <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20}}>
-      {CATEGORIE.slice(0,4).map(cat=>{
-        const n=fornitori.filter(f=>f.categoria===cat).length;
-        const s=fornitori.filter(f=>f.categoria===cat).reduce((a,f)=>a+(f.spesa_totale||0),0);
-        return <div key={cat} style={{background:'var(--g2)',borderRadius:12,padding:'14px 16px',border:'1px solid var(--g3)'}}>
-          <div style={{fontSize:11,color:'var(--g4)',fontFamily:'var(--fm)',marginBottom:4}}>{cat}</div>
-          <div style={{fontSize:20,fontWeight:700,color:CAT_COLOR[cat]||'var(--g5)'}}>{n}</div>
-          <div style={{fontSize:11,color:'var(--g4)',marginTop:2}}>{fmtEuro(s)}</div>
-        </div>;
-      })}
-    </div>
-
     {/* FILTRI */}
     <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap',alignItems:'center'}}>
-      <input value={ricerca} onChange={e=>setRicerca(e.target.value)} placeholder='Cerca fornitore...' style={{padding:'7px 12px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12,width:220}}/>
+      <input value={ricerca} onChange={e=>setRicerca(e.target.value)} placeholder="Cerca fornitore..." style={{padding:'7px 12px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12,width:220}}/>
       <select value={filtroCategoria} onChange={e=>setFiltroCategoria(e.target.value)} style={{padding:'7px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12}}>
-        <option value='TUTTI'>Tutte le categorie</option>
+        <option value="TUTTI">Tutte le categorie</option>
         {CATEGORIE.map(c=><option key={c} value={c}>{c}</option>)}
       </select>
       <span style={{fontSize:12,color:'var(--g4)',marginLeft:4}}>{filtered.length} risultati</span>
@@ -709,18 +832,21 @@ function FornitoriScreen({state,dispatch}){
     <div style={{background:'var(--g2)',borderRadius:14,border:'1px solid var(--g3)',overflow:'hidden'}}>
       <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
         <thead><tr style={{background:'var(--g1)'}}>
-          {['Fornitore','Categoria','Competenze','Tariffa','Fatture','Spesa totale','Ultima fattura',''].map(h=>
+          {['#','Fornitore','Categoria','Competenze','Tariffa','Fatture','Spesa totale','Ultima fattura',''].map(h=>
             <th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:11,color:'var(--g4)',fontFamily:'var(--fm)',fontWeight:600,borderBottom:'1px solid var(--g3)'}}>{h}</th>
           )}
         </tr></thead>
         <tbody>
-          {filtered.map(f=><tr key={f.id} style={{borderBottom:'1px solid var(--g3)'}}>
+          {filtered.map(f=><tr key={f.id} onClick={()=>setDrillFornitore(f)} style={{borderBottom:'1px solid var(--g3)',cursor:'pointer',transition:'background .15s'}}
+            onMouseEnter={e=>e.currentTarget.style.background='var(--g3)'}
+            onMouseLeave={e=>e.currentTarget.style.background=''}>
+            <td style={{padding:'10px 14px',fontFamily:'var(--fm)',fontSize:12,color:'var(--g4)',textAlign:'center'}}>{f.codice_cliente||'—'}</td>
             <td style={{padding:'10px 14px'}}>
               <div style={{fontWeight:700,color:'var(--white)'}}>{f.ragione_sociale}</div>
               {f.email&&<div style={{fontSize:11,color:'var(--g4)',marginTop:2}}>{f.email}</div>}
             </td>
             <td style={{padding:'10px 14px'}}>
-              {f.categoria?<span style={{padding:'3px 8px',borderRadius:6,fontSize:11,fontWeight:600,background:CAT_COLOR[f.categoria]+'22',color:CAT_COLOR[f.categoria]||'var(--g4)'}}>{f.categoria}</span>
+              {f.categoria?<span style={{padding:'3px 8px',borderRadius:6,fontSize:11,fontWeight:600,background:'rgba(124,58,237,.15)',color:'var(--violet)'}}>{f.categoria}</span>
               :<span style={{fontSize:11,color:'var(--g4)'}}>—</span>}
             </td>
             <td style={{padding:'10px 14px',maxWidth:200}}>
@@ -737,7 +863,17 @@ function FornitoriScreen({state,dispatch}){
             <td style={{padding:'10px 14px',fontFamily:'var(--fm)',fontSize:12,color:'var(--red)',fontWeight:600}}>−{fmtEuro(f.spesa_totale||0)}</td>
             <td style={{padding:'10px 14px',fontSize:11,color:'var(--g4)'}}>{f.ultima_fattura?fmtDate(f.ultima_fattura):'—'}</td>
             <td style={{padding:'10px 14px'}}>
-              <button onClick={()=>openEdit(f)} style={{padding:'4px 10px',borderRadius:7,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',fontSize:11,cursor:'pointer'}}>✎ Modifica</button>
+              <div style={{display:'flex',gap:4}}>
+                <button onClick={e=>openEdit(f,e)} style={{padding:'4px 10px',borderRadius:7,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',fontSize:11,cursor:'pointer'}}>✎</button>
+                <button onClick={async e=>{
+                  e.stopPropagation();
+                  if(!window.confirm('Eliminare il fornitore '+f.ragione_sociale+'?'))return;
+                  const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+                  const res=await fetch('/api/v1/fornitori/'+f.id,{method:'DELETE',headers:{'Authorization':'Bearer '+token}});
+                  if(res.ok){setFornitori(prev=>prev.filter(x=>x.id!==f.id));}
+                  else{const err=await res.json().catch(()=>({}));alert(err.detail||'Errore eliminazione');}
+                }} style={{padding:'4px 10px',borderRadius:7,border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.1)',color:'var(--red)',fontSize:11,cursor:'pointer'}}>✕</button>
+              </div>
             </td>
           </tr>)}
         </tbody>
@@ -745,51 +881,40 @@ function FornitoriScreen({state,dispatch}){
       {filtered.length===0&&<div style={{padding:40,textAlign:'center',color:'var(--g4)'}}>Nessun fornitore trovato</div>}
     </div>}
 
-    {/* MODAL MODIFICA */}
+    {/* MODAL MODIFICA dalla lista */}
     {modal==='edit'&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={()=>setModal(null)}>
       <div style={{background:'var(--g2)',borderRadius:16,padding:28,width:480,maxWidth:'90vw',border:'1px solid var(--g3)'}} onClick={e=>e.stopPropagation()}>
-        <h3 style={{margin:'0 0 20px',color:'var(--white)',fontSize:16}}>{form.ragione_sociale}</h3>
+        <h3 style={{margin:'0 0 20px',fontSize:16,fontWeight:700}}>Modifica fornitore</h3>
         <form onSubmit={saveEdit}>
-          <div style={{marginBottom:14}}>
-            <label style={{fontSize:12,color:'var(--g4)',display:'block',marginBottom:4}}>Categoria</label>
-            <select value={form.categoria||''} onChange={e=>setForm({...form,categoria:e.target.value})} style={{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:13}}>
-              <option value=''>— Seleziona —</option>
+          <FRow label="Categoria">
+            <select value={form.categoria||''} onChange={e=>setForm({...form,categoria:e.target.value})}>
+              <option value="">— Nessuna —</option>
               {CATEGORIE.map(c=><option key={c} value={c}>{c}</option>)}
             </select>
-          </div>
-          <div style={{marginBottom:14}}>
-            <label style={{fontSize:12,color:'var(--g4)',display:'block',marginBottom:4}}>Competenze <span style={{color:'var(--g4)',fontStyle:'italic'}}>(separate da virgola)</span></label>
-            <input value={form.competenze_str||''} onChange={e=>setForm({...form,competenze_str:e.target.value})} placeholder='es. grafica, social media, copywriting' style={{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:13,boxSizing:'border-box'}}/>
-          </div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
-            <div>
-              <label style={{fontSize:12,color:'var(--g4)',display:'block',marginBottom:4}}>Tariffa (€)</label>
-              <input type='number' step='0.01' value={form.tariffa||''} onChange={e=>setForm({...form,tariffa:e.target.value})} placeholder='0.00' style={{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:13,boxSizing:'border-box'}}/>
-            </div>
-            <div>
-              <label style={{fontSize:12,color:'var(--g4)',display:'block',marginBottom:4}}>Tipo tariffa</label>
-              <select value={form.tariffa_tipo||''} onChange={e=>setForm({...form,tariffa_tipo:e.target.value})} style={{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:13}}>
-                <option value=''>—</option>
-                <option value='oraria'>/ora</option>
-                <option value='giornaliera'>/giorno</option>
-                <option value='mensile'>/mese</option>
-                <option value='progetto'>a progetto</option>
+          </FRow>
+          <FRow label="Competenze (separate da virgola)">
+            <input value={form.competenze_str||''} onChange={e=>setForm({...form,competenze_str:e.target.value})} placeholder="es. Social Media, Copywriting"/>
+          </FRow>
+          <FGrid>
+            <FRow label="Tariffa (€)"><input type="number" min="0" step="0.01" value={form.tariffa||''} onChange={e=>setForm({...form,tariffa:e.target.value})}/></FRow>
+            <FRow label="Tipo tariffa">
+              <select value={form.tariffa_tipo||''} onChange={e=>setForm({...form,tariffa_tipo:e.target.value})}>
+                <option value="">—</option>
+                <option value="/ora">/ora</option>
+                <option value="/giorno">/giorno</option>
+                <option value="/mese">/mese</option>
+                <option value="fisso">fisso</option>
               </select>
-            </div>
-          </div>
-          <div style={{marginBottom:20}}>
-            <label style={{fontSize:12,color:'var(--g4)',display:'block',marginBottom:4}}>Note</label>
-            <textarea value={form.note||''} onChange={e=>setForm({...form,note:e.target.value})} rows={3} style={{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:13,boxSizing:'border-box',resize:'vertical'}}/>
-          </div>
-          <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-            <button type='button' onClick={()=>setModal(null)} style={{padding:'8px 16px',borderRadius:8,border:'1px solid var(--g3)',background:'transparent',color:'var(--g5)',cursor:'pointer'}}>Annulla</button>
-            <button type='submit' disabled={saving} style={{padding:'8px 16px',borderRadius:8,border:'none',background:'var(--purple)',color:'white',fontWeight:600,cursor:'pointer'}}>{saving?'Salvataggio...':'Salva'}</button>
-          </div>
+            </FRow>
+          </FGrid>
+          <FRow label="Note"><textarea value={form.note||''} onChange={e=>setForm({...form,note:e.target.value})} rows={3}/></FRow>
+          <FActions onCancel={()=>setModal(null)} submitLabel={saving?'Salvataggio...':'Salva'} disabled={saving}/>
         </form>
       </div>
     </div>}
   </div>;
 }
+
 
 function ClientiScreen({state,dispatch,setPage,setDrillCliente,api}) {
   const [search,setSearch]=useState('');
@@ -1414,7 +1539,7 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
 
   return <div className='fu'>
     {confirm&&<Confirm msg='Eliminare questa commessa?' onConfirm={()=>del(confirm.id)} onClose={()=>setConfirm(null)}/>}
-    {modal&&<Modal title={modal==='new'?'Nuova commessa':'Modifica commessa'} onClose={closeModal} width={580}>
+    {modal&&<Modal title={modal==='new'?'Nuova commessa':'Modifica commessa'} onClose={closeModal} width={620}>
       <form onSubmit={save}>
         <FRow label='Cliente'>
           <select value={form.cliente_id||''} onChange={e=>onClienteChange(e.target.value)} required disabled={modal!=='new'&&!!api?.enabled}>
@@ -1422,7 +1547,7 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
             {state.clienti.map(c=><option key={c.id} value={c.id}>{c.codice} — {c.ragione_sociale}</option>)}
           </select>
         </FRow>
-        {/* Mostra i progetti del cliente già aggregati */}
+        {/* Progetti aggregati */}
         {form.progetti_ids?.length>0&&<div style={{background:'var(--g2)',borderRadius:8,padding:'12px 14px',marginBottom:14}}>
           <div style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',marginBottom:10}}>PROGETTI AGGREGATI IN QUESTA COMMESSA</div>
           {form.progetti_ids.map(pid=>{
@@ -1433,13 +1558,22 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
             const pFatt=fatt(
               snap.importo_fisso ?? p.importo_fisso ?? 0,
               snap.importo_variabile ?? p.importo_variabile ?? 0,
-              da,
-              dc
+              da, dc
             );
             return <div key={pid} style={{padding:'8px 0',borderBottom:'1px solid rgba(255,255,255,.06)'}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:da>0?6:0}}>
-                <div style={{display:'flex',gap:8,alignItems:'center'}}><Badge s={p.categoria}/><span style={{fontWeight:600,fontSize:12}}>{p.nome}</span></div>
-                <span style={{fontFamily:'var(--fm)',fontSize:12,color:'var(--violet)'}}>{fmtEuro(pFatt)}</span>
+                <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                  <Badge s={p.categoria}/>
+                  <span style={{fontWeight:600,fontSize:12}}>{p.nome}</span>
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:10}}>
+                  <span style={{fontFamily:'var(--fm)',fontSize:12,color:'var(--violet)'}}>{fmtEuro(pFatt)}</span>
+                  <button type='button' onClick={()=>setForm(f=>({
+                    ...f,
+                    progetti_ids:(f.progetti_ids||[]).filter(id=>id!==pid),
+                    delivery_per_progetto:Object.fromEntries(Object.entries(f.delivery_per_progetto||{}).filter(([k])=>k!==pid)),
+                  }))} style={{padding:'2px 7px',borderRadius:5,border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.1)',color:'var(--red)',fontSize:11,cursor:'pointer'}} title='Rimuovi progetto'>✕</button>
+                </div>
               </div>
               {da>0&&<div style={{display:'flex',alignItems:'center',gap:10}}>
                 <span style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)'}}>Delivery consuntiva:</span>
@@ -1449,9 +1583,25 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
               </div>}
             </div>;
           })}
+
+          {/* Aggiustamenti */}
+          <div style={{marginTop:12,paddingTop:10,borderTop:'1px solid rgba(255,255,255,.08)'}}>
+            <div style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',marginBottom:8}}>AGGIUSTAMENTI (extra/sconto)</div>
+            {((form.aggiustamenti||[])).map((ag,i)=><div key={i} style={{display:'flex',gap:6,alignItems:'center',marginBottom:6}}>
+              <input value={ag.descrizione||''} onChange={e=>{const a=[...(form.aggiustamenti||[])];a[i]={...a[i],descrizione:e.target.value};setForm(f=>({...f,aggiustamenti:a}));}}
+                placeholder='Descrizione (es. Extra urgenza)' style={{flex:2,padding:'5px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)',fontSize:12}}/>
+              <input type='number' step='0.01' value={ag.importo||''} onChange={e=>{const a=[...(form.aggiustamenti||[])];a[i]={...a[i],importo:parseFloat(e.target.value)||0};setForm(f=>({...f,aggiustamenti:a}));}}
+                placeholder='+100 o -50' style={{flex:1,padding:'5px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g1)',color:(ag.importo||0)>=0?'var(--green)':'var(--red)',fontSize:12,fontFamily:'var(--fm)'}}/>
+              <button type='button' onClick={()=>setForm(f=>({...f,aggiustamenti:(f.aggiustamenti||[]).filter((_,j)=>j!==i)}))}
+                style={{padding:'4px 8px',borderRadius:5,border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.1)',color:'var(--red)',fontSize:11,cursor:'pointer'}}>✕</button>
+            </div>)}
+            <button type='button' onClick={()=>setForm(f=>({...f,aggiustamenti:[...(f.aggiustamenti||[]),{descrizione:'',importo:0}]}))}
+              style={{padding:'4px 10px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',fontSize:11,cursor:'pointer',marginTop:2}}>+ Aggiungi aggiustamento</button>
+          </div>
+
           <div style={{marginTop:10,display:'flex',justifyContent:'space-between',fontFamily:'var(--fm)',fontSize:12}}>
             <span style={{color:'var(--g4)'}}>Totale fatturabile</span>
-            <span style={{fontWeight:700,color:'var(--violet)'}}>{fmtEuro(previewFatt(form))}</span>
+            <span style={{fontWeight:700,color:'var(--violet)'}}>{fmtEuro(previewFatt(form)+(form.aggiustamenti||[]).reduce((s,a)=>s+(a.importo||0),0))}</span>
           </div>
         </div>}
         <FGrid>
@@ -1875,49 +2025,64 @@ function FinanziariaScreen({state,dispatch}) {
   const [cfAl,setCfAl]=useState(`${oggi.getFullYear()}-${String(oggi.getMonth()+4).padStart(2,'0').replace(/^(1[3-9])/,m=>String(parseInt(m)-12).padStart(2,'0'))}`);
 
   const cashflow=useMemo(()=>{
-    // Genera lista mesi nel range
     const mesi=[];
     const [sy,sm]=cfDal.split('-').map(Number);
     const [ey,em]=cfAl.split('-').map(Number);
     let cy=sy,cm=sm;
+    const now=new Date();
+    const meseCorrenteKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
     while(cy<ey||(cy===ey&&cm<=em)){
       const mKey=`${cy}-${String(cm).padStart(2,'0')}`;
-      const now=new Date();
       const meseDate=new Date(cy,cm-1,1);
       const isFuture=meseDate>new Date(now.getFullYear(),now.getMonth(),1);
-      const isCurrent=cy===now.getFullYear()&&cm===now.getMonth()+1;
+      const isCurrent=mKey===meseCorrenteKey;
+      const isPast=!isFuture&&!isCurrent;
 
-      // ENTRATE CONSUNTIVE: fatture incassate (data_ultimo_incasso)
-      const entrateReali=state.fatture_attive
-        .filter(f=>f.stato==='INCASSATA'&&f.data_ultimo_incasso?.substring(0,7)===mKey)
-        .reduce((s,f)=>s+(f.importo||0),0);
+      // ── ENTRATE ──────────────────────────────────────────
+      // Consuntivo (passato + corrente): movimenti cassa reali
+      const entrateReali=(isPast||isCurrent)
+        ?(state.movimenti_cassa||[])
+          .filter(m=>m.tipo==='ENTRATA'&&m.data_valuta?.substring(0,7)===mKey)
+          .reduce((s,m)=>s+Math.abs(m.importo||0),0)
+        :0;
 
-      // ENTRATE PREVISIONALI: fatture non incassate (per mesi futuri, usa data_scadenza)
-      const entratePrev=isFuture||isCurrent?state.fatture_attive
-        .filter(f=>f.stato!=='INCASSATA'&&f.data_scadenza?.substring(0,7)===mKey)
-        .reduce((s,f)=>s+(f.importo_residuo||f.importo||0),0):0;
+      // Previsionale (futuro + corrente non ancora incassato): fatture attive non incassate per data_scadenza
+      const entratePrev=(isFuture||isCurrent)
+        ?state.fatture_attive
+          .filter(f=>f.stato!=='INCASSATA'&&f.data_scadenza?.substring(0,7)===mKey)
+          .reduce((s,f)=>s+(f.importo_residuo||f.importo||0),0)
+        :0;
 
-      // USCITE: fatture passive per data_scadenza + costi fissi
-      // Uscite consuntive: fatture pagate (data_ultimo_pagamento)
-      const uscitePassPagate=state.fatture_passive
-        .filter(f=>f.stato==='PAGATA'&&f.data_ultimo_pagamento?.substring(0,7)===mKey)
-        .reduce((s,f)=>s+(f.importo||0),0);
-      // Uscite previsionali: fatture non pagate (data_emissione, solo mesi futuri/corrente)
-      const uscitePassPrev=(isFuture||isCurrent)?state.fatture_passive
-        .filter(f=>f.stato!=='PAGATA'&&f.data_emissione?.substring(0,7)===mKey)
-        .reduce((s,f)=>s+(f.importo||0),0):0;
-      const uscitePass=uscitePassPagate+uscitePassPrev;
-      const usciteCosti=state.costi_fissi
-        .filter(c=>c.mese===mKey)
-        .reduce((s,c)=>s+(c.importo||0),0);
+      // ── USCITE ───────────────────────────────────────────
+      // Consuntivo (passato + corrente): movimenti cassa reali
+      const usciteReali=(isPast||isCurrent)
+        ?(state.movimenti_cassa||[])
+          .filter(m=>m.tipo==='USCITA'&&m.data_valuta?.substring(0,7)===mKey)
+          .reduce((s,m)=>s+Math.abs(m.importo||0),0)
+        :0;
 
-      const entrate=entrateReali+(isFuture||isCurrent?entratePrev:0);
-      const uscite=uscitePass+usciteCosti;
-      mesi.push({mese:mKey,entrate,entrateReali,entratePrev,uscite,netto:entrate-uscite,isFuture,isCurrent});
+      // Previsionale (futuro + corrente non ancora pagato): fatture passive non pagate per data_emissione
+      const uscitePrev=(isFuture||isCurrent)
+        ?state.fatture_passive
+          .filter(f=>f.stato!=='PAGATA'&&f.data_emissione?.substring(0,7)===mKey)
+          .reduce((s,f)=>s+(f.importo||0),0)
+        :0;
+
+      const entrate=entrateReali+entratePrev;
+      const uscite=usciteReali+uscitePrev;
+
+      mesi.push({
+        mese:mKey,
+        entrate,entrateReali,entratePrev,
+        uscite,usciteReali,uscitePrev,
+        netto:entrate-uscite,
+        isFuture,isCurrent,isPast
+      });
       cm++;if(cm>12){cm=1;cy++;}
     }
     return mesi;
-  },[state.fatture_attive,state.fatture_passive,state.costi_fissi,cfDal,cfAl]);
+  },[state.fatture_attive,state.fatture_passive,state.movimenti_cassa,cfDal,cfAl]);
 
   const maxCF=Math.max(...cashflow.map(m=>Math.max(m.entrate,m.uscite)),1);
 
@@ -1948,12 +2113,49 @@ function FinanziariaScreen({state,dispatch}) {
       }else{const err=await res.json().catch(()=>({}));alert('Errore: '+JSON.stringify(err));}
     }catch(e){console.error(e);}
   };
-  const openCosto=()=>setForm({descrizione:'',importo:0,categoria:'PERSONALE',mese:currMese(),ricorrente:true})||setModal('costo');
+  const openCosto=()=>setForm({descrizione:'',importo:0,categoria:'PERSONALE',periodicita:'mensile',attivo:true,data_inizio:'',data_fine:'',note:''})||setModal('costo');
   const closeModal=()=>{setModal(null);setForm({});};
 
   const saveFattAttiva=e=>{e.preventDefault();dispatch({type:'ADD',entity:'fatture_attive',item:{...form,id:uid(),importo:parseFloat(form.importo)||0}});closeModal();};
   const saveFattPassiva=e=>{e.preventDefault();dispatch({type:'ADD',entity:'fatture_passive',item:{...form,id:uid(),importo:parseFloat(form.importo)||0}});closeModal();};
-  const saveCosto=e=>{e.preventDefault();dispatch({type:'ADD',entity:'costi_fissi',item:{...form,id:uid(),importo:parseFloat(form.importo)||0}});closeModal();};
+  const saveCosto=async e=>{
+    e.preventDefault();
+    const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+    const payload={
+      descrizione:form.descrizione,
+      importo:parseFloat(form.importo)||0,
+      categoria:form.categoria||'ALTRO',
+      periodicita:form.periodicita||'mensile',
+      attivo:true,
+      data_inizio:form.data_inizio||null,
+      data_fine:form.data_fine||null,
+      note:form.note||null,
+    };
+    try{
+      const res=await fetch('/api/v1/costi-fissi',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(payload)});
+      if(res.ok){const data=await res.json();dispatch({type:'ADD',entity:'costi_fissi',item:{...data,importo:parseFloat(data.importo)||0}});closeModal();}
+      else{const err=await res.json().catch(()=>({}));alert('Errore: '+JSON.stringify(err));}
+    }catch(e){console.error(e);}
+  };
+  const saveEditCosto=async e=>{
+    e.preventDefault();
+    const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+    const payload={
+      descrizione:form.descrizione,
+      importo:parseFloat(form.importo)||0,
+      categoria:form.categoria||'ALTRO',
+      periodicita:form.periodicita||'mensile',
+      attivo:form.attivo!==false,
+      data_inizio:form.data_inizio||null,
+      data_fine:form.data_fine||null,
+      note:form.note||null,
+    };
+    try{
+      const res=await fetch('/api/v1/costi-fissi/'+form._editId,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(payload)});
+      if(res.ok){const data=await res.json();dispatch({type:'UPDATE',entity:'costi_fissi',item:{...data,importo:parseFloat(data.importo)||0,id:form._editId}});closeModal();}
+      else{const err=await res.json().catch(()=>({}));alert('Errore: '+JSON.stringify(err));}
+    }catch(e){console.error(e);}
+  };
 
   const cambiaStatoFattAttiva=async(id,stato)=>{
     if(stato==='INCASSATA'){
@@ -2063,15 +2265,27 @@ function FinanziariaScreen({state,dispatch}) {
       </form>
     </Modal>}
 
-    {modal==='costo'&&<Modal title='Aggiungi costo fisso' onClose={closeModal}>
-      <form onSubmit={saveCosto}>
+    {(modal==='costo'||modal==='edit_costo')&&<Modal title={modal==='costo'?'Nuovo costo fisso':'Modifica costo fisso'} onClose={closeModal}>
+      <form onSubmit={modal==='costo'?saveCosto:saveEditCosto}>
         <FRow label='Descrizione'><input required value={form.descrizione||''} onChange={e=>setForm({...form,descrizione:e.target.value})}/></FRow>
         <FGrid>
           <FRow label='Importo (€)'><input type='number' min='0' step='0.01' value={form.importo||0} onChange={e=>setForm({...form,importo:e.target.value})} required/></FRow>
-          <FRow label='Categoria'><select value={form.categoria||'PERSONALE'} onChange={e=>setForm({...form,categoria:e.target.value})}>{['PERSONALE','STRUTTURA','SOFTWARE','CONSULENZE','ALTRO'].map(c=><option key={c} value={c}>{c}</option>)}</select></FRow>
+          <FRow label='Categoria'>
+            <select value={form.categoria||'ALTRO'} onChange={e=>setForm({...form,categoria:e.target.value})}>
+              {['PERSONALE','STRUTTURA','SOFTWARE','CONSULENZE','MARKETING','UTILITIES','ALTRO'].map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+          </FRow>
         </FGrid>
-        <FRow label='Mese'><input type='month' value={form.mese||currMese()} onChange={e=>setForm({...form,mese:e.target.value})} required/></FRow>
-        <FRow label='Ricorrente?'><select value={form.ricorrente?'true':'false'} onChange={e=>setForm({...form,ricorrente:e.target.value==='true'})}><option value='true'>Sì</option><option value='false'>No</option></select></FRow>
+        <FRow label='Periodicità'>
+          <select value={form.periodicita||'mensile'} onChange={e=>setForm({...form,periodicita:e.target.value})}>
+            {['mensile','bimestrale','trimestrale','semestrale','annuale'].map(p=><option key={p} value={p}>{p.charAt(0).toUpperCase()+p.slice(1)}</option>)}
+          </select>
+        </FRow>
+        <FGrid>
+          <FRow label='Data inizio'><input type='date' value={form.data_inizio||''} onChange={e=>setForm({...form,data_inizio:e.target.value})}/></FRow>
+          <FRow label='Data fine'><input type='date' value={form.data_fine||''} onChange={e=>setForm({...form,data_fine:e.target.value})}/></FRow>
+        </FGrid>
+        <FRow label='Note'><textarea value={form.note||''} onChange={e=>setForm({...form,note:e.target.value})} rows={2}/></FRow>
         <FActions onCancel={closeModal} submitLabel='Salva costo'/>
       </form>
     </Modal>}
@@ -2216,36 +2430,66 @@ function FinanziariaScreen({state,dispatch}) {
       </Card>}
 
       {/* COSTI FISSI */}
-      {tab==='costi_fissi'&&<div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:16}}>
-          {['PERSONALE','STRUTTURA','SOFTWARE','CONSULENZE','ALTRO'].map(cat=>{
-            const tot=costiMese.filter(c=>c.categoria===cat).reduce((s,c)=>s+c.importo,0);
-            return tot>0?<KPI key={cat} label={cat} value={fmtEuro(tot)} color='var(--g5)'/>:null;
-          }).filter(Boolean)}
-        </div>
-        <Card>
-          <CH title={`Costi fissi — ${meseFmt(mese)}`} meta={`Totale: ${fmtEuro(totCostiFissi)}`}/>
-          {costiMese.length===0?<Empty msg='Nessun costo fisso per questo mese'/>:
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
-            <thead><tr><Th c='Descrizione'/><Th c='Categoria'/><Th c='Importo'/><Th c='Ricorrente'/><Th c=''/></tr></thead>
-            <tbody>
-              {costiMese.map(c=><TR key={c.id}>
-                <Td><div style={{fontWeight:700}}>{c.descrizione}</div></Td>
-                <Td><Badge s={c.categoria}/></Td>
-                <Td mono style={{color:'var(--red)',fontWeight:700}}>−{fmtEuro(c.importo)}</Td>
-                <Td><span style={{fontFamily:'var(--fm)',fontSize:11,color:c.ricorrente?'var(--amber)':'var(--g5)'}}>{c.ricorrente?'↻ mensile':'una tantum'}</span></Td>
-                <Td><Btn v='danger' onClick={()=>dispatch({type:'DELETE',entity:'costi_fissi',id:c.id})} s={{padding:'4px 8px',fontSize:11}}>✕</Btn></Td>
-              </TR>)}
-            </tbody>
-          </table>}
-        </Card>
-      </div>}
+      {tab==='costi_fissi'&&(()=>{
+        const PERIODI={'mensile':1,'bimestrale':2,'trimestrale':3,'semestrale':6,'annuale':12};
+        const costiAttivi=(state.costi_fissi||[]).filter(c=>c.attivo!==false);
+        const normalizzaMese=c=>parseFloat(c.importo||0)/(PERIODI[c.periodicita]||1);
+        const totMensile=costiAttivi.reduce((s,c)=>s+normalizzaMese(c),0);
+        const catTotali=['PERSONALE','STRUTTURA','SOFTWARE','CONSULENZE','MARKETING','UTILITIES','ALTRO'].map(cat=>({
+          cat,tot:costiAttivi.filter(c=>c.categoria===cat).reduce((s,c)=>s+normalizzaMese(c),0)
+        })).filter(x=>x.tot>0);
+        return <div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:16}}>
+            <KPI label='Costo fisso mensile' value={fmtEuro(totMensile)} color='var(--red)'/>
+            <KPI label='Costo fisso annuale' value={fmtEuro(totMensile*12)} color='var(--red)'/>
+            <KPI label='Break-even mensile' value={fmtEuro(totMensile*1.3)} color='var(--amber)'/>
+            <KPI label='Voci attive' value={costiAttivi.length}/>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:16}}>
+            {catTotali.map(({cat,tot})=><KPI key={cat} label={cat} value={fmtEuro(tot)} color='var(--g5)'/>)}
+          </div>
+          <Card>
+            <CH title='Costi fissi' meta={`${costiAttivi.length} voci attive · ${fmtEuro(totMensile)}/mese`}/>
+            {(state.costi_fissi||[]).length===0?<Empty msg='Nessun costo fisso inserito'/>:
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
+              <thead><tr><Th c='Descrizione'/><Th c='Categoria'/><Th c='Importo'/><Th c='Periodicità'/><Th c='Mensile'/><Th c='Stato'/><Th c='Azioni'/></tr></thead>
+              <tbody>
+                {(state.costi_fissi||[]).map(c=>{
+                  const mensile=normalizzaMese(c);
+                  return <TR key={c.id} style={{opacity:c.attivo===false?.5:1}}>
+                    <Td><div style={{fontWeight:700}}>{c.descrizione}</div>{c.note&&<div style={{fontSize:11,color:'var(--g4)'}}>{c.note}</div>}</Td>
+                    <Td><Badge s={c.categoria}/></Td>
+                    <Td mono style={{color:'var(--red)',fontWeight:700}}>−{fmtEuro(c.importo)}</Td>
+                    <Td><span style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--amber)'}}>{c.periodicita||'mensile'}</span></Td>
+                    <Td mono style={{color:'var(--red)',fontSize:11}}>−{fmtEuro(mensile)}/m</Td>
+                    <Td><span style={{fontSize:11,color:c.attivo!==false?'var(--green)':'var(--g4)'}}>{c.attivo!==false?'● Attivo':'○ Inattivo'}</span></Td>
+                    <Td style={{display:'flex',gap:4}}>
+                      <Btn v='ghost' onClick={()=>{setForm({...c,_editId:c.id});setModal('edit_costo');}} s={{padding:'4px 8px',fontSize:11}}>✎</Btn>
+                      <Btn v={c.attivo!==false?'danger':'success'} onClick={async()=>{
+                        const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+                        const res=await fetch('/api/v1/costi-fissi/'+c.id,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({attivo:c.attivo===false})});
+                        if(res.ok)dispatch({type:'UPDATE',entity:'costi_fissi',item:{...c,attivo:c.attivo===false}});
+                      }} s={{padding:'4px 8px',fontSize:11}}>{c.attivo!==false?'Disattiva':'Attiva'}</Btn>
+                      <Btn v='danger' onClick={async()=>{
+                        if(!window.confirm('Eliminare questo costo fisso?'))return;
+                        const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+                        const res=await fetch('/api/v1/costi-fissi/'+c.id,{method:'DELETE',headers:{'Authorization':'Bearer '+token}});
+                        if(res.ok)dispatch({type:'DELETE',entity:'costi_fissi',id:c.id});
+                      }} s={{padding:'4px 8px',fontSize:11}}>✕</Btn>
+                    </Td>
+                  </TR>;
+                })}
+              </tbody>
+            </table>}
+          </Card>
+        </div>;
+      })()}
 
       {/* CASH FLOW */}
       {tab==='cashflow'&&<div>
         {/* KPI TOTALI */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:16}}>
-          <KPI label='Incassato (periodo)' value={fmtEuro(cashflow.reduce((s,m)=>s+m.entrateReali,0))} color='var(--green)' delay={.03}/>
+          <KPI label='Entrate reali' value={fmtEuro(cashflow.reduce((s,m)=>s+m.entrateReali,0))} color='var(--green)' delay={.03}/>
           <KPI label='Da incassare (prev.)' value={fmtEuro(cashflow.reduce((s,m)=>s+m.entratePrev,0))} color='var(--violet)' delay={.05}/>
           <KPI label='Uscite (periodo)' value={fmtEuro(cashflow.reduce((s,m)=>s+m.uscite,0))} color='var(--red)' delay={.08}/>
           <KPI label='Saldo netto' value={fmtEuro(cashflow.reduce((s,m)=>s+m.netto,0))} color={cashflow.reduce((s,m)=>s+m.netto,0)>=0?'var(--green)':'var(--red)'} delay={.11}/>
@@ -2275,27 +2519,30 @@ function FinanziariaScreen({state,dispatch}) {
                 const hu=Math.round((m.uscite/maxCF)*130);
                 return <div key={i} style={{minWidth:36,flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
                   <div style={{width:'100%',display:'flex',gap:2,alignItems:'flex-end',height:130}}>
-                    <div title={`Entrate: ${fmtEuro(m.entrate)}`} style={{flex:1,height:he||2,background:m.isFuture?'var(--violet)':'linear-gradient(180deg,var(--violet),var(--purple))',borderRadius:'3px 3px 0 0',opacity:m.isFuture?.5:1,transition:'height .3s',border:m.isFuture?'1px dashed var(--violet)':undefined,boxSizing:'border-box'}}/>
-                    <div title={`Uscite: ${fmtEuro(m.uscite)}`} style={{flex:1,height:hu||2,background:m.uscite>m.entrate?'var(--red)':'var(--g3)',borderRadius:'3px 3px 0 0',opacity:m.isFuture?.5:1,transition:'height .3s'}}/>
+                    <div title={`Entrate reali: ${fmtEuro(m.entrateReali)} | Prev: ${fmtEuro(m.entratePrev)}`} style={{flex:1,height:he||2,background:m.isPast?'linear-gradient(180deg,var(--violet),var(--purple))':m.isCurrent?'linear-gradient(180deg,var(--violet),var(--purple))':'var(--violet)',borderRadius:'3px 3px 0 0',opacity:m.isFuture?.5:1,transition:'height .3s',border:m.isFuture?'1px dashed var(--violet)':undefined,boxSizing:'border-box'}}/>
+                    <div title={`Uscite reali: ${fmtEuro(m.usciteReali)} | Prev: ${fmtEuro(m.uscitePrev)}`} style={{flex:1,height:hu||2,background:m.uscite>m.entrate?'var(--red)':m.isFuture?'rgba(239,68,68,.3)':'var(--g3)',borderRadius:'3px 3px 0 0',opacity:m.isFuture?.5:1,transition:'height .3s',border:m.isFuture?'1px dashed rgba(239,68,68,.5)':undefined,boxSizing:'border-box'}}/>
                   </div>
                   <span style={{fontFamily:'var(--fm)',fontSize:8,color:m.isCurrent?'var(--violet)':'var(--g4)',fontWeight:m.isCurrent?700:400,whiteSpace:'nowrap'}}>{meseFmt(m.mese).slice(0,3)}{m.isCurrent?' ◀':''}</span>
                 </div>;
               })}
             </div>
             <div style={{display:'flex',gap:16,fontFamily:'var(--fm)',fontSize:11,marginTop:4}}>
-              <span style={{display:'flex',alignItems:'center',gap:5}}><span style={{width:10,height:10,borderRadius:2,background:'var(--purple)',display:'inline-block'}}/>Entrate reali</span>
-              <span style={{display:'flex',alignItems:'center',gap:5}}><span style={{width:10,height:10,borderRadius:2,background:'var(--violet)',border:'1px dashed var(--violet)',display:'inline-block'}}/>Previsionali</span>
-              <span style={{display:'flex',alignItems:'center',gap:5}}><span style={{width:10,height:10,borderRadius:2,background:'var(--g3)',display:'inline-block'}}/>Uscite</span>
+              <span style={{display:'flex',alignItems:'center',gap:5}}><span style={{width:10,height:10,borderRadius:2,background:'linear-gradient(180deg,var(--violet),var(--purple))',display:'inline-block'}}/>Entrate reali (cassa)</span>
+              <span style={{display:'flex',alignItems:'center',gap:5}}><span style={{width:10,height:10,borderRadius:2,background:'var(--violet)',border:'1px dashed var(--violet)',display:'inline-block',opacity:.5}}/>Entrate previsionali</span>
+              <span style={{display:'flex',alignItems:'center',gap:5}}><span style={{width:10,height:10,borderRadius:2,background:'var(--g3)',display:'inline-block'}}/>Uscite reali (cassa)</span>
+              <span style={{display:'flex',alignItems:'center',gap:5}}><span style={{width:10,height:10,borderRadius:2,background:'rgba(239,68,68,.3)',border:'1px dashed rgba(239,68,68,.5)',display:'inline-block'}}/>Uscite previsionali</span>
             </div>
           </div>
           {/* TABELLA */}
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5,marginTop:8}}>
             <thead><tr>
               <Th c='Mese'/>
-              <Th c='Incassato'/>
-              <Th c='Da incassare'/>
+              <Th c='Entrate reali'/>
+              <Th c='Entrate prev.'/>
               <Th c='Totale entrate'/>
-              <Th c='Uscite'/>
+              <Th c='Uscite reali'/>
+              <Th c='Uscite prev.'/>
+              <Th c='Totale uscite'/>
               <Th c='Saldo netto'/>
             </tr></thead>
             <tbody>
@@ -2311,6 +2558,8 @@ function FinanziariaScreen({state,dispatch}) {
                   <Td mono style={{color:'var(--green)'}}>{m.entrateReali>0?fmtEuro(m.entrateReali):'—'}</Td>
                   <Td mono style={{color:'var(--violet)',opacity:.8}}>{m.entratePrev>0?fmtEuro(m.entratePrev):'—'}</Td>
                   <Td mono style={{color:'var(--green)',fontWeight:600}}>{fmtEuro(m.entrate)}</Td>
+                  <Td mono style={{color:'var(--red)',opacity:.9}}>{m.usciteReali>0?fmtEuro(m.usciteReali):'—'}</Td>
+                  <Td mono style={{color:'var(--red)',opacity:.6}}>{m.uscitePrev>0?fmtEuro(m.uscitePrev):'—'}</Td>
                   <Td mono style={{color:'var(--red)'}}>−{fmtEuro(m.uscite)}</Td>
                   <Td mono style={{fontWeight:700,color:m.netto>=0?'var(--green)':'var(--red)'}}>{m.netto>=0?'+':''}{fmtEuro(m.netto)}</Td>
                 </TR>;
@@ -2320,6 +2569,8 @@ function FinanziariaScreen({state,dispatch}) {
                 <Td mono style={{color:'var(--green)',fontWeight:700}}>{fmtEuro(cashflow.reduce((s,m)=>s+m.entrateReali,0))}</Td>
                 <Td mono style={{color:'var(--violet)',fontWeight:700}}>{fmtEuro(cashflow.reduce((s,m)=>s+m.entratePrev,0))}</Td>
                 <Td mono style={{color:'var(--green)',fontWeight:700}}>{fmtEuro(cashflow.reduce((s,m)=>s+m.entrate,0))}</Td>
+                <Td mono style={{color:'var(--red)',fontWeight:700}}>{fmtEuro(cashflow.reduce((s,m)=>s+m.usciteReali,0))}</Td>
+                <Td mono style={{color:'var(--red)',opacity:.7,fontWeight:700}}>{fmtEuro(cashflow.reduce((s,m)=>s+m.uscitePrev,0))}</Td>
                 <Td mono style={{color:'var(--red)',fontWeight:700}}>−{fmtEuro(cashflow.reduce((s,m)=>s+m.uscite,0))}</Td>
                 <Td mono style={{fontWeight:700,color:cashflow.reduce((s,m)=>s+m.netto,0)>=0?'var(--green)':'var(--red)'}}>{cashflow.reduce((s,m)=>s+m.netto,0)>=0?'+':''}{fmtEuro(cashflow.reduce((s,m)=>s+m.netto,0))}</Td>
               </TR>
@@ -3454,6 +3705,7 @@ const NAV=[
   {id:'marginalita',label:'Marginalità',icon:'◈',section:'Economia'},
   {id:'finanziaria',label:'Finanziaria',icon:'₿',section:'Economia'},
   {id:'cassa',label:'Cassa',icon:'⬡',section:'Economia'},
+  {id:'regole',label:'Regole Matching',icon:'⚙',section:'Economia'},
   {id:'team',label:'Utenti',icon:'◉',section:'Economia'},
 ];
 
@@ -3693,6 +3945,233 @@ function CassaScreen({state,dispatch}){
   </div>;
 }
 
+// ─────────────────────────────────────────────────────────
+// SCREEN: REGOLE MATCHING
+// ─────────────────────────────────────────────────────────
+function RegoleScreen({state,dispatch}){
+  const [modal,setModal]=React.useState(null);
+  const [form,setForm]=React.useState({});
+  const [saving,setSaving]=React.useState(false);
+  const [applying,setApplying]=React.useState(false);
+  const [applyResult,setApplyResult]=React.useState(null);
+
+  const regole=state.regole||[];
+  const fornitori=state.fornitori||[];
+
+  const TIPI_MATCH=[
+    {v:'contains',l:'Contiene'},
+    {v:'startswith',l:'Inizia con'},
+    {v:'regex',l:'Regex'},
+  ];
+
+  const CATEGORIE_CASSA=['Stipendi','Affitto','Utilities','Software','Advertising','Banca','Fiscale','Fornitore','Altro'];
+
+  const openNew=()=>{
+    setForm({nome:'',pattern:'',tipo_match:'contains',categoria:'',auto_riconcilia:false,priorita:0,attiva:true});
+    setModal('new');
+  };
+
+  const openEdit=(r)=>{
+    setForm({...r});
+    setModal('edit');
+  };
+
+  const save=async e=>{
+    e.preventDefault();
+    setSaving(true);
+    const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+    const payload={
+      nome:form.nome,
+      pattern:form.pattern,
+      tipo_match:form.tipo_match||'contains',
+      categoria:form.categoria||null,
+      fornitore_id:form.fornitore_id||null,
+      auto_riconcilia:form.auto_riconcilia===true||form.auto_riconcilia==='true',
+      priorita:parseInt(form.priorita)||0,
+      attiva:form.attiva!==false,
+    };
+    try{
+      const url=modal==='edit'?`/api/v1/regole-riconciliazione/${form.id}`:'/api/v1/regole-riconciliazione';
+      const method=modal==='edit'?'PATCH':'POST';
+      const res=await fetch(url,{method,headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(payload)});
+      if(res.ok){
+        const data=await res.json();
+        if(modal==='edit') dispatch({type:'UPDATE',entity:'regole',item:data});
+        else dispatch({type:'ADD',entity:'regole',item:data});
+        setModal(null);
+      }else{const err=await res.json().catch(()=>({}));alert('Errore: '+JSON.stringify(err));}
+    }catch(e){console.error(e);}
+    setSaving(false);
+  };
+
+  const deleteRegola=async(id)=>{
+    if(!window.confirm('Eliminare questa regola?')) return;
+    const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+    const res=await fetch(`/api/v1/regole-riconciliazione/${id}`,{method:'DELETE',headers:{'Authorization':'Bearer '+token}});
+    if(res.ok) dispatch({type:'DELETE',entity:'regole',id});
+  };
+
+  const toggleAttiva=async(r)=>{
+    const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+    const res=await fetch(`/api/v1/regole-riconciliazione/${r.id}`,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({attiva:!r.attiva})});
+    if(res.ok) dispatch({type:'UPDATE',entity:'regole',item:{...r,attiva:!r.attiva}});
+  };
+
+  const applicaRegole=async()=>{
+    setApplying(true);
+    setApplyResult(null);
+    const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+    try{
+      const res=await fetch('/api/v1/regole-riconciliazione/applica',{method:'POST',headers:{'Authorization':'Bearer '+token}});
+      if(res.ok){
+        const data=await res.json();
+        setApplyResult(data);
+      }
+    }catch(e){console.error(e);}
+    setApplying(false);
+  };
+
+  const regoleAttive=regole.filter(r=>r.attiva);
+  const regoleInattive=regole.filter(r=>!r.attiva);
+  const totMatch=regole.reduce((s,r)=>s+(r.contatore_match||0),0);
+
+  return <div style={{padding:'28px 32px',minHeight:'100vh',background:'var(--g1)'}}>
+    <div style={{marginBottom:24,display:'flex',alignItems:'flex-start',justifyContent:'space-between'}}>
+      <div>
+        <h1 style={{fontSize:26,fontWeight:800,color:'var(--white)',margin:0}}>Regole Matching</h1>
+        <p style={{color:'var(--g4)',fontSize:13,margin:'4px 0 0'}}>{regole.length} regole · {regoleAttive.length} attive · {totMatch} match totali</p>
+      </div>
+      <div style={{display:'flex',gap:8}}>
+        <button onClick={applicaRegole} disabled={applying||regoleAttive.length===0} style={{padding:'8px 16px',borderRadius:8,border:'none',background:applying?'var(--g3)':'linear-gradient(135deg,var(--purple),var(--violet))',color:'white',fontSize:12,fontWeight:600,cursor:applying?'not-allowed':'pointer'}}>
+          {applying?'⟳ Applicando...':'▶ Applica regole ora'}
+        </button>
+        <button onClick={openNew} style={{padding:'8px 16px',borderRadius:8,border:'none',background:'linear-gradient(135deg,var(--purple),var(--violet))',color:'white',fontSize:12,fontWeight:600,cursor:'pointer'}}>+ Nuova regola</button>
+      </div>
+    </div>
+
+    {applyResult&&<div style={{background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.3)',borderRadius:10,padding:'12px 16px',marginBottom:16,display:'flex',gap:16,alignItems:'center'}}>
+      <span style={{fontSize:20}}>✓</span>
+      <div>
+        <div style={{fontWeight:700,color:'var(--green)',fontSize:13}}>Regole applicate con successo</div>
+        <div style={{fontSize:12,color:'var(--g4)',marginTop:2}}>Movimenti processati: <b style={{color:'var(--g6)'}}>{applyResult.movimenti_processati}</b> · Match trovati: <b style={{color:'var(--green)'}}>{applyResult.match_trovati}</b></div>
+      </div>
+      <button onClick={()=>setApplyResult(null)} style={{marginLeft:'auto',background:'none',border:'none',color:'var(--g4)',cursor:'pointer',fontSize:16}}>×</button>
+    </div>}
+
+    {/* KPI */}
+    <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:20}}>
+      <KPI label='Regole totali' value={regole.length}/>
+      <KPI label='Attive' value={regoleAttive.length} color='var(--green)'/>
+      <KPI label='Auto-riconcilia' value={regole.filter(r=>r.auto_riconcilia&&r.attiva).length} color='var(--violet)'/>
+      <KPI label='Match totali' value={totMatch} color='var(--amber)'/>
+    </div>
+
+    {/* TABELLA REGOLE */}
+    <Card>
+      <CH title='Regole configurate' meta={`${regole.length} regole`} action={
+        <button onClick={openNew} style={{padding:'5px 10px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',fontSize:11,cursor:'pointer'}}>+ Nuova</button>
+      }/>
+      {regole.length===0?<Empty msg='Nessuna regola configurata. Crea la prima regola per automatizzare la riconciliazione.'/>:
+      <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
+        <thead><tr>
+          <Th c='Nome'/>
+          <Th c='Pattern'/>
+          <Th c='Tipo match'/>
+          <Th c='Categoria'/>
+          <Th c='Auto-riconcilia'/>
+          <Th c='Priorità'/>
+          <Th c='Match'/>
+          <Th c='Stato'/>
+          <Th c=''/>
+        </tr></thead>
+        <tbody>
+          {[...regole].sort((a,b)=>(b.priorita||0)-(a.priorita||0)).map(r=><TR key={r.id} style={{opacity:r.attiva?1:.5}}>
+            <Td><span style={{fontWeight:700,color:'var(--white)'}}>{r.nome}</span></Td>
+            <Td><code style={{fontFamily:'var(--fm)',fontSize:11,background:'var(--g3)',padding:'2px 6px',borderRadius:4,color:'var(--amber)'}}>{r.pattern}</code></Td>
+            <Td><span style={{fontSize:11,color:'var(--g4)'}}>{TIPI_MATCH.find(t=>t.v===r.tipo_match)?.l||r.tipo_match}</span></Td>
+            <Td>{r.categoria?<Badge s={r.categoria}/>:<span style={{color:'var(--g4)',fontSize:11}}>—</span>}</Td>
+            <Td><span style={{fontSize:11,color:r.auto_riconcilia?'var(--green)':'var(--g4)'}}>{r.auto_riconcilia?'✓ Sì':'— No'}</span></Td>
+            <Td mono style={{color:'var(--violet)'}}>{r.priorita||0}</Td>
+            <Td mono style={{color:'var(--amber)',fontWeight:700}}>{r.contatore_match||0}</Td>
+            <Td>
+              <button onClick={()=>toggleAttiva(r)} style={{padding:'3px 8px',borderRadius:5,border:'1px solid var(--g3)',background:'var(--g2)',color:r.attiva?'var(--green)':'var(--g4)',fontSize:11,cursor:'pointer'}}>
+                {r.attiva?'● Attiva':'○ Inattiva'}
+              </button>
+            </Td>
+            <Td style={{display:'flex',gap:4}}>
+              <Btn v='ghost' onClick={()=>openEdit(r)} s={{padding:'4px 8px',fontSize:11}}>✎</Btn>
+              <Btn v='danger' onClick={()=>deleteRegola(r.id)} s={{padding:'4px 8px',fontSize:11}}>✕</Btn>
+            </Td>
+          </TR>)}
+        </tbody>
+      </table>}
+    </Card>
+
+    {/* GUIDA RAPIDA */}
+    <Card style={{marginTop:16}}>
+      <CH title='Guida pattern' meta='Esempi di configurazione'/>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:12,padding:'4px 0'}}>
+        {[
+          {pattern:'meta platforms',tipo:'contains',desc:'Commissioni Meta/Facebook Ads'},
+          {pattern:'google',tipo:'contains',desc:'Google Ads, Google Workspace'},
+          {pattern:'canva',tipo:'contains',desc:'Abbonamento Canva'},
+          {pattern:'stipendio|accredito',tipo:'regex',desc:'Pagamenti stipendi (regex)'},
+          {pattern:'com.banca',tipo:'startswith',desc:'Commissioni bancarie'},
+          {pattern:'adobe',tipo:'contains',desc:'Adobe Creative Cloud'},
+        ].map((ex,i)=><div key={i} style={{background:'var(--g2)',borderRadius:8,padding:'10px 12px',border:'1px solid var(--g3)'}}>
+          <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:4}}>
+            <code style={{fontFamily:'var(--fm)',fontSize:11,background:'var(--g3)',padding:'2px 6px',borderRadius:4,color:'var(--amber)'}}>{ex.pattern}</code>
+            <span style={{fontSize:10,color:'var(--g4)',fontFamily:'var(--fm)'}}>{ex.tipo}</span>
+          </div>
+          <div style={{fontSize:11,color:'var(--g5)'}}>{ex.desc}</div>
+        </div>)}
+      </div>
+    </Card>
+
+    {/* MODAL */}
+    {modal&&<Modal title={modal==='new'?'Nuova regola':'Modifica regola'} onClose={()=>setModal(null)}>
+      <form onSubmit={save}>
+        <FRow label='Nome regola'><input required value={form.nome||''} onChange={e=>setForm({...form,nome:e.target.value})} placeholder='es. Meta Ads'/></FRow>
+        <FGrid>
+          <FRow label='Pattern da cercare'><input required value={form.pattern||''} onChange={e=>setForm({...form,pattern:e.target.value})} placeholder='es. meta platforms'/></FRow>
+          <FRow label='Tipo match'>
+            <select value={form.tipo_match||'contains'} onChange={e=>setForm({...form,tipo_match:e.target.value})}>
+              {TIPI_MATCH.map(t=><option key={t.v} value={t.v}>{t.l}</option>)}
+            </select>
+          </FRow>
+        </FGrid>
+        <FGrid>
+          <FRow label='Categoria da assegnare'>
+            <select value={form.categoria||''} onChange={e=>setForm({...form,categoria:e.target.value})}>
+              <option value=''>— Nessuna —</option>
+              {CATEGORIE_CASSA.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+          </FRow>
+          <FRow label='Fornitore da associare'>
+            <select value={form.fornitore_id||''} onChange={e=>setForm({...form,fornitore_id:e.target.value||null})}>
+              <option value=''>— Nessuno —</option>
+              {fornitori.map(f=><option key={f.id} value={f.id}>{f.ragione_sociale}</option>)}
+            </select>
+          </FRow>
+        </FGrid>
+        <FGrid>
+          <FRow label='Priorità (più alto = prima)'>
+            <input type='number' min='0' max='100' value={form.priorita||0} onChange={e=>setForm({...form,priorita:parseInt(e.target.value)||0})}/>
+          </FRow>
+          <FRow label='Auto-riconcilia automaticamente'>
+            <select value={form.auto_riconcilia?'true':'false'} onChange={e=>setForm({...form,auto_riconcilia:e.target.value==='true'})}>
+              <option value='false'>No — solo categorizza</option>
+              <option value='true'>Sì — riconcilia automaticamente</option>
+            </select>
+          </FRow>
+        </FGrid>
+        <FActions onCancel={()=>setModal(null)} submitLabel={saving?'Salvataggio...':'Salva regola'} disabled={saving}/>
+      </form>
+    </Modal>}
+  </div>;
+}
+
+
 function App(){
   const [state,dispatch]=useReducer(reducer,INIT);
   const [page,setPage]=useState('dashboard');
@@ -3767,6 +4246,8 @@ function App(){
           {key:'fatture_passive',run:()=>apiFetch('/fatture-passive',{tokenOverride:tk})},
           {key:'fornitori',run:()=>apiFetch('/fornitori',{tokenOverride:tk})},
           {key:'movimenti_cassa',run:()=>apiFetch('/movimenti-cassa',{tokenOverride:tk})},
+          {key:'costi_fissi',run:()=>apiFetch('/costi-fissi',{tokenOverride:tk})},
+          {key:'regole',run:()=>apiFetch('/regole-riconciliazione',{tokenOverride:tk})},
         );
       }
 
@@ -3868,6 +4349,22 @@ function App(){
           fattura_passiva_id:m.fattura_passiva_id||null,
           riconciliato:m.riconciliato||false,
           note:m.note||null,
+        }))});
+      }
+      if(data.regole){
+        dispatch({type:'SET_ENTITY',entity:'regole',items:((data.regole?.regole)||data.regole||[])});
+      }
+      if(data.costi_fissi){
+        dispatch({type:'SET_ENTITY',entity:'costi_fissi',items:((data.costi_fissi?.costi_fissi)||data.costi_fissi||[]).map(c=>({
+          id:c.id,
+          descrizione:c.descrizione,
+          importo:parseFloat(c.importo)||0,
+          categoria:c.categoria||'ALTRO',
+          periodicita:c.periodicita||'mensile',
+          attivo:c.attivo!==false,
+          data_inizio:c.data_inizio||null,
+          data_fine:c.data_fine||null,
+          note:c.note||null,
         }))});
       }
       if(!canReadManagement){
@@ -4024,6 +4521,7 @@ function App(){
       case 'marginalita':      return <MarginalitaScreen state={state}/>;
       case 'finanziaria':      return <FinanziariaScreen state={state} dispatch={dispatch}/>;
       case 'cassa':            return <CassaScreen state={state} dispatch={dispatch}/>;
+      case 'regole':           return <RegoleScreen state={state} dispatch={dispatch}/>;
       case 'team':             return <TeamScreen state={state} dispatch={dispatch} api={usersApi} isAdmin={isAdmin}/>;
       default: return null;
     }

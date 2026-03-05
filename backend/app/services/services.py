@@ -1422,3 +1422,187 @@ async def list_movimenti_cassa(db: AsyncSession):
     )
     rows = result.scalars().all()
     return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+
+
+async def list_costi_fissi(db: AsyncSession):
+    from app.models.models import CostoFisso
+    result = await db.execute(
+        select(CostoFisso).order_by(CostoFisso.categoria, CostoFisso.descrizione)
+    )
+    rows = result.scalars().all()
+    return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+
+
+async def create_costo_fisso(db: AsyncSession, payload: dict):
+    from app.models.models import CostoFisso
+    cf = CostoFisso(**{k: v for k, v in payload.items() if hasattr(CostoFisso, k)})
+    db.add(cf)
+    await db.commit()
+    await db.refresh(cf)
+    return {c.name: getattr(cf, c.name) for c in cf.__table__.columns}
+
+
+async def update_costo_fisso(db: AsyncSession, costo_id, payload: dict):
+    from app.models.models import CostoFisso
+    result = await db.execute(select(CostoFisso).where(CostoFisso.id == costo_id))
+    cf = result.scalar_one_or_none()
+    if not cf:
+        return None
+    for k, v in payload.items():
+        if hasattr(cf, k):
+            setattr(cf, k, v)
+    await db.commit()
+    await db.refresh(cf)
+    return {c.name: getattr(cf, c.name) for c in cf.__table__.columns}
+
+
+async def delete_costo_fisso(db: AsyncSession, costo_id):
+    from app.models.models import CostoFisso
+    result = await db.execute(select(CostoFisso).where(CostoFisso.id == costo_id))
+    cf = result.scalar_one_or_none()
+    if not cf:
+        return False
+    await db.delete(cf)
+    await db.commit()
+    return True
+
+
+# ── REGOLE RICONCILIAZIONE ────────────────────────────────
+async def list_regole(db: AsyncSession):
+    from app.models.models import RegolaRiconciliazione
+    result = await db.execute(
+        select(RegolaRiconciliazione).order_by(RegolaRiconciliazione.priorita.desc(), RegolaRiconciliazione.nome)
+    )
+    rows = result.scalars().all()
+    return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+
+
+async def create_regola(db: AsyncSession, payload: dict):
+    from app.models.models import RegolaRiconciliazione
+    r = RegolaRiconciliazione(**{k: v for k, v in payload.items() if hasattr(RegolaRiconciliazione, k)})
+    db.add(r)
+    await db.commit()
+    await db.refresh(r)
+    return {c.name: getattr(r, c.name) for c in r.__table__.columns}
+
+
+async def update_regola(db: AsyncSession, regola_id, payload: dict):
+    from app.models.models import RegolaRiconciliazione
+    result = await db.execute(select(RegolaRiconciliazione).where(RegolaRiconciliazione.id == regola_id))
+    r = result.scalar_one_or_none()
+    if not r:
+        return None
+    for k, v in payload.items():
+        if hasattr(r, k):
+            setattr(r, k, v)
+    await db.commit()
+    await db.refresh(r)
+    return {c.name: getattr(r, c.name) for c in r.__table__.columns}
+
+
+async def delete_regola(db: AsyncSession, regola_id):
+    from app.models.models import RegolaRiconciliazione
+    result = await db.execute(select(RegolaRiconciliazione).where(RegolaRiconciliazione.id == regola_id))
+    r = result.scalar_one_or_none()
+    if not r:
+        return False
+    await db.delete(r)
+    await db.commit()
+    return True
+
+
+async def applica_regole_automatiche(db: AsyncSession):
+    import re as re_module
+    from app.models.models import RegolaRiconciliazione, MovimentoCassa
+
+    res_regole = await db.execute(
+        select(RegolaRiconciliazione)
+        .where(RegolaRiconciliazione.attiva == True)
+        .order_by(RegolaRiconciliazione.priorita.desc())
+    )
+    regole = res_regole.scalars().all()
+
+    res_mov = await db.execute(
+        select(MovimentoCassa).where(MovimentoCassa.riconciliato == False)
+    )
+    movimenti = res_mov.scalars().all()
+
+    matched = 0
+    for mov in movimenti:
+        desc = (mov.descrizione or '').lower()
+        for regola in regole:
+            pattern = regola.pattern.lower()
+            hit = False
+            if regola.tipo_match == 'contains':
+                hit = pattern in desc
+            elif regola.tipo_match == 'startswith':
+                hit = desc.startswith(pattern)
+            elif regola.tipo_match == 'regex':
+                try:
+                    hit = bool(re_module.search(pattern, desc))
+                except:
+                    pass
+            if hit:
+                if regola.categoria:
+                    mov.categoria = regola.categoria
+                if regola.auto_riconcilia:
+                    mov.riconciliato = True
+                    if regola.fattura_passiva_id:
+                        mov.fattura_passiva_id = regola.fattura_passiva_id
+                regola.contatore_match = (regola.contatore_match or 0) + 1
+                matched += 1
+                break
+
+    await db.commit()
+    return {'movimenti_processati': len(movimenti), 'match_trovati': matched}
+
+
+async def suggest_riconciliazione(db: AsyncSession, movimento_id: uuid.UUID):
+    import re as re_module
+    from app.models.models import MovimentoCassa, FatturaPassiva, Fornitore, RegolaRiconciliazione
+
+    res = await db.execute(select(MovimentoCassa).where(MovimentoCassa.id == movimento_id))
+    mov = res.scalar_one_or_none()
+    if not mov:
+        return {'regola': None, 'fatture_importo': []}
+
+    desc = (mov.descrizione or '').lower()
+    importo = abs(float(mov.importo or 0))
+
+    res_regole = await db.execute(
+        select(RegolaRiconciliazione)
+        .where(RegolaRiconciliazione.attiva == True)
+        .order_by(RegolaRiconciliazione.priorita.desc())
+    )
+    regola_match = None
+    for r in res_regole.scalars().all():
+        pattern = r.pattern.lower()
+        hit = False
+        if r.tipo_match == 'contains': hit = pattern in desc
+        elif r.tipo_match == 'startswith': hit = desc.startswith(pattern)
+        elif r.tipo_match == 'regex':
+            try: hit = bool(re_module.search(pattern, desc))
+            except: pass
+        if hit:
+            regola_match = {c.name: getattr(r, c.name) for c in r.__table__.columns}
+            break
+
+    res_fp = await db.execute(
+        select(FatturaPassiva, Fornitore)
+        .outerjoin(Fornitore, FatturaPassiva.fornitore_id == Fornitore.id)
+        .where(FatturaPassiva.stato_pagamento.notin_(['paid', 'PAGATA']))
+        .where(func.abs(FatturaPassiva.importo_totale).between(importo * 0.95, importo * 1.05))
+        .limit(5)
+    )
+    fatture_match = []
+    for fp, forn in res_fp.all():
+        fatture_match.append({
+            'id': str(fp.id),
+            'numero': fp.numero,
+            'importo': float(fp.importo_totale or 0),
+            'fornitore': forn.ragione_sociale if forn else '—',
+            'data_emissione': str(fp.data_emissione) if fp.data_emissione else None,
+            'match_esatto': abs(float(fp.importo_totale or 0) - importo) < 0.01,
+        })
+
+    return {'regola': regola_match, 'fatture_importo': fatture_match}

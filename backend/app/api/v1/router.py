@@ -31,7 +31,7 @@ from app.services.services import (
     create_timesheet, list_timesheet, approva_timesheet,
     calcola_metriche_commessa,
     get_dashboard_kpi, get_marginalita_clienti,
-    sync_fic_data, get_last_fic_sync_status, list_fornitori, list_fatture_attive, list_fatture_passive, incassa_fattura, update_fattura_passiva, list_fornitori_full, update_fornitore, list_movimenti_cassa,
+    sync_fic_data, get_last_fic_sync_status, list_fornitori, list_fatture_attive, list_fatture_passive, incassa_fattura, update_fattura_passiva, list_fornitori_full, update_fornitore, list_movimenti_cassa, list_costi_fissi, create_costo_fisso, update_costo_fisso, delete_costo_fisso,
 )
 
 router = APIRouter()
@@ -436,15 +436,17 @@ async def patch_movimento_cassa(
 
     # Se si sta riconciliando con fattura attiva -> aggiorna fattura se ancora in ATTESA
     if payload.get('fattura_attiva_id') and payload.get('riconciliato'):
-        fa_res = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == payload['fattura_attiva_id']))
+        fa_id = uuid.UUID(payload['fattura_attiva_id']) if isinstance(payload['fattura_attiva_id'], str) else payload['fattura_attiva_id']
+        fa_res = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == fa_id))
         fa = fa_res.scalar_one_or_none()
-        if fa and fa.stato not in ('INCASSATA',):
-            fa.stato = 'INCASSATA'
+        if fa and fa.stato_pagamento not in ('INCASSATA', 'paid'):
+            fa.stato_pagamento = 'INCASSATA'
             fa.data_ultimo_incasso = mov.data_valuta
 
     # Se si sta riconciliando con fattura passiva -> aggiorna fattura se ancora in ATTESA
     if payload.get('fattura_passiva_id') and payload.get('riconciliato'):
-        fp_res = await db.execute(select(FatturaPassiva).where(FatturaPassiva.id == payload['fattura_passiva_id']))
+        fp_id = uuid.UUID(payload['fattura_passiva_id']) if isinstance(payload['fattura_passiva_id'], str) else payload['fattura_passiva_id']
+        fp_res = await db.execute(select(FatturaPassiva).where(FatturaPassiva.id == fp_id))
         fp = fp_res.scalar_one_or_none()
         if fp and fp.stato_pagamento not in ('paid', 'PAGATA'):
             fp.stato_pagamento = 'paid'
@@ -455,8 +457,8 @@ async def patch_movimento_cassa(
         if mov.fattura_attiva_id:
             fa_res = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == mov.fattura_attiva_id))
             fa = fa_res.scalar_one_or_none()
-            if fa and fa.stato == 'INCASSATA':
-                fa.stato = 'ATTESA'
+            if fa and fa.stato_pagamento == 'INCASSATA':
+                fa.stato_pagamento = 'ATTESA'
                 fa.data_ultimo_incasso = None
         if mov.fattura_passiva_id:
             fp_res = await db.execute(select(FatturaPassiva).where(FatturaPassiva.id == mov.fattura_passiva_id))
@@ -468,3 +470,100 @@ async def patch_movimento_cassa(
     await db.commit()
     await db.refresh(mov)
     return {c.name: getattr(mov, c.name) for c in mov.__table__.columns}
+
+
+@router.get("/costi-fissi", tags=["CostiFissi"])
+async def get_costi_fissi(db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    return {"costi_fissi": await list_costi_fissi(db)}
+
+
+@router.post("/costi-fissi", tags=["CostiFissi"])
+async def post_costo_fisso(payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    return await create_costo_fisso(db, payload)
+
+
+@router.patch("/costi-fissi/{costo_id}", tags=["CostiFissi"])
+@router.delete("/fornitori/{fornitore_id}", tags=["Fornitori"])
+async def delete_fornitore_endpoint(
+    fornitore_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from app.models.models import Fornitore, FatturaPassiva
+    from sqlalchemy import select
+    from sqlalchemy import func as sqlfunc
+    from fastapi import HTTPException
+    # Verifica fatture collegate
+    fp_count = await db.execute(
+        select(sqlfunc.count()).select_from(FatturaPassiva).where(FatturaPassiva.fornitore_id == fornitore_id)
+    )
+    count = fp_count.scalar()
+    if count > 0:
+        raise HTTPException(status_code=400, detail=f"Impossibile eliminare: fornitore ha {count} fatture passive collegate")
+    result = await db.execute(select(Fornitore).where(Fornitore.id == fornitore_id))
+    forn = result.scalar_one_or_none()
+    if not forn:
+        raise HTTPException(status_code=404, detail="Fornitore non trovato")
+    await db.delete(forn)
+    await db.commit()
+    return {"deleted": True}
+
+
+async def patch_costo_fisso(costo_id: uuid.UUID, payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from fastapi import HTTPException
+    result = await update_costo_fisso(db, costo_id, payload)
+    if not result:
+        raise HTTPException(status_code=404, detail="Costo non trovato")
+    return result
+
+
+@router.delete("/costi-fissi/{costo_id}", tags=["CostiFissi"])
+async def delete_costo_fisso_endpoint(costo_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from fastapi import HTTPException
+    ok = await delete_costo_fisso(db, costo_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Costo non trovato")
+    return {"deleted": True}
+
+
+# ── REGOLE RICONCILIAZIONE ────────────────────────────────
+@router.get("/regole-riconciliazione", tags=["Regole"])
+async def get_regole(db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from app.services.services import list_regole
+    return {"regole": await list_regole(db)}
+
+
+@router.post("/regole-riconciliazione", tags=["Regole"])
+async def post_regola(payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from app.services.services import create_regola
+    return await create_regola(db, payload)
+
+
+@router.patch("/regole-riconciliazione/{regola_id}", tags=["Regole"])
+async def patch_regola(regola_id: uuid.UUID, payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from app.services.services import update_regola
+    from fastapi import HTTPException
+    r = await update_regola(db, regola_id, payload)
+    if not r: raise HTTPException(status_code=404, detail="Regola non trovata")
+    return r
+
+
+@router.delete("/regole-riconciliazione/{regola_id}", tags=["Regole"])
+async def delete_regola_endpoint(regola_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from app.services.services import delete_regola
+    from fastapi import HTTPException
+    ok = await delete_regola(db, regola_id)
+    if not ok: raise HTTPException(status_code=404, detail="Regola non trovata")
+    return {"deleted": True}
+
+
+@router.post("/regole-riconciliazione/applica", tags=["Regole"])
+async def applica_regole(db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from app.services.services import applica_regole_automatiche
+    return await applica_regole_automatiche(db)
+
+
+@router.get("/movimenti-cassa/{movimento_id}/suggest", tags=["Regole"])
+async def suggest_mov(movimento_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from app.services.services import suggest_riconciliazione
+    return await suggest_riconciliazione(db, movimento_id)

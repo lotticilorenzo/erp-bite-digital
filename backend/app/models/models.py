@@ -372,6 +372,11 @@ class Fornitore(Base):
     email: Mapped[Optional[str]] = mapped_column(String(255))
     telefono: Mapped[Optional[str]] = mapped_column(String(50))
     attivo: Mapped[bool] = mapped_column(Boolean, default=True)
+    categoria: Mapped[Optional[str]] = mapped_column(String(50))
+    competenze: Mapped[Optional[list]] = mapped_column(JSON)
+    tariffa: Mapped[Optional[Decimal]] = mapped_column(Numeric(12,2))
+    tariffa_tipo: Mapped[Optional[str]] = mapped_column(String(20))
+    note: Mapped[Optional[str]] = mapped_column(Text)
     fic_raw_data: Mapped[Optional[dict]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -485,3 +490,38 @@ class MovimentoCassa(Base):
     note: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# ── COSTI FISSI ───────────────────────────────────────────
+class CostoFisso(Base):
+    __tablename__ = "costi_fissi"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    descrizione: Mapped[str] = mapped_column(String(200), nullable=False)
+    importo: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    categoria: Mapped[Optional[str]] = mapped_column(String(50), default='ALTRO')
+    periodicita: Mapped[Optional[str]] = mapped_column(String(20), default='mensile')
+    attivo: Mapped[bool] = mapped_column(Boolean, default=True)
+    data_inizio: Mapped[Optional[date]] = mapped_column(Date)
+    data_fine: Mapped[Optional[date]] = mapped_column(Date)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# ── REGOLE RICONCILIAZIONE ────────────────────────────────
+class RegolaRiconciliazione(Base):
+    __tablename__ = "regole_riconciliazione"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    nome: Mapped[str] = mapped_column(String(100), nullable=False)
+    pattern: Mapped[str] = mapped_column(String(200), nullable=False)
+    tipo_match: Mapped[Optional[str]] = mapped_column(String(20), default='contains')
+    categoria: Mapped[Optional[str]] = mapped_column(String(100))
+    fornitore_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey('fornitori.id', ondelete='SET NULL'), nullable=True)
+    fattura_passiva_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey('fatture_passive.id', ondelete='SET NULL'), nullable=True)
+    auto_riconcilia: Mapped[bool] = mapped_column(Boolean, default=False)
+    priorita: Mapped[int] = mapped_column(Integer, default=0)
+    attiva: Mapped[bool] = mapped_column(Boolean, default=True)
+    contatore_match: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
