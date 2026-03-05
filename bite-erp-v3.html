@@ -1287,18 +1287,20 @@ function ProgettiScreen({state,dispatch,setPage,setDrillProgetto,api}) {
     closeModal();
   };
   const del=async id=>{
-    if(api?.enabled){
-      try{
-        const saved=await api.updateProgetto(id,{stato:'CHIUSO'});
-        dispatch({type:'UPSERT',entity:'progetti',item:saved});
-      }catch(errApi){
-        alert(`Errore chiusura progetto: ${errApi.message||'operazione non riuscita'}`);
-      }finally{
-        setConfirm(null);
+    const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+    try{
+      const res=await fetch(`/api/v1/progetti/${id}`,{method:'DELETE',headers:{'Authorization':'Bearer '+token}});
+      if(res.ok||res.status===204){
+        dispatch({type:'DELETE',entity:'progetti',id});
+      } else {
+        const err=await res.json().catch(()=>({}));
+        alert('Errore eliminazione: '+(err.detail||'operazione non riuscita'));
       }
-      return;
+    }catch(e){
+      alert('Errore di rete: '+e.message);
+    }finally{
+      setConfirm(null);
     }
-    dispatch({type:'DELETE',entity:'progetti',id});setConfirm(null);
   };
 
   return <div className='fu'>
@@ -1524,13 +1526,20 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
     closeModal();
   };
   const del=async id=>{
-    if(api?.enabled){
-      alert('Eliminazione commessa via API non disponibile in questa versione.');
+    const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+    try{
+      const res=await fetch(`/api/v1/commesse/${id}`,{method:'DELETE',headers:{'Authorization':'Bearer '+token}});
+      if(res.ok||res.status===204){
+        dispatch({type:'DELETE',entity:'commesse',id});
+      } else {
+        const err=await res.json().catch(()=>({}));
+        alert('Errore eliminazione: '+(err.detail||'operazione non riuscita'));
+      }
+    }catch(e){
+      alert('Errore di rete: '+e.message);
+    }finally{
       setConfirm(null);
-      return;
     }
-    dispatch({type:'DELETE',entity:'commesse',id});
-    setConfirm(null);
   };
 
   const mesiDisponibili=useMemo(()=>{const s=new Set(state.commesse.map(c=>c.mese_competenza));s.add(currMese());return [...s].sort().reverse();},[state.commesse]);

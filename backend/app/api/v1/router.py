@@ -620,3 +620,31 @@ async def save_imputazioni_mov(movimento_id: uuid.UUID, payload: dict, db: Async
     if result is None:
         raise HTTPException(status_code=404, detail="Movimento non trovato")
     return {"imputazioni": result}
+
+
+# ── DELETE PROGETTO ───────────────────────────────────────
+@router.delete("/progetti/{progetto_id}", status_code=204, tags=["Progetti"])
+async def delete_progetto(progetto_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from app.models.models import Progetto
+    from sqlalchemy import select
+    from fastapi import HTTPException
+    result = await db.execute(select(Progetto).where(Progetto.id == progetto_id))
+    p = result.scalar_one_or_none()
+    if not p:
+        raise HTTPException(status_code=404, detail="Progetto non trovato")
+    await db.delete(p)
+    await db.commit()
+
+
+# ── DELETE COMMESSA ───────────────────────────────────────
+@router.delete("/commesse/{commessa_id}", status_code=204, tags=["Commesse"])
+async def delete_commessa(commessa_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from app.models.models import Commessa
+    from sqlalchemy import select
+    from fastapi import HTTPException
+    result = await db.execute(select(Commessa).where(Commessa.id == commessa_id))
+    c = result.scalar_one_or_none()
+    if not c:
+        raise HTTPException(status_code=404, detail="Commessa non trovata")
+    await db.delete(c)
+    await db.commit()
