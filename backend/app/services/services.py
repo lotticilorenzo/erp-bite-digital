@@ -1101,6 +1101,8 @@ async def _upsert_fic_fatture_attive(
             fattura.valuta = raw.get("currency", {}).get("code") if isinstance(raw.get("currency"), dict) else None
             fattura.payments_raw = {"payments": payments}
             fattura.fic_raw_data = raw
+            fattura.importo_netto = _to_decimal(raw.get("amount_net")) or Decimal("0")
+            fattura.importo_iva = _to_decimal(raw.get("amount_vat")) or Decimal("0")
             imported += 1
         except Exception as exc:
             errors.append(f"fattura_attiva:{raw.get('id')} -> {exc}")

@@ -2391,7 +2391,7 @@ function FinanziariaScreen({state,dispatch}) {
         </div>
         {state.fatture_passive.length===0?<Empty msg='Nessuna fattura passiva'/>:
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
-          <thead><tr><Th c='N°'/><Th c='Fornitore'/><Th c='Categoria'/><Th c='Importo'/><Th c='Emissione'/><Th c='Scadenza'/><Th c='Ricorrente'/><Th c='Stato'/><Th c='Pagamento'/><Th c='Azioni'/></tr></thead>
+          <thead><tr><Th c='N°'/><Th c='Fornitore'/><Th c='Categoria'/><Th c='Netto'/><Th c='IVA'/><Th c='Lordo'/><Th c='Emissione'/><Th c='Scadenza'/><Th c='Stato'/><Th c='Pagamento'/><Th c='Azioni'/></tr></thead>
           <tbody>
             {state.fatture_passive.filter(fp=>{
               if(fpSearch&&!fp.fornitore?.toLowerCase().includes(fpSearch.toLowerCase()))return false;
@@ -2403,10 +2403,11 @@ function FinanziariaScreen({state,dispatch}) {
               <Td mono muted>{fp.numero||'—'}</Td>
               <Td><div style={{fontWeight:700}}>{fp.fornitore}</div></Td>
               <Td muted>{fp.categoria}</Td>
+              <Td mono style={{color:'var(--g5)'}}>{fp.importo_netto>0?fmtEuro(fp.importo_netto):'—'}</Td>
+              <Td mono style={{color:'var(--amber)'}}>{fp.importo_iva>0?fmtEuro(fp.importo_iva):'—'}</Td>
               <Td mono style={{color:'var(--red)',fontWeight:700}}>−{fmtEuro(fp.importo)}</Td>
               <Td mono muted>{fmtDate(fp.data_emissione)}</Td>
               <Td mono muted>{fmtDate(fp.data_scadenza)}</Td>
-              <Td><span style={{fontFamily:'var(--fm)',fontSize:11,color:fp.ricorrente?'var(--amber)':'var(--g5)'}}>{fp.ricorrente?'↻ mensile':'una tantum'}</span></Td>
               <Td><Badge s={fp.stato}/></Td>
               <Td>
                 {fp.data_ultimo_pagamento&&<div style={{fontSize:11,color:'var(--green)'}}>{fmtDate(fp.data_ultimo_pagamento)}</div>}
@@ -2597,12 +2598,17 @@ function FinanziariaScreen({state,dispatch}) {
         });
 
         const lordo=fattureFiltrate.reduce((s,f)=>s+(f.importo||0),0);
-        const netto=lordo/1.22;
-        const iva=lordo-netto;
+        const netto=fattureFiltrate.reduce((s,f)=>s+(f.importo_netto||f.importo/1.22||0),0);
+        const iva=fattureFiltrate.reduce((s,f)=>s+(f.importo_iva||f.importo-f.importo/1.22||0),0);
         const incassato=fattureFiltrate.filter(f=>f.stato==='INCASSATA').reduce((s,f)=>s+(f.importo||0),0);
-        const incassatoNetto=incassato/1.22;
+        const incassatoNetto=fattureFiltrate.filter(f=>f.stato==='INCASSATA').reduce((s,f)=>s+(f.importo_netto||f.importo/1.22||0),0);
         const daIncassare=fattureFiltrate.filter(f=>f.stato!=='INCASSATA').reduce((s,f)=>s+(f.importo||0),0);
         const percIncassato=lordo>0?Math.round((incassato/lordo)*100):0;
+        // IVA a credito (fatture passive stesso periodo)
+        const fpFiltrate=(state.fatture_passive||[]).filter(f=>f.data_emissione&&f.data_emissione.startsWith(insightAnno));
+        const ivaCredito=fpFiltrate.reduce((s,f)=>s+(parseFloat(f.importo_iva)||0),0);
+        const nettoPassivo=fpFiltrate.reduce((s,f)=>s+(parseFloat(f.importo_netto)||0),0);
+        const ivaNetta=iva-ivaCredito;
 
         return <div>
           {/* FILTRI */}
@@ -2631,9 +2637,28 @@ function FinanziariaScreen({state,dispatch}) {
               <div style={{fontSize:11,color:'var(--g4)',marginTop:4}}>Imponibile (÷ 1,22)</div>
             </div>
             <div style={{background:'var(--g2)',borderRadius:14,padding:'20px 24px',border:'1px solid var(--g3)'}}>
+              <div style={{fontSize:11,color:'var(--g4)',fontFamily:'var(--fm)',marginBottom:6}}>COSTI PASSIVI NETTI</div>
+              <div style={{fontSize:28,fontWeight:800,color:'var(--red)'}}>{fmtEuro(nettoPassivo)}</div>
+              <div style={{fontSize:11,color:'var(--g4)',marginTop:4}}>{fpFiltrate.length} fatture passive</div>
+            </div>
+          </div>
+
+          {/* KPI IVA */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:20}}>
+            <div style={{background:'var(--g2)',borderRadius:14,padding:'20px 24px',border:'1px solid var(--g3)'}}>
               <div style={{fontSize:11,color:'var(--g4)',fontFamily:'var(--fm)',marginBottom:6}}>IVA A DEBITO</div>
               <div style={{fontSize:28,fontWeight:800,color:'var(--amber)'}}>{fmtEuro(iva)}</div>
-              <div style={{fontSize:11,color:'var(--g4)',marginTop:4}}>22% sul netto</div>
+              <div style={{fontSize:11,color:'var(--g4)',marginTop:4}}>Da fatture attive</div>
+            </div>
+            <div style={{background:'var(--g2)',borderRadius:14,padding:'20px 24px',border:'1px solid var(--g3)'}}>
+              <div style={{fontSize:11,color:'var(--g4)',fontFamily:'var(--fm)',marginBottom:6}}>IVA A CREDITO</div>
+              <div style={{fontSize:28,fontWeight:800,color:'var(--violet)'}}>{fmtEuro(ivaCredito)}</div>
+              <div style={{fontSize:11,color:'var(--g4)',marginTop:4}}>Da fatture passive · {fpFiltrate.length} doc</div>
+            </div>
+            <div style={{background:ivaNetta>=0?'rgba(245,158,11,.08)':'rgba(34,197,94,.08)',borderRadius:14,padding:'20px 24px',border:'1px solid '+(ivaNetta>=0?'rgba(245,158,11,.3)':'rgba(34,197,94,.3)')}}>
+              <div style={{fontSize:11,color:'var(--g4)',fontFamily:'var(--fm)',marginBottom:6}}>SALDO IVA</div>
+              <div style={{fontSize:28,fontWeight:800,color:ivaNetta>=0?'var(--amber)':'var(--green)'}}>{fmtEuro(Math.abs(ivaNetta))}</div>
+              <div style={{fontSize:11,color:'var(--g4)',marginTop:4}}>{ivaNetta>=0?'⚠ Da versare':'✓ A credito'}</div>
             </div>
           </div>
 
@@ -4322,6 +4347,7 @@ function App(){
             numero:f.numero, data_emissione:f.data_emissione, data_scadenza:f.data_scadenza,
             importo:parseFloat(f.importo_totale)||0, importo_pagato:parseFloat(f.importo_pagato)||0,
             importo_residuo:parseFloat(f.importo_residuo)||0,
+            importo_netto:parseFloat(f.importo_netto)||0, importo_iva:parseFloat(f.importo_iva)||0,
             stato, categoria:cat, valuta:f.valuta||'EUR',
             ricorrente:existing?.ricorrente||false,
             note:existing?.note||f.note||'',
