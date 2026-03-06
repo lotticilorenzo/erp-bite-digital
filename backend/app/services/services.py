@@ -1735,3 +1735,121 @@ async def save_imputazioni_movimento(db: AsyncSession, movimento_id: uuid.UUID, 
         db.add(obj)
     await db.commit()
     return await get_imputazioni_movimento(db, movimento_id)
+
+
+# ── RISORSE (HR) ──────────────────────────────────────────
+def calcola_costo_orario(r) -> float:
+    """Calcola costo orario reale dalla struttura contrattuale."""
+    ore_anno = float(r.get('ore_settimanali', 40)) * 52 - 176 - 88  # ferie + festività
+    tipo = r.get('tipo_contratto', '')
+
+    if tipo == 'FONDATORE':
+        # Usa compenso obiettivo se presente, altrimenti 0
+        compenso = float(r.get('compenso_obiettivo') or 0)
+        if compenso == 0:
+            return 0.0
+        costo_anno = compenso * 12 * (1 + float(r.get('contributi_percentuale', 30)) / 100 + float(r.get('tfr_percentuale', 6.91)) / 100)
+        return round(costo_anno / ore_anno, 2)
+
+    if tipo in ('FREELANCER', 'PRESTAZIONE_OCCASIONALE'):
+        compenso_mensile = float(r.get('compenso_fisso_mensile') or 0)
+        if compenso_mensile == 0:
+            return 0.0
+        ore_mese = float(r.get('ore_settimanali', 40)) * 4.33
+        return round(compenso_mensile / ore_mese, 2)
+
+    # Dipendenti (APPRENDISTATO, TEMPO_DETERMINATO, DIPENDENTE)
+    ral = float(r.get('ral') or 0)
+    if ral == 0:
+        return 0.0
+    contributi = float(r.get('contributi_percentuale', 30)) / 100
+    tfr = float(r.get('tfr_percentuale', 6.91)) / 100
+    costo_anno = ral * (1 + contributi + tfr)
+    return round(costo_anno / ore_anno, 2)
+
+
+async def list_risorse(db: AsyncSession):
+    from app.models.models import Risorsa
+    result = await db.execute(select(Risorsa).order_by(Risorsa.cognome, Risorsa.nome))
+    risorse = result.scalars().all()
+    out = []
+    for r in risorse:
+        d = {c.name: getattr(r, c.name) for c in r.__table__.columns}
+        d['costo_orario_effettivo'] = float(d.get('costo_orario_override') or d.get('costo_orario_calcolato') or 0)
+        out.append(d)
+    return out
+
+
+async def create_risorsa(db: AsyncSession, payload: dict):
+    from app.models.models import Risorsa
+    from decimal import Decimal
+    costo = calcola_costo_orario(payload)
+    from datetime import date as date_type
+    def parse_date(v):
+        if not v: return None
+        if isinstance(v, date_type): return v
+        try: return date_type.fromisoformat(str(v))
+        except: return None
+
+    r = Risorsa(
+        nome=payload['nome'],
+        cognome=payload['cognome'],
+        ruolo=payload.get('ruolo'),
+        tipo_contratto=payload.get('tipo_contratto', 'DIPENDENTE'),
+        data_inizio=parse_date(payload.get('data_inizio')),
+        data_fine=parse_date(payload.get('data_fine')),
+        ore_settimanali=Decimal(str(payload.get('ore_settimanali', 40))),
+        ral=Decimal(str(payload['ral'])) if payload.get('ral') else None,
+        compenso_fisso_mensile=Decimal(str(payload['compenso_fisso_mensile'])) if payload.get('compenso_fisso_mensile') else None,
+        compenso_obiettivo=Decimal(str(payload['compenso_obiettivo'])) if payload.get('compenso_obiettivo') else None,
+        contributi_percentuale=Decimal(str(payload.get('contributi_percentuale', 30))),
+        tfr_percentuale=Decimal(str(payload.get('tfr_percentuale', 6.91))),
+        costo_orario_override=Decimal(str(payload['costo_orario_override'])) if payload.get('costo_orario_override') else None,
+        costo_orario_calcolato=Decimal(str(costo)),
+        attivo=payload.get('attivo', True),
+        note=payload.get('note'),
+        user_id=uuid.UUID(payload['user_id']) if payload.get('user_id') else None,
+    )
+    db.add(r)
+    await db.commit()
+    await db.refresh(r)
+    return r
+
+
+async def update_risorsa(db: AsyncSession, risorsa_id: uuid.UUID, payload: dict):
+    from app.models.models import Risorsa
+    from decimal import Decimal
+    result = await db.execute(select(Risorsa).where(Risorsa.id == risorsa_id))
+    r = result.scalar_one_or_none()
+    if not r:
+        return None
+    from datetime import date as date_type
+    def parse_date(v):
+        if not v: return None
+        if isinstance(v, date_type): return v
+        try: return date_type.fromisoformat(str(v))
+        except: return None
+
+    date_fields = {'data_inizio', 'data_fine'}
+    skip_fields = {'id', 'created_at', 'updated_at', 'costo_orario_calcolato'}
+    for k, v in payload.items():
+        if k in skip_fields: continue
+        if hasattr(r, k):
+            setattr(r, k, parse_date(v) if k in date_fields else v)
+    # Ricalcola costo orario
+    d = {c.name: getattr(r, c.name) for c in r.__table__.columns}
+    r.costo_orario_calcolato = Decimal(str(calcola_costo_orario(d)))
+    await db.commit()
+    await db.refresh(r)
+    return r
+
+
+async def delete_risorsa(db: AsyncSession, risorsa_id: uuid.UUID):
+    from app.models.models import Risorsa
+    result = await db.execute(select(Risorsa).where(Risorsa.id == risorsa_id))
+    r = result.scalar_one_or_none()
+    if not r:
+        return False
+    await db.delete(r)
+    await db.commit()
+    return True

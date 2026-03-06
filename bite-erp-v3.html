@@ -273,6 +273,7 @@ const INIT = {
     {id:'fp2',fornitore:'Affitto ufficio',categoria:'STRUTTURA',data_emissione:currMese()+'-01',data_scadenza:currMese()+'-05',importo:1200,stato:'PAGATA',ricorrente:true,note:''},
     {id:'fp3',fornitore:'Freelancer grafico esterno',categoria:'PERSONALE',data_emissione:currMese()+'-10',data_scadenza:currMese()+'-25',importo:450,stato:'ATTESA',ricorrente:false,note:''},
   ],
+  risorse: [],
   costi_fissi: [
     {id:'cf1',descrizione:'Stipendi',importo:8500,categoria:'PERSONALE',mese:currMese(),ricorrente:true},
     {id:'cf2',descrizione:'Affitto ufficio',importo:1200,categoria:'STRUTTURA',mese:currMese(),ricorrente:true},
@@ -2381,7 +2382,7 @@ function FinanziariaScreen({state,dispatch}) {
         </FRow>
         <FGrid>
           <FRow label='Data inizio'><input type='date' value={form.data_inizio||''} onChange={e=>setForm({...form,data_inizio:e.target.value})}/></FRow>
-          <FRow label='Data fine'><input type='date' value={form.data_fine||''} onChange={e=>setForm({...form,data_fine:e.target.value})}/></FRow>
+          <FRow label='Data fine (opzionale)'><input type='date' value={form.data_fine||''} onChange={e=>setForm({...form,data_fine:e.target.value||null})} placeholder='— Rapporto in corso —'/></FRow>
         </FGrid>
         <FRow label='Note'><textarea value={form.note||''} onChange={e=>setForm({...form,note:e.target.value})} rows={2}/></FRow>
         <FActions onCancel={closeModal} submitLabel='Salva costo'/>
@@ -3835,6 +3836,7 @@ const NAV=[
   {id:'cassa',label:'Cassa',icon:'⬡',section:'Economia'},
   {id:'regole',label:'Regole Matching',icon:'⚙',section:'Economia'},
   {id:'team',label:'Utenti',icon:'◉',section:'Economia'},
+  {id:'risorse',label:'Risorse umane',icon:'👥',section:'HR'},
 ];
 
 
@@ -4259,6 +4261,217 @@ function CassaScreen({state,dispatch}){
 }
 
 // ─────────────────────────────────────────────────────────
+// SCREEN: RISORSE UMANE (HR)
+// ─────────────────────────────────────────────────────────
+function RisorseScreen({state,dispatch}){
+  const [modal,setModal]=useState(null);
+  const [form,setForm]=useState({});
+  const [saving,setSaving]=useState(false);
+  const [filterAttivo,setFilterAttivo]=useState('TUTTI');
+
+  const risorse=state.risorse||[];
+  const token=()=>localStorage.getItem('BITE_ERP_TOKEN')||'';
+
+  const TIPI=[
+    {v:'FONDATORE',l:'Co-founder'},
+    {v:'APPRENDISTATO',l:'Apprendistato'},
+    {v:'TEMPO_DETERMINATO',l:'Tempo determinato'},
+    {v:'DIPENDENTE',l:'Dipendente'},
+    {v:'PRESTAZIONE_OCCASIONALE',l:'Prest. occasionale'},
+    {v:'FREELANCER',l:'Freelancer'},
+  ];
+
+  const filtered=risorse.filter(r=>filterAttivo==='TUTTI'||String(r.attivo)===(filterAttivo==='ATTIVI'?'true':'false'));
+
+  const costoOrarioEffettivo=r=>parseFloat(r.costo_orario_override||r.costo_orario_calcolato||0);
+  const costoMensile=r=>{
+    if(r.tipo_contratto==='FREELANCER'||r.tipo_contratto==='PRESTAZIONE_OCCASIONALE')
+      return parseFloat(r.compenso_fisso_mensile||0);
+    if(r.tipo_contratto==='FONDATORE')
+      return 0; // compenso variabile — non contabilizzato nel costo fisso mensile
+    const co=costoOrarioEffettivo(r);
+    const oreSettimana=parseFloat(r.ore_settimanali||40);
+    return co*oreSettimana*4.33;
+  };
+  const costoAnno=r=>costoMensile(r)*12;
+
+  const openNew=()=>{setForm({tipo_contratto:'DIPENDENTE',ore_settimanali:40,contributi_percentuale:30,tfr_percentuale:6.91,attivo:true});setModal('new');};
+  const openEdit=r=>{setForm({...r,_editId:r.id});setModal('edit');};
+  const closeModal=()=>{setModal(null);setForm({});};
+
+  const save=async()=>{
+    setSaving(true);
+    const payload={...form};
+    delete payload._editId;
+    // converti numerici
+    ['ore_settimanali','ral','compenso_fisso_mensile','compenso_obiettivo','contributi_percentuale','tfr_percentuale','costo_orario_override'].forEach(k=>{
+      if(payload[k]!==undefined&&payload[k]!=='') payload[k]=parseFloat(payload[k]);
+      else delete payload[k];
+    });
+    try{
+      const url=modal==='edit'?`/api/v1/risorse/${form._editId}`:'/api/v1/risorse';
+      const method=modal==='edit'?'PATCH':'POST';
+      const res=await fetch(url,{method,headers:{'Content-Type':'application/json','Authorization':'Bearer '+token()},body:JSON.stringify(payload)});
+      if(res.ok){
+        const saved=await res.json();
+        if(modal==='edit') dispatch({type:'UPDATE',entity:'risorse',item:saved});
+        else dispatch({type:'ADD',entity:'risorse',item:saved});
+        closeModal();
+      }else{const e=await res.json().catch(()=>({}));alert('Errore: '+(e.detail||JSON.stringify(e)));}
+    }catch(e){alert('Errore di rete: '+e.message);}
+    setSaving(false);
+  };
+
+  const del=async id=>{
+    if(!window.confirm('Eliminare questa risorsa?')) return;
+    const res=await fetch(`/api/v1/risorse/${id}`,{method:'DELETE',headers:{'Authorization':'Bearer '+token()}});
+    if(res.ok||res.status===204) dispatch({type:'DELETE',entity:'risorse',id});
+    else alert('Errore eliminazione');
+  };
+
+  const tipoLabel=v=>TIPI.find(t=>t.v===v)?.l||v;
+  const tipoColor=v=>({
+    FONDATORE:'var(--violet)',APPRENDISTATO:'var(--blue)',TEMPO_DETERMINATO:'var(--green)',
+    DIPENDENTE:'var(--green)',PRESTAZIONE_OCCASIONALE:'var(--amber)',FREELANCER:'var(--amber)'
+  }[v]||'var(--g4)');
+
+  // KPI
+  const attivi=risorse.filter(r=>r.attivo);
+  const totCostoMensile=attivi.reduce((s,r)=>s+costoMensile(r),0);
+  const totCostoAnno=attivi.reduce((s,r)=>s+costoAnno(r),0);
+  const totObiettivo=attivi.reduce((s,r)=>s+(parseFloat(r.compenso_obiettivo||r.ral||r.compenso_fisso_mensile*12||0)),0);
+
+  const mostraCompensoBase=f=>{
+    const t=f.tipo_contratto;
+    if(t==='FREELANCER'||t==='PRESTAZIONE_OCCASIONALE') return 'compenso_fisso_mensile';
+    return 'ral';
+  };
+
+  return <div className='fu'>
+    {modal&&<Modal title={modal==='new'?'Nuova risorsa':'Modifica risorsa'} onClose={closeModal} width={560}>
+      <div style={{display:'flex',flexDirection:'column',gap:0}}>
+        <FGrid>
+          <FRow label='Nome'><input required value={form.nome||''} onChange={e=>setForm({...form,nome:e.target.value})}/></FRow>
+          <FRow label='Cognome'><input required value={form.cognome||''} onChange={e=>setForm({...form,cognome:e.target.value})}/></FRow>
+        </FGrid>
+        <FRow label='Ruolo'><input value={form.ruolo||''} onChange={e=>setForm({...form,ruolo:e.target.value})} placeholder='es. Art Director, Copywriter...'/></FRow>
+        <FGrid>
+          <FRow label='Tipo contratto'>
+            <select value={form.tipo_contratto||'DIPENDENTE'} onChange={e=>setForm({...form,tipo_contratto:e.target.value,contributi_percentuale:e.target.value==='APPRENDISTATO'?10:e.target.value==='FONDATORE'?0:30})}>
+              {TIPI.map(t=><option key={t.v} value={t.v}>{t.l}</option>)}
+            </select>
+          </FRow>
+          <FRow label='Ore/settimana'><input type='number' min='1' max='60' step='0.5' value={form.ore_settimanali||40} onChange={e=>setForm({...form,ore_settimanali:e.target.value})}/></FRow>
+        </FGrid>
+        <FGrid>
+          <FRow label='Data inizio'><input type='date' value={form.data_inizio||''} onChange={e=>setForm({...form,data_inizio:e.target.value})}/></FRow>
+          <FRow label='Data fine'><input type='date' value={form.data_fine||''} onChange={e=>setForm({...form,data_fine:e.target.value})}/></FRow>
+        </FGrid>
+
+        {/* Compenso base */}
+        {(form.tipo_contratto==='FREELANCER'||form.tipo_contratto==='PRESTAZIONE_OCCASIONALE')?
+          <FRow label='Compenso mensile (€)'><input type='number' min='0' step='0.01' value={form.compenso_fisso_mensile||''} onChange={e=>setForm({...form,compenso_fisso_mensile:e.target.value})} placeholder='es. 500'/></FRow>:
+          <FRow label='RAL (€)'><input type='number' min='0' step='100' value={form.ral||''} onChange={e=>setForm({...form,ral:e.target.value})} placeholder='es. 22000'/></FRow>
+        }
+
+        <FRow label='Compenso obiettivo (€/anno)'>
+          <input type='number' min='0' step='100' value={form.compenso_obiettivo||''} onChange={e=>setForm({...form,compenso_obiettivo:e.target.value})} placeholder='es. 30000 — compenso target a regime'/>
+        </FRow>
+
+        {/* Parametri costo */}
+        {form.tipo_contratto!=='FREELANCER'&&form.tipo_contratto!=='PRESTAZIONE_OCCASIONALE'&&<FGrid>
+          <FRow label='Contributi azienda (%)'>
+            <input type='number' min='0' max='50' step='0.1' value={form.contributi_percentuale||30} onChange={e=>setForm({...form,contributi_percentuale:e.target.value})}/>
+            <span style={{fontSize:10,color:'var(--g4)',marginTop:3,display:'block'}}>
+              {form.tipo_contratto==='APPRENDISTATO'?'Apprendistato: ~10%':'Standard: ~30%'}
+            </span>
+          </FRow>
+          <FRow label='TFR (%)'>
+            <input type='number' min='0' max='10' step='0.01' value={form.tfr_percentuale||6.91} onChange={e=>setForm({...form,tfr_percentuale:e.target.value})}/>
+          </FRow>
+        </FGrid>}
+
+        <FRow label='Override costo orario (€/h)'>
+          <input type='number' min='0' step='0.01' value={form.costo_orario_override||''} onChange={e=>setForm({...form,costo_orario_override:e.target.value})} placeholder='Lascia vuoto per calcolo automatico'/>
+        </FRow>
+        <FRow label='Note'><textarea value={form.note||''} onChange={e=>setForm({...form,note:e.target.value})} rows={2}/></FRow>
+        <FRow label='Attivo'>
+          <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer'}}>
+            <input type='checkbox' checked={!!form.attivo} onChange={e=>setForm({...form,attivo:e.target.checked})}/>
+            <span>Risorsa attiva</span>
+          </label>
+        </FRow>
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:16}}>
+          <Btn v='ghost' onClick={closeModal} type='button'>Annulla</Btn>
+          <Btn v='primary' onClick={save} disabled={saving}>{saving?'Salvo...':'Salva'}</Btn>
+        </div>
+      </div>
+    </Modal>}
+
+    <Topbar title='Risorse umane'>
+      <Btn v='primary' onClick={openNew}>+ Nuova risorsa</Btn>
+    </Topbar>
+
+    {/* KPI */}
+    <div style={{display:'flex',gap:16,marginBottom:20,flexWrap:'wrap'}}>
+      <KPI label='Risorse attive' value={attivi.length}/>
+      <KPI label='Costo mensile stimato' value={fmtEuro(totCostoMensile)} color='var(--red)'/>
+      <KPI label='Costo annuo stimato' value={fmtEuro(totCostoAnno)} color='var(--red)'/>
+      <KPI label='Compenso obiettivo annuo' value={fmtEuro(totObiettivo)} color='var(--amber)'/>
+    </div>
+
+    {/* Filtri */}
+    <div style={{display:'flex',gap:8,marginBottom:14,alignItems:'center'}}>
+      {['TUTTI','ATTIVI','INATTIVI'].map(f=>
+        <button key={f} onClick={()=>setFilterAttivo(f)} style={{padding:'4px 12px',borderRadius:6,border:'1px solid var(--g3)',background:filterAttivo===f?'var(--purple)':'var(--g2)',color:filterAttivo===f?'white':'var(--g5)',fontSize:11,cursor:'pointer'}}>{f}</button>
+      )}
+    </div>
+
+    <Card>
+      <CH title='Team' meta={`${filtered.length} risorse`}/>
+      {filtered.length===0?<Empty msg='Nessuna risorsa'/>:
+      <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
+        <thead><tr>
+          <Th c='Nominativo'/><Th c='Ruolo'/><Th c='Contratto'/><Th c='Inizio'/><Th c='RAL / Compenso'/><Th c='Obiettivo'/><Th c='Costo/h'/><Th c='Costo mese'/><Th c='Stato'/><Th c='Azioni'/>
+        </tr></thead>
+        <tbody>
+          {filtered.map(r=>{
+            const co=costoOrarioEffettivo(r);
+            const cm=costoMensile(r);
+            const isOverride=!!r.costo_orario_override;
+            return <TR key={r.id}>
+              <Td><div style={{fontWeight:700}}>{r.cognome} {r.nome}</div></Td>
+              <Td muted>{r.ruolo||'—'}</Td>
+              <Td><span style={{fontFamily:'var(--fm)',fontSize:11,color:tipoColor(r.tipo_contratto)}}>{tipoLabel(r.tipo_contratto)}</span></Td>
+              <Td mono muted>{fmtDate(r.data_inizio)}</Td>
+              <Td mono style={{color:'var(--g5)'}}>
+                {r.tipo_contratto==='FREELANCER'||r.tipo_contratto==='PRESTAZIONE_OCCASIONALE'
+                  ?<span>{fmtEuro(r.compenso_fisso_mensile||0)}<span style={{color:'var(--g4)',fontSize:10}}>/mese</span></span>
+                  :<span>{fmtEuro(r.ral||0)}<span style={{color:'var(--g4)',fontSize:10}}>/anno</span></span>
+                }
+              </Td>
+              <Td mono style={{color:'var(--amber)'}}>
+                {r.compenso_obiettivo?<span>{fmtEuro(r.compenso_obiettivo)}<span style={{color:'var(--g4)',fontSize:10}}>/anno</span></span>:'—'}
+              </Td>
+              <Td mono style={{color:co>0?'var(--violet)':'var(--g4)',fontWeight:600}}>
+                {co>0?<span>{fmtEuro(co)}/h{isOverride&&<span style={{fontSize:9,color:'var(--amber)',marginLeft:3}}>▲</span>}</span>:'—'}
+              </Td>
+              <Td mono style={{color:'var(--red)',fontWeight:600}}>{cm>0?fmtEuro(cm):'—'}</Td>
+              <Td><span style={{fontSize:11,color:r.attivo?'var(--green)':'var(--g4)'}}>{r.attivo?'● Attivo':'○ Inattivo'}</span></Td>
+              <Td style={{display:'flex',gap:4}}>
+                <Btn v='ghost' onClick={()=>openEdit(r)} s={{padding:'4px 8px',fontSize:11}}>✎ Modifica</Btn>
+                <Btn v='danger' onClick={()=>del(r.id)} s={{padding:'4px 8px',fontSize:11}}>✕</Btn>
+              </Td>
+            </TR>;
+          })}
+        </tbody>
+      </table>}
+    </Card>
+  </div>;
+}
+
+
+// ─────────────────────────────────────────────────────────
 // SCREEN: REGOLE MATCHING
 // ─────────────────────────────────────────────────────────
 function RegoleScreen({state,dispatch}){
@@ -4557,6 +4770,7 @@ function App(){
           {key:'users',run:()=>apiFetch('/users',{tokenOverride:tk})},
           {key:'fatture_attive',run:()=>apiFetch('/fatture-attive',{tokenOverride:tk})},
           {key:'fatture_passive',run:()=>apiFetch('/fatture-passive',{tokenOverride:tk})},
+          {key:'risorse',run:()=>apiFetch('/risorse',{tokenOverride:tk})},
           {key:'fornitori',run:()=>apiFetch('/fornitori',{tokenOverride:tk})},
           {key:'movimenti_cassa',run:()=>apiFetch('/movimenti-cassa',{tokenOverride:tk})},
           {key:'costi_fissi',run:()=>apiFetch('/costi-fissi',{tokenOverride:tk})},
@@ -4619,6 +4833,9 @@ function App(){
           importo_residuo:parseFloat(f.importo_residuo)||0, stato:f.stato_pagamento==='paid'?'INCASSATA':f.stato_pagamento==='partial'?'PARZIALE':'ATTESA', data_ultimo_incasso:f.data_ultimo_incasso||null,
           valuta:f.valuta||'EUR',
         }))});
+      }
+      if(data.risorse){
+        dispatch({type:'SET_ENTITY',entity:'risorse',items:data.risorse});
       }
       if(data.fatture_passive){
         const fornitoriMap=Object.fromEntries((data.fornitori||state.fornitori||[]).map(f=>[f.id,f]));
@@ -4837,6 +5054,7 @@ function App(){
       case 'cassa':            return <CassaScreen state={state} dispatch={dispatch}/>;
       case 'regole':           return <RegoleScreen state={state} dispatch={dispatch}/>;
       case 'team':             return <TeamScreen state={state} dispatch={dispatch} api={usersApi} isAdmin={isAdmin}/>;
+      case 'risorse':         return <RisorseScreen state={state} dispatch={dispatch}/>;
       default: return null;
     }
   };

@@ -560,3 +560,29 @@ class MovimentoCassaImputazione(Base):
     ereditata_da_fattura: Mapped[bool] = mapped_column(Boolean, default=False)
     note: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# ── RISORSA (HR) ──────────────────────────────────────────
+class Risorsa(Base):
+    __tablename__ = "risorse"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    nome: Mapped[str] = mapped_column(String(100), nullable=False)
+    cognome: Mapped[str] = mapped_column(String(100), nullable=False)
+    ruolo: Mapped[Optional[str]] = mapped_column(String(150))
+    tipo_contratto: Mapped[str] = mapped_column(String(30), default="DIPENDENTE")
+    data_inizio: Mapped[Optional[date]] = mapped_column(Date)
+    data_fine: Mapped[Optional[date]] = mapped_column(Date)
+    ore_settimanali: Mapped[Decimal] = mapped_column(Numeric(4, 1), default=40)
+    ral: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    compenso_fisso_mensile: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    compenso_obiettivo: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    contributi_percentuale: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=30)
+    tfr_percentuale: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("6.91"))
+    costo_orario_override: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    costo_orario_calcolato: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    attivo: Mapped[bool] = mapped_column(Boolean, default=True)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

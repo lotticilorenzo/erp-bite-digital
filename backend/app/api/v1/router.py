@@ -648,3 +648,35 @@ async def delete_commessa(commessa_id: uuid.UUID, db: AsyncSession = Depends(get
         raise HTTPException(status_code=404, detail="Commessa non trovata")
     await db.delete(c)
     await db.commit()
+
+
+# ── RISORSE (HR) ──────────────────────────────────────────
+@router.get("/risorse", tags=["HR"])
+async def get_risorse(db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from app.services.services import list_risorse
+    return await list_risorse(db)
+
+
+@router.post("/risorse", tags=["HR"])
+async def post_risorsa(payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from app.services.services import create_risorsa
+    return await create_risorsa(db, payload)
+
+
+@router.patch("/risorse/{risorsa_id}", tags=["HR"])
+async def patch_risorsa(risorsa_id: uuid.UUID, payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from app.services.services import update_risorsa
+    from fastapi import HTTPException
+    r = await update_risorsa(db, risorsa_id, payload)
+    if not r:
+        raise HTTPException(status_code=404, detail="Risorsa non trovata")
+    return r
+
+
+@router.delete("/risorse/{risorsa_id}", status_code=204, tags=["HR"])
+async def del_risorsa(risorsa_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from app.services.services import delete_risorsa
+    from fastapi import HTTPException
+    ok = await delete_risorsa(db, risorsa_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Risorsa non trovata")
