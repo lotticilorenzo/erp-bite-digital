@@ -386,6 +386,8 @@ async def update_commessa(
 
     if data.stato is not None:
         c.stato = data.stato
+    if data.mese_competenza is not None:
+        c.mese_competenza = data.mese_competenza
     if data.costi_diretti is not None:
         c.costi_diretti = data.costi_diretti
     if data.note is not None:
@@ -440,6 +442,10 @@ async def update_commessa(
                 row.delivery_attesa = riga_patch.delivery_attesa
             if riga_patch.delivery_consuntiva is not None:
                 row.delivery_consuntiva = riga_patch.delivery_consuntiva
+
+    # Aggiustamenti (extra/sconti)
+    if hasattr(data, 'aggiustamenti') and data.aggiustamenti is not None:
+        c.aggiustamenti = [{'descrizione': a.get('descrizione',''), 'importo': float(a.get('importo',0))} for a in data.aggiustamenti]
 
     # Se la commessa passa a CHIUSA, registra la data
     if data.stato == CommessaStatus.CHIUSA and not c.data_chiusura:

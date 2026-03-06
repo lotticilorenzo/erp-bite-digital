@@ -208,8 +208,10 @@ class CommessaCreate(BaseModel):
 
 class CommessaUpdate(BaseModel):
     stato: Optional[CommessaStatus] = None
+    mese_competenza: Optional[date] = None
     costi_diretti: Optional[Decimal] = None
     righe_progetto: Optional[List[CommessaRigaUpdate]] = None
+    aggiustamenti: Optional[List[dict]] = None
     note: Optional[str] = None
 
 class CommessaOut(OrmBase):
@@ -224,6 +226,7 @@ class CommessaOut(OrmBase):
     note: Optional[str]
     created_at: datetime
     # Calcolati lato applicazione
+    aggiustamenti: Optional[list] = None
     valore_fatturabile: Optional[Decimal] = None
     costi_indiretti_allocati: Optional[Decimal] = None
     coefficiente_allocazione: Optional[Decimal] = None

@@ -168,6 +168,8 @@ class Commessa(Base):
     costo_manodopera: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     costi_diretti: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     data_chiusura: Mapped[Optional[date]] = mapped_column(Date)
+    aggiustamenti: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    valore_fatturabile_override: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
     note: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -181,10 +183,13 @@ class Commessa(Base):
 
     @property
     def valore_fatturabile_calc(self) -> Decimal:
-        """Somma del fatturabile delle righe progetto della commessa."""
+        """Somma del fatturabile delle righe progetto + aggiustamenti."""
         totale = Decimal("0")
         for riga in self.righe_progetto:
             totale += riga.valore_fatturabile_calc
+        # Aggiustamenti (extra/sconti)
+        for ag in (self.aggiustamenti or []):
+            totale += Decimal(str(ag.get('importo', 0)))
         return totale
 
     @property
