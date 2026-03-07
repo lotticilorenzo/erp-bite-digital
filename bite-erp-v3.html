@@ -143,6 +143,7 @@ const normalizeProgettoFromApi = (p,existing) => {
     speso_campagna:safeNum(existing?.speso_campagna),
     note:p.note||'',
     soglia_margine:safeNum(existing?.soglia_margine)||30,
+    servizi:p.servizi||existing?.servizi||[],
   };
 };
 
@@ -172,6 +173,7 @@ const normalizeCommessaFromApi = cm => {
     costi_diretti:safeNum(cm.costi_diretti),
     note:cm.note||'',
     valore_fatturabile:safeNum(cm.valore_fatturabile),
+    aggiustamenti:cm.aggiustamenti||[],
     margine_percentuale:safeNum(cm.margine_percentuale),
     righe_progetto:righe,
   };
@@ -1222,11 +1224,34 @@ function ProgettiScreen({state,dispatch,setPage,setDrillProgetto,api}) {
   const [form,setForm]=useState({});
   const [milestoneInput,setMilestoneInput]=useState('');
   const [saving,setSaving]=useState(false);
+  const [servizi,setServizi]=useState([]);
+  const [loadingServizi,setLoadingServizi]=useState(false);
   const clienteMap=useMemo(()=>Object.fromEntries(state.clienti.map(c=>[c.id,c])),[state.clienti]);
 
-  const openNew=()=>{setForm({cliente_id:state.clienti[0]?.id||'',nome:'',categoria:'SOCIAL',stato:'ATTIVO',importo_fisso:0,importo_variabile:0,delivery_attesa:0,milestone:[],budget_campagna:0,note:''});setMilestoneInput('');setModal('new');};
-  const openEdit=p=>{setForm({...p,milestone:[...(p.milestone||[])]});setMilestoneInput('');setModal(p);};
-  const closeModal=()=>{setModal(null);setForm({});};
+  const emptyServizio=()=>({_id:'new_'+Date.now(),tipo:'SOCIAL',nome:'',valore_fisso:0,valore_variabile:0,contenuti_previsti:'',cadenza:'MENSILE',attivo:true,isNew:true});
+
+  const openNew=()=>{
+    setForm({cliente_id:state.clienti[0]?.id||'',nome:'',stato:'ATTIVO',note:''});
+    setServizi([emptyServizio()]);
+    setMilestoneInput('');
+    setModal('new');
+  };
+  const openEdit=async p=>{
+    setForm({...p,milestone:[...(p.milestone||[])]});
+    setMilestoneInput('');
+    setModal(p);
+    if(api?.enabled){
+      setLoadingServizi(true);
+      try{
+        const sv=await api.listServizi(p.id);
+        setServizi(sv.length>0?sv:[emptyServizio()]);
+      }catch(e){ setServizi(p.servizi?.length>0?p.servizi:[emptyServizio()]); }
+      finally{ setLoadingServizi(false); }
+    } else {
+      setServizi(p.servizi?.length>0?[...p.servizi]:[emptyServizio()]);
+    }
+  };
+  const closeModal=()=>{setModal(null);setForm({});setServizi([]);};
 
   const addMilestone=()=>{
     if(!milestoneInput.trim()) return;
@@ -1242,37 +1267,46 @@ function ProgettiScreen({state,dispatch,setPage,setDrillProgetto,api}) {
   };
   const removeMilestone=mid=>setForm(f=>({...f,milestone:f.milestone.filter(m=>m.id!==mid)}));
 
+  const serviziValidi=servizi.filter(s=>s.tipo);
+
   const save=async e=>{
     e.preventDefault();
-    const item={...form,importo_fisso:parseFloat(form.importo_fisso)||0,importo_variabile:parseFloat(form.importo_variabile)||0,delivery_attesa:parseInt(form.delivery_attesa)||0,budget_campagna:parseFloat(form.budget_campagna)||0};
+    if(serviziValidi.length===0){alert('Aggiungi almeno un servizio al progetto.');return;}
+    const item={...form};
+    const primoS=serviziValidi[0];
+    const tipoMap={'SOCIAL':'RETAINER','WEB':'ONE_OFF','CONSULENZA':'RETAINER','SPOT':'ONE_OFF'};
     if(api?.enabled){
       try{
         setSaving(true);
         const payload={
           cliente_id:item.cliente_id,
           nome:item.nome,
-          tipo:categoriaToTipo(item.categoria||'SOCIAL'),
-          importo_fisso:item.importo_fisso,
-          importo_variabile:item.importo_variabile,
-          delivery_attesa:item.delivery_attesa,
-          note:withCategoriaNote(item.note,item.categoria||'SOCIAL'),
+          tipo:tipoMap[primoS.tipo]||'RETAINER',
+          importo_fisso:parseFloat(primoS.valore_fisso)||0,
+          importo_variabile:parseFloat(primoS.valore_variabile)||0,
+          delivery_attesa:parseInt(primoS.contenuti_previsti)||0,
+          note:item.note||'',
         };
         let saved;
         if(modal==='new'){
           saved=await api.createProgetto(payload,{local:item});
-          if(item.stato&&item.stato!=='ATTIVO'){
+          if(item.stato&&item.stato!=='ATTIVO')
             saved=await api.updateProgetto(saved.id,{stato:item.stato},{local:item});
+          for(const s of serviziValidi){
+            await api.createServizio(saved.id,{tipo:s.tipo,nome:s.nome||s.tipo,valore_fisso:parseFloat(s.valore_fisso)||0,valore_variabile:parseFloat(s.valore_variabile)||0,contenuti_previsti:parseInt(s.contenuti_previsti)||null,cadenza:s.cadenza||'MENSILE',attivo:true,note:null});
           }
         }else{
-          saved=await api.updateProgetto(modal.id,{
-            nome:payload.nome,
-            tipo:payload.tipo,
-            stato:item.stato,
-            importo_fisso:payload.importo_fisso,
-            importo_variabile:payload.importo_variabile,
-            delivery_attesa:payload.delivery_attesa,
-            note:payload.note,
-          },{local:item});
+          saved=await api.updateProgetto(modal.id,{nome:payload.nome,tipo:payload.tipo,stato:item.stato,importo_fisso:payload.importo_fisso,importo_variabile:payload.importo_variabile,delivery_attesa:payload.delivery_attesa,note:payload.note},{local:item});
+          const esistenti=servizi.filter(s=>!s.isNew&&s.id);
+          const nuovi=servizi.filter(s=>s.isNew);
+          for(const s of esistenti){
+            await api.updateServizio(modal.id,s.id,{tipo:s.tipo,nome:s.nome||s.tipo,valore_fisso:parseFloat(s.valore_fisso)||0,valore_variabile:parseFloat(s.valore_variabile)||0,contenuti_previsti:parseInt(s.contenuti_previsti)||null,cadenza:s.cadenza||'MENSILE',attivo:s.attivo});
+          }
+          for(const s of nuovi){
+            await api.createServizio(modal.id,{tipo:s.tipo,nome:s.nome||s.tipo,valore_fisso:parseFloat(s.valore_fisso)||0,valore_variabile:parseFloat(s.valore_variabile)||0,contenuti_previsti:parseInt(s.contenuti_previsti)||null,cadenza:s.cadenza||'MENSILE',attivo:true});
+          }
+          const svAgg=await api.listServizi(modal.id);
+          saved={...saved,servizi:svAgg};
         }
         dispatch({type:'UPSERT',entity:'progetti',item:saved});
         closeModal();
@@ -1283,8 +1317,8 @@ function ProgettiScreen({state,dispatch,setPage,setDrillProgetto,api}) {
       }
       return;
     }
-    if(modal==='new') dispatch({type:'ADD',entity:'progetti',item:{...item,id:uid()}});
-    else dispatch({type:'UPDATE',entity:'progetti',item:{...modal,...item}});
+    if(modal==='new') dispatch({type:'ADD',entity:'progetti',item:{...item,id:uid(),servizi:serviziValidi}});
+    else dispatch({type:'UPDATE',entity:'progetti',item:{...modal,...item,servizi:serviziValidi}});
     closeModal();
   };
   const del=async id=>{
@@ -1314,68 +1348,56 @@ function ProgettiScreen({state,dispatch,setPage,setDrillProgetto,api}) {
             {state.clienti.map(c=><option key={c.id} value={c.id}>{c.codice} — {c.ragione_sociale}</option>)}
           </select>
         </FRow>
-        <FRow label='Nome progetto'><input required value={form.nome||''} onChange={e=>setForm({...form,nome:e.target.value})}/></FRow>
-        <FGrid>
-          <FRow label='Categoria'>
-            <select value={form.categoria||'SOCIAL'} onChange={e=>setForm({...form,categoria:e.target.value,importo_variabile:0,delivery_attesa:0,milestone:[],budget_campagna:0})}>
-              <option value='SOCIAL'>Social — delivery contenuti</option>
-              <option value='WEB'>Web — milestone</option>
-              <option value='MARKETING'>Marketing — retainer + budget campagna</option>
-            </select>
-          </FRow>
-          <FRow label='Stato'>
-            <select value={form.stato||'ATTIVO'} onChange={e=>setForm({...form,stato:e.target.value})}>
-              <option value='ATTIVO'>Attivo</option><option value='CHIUSO'>Chiuso</option>
-            </select>
-          </FRow>
-        </FGrid>
+        <FRow label='Nome progetto / Brand'><input required value={form.nome||''} onChange={e=>setForm({...form,nome:e.target.value})} placeholder='es. La Beccheria, Otello, Ferramenta Piazza…'/></FRow>
+        <FRow label='Stato'>
+          <select value={form.stato||'ATTIVO'} onChange={e=>setForm({...form,stato:e.target.value})}>
+            <option value='ATTIVO'>Attivo</option><option value='CHIUSO'>Chiuso</option>
+          </select>
+        </FRow>
 
-        {/* Campi per categoria SOCIAL */}
-        {form.categoria==='SOCIAL'&&<>
-          <div style={{background:'var(--vdim)',border:'1px solid rgba(176,96,224,.2)',borderRadius:8,padding:'12px 16px',marginBottom:14}}>
-            <div style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--violet)',marginBottom:10}}>◆ SOCIAL — Fisso + Variabile su delivery</div>
-            <FGrid>
-              <FRow label='Importo fisso (€/mese)'><input type='number' min='0' step='0.01' value={form.importo_fisso||0} onChange={e=>setForm({...form,importo_fisso:e.target.value})}/></FRow>
-              <FRow label='Importo variabile (€)'><input type='number' min='0' step='0.01' value={form.importo_variabile||0} onChange={e=>setForm({...form,importo_variabile:e.target.value})}/></FRow>
-            </FGrid>
-            <FRow label='Delivery attesa (contenuti/mese)' hint='La delivery consuntiva può superare questo valore'>
-              <input type='number' min='0' value={form.delivery_attesa||0} onChange={e=>setForm({...form,delivery_attesa:e.target.value})}/>
-            </FRow>
-            {(parseFloat(form.importo_fisso)||0)>0&&<div style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)'}}>Prezzo unitario: {fmtEuro((parseFloat(form.importo_variabile)||0)/(parseInt(form.delivery_attesa)||1))}/contenuto</div>}
+        {/* SEZIONE SERVIZI */}
+        <div style={{marginBottom:14}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+            <div style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',letterSpacing:1}}>SERVIZI DEL PROGETTO</div>
+            <Btn v='outline' type='button' s={{fontSize:10,padding:'4px 10px'}} onClick={()=>setServizi(sv=>[...sv,emptyServizio()])}>+ Aggiungi servizio</Btn>
           </div>
-        </>}
-
-        {/* Campi per categoria WEB */}
-        {form.categoria==='WEB'&&<>
-          <div style={{background:'rgba(59,130,246,.08)',border:'1px solid rgba(59,130,246,.2)',borderRadius:8,padding:'12px 16px',marginBottom:14}}>
-            <div style={{fontFamily:'var(--fm)',fontSize:10,color:'#60a5fa',marginBottom:10}}>◆ WEB — Importo fisso + Milestone</div>
-            <FRow label='Importo progetto (€)'><input type='number' min='0' step='0.01' value={form.importo_fisso||0} onChange={e=>setForm({...form,importo_fisso:e.target.value})}/></FRow>
-            <FRow label='Milestone'>
-              <div style={{display:'flex',gap:8,marginBottom:8}}>
-                <input value={milestoneInput} onChange={e=>setMilestoneInput(e.target.value)} placeholder='Nome milestone…' onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addMilestone();}}} style={{flex:1}}/>
-                <Btn v='outline' onClick={addMilestone} type='button' s={{padding:'7px 12px',whiteSpace:'nowrap'}}>+ Aggiungi</Btn>
-              </div>
-              {(form.milestone||[]).map(m=><div key={m.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
-                <button type='button' onClick={()=>toggleMilestone(m.id)} style={{width:20,height:20,borderRadius:4,border:'none',background:BADGE_MAP[m.stato]?.[0]||'var(--g2)',color:BADGE_MAP[m.stato]?.[1]||'var(--g5)',fontSize:11,flexShrink:0}}>{m.stato==='DONE'?'✓':m.stato==='IN_PROGRESS'?'⋯':'○'}</button>
-                <span style={{flex:1,fontSize:12}}>{m.nome}</span>
-                <Badge s={m.stato}/>
-                <button type='button' onClick={()=>removeMilestone(m.id)} style={{background:'none',border:'none',color:'var(--g4)',fontSize:14,padding:2}}>×</button>
-              </div>)}
-              {(form.milestone||[]).length===0&&<div style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)',padding:'8px 0'}}>Nessuna milestone — aggiungila sopra</div>}
-            </FRow>
-          </div>
-        </>}
-
-        {/* Campi per categoria MARKETING */}
-        {form.categoria==='MARKETING'&&<>
-          <div style={{background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:8,padding:'12px 16px',marginBottom:14}}>
-            <div style={{fontFamily:'var(--fm)',fontSize:10,color:'#fbbf24',marginBottom:10}}>◆ MARKETING — Retainer + Budget campagne</div>
-            <FGrid>
-              <FRow label='Retainer mensile (€)'><input type='number' min='0' step='0.01' value={form.importo_fisso||0} onChange={e=>setForm({...form,importo_fisso:e.target.value})}/></FRow>
-              <FRow label='Budget campagne (€/mese)' hint='Passante — non è ricavo Bite'><input type='number' min='0' step='0.01' value={form.budget_campagna||0} onChange={e=>setForm({...form,budget_campagna:e.target.value})}/></FRow>
-            </FGrid>
-          </div>
-        </>}
+          {loadingServizi&&<div style={{color:'var(--g4)',fontSize:12,padding:'8px 0'}}>Caricamento servizi…</div>}
+          {servizi.map((s,idx)=>{
+            const colMap={SOCIAL:['rgba(176,96,224,.12)','rgba(176,96,224,.3)','var(--violet)'],WEB:['rgba(59,130,246,.12)','rgba(59,130,246,.3)','#60a5fa'],CONSULENZA:['rgba(16,185,129,.12)','rgba(16,185,129,.3)','#34d399'],SPOT:['rgba(245,158,11,.12)','rgba(245,158,11,.3)','#fbbf24']};
+            const [bg,border,col]=colMap[s.tipo]||colMap.SOCIAL;
+            const upd=(k,v)=>setServizi(sv=>sv.map((x,i)=>i===idx?{...x,[k]:v}:x));
+            return <div key={s._id||s.id||idx} style={{background:bg,border:`1px solid ${border}`,borderRadius:8,padding:'12px 16px',marginBottom:10,position:'relative'}}>
+              {servizi.length>1&&<button type='button' onClick={()=>setServizi(sv=>sv.filter((_,i)=>i!==idx))} style={{position:'absolute',top:8,right:8,background:'none',border:'none',color:'var(--g4)',fontSize:16,cursor:'pointer',padding:2}}>×</button>}
+              <div style={{fontFamily:'var(--fm)',fontSize:10,color:col,marginBottom:10}}>◆ SERVIZIO {idx+1}</div>
+              <FGrid>
+                <FRow label='Tipo'>
+                  <select value={s.tipo} onChange={e=>upd('tipo',e.target.value)}>
+                    <option value='SOCIAL'>Social</option>
+                    <option value='WEB'>Web</option>
+                    <option value='CONSULENZA'>Consulenza / Fee</option>
+                    <option value='SPOT'>Spot / Una tantum</option>
+                  </select>
+                </FRow>
+                <FRow label='Nome (opzionale)'><input value={s.nome||''} onChange={e=>upd('nome',e.target.value)} placeholder={s.tipo}/></FRow>
+              </FGrid>
+              <FGrid>
+                <FRow label='Valore fisso (€)'><input type='number' min='0' step='0.01' value={s.valore_fisso||0} onChange={e=>upd('valore_fisso',e.target.value)}/></FRow>
+                {s.tipo==='SOCIAL'&&<FRow label='Valore variabile (€)'><input type='number' min='0' step='0.01' value={s.valore_variabile||0} onChange={e=>upd('valore_variabile',e.target.value)}/></FRow>}
+              </FGrid>
+              {s.tipo==='SOCIAL'&&<FRow label='Contenuti previsti/mese'><input type='number' min='0' value={s.contenuti_previsti||''} onChange={e=>upd('contenuti_previsti',e.target.value)} placeholder='es. 8'/></FRow>}
+              {(s.tipo==='WEB'||s.tipo==='CONSULENZA')&&<FRow label='Cadenza'>
+                <select value={s.cadenza||'MENSILE'} onChange={e=>upd('cadenza',e.target.value)}>
+                  <option value='MENSILE'>Mensile</option>
+                  <option value='SEMESTRALE'>Semestrale</option>
+                  <option value='ANNUALE'>Annuale</option>
+                  <option value='UNA_TANTUM'>Una tantum</option>
+                </select>
+              </FRow>}
+              {s.tipo==='SOCIAL'&&(parseFloat(s.valore_variabile)||0)>0&&(parseInt(s.contenuti_previsti)||0)>0&&
+                <div style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)',marginTop:4}}>Prezzo unitario: {fmtEuro((parseFloat(s.valore_variabile)||0)/(parseInt(s.contenuti_previsti)||1))}/contenuto</div>}
+            </div>;
+          })}
+        </div>
 
         <FRow label='Note'><textarea value={form.note||''} onChange={e=>setForm({...form,note:e.target.value})}/></FRow>
         <FActions onCancel={closeModal} submitLabel={saving?'Salvataggio...':'Salva'}/>
@@ -1386,9 +1408,9 @@ function ProgettiScreen({state,dispatch,setPage,setDrillProgetto,api}) {
     <div style={{padding:'22px 26px'}}>
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:22}}>
         <KPI label='Totale' value={state.progetti.length} delay={.05}/>
-        <KPI label='Social' value={state.progetti.filter(p=>p.categoria==='SOCIAL').length} delay={.08} color='var(--violet)'/>
-        <KPI label='Web' value={state.progetti.filter(p=>p.categoria==='WEB').length} delay={.11} color='#60a5fa'/>
-        <KPI label='Marketing' value={state.progetti.filter(p=>p.categoria==='MARKETING').length} delay={.14} color='var(--amber)'/>
+        <KPI label='Social' value={state.progetti.filter(p=>(p.servizi||[]).some(s=>s.tipo==='SOCIAL')).length} delay={.08} color='var(--violet)'/>
+        <KPI label='Web' value={state.progetti.filter(p=>(p.servizi||[]).some(s=>s.tipo==='WEB')).length} delay={.11} color='#60a5fa'/>
+        <KPI label='Consulenza' value={state.progetti.filter(p=>(p.servizi||[]).some(s=>s.tipo==='CONSULENZA')).length} delay={.14} color='var(--amber)'/>
       </div>
       <Card>
         <CH title='Tutti i progetti' meta={`${state.progetti.length} progetti`} action={<Btn v='primary' onClick={openNew} s={{fontSize:11,padding:'5px 10px'}}>+ Nuovo</Btn>}/>
@@ -1398,13 +1420,15 @@ function ProgettiScreen({state,dispatch,setPage,setDrillProgetto,api}) {
           <tbody>
             {state.progetti.map(p=>{
               const cl=clienteMap[p.cliente_id];
-              const econDesc=p.categoria==='SOCIAL'?`${fmtEuro(p.importo_fisso)} + ${fmtEuro(p.importo_variabile)} (${p.delivery_attesa} cont.)`:
-                p.categoria==='WEB'?`${fmtEuro(p.importo_fisso)} — ${(p.milestone||[]).length} milestone`:
-                `${fmtEuro(p.importo_fisso)}/mese + ${fmtEuro(p.budget_campagna)} camp.`;
+              const svList=p.servizi||[];
+              const tipoColMap={SOCIAL:'var(--violet)',WEB:'#60a5fa',CONSULENZA:'#34d399',SPOT:'#fbbf24'};
+              const econDesc=svList.length>0
+                ?svList.map(s=>`${s.tipo}${s.nome&&s.nome!==s.tipo?' ('+s.nome+')':''}: ${fmtEuro(parseFloat(s.valore_fisso)||0)}${parseFloat(s.valore_variabile)>0?'+'+fmtEuro(parseFloat(s.valore_variabile)):''}`).join(' | ')
+                :`${fmtEuro(p.importo_fisso)}`;
               return <TR key={p.id} onClick={()=>{setDrillProgetto(p.id);setPage('progetto_detail');}}>
                 <Td><span style={{fontFamily:'var(--fm)',fontWeight:700,color:'var(--violet)',letterSpacing:1,fontSize:11}}>{cl?.codice}</span><span style={{color:'var(--g5)',marginLeft:6}}>{cl?.ragione_sociale}</span></Td>
                 <Td><div style={{fontWeight:700}}>{p.nome}</div></Td>
-                <Td><Badge s={p.categoria}/></Td>
+                <Td>{svList.length>0?svList.map((s,i)=><span key={i} style={{display:'inline-block',background:tipoColMap[s.tipo]+'22',color:tipoColMap[s.tipo],border:`1px solid ${tipoColMap[s.tipo]}44`,borderRadius:4,padding:'1px 6px',fontSize:10,fontFamily:'var(--fm)',marginRight:3}}>{s.tipo}</span>):<Badge s={p.categoria||'SOCIAL'}/>}</Td>
                 <Td mono muted style={{fontSize:11}}>{econDesc}</Td>
                 <Td><Badge s={p.stato}/></Td>
                 <Td><div onClick={e=>e.stopPropagation()} style={{display:'flex',gap:6}}>
@@ -1445,7 +1469,7 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
     setModal('new');
   };
   const openEdit=cm=>{setForm({...cm,delivery_per_progetto:{...(cm.delivery_per_progetto||{})},progetti_ids:[...cm.progetti_ids],costi_diretti:cm.costi_diretti||0});setModal(cm);};
-  const closeModal=()=>{setModal(null);setForm({});};
+  const closeModal=()=>{setModal(null);setForm({});setServizi([]);};
 
   const onClienteChange=cid=>{
     const pIds=state.progetti.filter(p=>p.cliente_id===cid&&p.stato==='ATTIVO').map(p=>p.id);
@@ -1453,17 +1477,21 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
   };
 
   // calcola anteprima fatturabile
-  const previewFatt=(f)=>f.progetti_ids.reduce((s,pid)=>{
-    const p=progettoMap[pid]||{};
-    const snap=(f.snapshot_per_progetto||{})[pid]||{};
-    const dc=(f.delivery_per_progetto||{})[pid] ?? snap.delivery_consuntiva ?? 0;
-    return s+fatt(
-      snap.importo_fisso ?? p.importo_fisso ?? 0,
-      snap.importo_variabile ?? p.importo_variabile ?? 0,
-      snap.delivery_attesa ?? p.delivery_attesa ?? 0,
-      dc
-    );
-  },0);
+  const previewFatt=(f)=>{
+    const base=f.progetti_ids.reduce((s,pid)=>{
+      const p=progettoMap[pid]||{};
+      const snap=(f.snapshot_per_progetto||{})[pid]||{};
+      const dc=(f.delivery_per_progetto||{})[pid] ?? snap.delivery_consuntiva ?? 0;
+      return s+fatt(
+        snap.importo_fisso ?? p.importo_fisso ?? 0,
+        snap.importo_variabile ?? p.importo_variabile ?? 0,
+        snap.delivery_attesa ?? p.delivery_attesa ?? 0,
+        dc
+      );
+    },0);
+    const aggiust=(f.aggiustamenti||[]).reduce((s,a)=>s+(parseFloat(a.importo)||0),0);
+    return base+aggiust;
+  };
 
   const buildRighePayload = f => (f.progetti_ids||[]).map(pid=>{
     const p=progettoMap[pid]||{};
@@ -1490,6 +1518,7 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
             mese_competenza:monthToApi(item.mese_competenza),
             righe_progetto:buildRighePayload(item),
             costi_diretti:item.costi_diretti,
+            aggiustamenti:item.aggiustamenti||[],
             note:item.note||'',
           };
           saved=await api.createCommessa(createPayload);
@@ -1500,7 +1529,9 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
         }else{
           const updatePayload={
             stato:item.stato,
+            mese_competenza:monthToApi(item.mese_competenza),
             costi_diretti:item.costi_diretti,
+            aggiustamenti:item.aggiustamenti||[],
             note:item.note||'',
             righe_progetto:buildRighePayload(item).map(r=>({
               progetto_id:r.progetto_id,
@@ -1611,7 +1642,7 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
 
           <div style={{marginTop:10,display:'flex',justifyContent:'space-between',fontFamily:'var(--fm)',fontSize:12}}>
             <span style={{color:'var(--g4)'}}>Totale fatturabile</span>
-            <span style={{fontWeight:700,color:'var(--violet)'}}>{fmtEuro(previewFatt(form)+(form.aggiustamenti||[]).reduce((s,a)=>s+(a.importo||0),0))}</span>
+            <span style={{fontWeight:700,color:'var(--violet)'}}>{fmtEuro(previewFatt(form))}</span>
           </div>
         </div>}
         <FGrid>
@@ -2143,7 +2174,7 @@ function FinanziariaScreen({state,dispatch}) {
     }catch(e){console.error(e);}
   };
   const openCosto=()=>setForm({descrizione:'',importo:0,categoria:'PERSONALE',periodicita:'mensile',attivo:true,data_inizio:'',data_fine:'',note:''})||setModal('costo');
-  const closeModal=()=>{setModal(null);setForm({});};
+  const closeModal=()=>{setModal(null);setForm({});setServizi([]);};
 
   const saveFattAttiva=e=>{e.preventDefault();dispatch({type:'ADD',entity:'fatture_attive',item:{...form,id:uid(),importo:parseFloat(form.importo)||0}});closeModal();};
   const saveFattPassiva=e=>{e.preventDefault();dispatch({type:'ADD',entity:'fatture_passive',item:{...form,id:uid(),importo:parseFloat(form.importo)||0}});closeModal();};
@@ -2927,7 +2958,7 @@ function TeamScreen({state,dispatch,api,isAdmin}) {
 
   const openNew=()=>{setForm({nome:'',cognome:'',email:'',password:'',ruolo:'DIPENDENTE',costo_orario:30,attivo:true});setModal('new');};
   const openEdit=u=>{setForm({...u});setModal(u);};
-  const closeModal=()=>{setModal(null);setForm({});};
+  const closeModal=()=>{setModal(null);setForm({});setServizi([]);};
 
   const save=async e=>{
     e.preventDefault();
@@ -4297,7 +4328,7 @@ function RisorseScreen({state,dispatch}){
 
   const openNew=()=>{setForm({tipo_contratto:'DIPENDENTE',ore_settimanali:40,contributi_percentuale:30,tfr_percentuale:6.91,attivo:true});setModal('new');};
   const openEdit=r=>{setForm({...r,_editId:r.id});setModal('edit');};
-  const closeModal=()=>{setModal(null);setForm({});};
+  const closeModal=()=>{setModal(null);setForm({});setServizi([]);};
 
   const save=async()=>{
     setSaving(true);
@@ -4988,6 +5019,10 @@ function App(){
       const data=await apiFetch(`/progetti/${id}`,{method:'PATCH',body:payload});
       return normalizeProgettoFromApi(data,local||state.progetti.find(p=>p.id===id));
     },
+    listServizi:async(progettoId)=>await apiFetch(`/progetti/${progettoId}/servizi`),
+    createServizio:async(progettoId,payload)=>await apiFetch(`/progetti/${progettoId}/servizi`,{method:'POST',body:payload}),
+    updateServizio:async(progettoId,servizioId,payload)=>await apiFetch(`/progetti/${progettoId}/servizi/${servizioId}`,{method:'PATCH',body:payload}),
+    deleteServizio:async(progettoId,servizioId)=>await apiFetch(`/progetti/${progettoId}/servizi/${servizioId}`,{method:'DELETE'}),
   };
 
   const usersApi={

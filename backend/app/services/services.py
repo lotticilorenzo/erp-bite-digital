@@ -1859,3 +1859,51 @@ async def delete_risorsa(db: AsyncSession, risorsa_id: uuid.UUID):
     await db.delete(r)
     await db.commit()
     return True
+
+# ── SERVIZI PROGETTO ──────────────────────────────────────
+async def get_servizi_progetto(db: AsyncSession, progetto_id: uuid.UUID):
+    from app.models.models import ServizioProgetto
+    result = await db.execute(
+        select(ServizioProgetto).where(ServizioProgetto.progetto_id == progetto_id).order_by(ServizioProgetto.created_at)
+    )
+    return result.scalars().all()
+
+async def create_servizio_progetto(db: AsyncSession, progetto_id: uuid.UUID, data):
+    from app.models.models import ServizioProgetto
+    s = ServizioProgetto(
+        progetto_id=progetto_id,
+        tipo=data.tipo,
+        nome=data.nome,
+        valore_fisso=data.valore_fisso,
+        valore_variabile=data.valore_variabile,
+        contenuti_previsti=data.contenuti_previsti,
+        cadenza=data.cadenza,
+        attivo=data.attivo,
+        note=data.note,
+    )
+    db.add(s)
+    await db.commit()
+    await db.refresh(s)
+    return s
+
+async def update_servizio_progetto(db: AsyncSession, servizio_id: uuid.UUID, data):
+    from app.models.models import ServizioProgetto
+    result = await db.execute(select(ServizioProgetto).where(ServizioProgetto.id == servizio_id))
+    s = result.scalar_one_or_none()
+    if not s:
+        return None
+    for field, val in data.model_dump(exclude_unset=True).items():
+        if val is not None:
+            setattr(s, field, val)
+    await db.commit()
+    await db.refresh(s)
+    return s
+
+async def delete_servizio_progetto(db: AsyncSession, servizio_id: uuid.UUID):
+    from app.models.models import ServizioProgetto
+    result = await db.execute(select(ServizioProgetto).where(ServizioProgetto.id == servizio_id))
+    s = result.scalar_one_or_none()
+    if s:
+        await db.delete(s)
+        await db.commit()
+    return s

@@ -5,7 +5,7 @@ import uuid
 from datetime import date
 from decimal import Decimal
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -680,3 +680,31 @@ async def del_risorsa(risorsa_id: uuid.UUID, db: AsyncSession = Depends(get_db),
     ok = await delete_risorsa(db, risorsa_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Risorsa non trovata")
+
+# ── SERVIZI PROGETTO ──────────────────────────────────────
+@router.get("/progetti/{progetto_id}/servizi")
+async def list_servizi_progetto(progetto_id: uuid.UUID, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    from app.schemas.schemas import ServizioProgettoOut
+    items = await services.get_servizi_progetto(db, progetto_id)
+    return [ServizioProgettoOut.model_validate(i) for i in items]
+
+@router.post("/progetti/{progetto_id}/servizi")
+async def create_servizio_progetto(progetto_id: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    from app.schemas.schemas import ServizioProgettoCreate, ServizioProgettoOut
+    body = await request.json()
+    data = ServizioProgettoCreate(**body)
+    item = await services.create_servizio_progetto(db, progetto_id, data)
+    return ServizioProgettoOut.model_validate(item)
+
+@router.patch("/progetti/{progetto_id}/servizi/{servizio_id}")
+async def update_servizio_progetto(progetto_id: uuid.UUID, servizio_id: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    from app.schemas.schemas import ServizioProgettoUpdate, ServizioProgettoOut
+    body = await request.json()
+    data = ServizioProgettoUpdate(**body)
+    item = await services.update_servizio_progetto(db, servizio_id, data)
+    return ServizioProgettoOut.model_validate(item)
+
+@router.delete("/progetti/{progetto_id}/servizi/{servizio_id}")
+async def delete_servizio_progetto(progetto_id: uuid.UUID, servizio_id: uuid.UUID, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    await services.delete_servizio_progetto(db, servizio_id)
+    return {"ok": True}

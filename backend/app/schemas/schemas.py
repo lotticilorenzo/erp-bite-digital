@@ -130,6 +130,41 @@ class ClienteOut(OrmBase):
 
 
 # ── PROGETTO ──────────────────────────────────────────────
+
+# ── SERVIZI PROGETTO ──────────────────────────────────────
+class ServizioProgettoCreate(BaseModel):
+    tipo: str
+    nome: Optional[str] = None
+    valore_fisso: float = 0
+    valore_variabile: float = 0
+    contenuti_previsti: Optional[int] = None
+    cadenza: str = "MENSILE"
+    attivo: bool = True
+    note: Optional[str] = None
+
+class ServizioProgettoUpdate(BaseModel):
+    tipo: Optional[str] = None
+    nome: Optional[str] = None
+    valore_fisso: Optional[float] = None
+    valore_variabile: Optional[float] = None
+    contenuti_previsti: Optional[int] = None
+    cadenza: Optional[str] = None
+    attivo: Optional[bool] = None
+    note: Optional[str] = None
+
+class ServizioProgettoOut(OrmBase):
+    id: uuid.UUID
+    progetto_id: uuid.UUID
+    tipo: str
+    nome: Optional[str] = None
+    valore_fisso: float = 0
+    valore_variabile: float = 0
+    contenuti_previsti: Optional[int] = None
+    cadenza: str = "MENSILE"
+    attivo: bool = True
+    note: Optional[str] = None
+    created_at: Optional[datetime] = None
+
 class ProgettoCreate(BaseModel):
     cliente_id: Optional[uuid.UUID] = None
     nome: str
@@ -162,6 +197,8 @@ class ProgettoOut(OrmBase):
     clickup_list_id: Optional[str]
     note: Optional[str]
     created_at: datetime
+
+    servizi: List[ServizioProgettoOut] = Field(default_factory=list)
 
 class ProgettoWithCliente(ProgettoOut):
     cliente: Optional[ClienteOut] = None

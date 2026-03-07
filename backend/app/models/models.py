@@ -20,6 +20,19 @@ class UserRole(str, enum.Enum):
     DIPENDENTE = "DIPENDENTE"
     FREELANCER = "FREELANCER"
 
+
+class ServiceType(str, enum.Enum):
+    SOCIAL = "SOCIAL"
+    WEB = "WEB"
+    CONSULENZA = "CONSULENZA"
+    SPOT = "SPOT"
+
+class ServiceCadenza(str, enum.Enum):
+    MENSILE = "MENSILE"
+    SEMESTRALE = "SEMESTRALE"
+    ANNUALE = "ANNUALE"
+    UNA_TANTUM = "UNA_TANTUM"
+
 class ProjectType(str, enum.Enum):
     RETAINER = "RETAINER"
     ONE_OFF = "ONE_OFF"
@@ -141,6 +154,7 @@ class Progetto(Base):
     cliente: Mapped["Cliente"] = relationship(back_populates="progetti")
     commesse_link: Mapped[List["CommessaProgetto"]] = relationship(back_populates="progetto")
     team: Mapped[List["ProgettoTeam"]] = relationship(back_populates="progetto")
+    servizi: Mapped[List["ServizioProgetto"]] = relationship(back_populates="progetto", cascade="all, delete-orphan", lazy="selectin")
 
 
 class ProgettoTeam(Base):
@@ -155,6 +169,26 @@ class ProgettoTeam(Base):
     progetto: Mapped["Progetto"] = relationship(back_populates="team")
     user: Mapped["User"] = relationship()
 
+
+
+# ── SERVIZIO PROGETTO ─────────────────────────────────────
+class ServizioProgetto(Base):
+    __tablename__ = "servizi_progetto"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    progetto_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id", ondelete="CASCADE"))
+    tipo: Mapped[ServiceType] = mapped_column(SAEnum(ServiceType, name="servicetype"), default=ServiceType.SOCIAL)
+    nome: Mapped[Optional[str]] = mapped_column(String(100))
+    valore_fisso: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    valore_variabile: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    contenuti_previsti: Mapped[Optional[int]] = mapped_column(Integer)
+    cadenza: Mapped[ServiceCadenza] = mapped_column(SAEnum(ServiceCadenza, name="servicecadenza"), default=ServiceCadenza.MENSILE)
+    attivo: Mapped[bool] = mapped_column(Boolean, default=True)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    progetto: Mapped["Progetto"] = relationship(back_populates="servizi")
 
 # ── COMMESSA ──────────────────────────────────────────────
 class Commessa(Base):
