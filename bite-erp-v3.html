@@ -1199,8 +1199,10 @@ function ClienteDetailScreen({state,dispatch,clienteId,setPage,setDrillProgetto}
               const u=state.users.find(x=>x.id===t.user_id);
               const p=state.progetti.find(x=>x.id===t.progetto_id);
               const task=CLICKUP_TASKS.find(x=>x.id===t.clickup_task_id);
+              const _brandNote=t.note?t.note.replace('[CSV]','').split('|')[0].trim():null;
+              const _brandNome=p?.nome||_brandNote||'—';
               return <TR key={t.id}>
-                <Td muted>{p?.nome||'—'}</Td>
+                <Td muted>{_brandNome}</Td>
                 <Td>{task?.name||t.servizio||'—'}</Td>
                 <Td>{u?<div style={{display:'flex',alignItems:'center',gap:6}}><Av u={u} size={20}/><span>{u.nome}</span></div>:'—'}</Td>
                 <Td mono muted>{t.data_attivita}</Td>
@@ -1297,6 +1299,12 @@ function ProgettiScreen({state,dispatch,setPage,setDrillProgetto,api}) {
           }
         }else{
           saved=await api.updateProgetto(modal.id,{nome:payload.nome,tipo:payload.tipo,stato:item.stato,importo_fisso:payload.importo_fisso,importo_variabile:payload.importo_variabile,delivery_attesa:payload.delivery_attesa,note:payload.note},{local:item});
+          const idAttuali=servizi.filter(s=>!s.isNew&&s.id).map(s=>s.id);
+          const svPrecedenti=await api.listServizi(modal.id);
+          const daEliminare=svPrecedenti.filter(s=>!idAttuali.includes(s.id));
+          for(const s of daEliminare){
+            await api.deleteServizio(modal.id,s.id);
+          }
           const esistenti=servizi.filter(s=>!s.isNew&&s.id);
           const nuovi=servizi.filter(s=>s.isNew);
           for(const s of esistenti){
@@ -1469,7 +1477,7 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
     setModal('new');
   };
   const openEdit=cm=>{setForm({...cm,delivery_per_progetto:{...(cm.delivery_per_progetto||{})},progetti_ids:[...cm.progetti_ids],costi_diretti:cm.costi_diretti||0});setModal(cm);};
-  const closeModal=()=>{setModal(null);setForm({});setServizi([]);};
+  const closeModal=()=>{setModal(null);setForm({});};
 
   const onClienteChange=cid=>{
     const pIds=state.progetti.filter(p=>p.cliente_id===cid&&p.stato==='ATTIVO').map(p=>p.id);
@@ -1478,16 +1486,17 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
 
   // calcola anteprima fatturabile
   const previewFatt=(f)=>{
-    const base=f.progetti_ids.reduce((s,pid)=>{
+    const base=(f.progetti_ids||[]).reduce((s,pid)=>{
       const p=progettoMap[pid]||{};
-      const snap=(f.snapshot_per_progetto||{})[pid]||{};
-      const dc=(f.delivery_per_progetto||{})[pid] ?? snap.delivery_consuntiva ?? 0;
-      return s+fatt(
-        snap.importo_fisso ?? p.importo_fisso ?? 0,
-        snap.importo_variabile ?? p.importo_variabile ?? 0,
-        snap.delivery_attesa ?? p.delivery_attesa ?? 0,
-        dc
-      );
+      const svList=(p.servizi||[]).length>0 ? p.servizi : [{id:'legacy',tipo:p.categoria==='WEB'?'WEB':'SOCIAL',valore_fisso:p.importo_fisso,valore_variabile:p.importo_variabile,contenuti_previsti:p.delivery_attesa}];
+      return s+svList.reduce((ss,sv)=>{
+        if(sv.tipo==='SOCIAL'){
+          const da=parseInt(sv.contenuti_previsti)||0;
+          const dc=(f.delivery_per_progetto||{})[pid+'_'+sv.id] ?? (f.delivery_per_progetto||{})[pid] ?? 0;
+          return ss+fatt(parseFloat(sv.valore_fisso)||0,parseFloat(sv.valore_variabile)||0,da,dc);
+        }
+        return ss+(parseFloat(sv.valore_fisso)||0);
+      },0);
     },0);
     const aggiust=(f.aggiustamenti||[]).reduce((s,a)=>s+(parseFloat(a.importo)||0),0);
     return base+aggiust;
@@ -1593,35 +1602,52 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
           <div style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',marginBottom:10}}>PROGETTI AGGREGATI IN QUESTA COMMESSA</div>
           {form.progetti_ids.map(pid=>{
             const p=progettoMap[pid]; if(!p) return null;
-            const snap=(form.snapshot_per_progetto||{})[pid]||{};
-            const da=snap.delivery_attesa ?? p.delivery_attesa ?? 0;
-            const dc=(form.delivery_per_progetto||{})[pid] ?? snap.delivery_consuntiva ?? 0;
-            const pFatt=fatt(
-              snap.importo_fisso ?? p.importo_fisso ?? 0,
-              snap.importo_variabile ?? p.importo_variabile ?? 0,
-              da, dc
-            );
-            return <div key={pid} style={{padding:'8px 0',borderBottom:'1px solid rgba(255,255,255,.06)'}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:da>0?6:0}}>
-                <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                  <Badge s={p.categoria}/>
-                  <span style={{fontWeight:600,fontSize:12}}>{p.nome}</span>
-                </div>
+            const svList=(p.servizi||[]).length>0 ? p.servizi : [{id:'legacy',tipo:p.categoria==='WEB'?'WEB':'SOCIAL',nome:p.nome,valore_fisso:p.importo_fisso,valore_variabile:p.importo_variabile,contenuti_previsti:p.delivery_attesa}];
+            const tipoColMap={SOCIAL:'var(--violet)',WEB:'#60a5fa',CONSULENZA:'#34d399',SPOT:'#fbbf24'};
+            const totProg=svList.reduce((s,sv)=>{
+              if(sv.tipo==='SOCIAL'){
+                const da=parseInt(sv.contenuti_previsti)||0;
+                const dc=(form.delivery_per_progetto||{})[pid+'_'+sv.id] ?? (form.delivery_per_progetto||{})[pid] ?? 0;
+                return s+fatt(parseFloat(sv.valore_fisso)||0,parseFloat(sv.valore_variabile)||0,da,dc);
+              }
+              return s+(parseFloat(sv.valore_fisso)||0);
+            },0);
+            return <div key={pid} style={{marginBottom:8,padding:'10px 12px',background:'rgba(255,255,255,.03)',borderRadius:8,border:'1px solid rgba(255,255,255,.07)'}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                <span style={{fontWeight:700,fontSize:12}}>{p.nome}</span>
                 <div style={{display:'flex',alignItems:'center',gap:10}}>
-                  <span style={{fontFamily:'var(--fm)',fontSize:12,color:'var(--violet)'}}>{fmtEuro(pFatt)}</span>
+                  <span style={{fontFamily:'var(--fm)',fontSize:12,color:'var(--violet)',fontWeight:700}}>{fmtEuro(totProg)}</span>
                   <button type='button' onClick={()=>setForm(f=>({
                     ...f,
                     progetti_ids:(f.progetti_ids||[]).filter(id=>id!==pid),
-                    delivery_per_progetto:Object.fromEntries(Object.entries(f.delivery_per_progetto||{}).filter(([k])=>k!==pid)),
-                  }))} style={{padding:'2px 7px',borderRadius:5,border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.1)',color:'var(--red)',fontSize:11,cursor:'pointer'}} title='Rimuovi progetto'>✕</button>
+                    delivery_per_progetto:Object.fromEntries(Object.entries(f.delivery_per_progetto||{}).filter(([k])=>!k.startsWith(pid))),
+                  }))} style={{padding:'2px 7px',borderRadius:5,border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.1)',color:'var(--red)',fontSize:11,cursor:'pointer'}}>✕</button>
                 </div>
               </div>
-              {da>0&&<div style={{display:'flex',alignItems:'center',gap:10}}>
-                <span style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)'}}>Delivery consuntiva:</span>
-                <input type='number' min='0' value={dc} onChange={e=>{setForm(f=>({...f,delivery_per_progetto:{...(f.delivery_per_progetto||{}),[pid]:parseInt(e.target.value)||0}}));}} style={{width:80,padding:'4px 8px',fontSize:12}}/>
-                <span style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)'}}>/ {da} attesi</span>
-                {dc>da&&<span style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--amber)'}}>⬆ over delivery +{dc-da}</span>}
-              </div>}
+              {svList.map((sv,si)=>{
+                const svKey=pid+'_'+sv.id;
+                const col=tipoColMap[sv.tipo]||'var(--violet)';
+                if(sv.tipo==='SOCIAL'){
+                  const da=parseInt(sv.contenuti_previsti)||0;
+                  const dc=(form.delivery_per_progetto||{})[svKey] ?? (si===0?(form.delivery_per_progetto||{})[pid]:0) ?? 0;
+                  const svFatt=fatt(parseFloat(sv.valore_fisso)||0,parseFloat(sv.valore_variabile)||0,da,dc);
+                  return <div key={sv.id||si} style={{display:'flex',alignItems:'center',gap:8,padding:'5px 0',borderTop:'1px solid rgba(255,255,255,.05)'}}>
+                    <span style={{fontFamily:'var(--fm)',fontSize:10,color:col,minWidth:70}}>◆ {sv.tipo}</span>
+                    <span style={{fontSize:11,color:'var(--g4)',flex:1}}>{sv.nome&&sv.nome!==sv.tipo?sv.nome:''}</span>
+                    <span style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)'}}>Delivery:</span>
+                    <input type='number' min='0' value={dc} onChange={e=>setForm(f=>({...f,delivery_per_progetto:{...(f.delivery_per_progetto||{}),[svKey]:parseInt(e.target.value)||0,[pid]:parseInt(e.target.value)||0}}))} style={{width:60,padding:'3px 6px',fontSize:12,borderRadius:5,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--g6)'}}/>
+                    <span style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)'}}>/ {da}</span>
+                    {dc>da&&<span style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--amber)'}}>+{dc-da}</span>}
+                    <span style={{fontFamily:'var(--fm)',fontSize:11,color:col,minWidth:60,textAlign:'right'}}>{fmtEuro(svFatt)}</span>
+                  </div>;
+                } else {
+                  return <div key={sv.id||si} style={{display:'flex',alignItems:'center',gap:8,padding:'5px 0',borderTop:'1px solid rgba(255,255,255,.05)'}}>
+                    <span style={{fontFamily:'var(--fm)',fontSize:10,color:col,minWidth:70}}>◆ {sv.tipo}</span>
+                    <span style={{fontSize:11,color:'var(--g4)',flex:1}}>{sv.nome&&sv.nome!==sv.tipo?sv.nome:''}</span>
+                    <span style={{fontFamily:'var(--fm)',fontSize:11,color:col,minWidth:60,textAlign:'right'}}>{fmtEuro(parseFloat(sv.valore_fisso)||0)}</span>
+                  </div>;
+                }
+              })}
             </div>;
           })}
 
@@ -1809,10 +1835,14 @@ function CommessaDetailScreen({state,commessaId,setPage,onChiudi}) {
           <tbody>
             {tsComm.map(t=>{
               const u=userMap[t.user_id]; const p=progettoMap[t.progetto_id];
+              const _brandNote=t.note?t.note.replace('[CSV]','').split('|')[0].trim():null;
+              const _brandNome=p?.nome||_brandNote||'—';
               const task=CLICKUP_TASKS.find(x=>x.id===t.clickup_task_id);
+              const brandNote=t.note?t.note.replace('[CSV]','').split('|')[0].trim():null;
+              const brandNome=p?.nome||brandNote||'—';
               return <TR key={t.id}>
                 <Td>{u?<div style={{display:'flex',alignItems:'center',gap:6}}><Av u={u} size={20}/><span style={{fontWeight:600}}>{u.nome}</span></div>:'—'}</Td>
-                <Td muted>{p?.nome||'—'}</Td>
+                <Td muted>{brandNome}</Td>
                 <Td>{task?.name||'—'}</Td>
                 <Td mono muted>{t.data_attivita}</Td>
                 <Td mono>{fmtMin(t.durata_minuti)}</Td>
@@ -1991,6 +2021,8 @@ function TimesheetScreen({state,dispatch,api,authUser}) {
           <tbody>
             {fil.map(t=>{
               const u=userMap[t.user_id]; const p=progettoMap[t.progetto_id];
+              const _brandNote=t.note?t.note.replace('[CSV]','').split('|')[0].trim():null;
+              const _brandNome=p?.nome||_brandNote||'—';
               const cl=clienteMap[p?.cliente_id];
               const task=CLICKUP_TASKS.find(x=>x.id===t.clickup_task_id);
               return <TR key={t.id}>
@@ -1998,7 +2030,7 @@ function TimesheetScreen({state,dispatch,api,authUser}) {
                 <Td><div style={{maxWidth:220}}>
                   {task?<><div style={{fontSize:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{task.name}</div><Badge s={task.status}/></>:<span style={{color:'var(--g5)',fontFamily:'var(--fm)',fontSize:11}}>—</span>}
                 </div></Td>
-                <Td muted>{cl?`${cl.codice} / ${p?.nome}`:'—'}</Td>
+                <Td muted>{p?`${cl?.codice||''} / ${p.nome}`:_brandNome}</Td>
                 <Td mono muted>{t.data_attivita}</Td>
                 <Td mono>{fmtMin(t.durata_minuti)}</Td>
                 <Td><Badge s={t.stato}/></Td>
@@ -5052,6 +5084,17 @@ function App(){
       const list=await apiFetch('/timesheet/approva',{method:'POST',body:{ids:[id],azione}});
       const commesseMap=Object.fromEntries(state.commesse.map(cm=>[cm.id,cm]));
       return (list||[]).map(item=>normalizeTimesheetFromApi(item,{commesseMap,existingTimesheet:state.timesheet}));
+    },
+    bulkApprova:async(ids,azione)=>{
+      const commesseMap=Object.fromEntries(state.commesse.map(cm=>[cm.id,cm]));
+      const list=await apiFetch('/timesheet/approva',{method:'POST',body:{ids,azione}});
+      return (list||[]).map(item=>normalizeTimesheetFromApi(item,{commesseMap,existingTimesheet:state.timesheet}));
+    },
+    bulkElimina:async(ids)=>{
+      return await apiFetch('/timesheet/bulk',{method:'DELETE',body:{ids}});
+    },
+    bulkCambiaMese:async(ids,mese_competenza)=>{
+      return await apiFetch('/timesheet/bulk-mese',{method:'PATCH',body:{ids,mese_competenza}});
     },
   };
 

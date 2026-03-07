@@ -29,7 +29,7 @@ from app.services.services import (
     list_progetti, get_progetto, create_progetto, update_progetto, get_progetto_with_servizi,
     get_servizi_progetto, create_servizio_progetto, update_servizio_progetto, delete_servizio_progetto,
     list_commesse, get_commessa, create_commessa, update_commessa,
-    create_timesheet, list_timesheet, approva_timesheet,
+    create_timesheet, list_timesheet, approva_timesheet, elimina_timesheet_bulk, aggiorna_mese_competenza_bulk,
     calcola_metriche_commessa,
     get_dashboard_kpi, get_marginalita_clienti,
     sync_fic_data, get_last_fic_sync_status, list_fornitori, list_fatture_attive, list_fatture_passive, incassa_fattura, update_fattura_passiva, list_fornitori_full, update_fornitore, list_movimenti_cassa, list_costi_fissi, create_costo_fisso, update_costo_fisso, delete_costo_fisso,
@@ -687,7 +687,7 @@ async def del_risorsa(risorsa_id: uuid.UUID, db: AsyncSession = Depends(get_db),
 @router.get("/progetti/{progetto_id}/servizi")
 async def list_servizi_progetto_endpoint(progetto_id: uuid.UUID, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
     from app.schemas.schemas import ServizioProgettoOut
-    items = await services.get_servizi_progetto(db, progetto_id)
+    items = await get_servizi_progetto(db, progetto_id)
     return [ServizioProgettoOut.model_validate(i) for i in items]
 
 @router.post("/progetti/{progetto_id}/servizi")
@@ -710,3 +710,27 @@ async def update_servizio_progetto_endpoint(progetto_id: uuid.UUID, servizio_id:
 async def delete_servizio_progetto_endpoint(progetto_id: uuid.UUID, servizio_id: uuid.UUID, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
     await delete_servizio_progetto(db, servizio_id)
     return {"ok": True}
+
+
+@router.delete("/timesheet/bulk", tags=["Timesheet"])
+async def bulk_elimina(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    from app.schemas.schemas import TimesheetBulkDelete
+    body = await request.json()
+    data = TimesheetBulkDelete(**body)
+    return await elimina_timesheet_bulk(db, data.ids, current_user)
+
+
+@router.patch("/timesheet/bulk-mese", tags=["Timesheet"])
+async def bulk_cambia_mese(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    from app.schemas.schemas import TimesheetBulkMese
+    body = await request.json()
+    data = TimesheetBulkMese(**body)
+    return await aggiorna_mese_competenza_bulk(db, data.ids, data.mese_competenza, current_user)

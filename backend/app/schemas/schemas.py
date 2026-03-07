@@ -320,8 +320,15 @@ class TimesheetCreate(BaseModel):
 
 class TimesheetApprova(BaseModel):
     ids: List[uuid.UUID]
-    azione: str  # "APPROVA" o "RIFIUTA"
+    azione: str  # "APPROVA", "RIFIUTA", "PENDING"
     note: Optional[str] = None
+
+class TimesheetBulkDelete(BaseModel):
+    ids: List[uuid.UUID]
+
+class TimesheetBulkMese(BaseModel):
+    ids: List[uuid.UUID]
+    mese_competenza: date  # formato YYYY-MM-01
 
 class TimesheetOut(OrmBase):
     id: uuid.UUID

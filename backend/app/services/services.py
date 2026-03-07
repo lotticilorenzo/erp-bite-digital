@@ -505,11 +505,19 @@ async def approva_timesheet(
         from fastapi import HTTPException
         raise HTTPException(status_code=403, detail="Solo PM e ADMIN possono approvare le ore")
 
-    nuovo_stato = TimesheetStatus.APPROVATO if data.azione == "APPROVA" else TimesheetStatus.RIFIUTATO
+    if data.azione == "APPROVA":
+        nuovo_stato = TimesheetStatus.APPROVATO
+    elif data.azione == "RIFIUTA":
+        nuovo_stato = TimesheetStatus.RIFIUTATO
+    else:
+        nuovo_stato = TimesheetStatus.PENDING
+    # Per APPROVA/RIFIUTA filtriamo solo i PENDING; per PENDING accettiamo qualsiasi stato
+    if nuovo_stato == TimesheetStatus.PENDING:
+        stato_filter = Timesheet.id.in_(data.ids)
+    else:
+        stato_filter = and_(Timesheet.id.in_(data.ids), Timesheet.stato == TimesheetStatus.PENDING)
     result = await db.execute(
-        select(Timesheet).where(
-            and_(Timesheet.id.in_(data.ids), Timesheet.stato == TimesheetStatus.PENDING)
-        )
+        select(Timesheet).where(stato_filter)
     )
     entries = result.scalars().all()
 
@@ -535,9 +543,15 @@ async def approva_timesheet(
         else:
             t.costo_orario_snapshot = None
             t.costo_lavoro = Decimal("0")
+            if nuovo_stato == TimesheetStatus.PENDING:
+                t.approvato_da = None
+                t.approvato_at = None
 
     await db.flush()
-    return entries
+    await db.commit()
+    ids = [t.id for t in entries]
+    result2 = await db.execute(select(Timesheet).options(selectinload(Timesheet.user)).where(Timesheet.id.in_(ids)))
+    return result2.scalars().all()
 
 
 # ── REPORT SERVICE ────────────────────────────────────────
@@ -1915,3 +1929,47 @@ async def delete_servizio_progetto(db: AsyncSession, servizio_id: uuid.UUID):
         await db.delete(s)
         await db.commit()
     return s
+
+
+async def elimina_timesheet_bulk(
+    db: AsyncSession,
+    ids: list,
+    approver
+) -> dict:
+    """Elimina in bulk una lista di timesheet. Solo PM e ADMIN."""
+    if approver.ruolo not in (UserRole.ADMIN, UserRole.PM):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Solo PM e ADMIN possono eliminare le ore")
+
+    result = await db.execute(
+        select(Timesheet).where(Timesheet.id.in_(ids))
+    )
+    entries = result.scalars().all()
+    count = len(entries)
+    for t in entries:
+        await db.delete(t)
+    await db.commit()
+    return {"eliminati": count}
+
+
+async def aggiorna_mese_competenza_bulk(
+    db: AsyncSession,
+    ids: list,
+    mese_competenza,
+    approver
+) -> dict:
+    """Aggiorna mese_competenza in bulk. Solo PM e ADMIN."""
+    if approver.ruolo not in (UserRole.ADMIN, UserRole.PM):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Solo PM e ADMIN possono modificare il mese competenza")
+
+    result = await db.execute(
+        select(Timesheet).where(Timesheet.id.in_(ids))
+    )
+    entries = result.scalars().all()
+    count = len(entries)
+    for t in entries:
+        t.mese_competenza = mese_competenza
+    await db.flush()
+    await db.commit()
+    return {"aggiornati": count}
