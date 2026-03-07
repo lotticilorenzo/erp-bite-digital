@@ -1860,6 +1860,14 @@ async def delete_risorsa(db: AsyncSession, risorsa_id: uuid.UUID):
     await db.commit()
     return True
 
+async def get_progetto_with_servizi(db: AsyncSession, progetto_id):
+    from app.models.models import Progetto, ServizioProgetto
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(
+        select(Progetto).options(selectinload(Progetto.servizi)).where(Progetto.id == progetto_id)
+    )
+    return result.scalar_one_or_none()
+
 # ── SERVIZI PROGETTO ──────────────────────────────────────
 async def get_servizi_progetto(db: AsyncSession, progetto_id: uuid.UUID):
     from app.models.models import ServizioProgetto

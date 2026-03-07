@@ -26,7 +26,8 @@ from app.schemas.schemas import FatturaIncassaRequest, FatturaPassivaUpdate, For
 from app.services.services import (
     get_user_by_email, create_user, list_users, update_user,
     list_clienti, get_cliente, create_cliente, update_cliente, delete_cliente,
-    list_progetti, get_progetto, create_progetto, update_progetto,
+    list_progetti, get_progetto, create_progetto, update_progetto, get_progetto_with_servizi,
+    get_servizi_progetto, create_servizio_progetto, update_servizio_progetto, delete_servizio_progetto,
     list_commesse, get_commessa, create_commessa, update_commessa,
     create_timesheet, list_timesheet, approva_timesheet,
     calcola_metriche_commessa,
@@ -186,7 +187,8 @@ async def add_progetto(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
 ):
-    return await create_progetto(db, data)
+    p = await create_progetto(db, data)
+    return await get_progetto_with_servizi(db, p.id)
 
 @router.patch("/progetti/{progetto_id}", response_model=ProgettoOut, tags=["Progetti"])
 async def patch_progetto(
@@ -198,7 +200,7 @@ async def patch_progetto(
     p = await update_progetto(db, progetto_id, data, current_user.id)
     if not p:
         raise HTTPException(status_code=404, detail="Progetto non trovato")
-    return p
+    return await get_progetto_with_servizi(db, p.id)
 
 
 # ═══════════════════════════════════════════════════════
@@ -683,28 +685,28 @@ async def del_risorsa(risorsa_id: uuid.UUID, db: AsyncSession = Depends(get_db),
 
 # ── SERVIZI PROGETTO ──────────────────────────────────────
 @router.get("/progetti/{progetto_id}/servizi")
-async def list_servizi_progetto(progetto_id: uuid.UUID, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+async def list_servizi_progetto_endpoint(progetto_id: uuid.UUID, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
     from app.schemas.schemas import ServizioProgettoOut
     items = await services.get_servizi_progetto(db, progetto_id)
     return [ServizioProgettoOut.model_validate(i) for i in items]
 
 @router.post("/progetti/{progetto_id}/servizi")
-async def create_servizio_progetto(progetto_id: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+async def create_servizio_progetto_endpoint(progetto_id: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
     from app.schemas.schemas import ServizioProgettoCreate, ServizioProgettoOut
     body = await request.json()
     data = ServizioProgettoCreate(**body)
-    item = await services.create_servizio_progetto(db, progetto_id, data)
+    item = await create_servizio_progetto(db, progetto_id, data)
     return ServizioProgettoOut.model_validate(item)
 
 @router.patch("/progetti/{progetto_id}/servizi/{servizio_id}")
-async def update_servizio_progetto(progetto_id: uuid.UUID, servizio_id: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+async def update_servizio_progetto_endpoint(progetto_id: uuid.UUID, servizio_id: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
     from app.schemas.schemas import ServizioProgettoUpdate, ServizioProgettoOut
     body = await request.json()
     data = ServizioProgettoUpdate(**body)
-    item = await services.update_servizio_progetto(db, servizio_id, data)
+    item = await update_servizio_progetto(db, servizio_id, data)
     return ServizioProgettoOut.model_validate(item)
 
 @router.delete("/progetti/{progetto_id}/servizi/{servizio_id}")
-async def delete_servizio_progetto(progetto_id: uuid.UUID, servizio_id: uuid.UUID, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    await services.delete_servizio_progetto(db, servizio_id)
+async def delete_servizio_progetto_endpoint(progetto_id: uuid.UUID, servizio_id: uuid.UUID, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    await delete_servizio_progetto(db, servizio_id)
     return {"ok": True}
