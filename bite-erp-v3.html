@@ -1123,7 +1123,9 @@ function ClienteDetailScreen({state,dispatch,clienteId,setPage,setDrillProgetto}
   const totMO=commesse.reduce((s,cm)=>s+(cm.costo_manodopera||0),0);
   const margPct=totFatt>0?Math.round((totFatt-totMO)/totFatt*100):0;
 
-  const tsCliente=state.timesheet.filter(t=>progetti.some(p=>p.id===t.progetto_id));
+  const commesseCliente=state.commesse.filter(cm=>cm.cliente_id===clienteId);
+  const commesseClienteIds=new Set(commesseCliente.map(cm=>cm.id));
+  const tsCliente=state.timesheet.filter(t=>t.commessa_id&&commesseClienteIds.has(t.commessa_id));
   const oreClienti=tsCliente.filter(t=>t.stato==='APPROVATO').reduce((s,t)=>s+t.durata_minuti,0);
 
   return <div className='fu'>
@@ -3174,7 +3176,8 @@ function ProgettoDetailScreen({state,progettoId,setPage}) {
   // Commesse di questo progetto (storico)
   const commesse=state.commesse.filter(cm=>cm.progetti_ids.includes(p.id)).sort((a,b)=>b.mese_competenza.localeCompare(a.mese_competenza));
   // Timesheet del progetto
-  const ts=state.timesheet.filter(t=>t.progetto_id===p.id);
+  const commesseIds=new Set(commesse.map(cm=>cm.id));
+  const ts=state.timesheet.filter(t=>(t.commessa_id&&commesseIds.has(t.commessa_id)));
   const oreAppr=ts.filter(t=>t.stato==='APPROVATO').reduce((s,t)=>s+t.durata_minuti,0);
   // KPI comuni
   const totFatt=commesse.reduce((s,cm)=>{const dc=(cm.delivery_per_progetto||{})[p.id]||0;return s+fatt(p.importo_fisso,p.importo_variabile,p.delivery_attesa,dc);},0);
