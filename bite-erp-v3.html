@@ -1866,6 +1866,10 @@ function TimesheetScreen({state,dispatch,api,authUser}) {
   const [taskFil,setTaskFil]=useState('');
   const [saving,setSaving]=useState(false);
   const [processing,setProcessing]=useState(null);
+  const [selectedIds,setSelectedIds]=useState(new Set());
+  const [bulkProcessing,setBulkProcessing]=useState(false);
+  const [bulkMeseModal,setBulkMeseModal]=useState(false);
+  const [bulkMese,setBulkMese]=useState('');
 
   const userMap    =useMemo(()=>Object.fromEntries(state.users.map(u=>[u.id,u])),[state.users]);
   const progettoMap=useMemo(()=>Object.fromEntries(state.progetti.map(p=>[p.id,p])),[state.progetti]);
@@ -1939,6 +1943,36 @@ function TimesheetScreen({state,dispatch,api,authUser}) {
   const pending=state.timesheet.filter(t=>t.stato==='PENDING').length;
   const oreAppr=state.timesheet.filter(t=>t.stato==='APPROVATO').reduce((s,t)=>s+t.durata_minuti,0);
   const canApprove=(authUser?.ruolo==='ADMIN'||authUser?.ruolo==='PM');
+  const allFiltIds=fil.map(t=>t.id);
+  const allSelected=allFiltIds.length>0&&allFiltIds.every(id=>selectedIds.has(id));
+  const toggleAll=()=>{if(allSelected){setSelectedIds(new Set());}else{setSelectedIds(new Set(allFiltIds));}};
+  const toggleOne=id=>{setSelectedIds(prev=>{const s=new Set(prev);s.has(id)?s.delete(id):s.add(id);return s;});};
+  const bulkAzione=async(azione)=>{
+    if(!api?.enabled||selectedIds.size===0)return;
+    if(azione==='ELIMINA'&&!window.confirm('Eliminare '+selectedIds.size+' record definitivamente?'))return;
+    try{
+      setBulkProcessing(true);
+      if(azione==='ELIMINA'){
+        await api.bulkElimina([...selectedIds]);
+        [...selectedIds].forEach(id=>dispatch({type:'REMOVE',entity:'timesheet',id}));
+      }else{
+        const list=await api.bulkApprova([...selectedIds],azione);
+        (list||[]).forEach(item=>dispatch({type:'UPSERT',entity:'timesheet',item}));
+      }
+      setSelectedIds(new Set());
+    }catch(err){alert('Errore bulk: '+(err.message||'operazione non riuscita'));}
+    finally{setBulkProcessing(false);}
+  };
+  const bulkCambiaMese=async()=>{
+    if(!api?.enabled||selectedIds.size===0||!bulkMese)return;
+    try{
+      setBulkProcessing(true);
+      await api.bulkCambiaMese([...selectedIds],bulkMese+'-01');
+      [...selectedIds].forEach(id=>{const t=state.timesheet.find(x=>x.id===id);if(t)dispatch({type:'UPDATE',entity:'timesheet',item:{...t,mese_competenza:bulkMese}});});
+      setSelectedIds(new Set());setBulkMeseModal(false);
+    }catch(err){alert('Errore cambio mese: '+(err.message||'operazione non riuscita'));}
+    finally{setBulkProcessing(false);}
+  };
 
   const selectedTask=CLICKUP_TASKS.find(t=>t.id===form.clickup_task_id);
 
@@ -2017,7 +2051,10 @@ function TimesheetScreen({state,dispatch,api,authUser}) {
         <CH title='Registrazioni ore' meta={`${fil.length} voci`} action={<Btn v='primary' onClick={openNew} s={{fontSize:11,padding:'5px 10px'}}>+ Registra</Btn>}/>
         {fil.length===0?<Empty msg='Nessuna registrazione'/>:
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
-          <thead><tr><Th c='Risorsa'/><Th c='Task ClickUp'/><Th c='Progetto'/><Th c='Data'/><Th c='Durata'/><Th c='Stato'/><Th c='Azioni'/></tr></thead>
+          <thead><tr>
+            <th style={{padding:'8px 10px',textAlign:'center',width:36}}><input type='checkbox' checked={allSelected} onChange={toggleAll} style={{cursor:'pointer',accentColor:'var(--purple)'}} title={allSelected?'Deseleziona tutti':'Seleziona tutti'}/></th>
+            <Th c='Risorsa'/><Th c='Task ClickUp'/><Th c='Progetto'/><Th c='Data'/><Th c='Durata'/><Th c='Stato'/><Th c='Azioni'/>
+          </tr></thead>
           <tbody>
             {fil.map(t=>{
               const u=userMap[t.user_id]; const p=progettoMap[t.progetto_id];
@@ -2025,7 +2062,8 @@ function TimesheetScreen({state,dispatch,api,authUser}) {
               const _brandNome=p?.nome||_brandNote||'—';
               const cl=clienteMap[p?.cliente_id];
               const task=CLICKUP_TASKS.find(x=>x.id===t.clickup_task_id);
-              return <TR key={t.id}>
+              return <TR key={t.id} style={{background:selectedIds.has(t.id)?'rgba(176,96,224,.07)':undefined}}>
+                <td style={{padding:'8px 10px',textAlign:'center'}}><input type='checkbox' checked={selectedIds.has(t.id)} onChange={()=>toggleOne(t.id)} style={{cursor:'pointer',accentColor:'var(--purple)'}}/></td>
                 <Td>{u?<div style={{display:'flex',alignItems:'center',gap:8}}><Av u={u} size={24}/><span style={{fontWeight:600}}>{u.nome} {u.cognome}</span></div>:'—'}</Td>
                 <Td><div style={{maxWidth:220}}>
                   {task?<><div style={{fontSize:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{task.name}</div><Badge s={task.status}/></>:<span style={{color:'var(--g5)',fontFamily:'var(--fm)',fontSize:11}}>—</span>}
