@@ -293,6 +293,7 @@ function reducer(state, action) {
     case 'ADD':    return {...state,[action.entity]:[...state[action.entity],action.item]};
     case 'UPDATE': return {...state,[action.entity]:state[action.entity].map(x=>x.id===action.item.id?action.item:x)};
     case 'DELETE': return {...state,[action.entity]:state[action.entity].filter(x=>x.id!==action.id)};
+    case 'REMOVE': return {...state,[action.entity]:state[action.entity].filter(x=>x.id!==action.id)};
     case 'SET_ENTITY': return {...state,[action.entity]:action.items};
     case 'UPSERT': {
       const arr=state[action.entity]||[];
@@ -2041,6 +2042,22 @@ function TimesheetScreen({state,dispatch,api,authUser}) {
       <Btn v='primary' onClick={openNew}>+ Registra ore</Btn>
     </Topbar>
     <div style={{padding:'22px 26px'}}>
+      {selectedIds.size>0&&<div style={{display:'flex',alignItems:'center',gap:10,padding:'10px 16px',marginBottom:16,borderRadius:10,background:'rgba(176,96,224,.13)',border:'1px solid rgba(176,96,224,.25)'}}>
+        <span style={{fontFamily:'var(--fm)',fontSize:12,fontWeight:600,color:'var(--purple)',minWidth:130}}>{selectedIds.size} selezionati</span>
+        {canApprove&&<>
+          <Btn v='success' onClick={()=>bulkAzione('APPROVA')} disabled={bulkProcessing} s={{padding:'5px 12px',fontSize:11}}>✓ Approva selezionati</Btn>
+          <Btn v='secondary' onClick={()=>bulkAzione('PENDING')} disabled={bulkProcessing} s={{padding:'5px 12px',fontSize:11}}>↩ Metti in Pending</Btn>
+          <Btn v='danger' onClick={()=>bulkAzione('ELIMINA')} disabled={bulkProcessing} s={{padding:'5px 12px',fontSize:11}}>🗑 Elimina</Btn>
+          <Btn v='secondary' onClick={()=>{setBulkMese(currMese());setBulkMeseModal(true);}} disabled={bulkProcessing} s={{padding:'5px 12px',fontSize:11}}>📅 Cambia mese</Btn>
+        </>}
+        <button onClick={()=>setSelectedIds(new Set())} style={{marginLeft:'auto',background:'none',border:'none',color:'var(--g4)',fontSize:18,cursor:'pointer',lineHeight:1}}>×</button>
+      </div>}
+      {bulkMeseModal&&<Modal title='Cambia mese competenza' onClose={()=>setBulkMeseModal(false)} width={340}>
+        <div style={{padding:'8px 0 16px'}}>
+          <FRow label='Nuovo mese competenza'><input type='month' value={bulkMese} onChange={e=>setBulkMese(e.target.value)} required/></FRow>
+          <FActions onCancel={()=>setBulkMeseModal(false)} submitLabel={bulkProcessing?'Salvataggio...':'Applica a '+selectedIds.size+' record'} onSubmit={e=>{e.preventDefault();bulkCambiaMese();}}/>
+        </div>
+      </Modal>}
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:22}}>
         <KPI label='Ore approvate' value={fmtMin(oreAppr)} delay={.05}/>
         <KPI label='Da approvare' value={pending} delay={.08} warn={pending>0} color={pending>0?'var(--amber)':undefined}/>
