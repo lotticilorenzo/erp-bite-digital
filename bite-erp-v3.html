@@ -4965,7 +4965,7 @@ function App(){
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
       body:JSON.stringify(body)
     });
-    if(res.ok){ const ts=await res.json(); dispatch({type:'ADD',collection:'timesheet',item:ts}); return true; }
+    if(res.ok){ const ts=await res.json(); dispatch({type:'UPSERT',entity:'timesheet',item:ts}); return true; }
     return false;
   };
 

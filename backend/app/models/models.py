@@ -332,6 +332,9 @@ class Timesheet(Base):
     approvato_da: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     approvato_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     note: Mapped[Optional[str]] = mapped_column(Text)
+    clickup_task_id: Mapped[Optional[str]] = mapped_column(String(50))
+    clickup_parent_task_id: Mapped[Optional[str]] = mapped_column(String(50))
+    task_display_name: Mapped[Optional[str]] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

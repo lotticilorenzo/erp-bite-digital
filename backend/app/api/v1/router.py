@@ -921,6 +921,7 @@ async def add_timesheet_manuale(
 
     # Crea timesheet
     from sqlalchemy import select as sa_select
+    from app.models.models import User as UserModel
     co_res = await db.execute(sa_select(UserModel.costo_orario).where(UserModel.id == current_user.id))
     costo_orario = co_res.scalar_one_or_none() or 0
     costo_lavoro = round((durata / 60.0) * float(costo_orario or 0), 2)
