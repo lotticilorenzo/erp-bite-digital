@@ -1517,6 +1517,7 @@ const STATI_CM=['APERTA','PRONTA_CHIUSURA','CHIUSA','FATTURATA','INCASSATA'];
 function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) {
   const [filterStato,setFilterStato]=useState('TUTTI');
   const [filterMese,setFilterMese]=useState(currMese());
+  const [filterSearch,setFilterSearch]=useState('');
   const [modal,setModal]=useState(null);
   const [confirm,setConfirm]=useState(null);
   const [form,setForm]=useState({});
@@ -1641,7 +1642,11 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
   };
 
   const mesiDisponibili=useMemo(()=>{const s=new Set(state.commesse.map(c=>c.mese_competenza));s.add(currMese());return [...s].sort().reverse();},[state.commesse]);
-  const fil=state.commesse.filter(c=>(filterStato==='TUTTI'||c.stato===filterStato)&&(!filterMese||c.mese_competenza===filterMese));
+  const fil=state.commesse.filter(c=>{
+    const cl=clienteMap[c.cliente_id];
+    const search=filterSearch.toLowerCase();
+    return (filterStato==='TUTTI'||c.stato===filterStato)&&(!filterMese||c.mese_competenza===filterMese)&&(!search||cl?.ragione_sociale?.toLowerCase().includes(search)||cl?.codice?.toLowerCase().includes(search));
+  });
   const totFatt=fil.reduce((s,cm)=>s+previewFatt(cm),0);
 
   return <div className='fu'>
@@ -1744,6 +1749,7 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
     </Modal>}
 
     <Topbar title='Commesse'>
+      <input type='text' placeholder='Cerca cliente...' value={filterSearch} onChange={e=>setFilterSearch(e.target.value)} style={{width:160,height:34,padding:'0 12px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--fg)',fontSize:13}}/>
       <select value={filterMese} onChange={e=>setFilterMese(e.target.value)} style={{width:140,height:34,padding:'0 10px'}}>
         <option value=''>Tutti i mesi</option>
         {mesiDisponibili.map(m=><option key={m} value={m}>{meseFmt(m)}</option>)}
