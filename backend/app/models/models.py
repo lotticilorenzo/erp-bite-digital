@@ -83,6 +83,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     ruolo: Mapped[UserRole] = mapped_column(SAEnum(UserRole, name="user_role"))
     costo_orario: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    clickup_user_id: Mapped[Optional[str]] = mapped_column(String(50))
     attivo: Mapped[bool] = mapped_column(Boolean, default=True)
     data_inizio: Mapped[Optional[date]] = mapped_column(Date)
     data_fine: Mapped[Optional[date]] = mapped_column(Date)

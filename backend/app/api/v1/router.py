@@ -23,6 +23,7 @@ from app.schemas.schemas import (
     FornitoreOut, FatturaAttivaOut, FatturaPassivaOut, FicSyncStatusOut,
 )
 from app.schemas.schemas import FatturaIncassaRequest, FatturaPassivaUpdate, FornitoreUpdate, FornitoreOut
+import httpx
 from app.services.services import (
     get_user_by_email, create_user, list_users, update_user,
     list_clienti, get_cliente, create_cliente, update_cliente, delete_cliente,
@@ -734,3 +735,213 @@ async def bulk_cambia_mese(
     body = await request.json()
     data = TimesheetBulkMese(**body)
     return await aggiorna_mese_competenza_bulk(db, data.ids, data.mese_competenza, current_user)
+
+
+# ═══════════════════════════════════════════════════════
+# CLICKUP — task lookup per timer
+# ═══════════════════════════════════════════════════════
+
+CLICKUP_BASE = "https://api.clickup.com/api/v2"
+CLICKUP_TEAM_ID = "9015889235"
+
+async def _cu_get(path: str) -> dict:
+    import os
+    token = os.getenv("CLICKUP_TOKEN", "")
+    if not token:
+        raise HTTPException(status_code=500, detail="CLICKUP_TOKEN non configurato")
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(
+            f"{CLICKUP_BASE}{path}",
+            headers={"Authorization": token}
+        )
+        r.raise_for_status()
+        return r.json()
+
+
+@router.get("/clickup/users", tags=["ClickUp"])
+async def get_clickup_members(
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    """Lista membri workspace ClickUp con ID — per configurare clickup_user_id su users"""
+    data = await _cu_get(f"/team/{CLICKUP_TEAM_ID}/member")
+    members = []
+    for m in data.get("members", []):
+        u = m.get("user", {})
+        members.append({
+            "clickup_id": u.get("id"),
+            "username": u.get("username"),
+            "email": u.get("email"),
+        })
+    return {"members": members}
+
+
+@router.get("/clickup/tasks", tags=["ClickUp"])
+async def get_clickup_tasks_per_utente(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Ritorna i task ClickUp open assegnati all utente corrente.
+    Usa /team/tasks con filtro assignee — 1 sola chiamata API invece di N*M.
+    """
+    from sqlalchemy import select
+    from app.models.models import User as UserModel
+    result = await db.execute(
+        select(UserModel.clickup_user_id).where(UserModel.id == current_user.id)
+    )
+    row = result.fetchone()
+    if not row or not row.clickup_user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="clickup_user_id non configurato — chiedi all admin di impostarlo"
+        )
+    cu_user_id = str(row.clickup_user_id)
+
+    # 1 chiamata per tutti i task assegnati, include subtask, escludi chiusi
+    # Pagina fino a 200 task (sufficiente per un team piccolo)
+    all_tasks = []
+    page = 0
+    while True:
+        data = await _cu_get(
+            f"/team/{CLICKUP_TEAM_ID}/task"
+            f"?assignees[]={cu_user_id}"
+            f"&include_closed=false&subtasks=true"
+            f"&page={page}&order_by=due_date&reverse=true"
+        )
+        batch = data.get("tasks", [])
+        all_tasks.extend(batch)
+        if len(batch) < 100 or page >= 1:
+            break
+        page += 1
+
+    # Mappa id → {name, folder} per risolvere parent e cliente
+    id_to_task = {t["id"]: t for t in all_tasks}
+
+    tasks_out = []
+    for task in all_tasks:
+        parent_id = task.get("parent")
+        folder = task.get("folder", {})
+        space = task.get("space", {})
+
+        # Salta task dello space BITE (interno)
+        if space.get("id") == "90153479822":
+            continue
+
+        cliente_nome = folder.get("name", "—")
+        folder_id = folder.get("id", "")
+
+        if parent_id:
+            parent_task = id_to_task.get(parent_id)
+            parent_name = parent_task["name"] if parent_task else parent_id
+            display_name = f"{parent_name} · {task['name']}"
+        else:
+            display_name = task["name"]
+
+        tasks_out.append({
+            "id": task["id"],
+            "name": task["name"],
+            "display_name": display_name,
+            "parent_id": parent_id,
+            "parent_name": id_to_task[parent_id]["name"] if parent_id and parent_id in id_to_task else None,
+            "cliente_nome": cliente_nome,
+            "folder_id": folder_id,
+            "list_name": task.get("list", {}).get("name", ""),
+            "status": task.get("status", {}).get("status", ""),
+            "url": task.get("url", ""),
+        })
+
+    # Raggruppa per cliente
+    grouped = {}
+    for t in tasks_out:
+        k = t["cliente_nome"]
+        if k not in grouped:
+            grouped[k] = {"cliente_nome": k, "folder_id": t["folder_id"], "tasks": []}
+        grouped[k]["tasks"].append(t)
+
+    return {"clienti": list(grouped.values()), "totale_task": len(tasks_out)}
+
+
+# ═══════════════════════════════════════════════════════
+# TIMESHEET MANUALE (da timer o inserimento libero)
+# ═══════════════════════════════════════════════════════
+
+@router.post("/timesheet/manuale", response_model=TimesheetOut, status_code=201, tags=["Timesheet"])
+async def add_timesheet_manuale(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Crea un timesheet da timer BiteERP o inserimento manuale.
+    Accetta: cliente_id, clickup_task_id, clickup_parent_task_id,
+             task_display_name, servizio, durata_minuti, data_attivita, note
+    """
+    from app.models.models import Timesheet, TimesheetStatus, Commessa
+    from sqlalchemy import select
+    import calendar
+
+    body = await request.json()
+
+    # Valida campi obbligatori
+    durata = body.get("durata_minuti")
+    data_str = body.get("data_attivita")
+    if not durata or durata <= 0:
+        raise HTTPException(status_code=400, detail="durata_minuti obbligatorio e > 0")
+    if not data_str:
+        raise HTTPException(status_code=400, detail="data_attivita obbligatorio")
+
+    data_att = date.fromisoformat(data_str)
+    mese_comp = date(data_att.year, data_att.month, 1)
+
+    # Risolvi commessa_id se cliente_id fornito
+    commessa_id = None
+    cliente_id = body.get("cliente_id")
+    if cliente_id:
+        cm_result = await db.execute(
+            select(Commessa).where(
+                Commessa.cliente_id == uuid.UUID(cliente_id),
+                Commessa.mese_competenza == mese_comp
+            )
+        )
+        cm = cm_result.scalar_one_or_none()
+        if cm:
+            commessa_id = cm.id
+        else:
+            # Crea commessa APERTA per il mese corrente se non esiste
+            new_cm = Commessa(
+                id=uuid.uuid4(),
+                cliente_id=uuid.UUID(cliente_id),
+                mese_competenza=mese_comp,
+                stato=CommessaStatus.APERTA,
+                costo_manodopera=0
+            )
+            db.add(new_cm)
+            await db.flush()
+            commessa_id = new_cm.id
+
+    # Crea timesheet
+    from sqlalchemy import select as sa_select
+    co_res = await db.execute(sa_select(UserModel.costo_orario).where(UserModel.id == current_user.id))
+    costo_orario = co_res.scalar_one_or_none() or 0
+    costo_lavoro = round((durata / 60.0) * float(costo_orario or 0), 2)
+
+    ts = Timesheet(
+        id=uuid.uuid4(),
+        user_id=current_user.id,
+        commessa_id=commessa_id,
+        data_attivita=data_att,
+        mese_competenza=mese_comp,
+        servizio=body.get("servizio"),
+        durata_minuti=durata,
+        costo_orario_snapshot=costo_orario,
+        costo_lavoro=costo_lavoro,
+        stato=TimesheetStatus.PENDING,
+        note=body.get("note"),
+        clickup_task_id=body.get("clickup_task_id"),
+        clickup_parent_task_id=body.get("clickup_parent_task_id"),
+        task_display_name=body.get("task_display_name"),
+    )
+    db.add(ts)
+    await db.commit()
+    await db.refresh(ts)
+    return ts

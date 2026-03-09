@@ -383,6 +383,60 @@ const CH=({title,meta,action})=><div style={{padding:'14px 18px',borderBottom:'1
   <div><div style={{fontSize:13,fontWeight:700}}>{title}</div>{meta&&<div style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',marginTop:2}}>{meta}</div>}</div>
   {action}
 </div>;
+const SERVIZI=['Social Media','Grafica','Copy','Advertising','Web','SEO','Video','Strategia','Amministrazione','Altro'];
+
+const TimerBar=({timerStatus,timerSeconds,timerTask,timerCliente,fmtTimer,
+  onStart,onPause,onResume,onStop,onManual,onCancel})=>{
+  const idle=timerStatus==='idle', running=timerStatus==='running', paused=timerStatus==='paused';
+  return <div style={{
+    position:'fixed',bottom:0,left:0,right:0,zIndex:200,height:52,
+    display:'flex',alignItems:'center',padding:'0 24px',gap:14,
+    background: running?'linear-gradient(90deg,#1a0a2e,#2d1060)':paused?'rgba(30,20,10,.97)':'rgba(15,15,18,.97)',
+    borderTop: running?'1px solid #b660e0':paused?'1px solid #f0a030':'1px solid rgba(255,255,255,.07)',
+    backdropFilter:'blur(14px)',transition:'background .3s',
+  }}>
+    {(running||paused)?<>
+      <div style={{width:9,height:9,borderRadius:'50%',flexShrink:0,
+        background:running?'#e05560':'#f0a030',
+        boxShadow:running?'0 0 8px #e05560':'0 0 8px #f0a030'}}/>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:11,color:running?'#b660e0':'#f0a030',fontWeight:700,letterSpacing:.6}}>
+          {running?'IN CORSO':'IN PAUSA'}
+        </div>
+        <div style={{fontSize:12,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+          {timerTask?timerTask.display_name:timerCliente?.nome||'—'}
+          {timerTask&&timerCliente&&<span style={{color:'rgba(255,255,255,.35)',marginLeft:6}}>· {timerCliente.nome}</span>}
+        </div>
+      </div>
+      <div style={{fontFamily:'var(--fm)',fontSize:20,fontWeight:700,color:'#fff',letterSpacing:1,minWidth:86,textAlign:'center'}}>
+        {fmtTimer(timerSeconds)}
+      </div>
+      {running?
+        <button onClick={onPause} style={{background:'rgba(240,160,48,.15)',border:'1px solid #f0a030',color:'#f0a030',borderRadius:8,padding:'6px 16px',fontWeight:700,fontSize:12,cursor:'pointer'}}>
+          ⏸ Pausa
+        </button>:
+        <button onClick={onResume} style={{background:'rgba(182,96,224,.15)',border:'1px solid #b660e0',color:'#b660e0',borderRadius:8,padding:'6px 16px',fontWeight:700,fontSize:12,cursor:'pointer'}}>
+          ▶ Riprendi
+        </button>
+      }
+      <button onClick={onCancel} style={{background:'transparent',border:'1px solid rgba(255,255,255,.15)',color:'rgba(255,255,255,.45)',borderRadius:8,padding:'6px 14px',fontSize:11,cursor:'pointer'}}>
+        ✕ Annulla
+      </button>
+      <button onClick={onStop} style={{background:'#e05560',border:'none',color:'#fff',borderRadius:8,padding:'6px 18px',fontWeight:700,fontSize:12,cursor:'pointer'}}>
+        ■ Stop &amp; Salva
+      </button>
+    </>:<>
+      <div style={{flex:1,color:'rgba(255,255,255,.25)',fontSize:12}}>Nessun timer attivo</div>
+      <button onClick={onManual} style={{background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.1)',color:'rgba(255,255,255,.6)',borderRadius:8,padding:'6px 14px',fontSize:12,cursor:'pointer'}}>
+        + Ore manuali
+      </button>
+      <button onClick={onStart} style={{background:'#b660e0',border:'none',color:'#fff',borderRadius:8,padding:'6px 18px',fontWeight:700,fontSize:12,cursor:'pointer'}}>
+        ▶ Avvia timer
+      </button>
+    </>}
+  </div>;
+};
+
 const Topbar=({title,sub,children})=><div style={{minHeight:58,borderBottom:'1px solid var(--g2)',display:'flex',alignItems:'center',padding:'0 28px',gap:12,background:'rgba(9,9,11,.95)',backdropFilter:'blur(10px)',position:'sticky',top:0,zIndex:50,flexWrap:'wrap'}}>
   <div style={{flex:1,minWidth:120}}>
     <div style={{fontSize:17,fontWeight:700,letterSpacing:-.3}}>{title}</div>
@@ -4820,6 +4874,129 @@ function RegoleScreen({state,dispatch}){
 
 
 function App(){
+  // ── TIMER STATE ──────────────────────────────────────────────────────
+  const [timerStatus, setTimerStatus] = React.useState('idle'); // idle|running|paused
+  const [timerSeconds, setTimerSeconds] = React.useState(0);
+  const [timerTask, setTimerTask] = React.useState(null);
+  const [timerCliente, setTimerCliente] = React.useState(null);
+  const [timerServizio, setTimerServizio] = React.useState('');
+  const [timerNota, setTimerNota] = React.useState('');
+  const timerRef = React.useRef(null);
+  const [showTimerModal, setShowTimerModal] = React.useState(false); // false|'start'|'stop'|'manual'
+  const [cuTasks, setCuTasks] = React.useState([]);
+  const [cuLoading, setCuLoading] = React.useState(false);
+  const [timerSelectedTask, setTimerSelectedTask] = React.useState(null);
+  const [timerSelectedCliente, setTimerSelectedCliente] = React.useState('');
+  const [timerDurataManuale, setTimerDurataManuale] = React.useState('');
+  const [timerDataManuale, setTimerDataManuale] = React.useState('');
+  const [timerSaving, setTimerSaving] = React.useState(false);
+
+  const fmtTimer = (s) => {
+    const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  };
+
+  const timerStart = () => {
+    if(timerRef.current) return;
+    timerRef.current = setInterval(()=>setTimerSeconds(s=>s+1),1000);
+    setTimerStatus('running');
+  };
+  const timerPause = () => {
+    if(timerRef.current){ clearInterval(timerRef.current); timerRef.current=null; }
+    setTimerStatus('paused');
+  };
+  const timerResume = () => {
+    if(timerRef.current) return;
+    timerRef.current = setInterval(()=>setTimerSeconds(s=>s+1),1000);
+    setTimerStatus('running');
+  };
+  const timerReset = () => {
+    if(timerRef.current){ clearInterval(timerRef.current); timerRef.current=null; }
+    setTimerStatus('idle'); setTimerSeconds(0);
+    setTimerTask(null); setTimerCliente(null); setTimerServizio(''); setTimerNota('');
+  };
+
+  const loadCuTasks = async () => {
+    setCuLoading(true); setCuTasks([]);
+    try {
+      const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+      const res=await fetch('/api/v1/clickup/tasks',{headers:{'Authorization':'Bearer '+token}});
+      if(res.ok){ const d=await res.json(); setCuTasks(d.clienti||[]); }
+    } catch(e){}
+    setCuLoading(false);
+  };
+
+  const openStartModal = () => {
+    setTimerSelectedTask(null); setTimerSelectedCliente('');
+    setTimerServizio(''); setTimerNota('');
+    loadCuTasks(); setShowTimerModal('start');
+  };
+  const openStopModal = () => setShowTimerModal('stop');
+  const openManualModal = () => {
+    setTimerSelectedTask(null); setTimerSelectedCliente('');
+    setTimerServizio(''); setTimerNota('');
+    setTimerDurataManuale(''); setTimerDataManuale(new Date().toISOString().slice(0,10));
+    loadCuTasks(); setShowTimerModal('manual');
+  };
+
+  const confirmStart = () => {
+    if(!timerSelectedCliente) return;
+    const cl=state.clienti.find(c=>c.id===timerSelectedCliente);
+    setTimerCliente({id:timerSelectedCliente, nome:cl?.ragione_sociale||timerSelectedCliente});
+    setTimerTask(timerSelectedTask);
+    setTimerSeconds(0); timerStart();
+    setShowTimerModal(false);
+  };
+
+  const saveTimesheet = async (durata, dataStr) => {
+    const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
+    const body={
+      cliente_id: timerCliente?.id||timerSelectedCliente||null,
+      durata_minuti: durata,
+      data_attivita: dataStr,
+      servizio: timerServizio||null,
+      note: timerNota||null,
+      clickup_task_id: (timerTask||timerSelectedTask)?.id||null,
+      clickup_parent_task_id: (timerTask||timerSelectedTask)?.parent_id||null,
+      task_display_name: (timerTask||timerSelectedTask)?.display_name||null,
+    };
+    const res=await fetch('/api/v1/timesheet/manuale',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+      body:JSON.stringify(body)
+    });
+    if(res.ok){ const ts=await res.json(); dispatch({type:'ADD',collection:'timesheet',item:ts}); return true; }
+    return false;
+  };
+
+  const confirmStop = async () => {
+    setTimerSaving(true);
+    const durata=Math.max(1,Math.round(timerSeconds/60));
+    const oggi=new Date().toISOString().slice(0,10);
+    const ok=await saveTimesheet(durata, oggi);
+    if(ok){ timerReset(); setShowTimerModal(false); }
+    else alert('Errore nel salvataggio');
+    setTimerSaving(false);
+  };
+
+  const confirmManual = async () => {
+    if(!timerSelectedCliente||!timerDurataManuale||!timerDataManuale) return;
+    setTimerSaving(true);
+    let minuti=0;
+    if(String(timerDurataManuale).includes(':')){ const[h,m]=timerDurataManuale.split(':').map(Number); minuti=h*60+(m||0); }
+    else minuti=Math.round(parseFloat(timerDurataManuale)*60);
+    if(minuti<=0){ setTimerSaving(false); return; }
+    const cl=state.clienti.find(c=>c.id===timerSelectedCliente);
+    setTimerCliente({id:timerSelectedCliente,nome:cl?.ragione_sociale||''});
+    const ok=await saveTimesheet(minuti, timerDataManuale);
+    if(ok){
+      setShowTimerModal(false);
+      setTimerSelectedTask(null); setTimerSelectedCliente('');
+      setTimerServizio(''); setTimerNota(''); setTimerDurataManuale('');
+    } else alert('Errore nel salvataggio');
+    setTimerSaving(false);
+  };
+
   const [state,dispatch]=useReducer(reducer,INIT);
   const [page,setPage]=useState('dashboard');
   const [drillCliente,setDrillCliente]=useState(null);
@@ -5200,7 +5377,116 @@ function App(){
   const profileInitial=(profileName||'A')[0].toUpperCase();
 
   if(!authToken) return <BackendConnectModal apiBaseUrl={apiBaseUrl} onApiBaseUrlChange={setApiBaseUrl} onClose={()=>{}} onLogin={handleLogin} loading={loginLoading} error={apiError}/>;
-  return <div style={{display:'flex',minHeight:'100vh'}}>
+  return <div style={{display:'flex',minHeight:'100vh',paddingBottom:52}}>
+
+    {/* ── MODAL AVVIA TIMER / INSERIMENTO MANUALE ─────────────── */}
+    {(showTimerModal==='start'||showTimerModal==='manual')&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.75)',zIndex:500,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setShowTimerModal(false)}>
+      <div style={{background:'#18181b',border:'1px solid rgba(255,255,255,.1)',borderRadius:16,padding:28,width:480,maxWidth:'95vw',maxHeight:'88vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:20,color:'#fff'}}>
+          {showTimerModal==='start'?'▶ Avvia Timer':'+ Inserimento Manuale'}
+        </div>
+
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,color:'rgba(255,255,255,.45)',marginBottom:6,fontWeight:600,letterSpacing:.5}}>CLIENTE *</div>
+          <select value={timerSelectedCliente} onChange={e=>{setTimerSelectedCliente(e.target.value);setTimerSelectedTask(null);}}
+            style={{width:'100%',background:'#111',border:'1px solid rgba(255,255,255,.12)',borderRadius:8,padding:'9px 12px',color:'#fff',fontSize:13}}>
+            <option value=''>— Seleziona cliente —</option>
+            {[...state.clienti].filter(c=>c.attivo).sort((a,b)=>a.ragione_sociale.localeCompare(b.ragione_sociale)).map(c=>
+              <option key={c.id} value={c.id}>{c.ragione_sociale}</option>
+            )}
+          </select>
+        </div>
+
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,color:'rgba(255,255,255,.45)',marginBottom:6,fontWeight:600,letterSpacing:.5}}>
+            TASK CLICKUP {cuLoading&&<span style={{color:'#b660e0',marginLeft:6}}>⟳ caricamento...</span>}
+          </div>
+          {timerSelectedCliente&&!cuLoading?(()=>{
+            const cl=state.clienti.find(c=>c.id===timerSelectedCliente);
+            const keyword=(cl?.ragione_sociale||'').split(' ')[0].toLowerCase();
+            const gruppo=cuTasks.find(g=>g.cliente_nome.toLowerCase().includes(keyword));
+            const tasks=gruppo?.tasks||[];
+            return tasks.length>0
+              ?<select value={timerSelectedTask?.id||''} onChange={e=>{const t=tasks.find(x=>x.id===e.target.value)||null;setTimerSelectedTask(t);}}
+                style={{width:'100%',background:'#111',border:'1px solid rgba(255,255,255,.12)',borderRadius:8,padding:'9px 12px',color:'#fff',fontSize:12}}>
+                <option value=''>— Nessun task specifico —</option>
+                {tasks.map(t=><option key={t.id} value={t.id}>{t.display_name}</option>)}
+              </select>
+              :<div style={{fontSize:12,color:'rgba(255,255,255,.3)',padding:'6px 0'}}>Nessun task aperto assegnato per questo cliente</div>;
+          })():<div style={{fontSize:12,color:'rgba(255,255,255,.25)',padding:'6px 0'}}>{timerSelectedCliente?'Caricamento...':'Seleziona prima un cliente'}</div>}
+        </div>
+
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,color:'rgba(255,255,255,.45)',marginBottom:6,fontWeight:600,letterSpacing:.5}}>TIPO ATTIVITÀ</div>
+          <select value={timerServizio} onChange={e=>setTimerServizio(e.target.value)}
+            style={{width:'100%',background:'#111',border:'1px solid rgba(255,255,255,.12)',borderRadius:8,padding:'9px 12px',color:'#fff',fontSize:13}}>
+            <option value=''>— Seleziona —</option>
+            {SERVIZI.map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+
+        {showTimerModal==='manual'&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
+          <div>
+            <div style={{fontSize:11,color:'rgba(255,255,255,.45)',marginBottom:6,fontWeight:600,letterSpacing:.5}}>DURATA * (hh:mm o ore)</div>
+            <input value={timerDurataManuale} onChange={e=>setTimerDurataManuale(e.target.value)} placeholder='es. 1:30 o 1.5'
+              style={{width:'100%',background:'#111',border:'1px solid rgba(255,255,255,.12)',borderRadius:8,padding:'9px 12px',color:'#fff',fontSize:13,boxSizing:'border-box'}}/>
+          </div>
+          <div>
+            <div style={{fontSize:11,color:'rgba(255,255,255,.45)',marginBottom:6,fontWeight:600,letterSpacing:.5}}>DATA *</div>
+            <input type='date' value={timerDataManuale} onChange={e=>setTimerDataManuale(e.target.value)}
+              style={{width:'100%',background:'#111',border:'1px solid rgba(255,255,255,.12)',borderRadius:8,padding:'9px 12px',color:'#fff',fontSize:13,boxSizing:'border-box'}}/>
+          </div>
+        </div>}
+
+        <div style={{marginBottom:20}}>
+          <div style={{fontSize:11,color:'rgba(255,255,255,.45)',marginBottom:6,fontWeight:600,letterSpacing:.5}}>NOTE</div>
+          <input value={timerNota} onChange={e=>setTimerNota(e.target.value)} placeholder='Descrizione attività (opzionale)'
+            style={{width:'100%',background:'#111',border:'1px solid rgba(255,255,255,.12)',borderRadius:8,padding:'9px 12px',color:'#fff',fontSize:13,boxSizing:'border-box'}}/>
+        </div>
+
+        <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+          <button onClick={()=>setShowTimerModal(false)} style={{background:'transparent',border:'1px solid rgba(255,255,255,.1)',color:'rgba(255,255,255,.45)',borderRadius:8,padding:'8px 18px',cursor:'pointer',fontSize:13}}>Annulla</button>
+          <button disabled={!timerSelectedCliente||(showTimerModal==='manual'&&!timerDurataManuale)||timerSaving}
+            onClick={showTimerModal==='start'?confirmStart:confirmManual}
+            style={{background:timerSelectedCliente?'#b660e0':'#333',border:'none',color:'#fff',borderRadius:8,padding:'8px 22px',fontWeight:700,fontSize:13,cursor:timerSelectedCliente?'pointer':'not-allowed',opacity:timerSelectedCliente?1:.5}}>
+            {timerSaving?'Salvataggio...':(showTimerModal==='start'?'▶ Avvia':'Salva ore')}
+          </button>
+        </div>
+      </div>
+    </div>}
+
+    {/* ── MODAL STOP ───────────────────────────────────────────── */}
+    {showTimerModal==='stop'&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.75)',zIndex:500,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setShowTimerModal(false)}>
+      <div style={{background:'#18181b',border:'1px solid rgba(255,255,255,.1)',borderRadius:16,padding:28,width:380,maxWidth:'95vw'}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:4,color:'#fff'}}>■ Stop timer</div>
+        <div style={{fontSize:12,color:'rgba(255,255,255,.35)',marginBottom:18}}>
+          {timerCliente?.nome}{timerTask&&<span> · {timerTask.display_name}</span>}
+        </div>
+        <div style={{textAlign:'center',fontFamily:'var(--fm)',fontSize:38,fontWeight:700,color:'#b660e0',marginBottom:20,letterSpacing:2}}>
+          {fmtTimer(timerSeconds)}
+        </div>
+        <div style={{marginBottom:18}}>
+          <div style={{fontSize:11,color:'rgba(255,255,255,.45)',marginBottom:6,fontWeight:600,letterSpacing:.5}}>NOTE</div>
+          <input value={timerNota} onChange={e=>setTimerNota(e.target.value)} placeholder='Descrizione attività (opzionale)'
+            style={{width:'100%',background:'#111',border:'1px solid rgba(255,255,255,.12)',borderRadius:8,padding:'9px 12px',color:'#fff',fontSize:13,boxSizing:'border-box'}}/>
+        </div>
+        <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+          <button onClick={()=>setShowTimerModal(false)} style={{background:'transparent',border:'1px solid rgba(255,255,255,.1)',color:'rgba(255,255,255,.45)',borderRadius:8,padding:'8px 18px',cursor:'pointer',fontSize:13}}>Annulla</button>
+          <button onClick={confirmStop} disabled={timerSaving}
+            style={{background:'#e05560',border:'none',color:'#fff',borderRadius:8,padding:'8px 22px',fontWeight:700,fontSize:13,cursor:'pointer'}}>
+            {timerSaving?'Salvataggio...':'Salva e chiudi'}
+          </button>
+        </div>
+      </div>
+    </div>}
+
+    {/* ── TIMER BAR fissa in basso ─────────────────────────────── */}
+    <TimerBar timerStatus={timerStatus} timerSeconds={timerSeconds} timerTask={timerTask}
+      timerCliente={timerCliente} fmtTimer={fmtTimer}
+      onStart={openStartModal} onPause={timerPause} onResume={timerResume}
+      onStop={openStopModal} onManual={openManualModal} onCancel={timerReset}/>
+
+
     {showConnectModal&&<BackendConnectModal
       apiBaseUrl={apiBaseUrl}
       onApiBaseUrlChange={setApiBaseUrl}

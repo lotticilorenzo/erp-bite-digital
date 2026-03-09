@@ -23,6 +23,7 @@ class UserCreate(BaseModel):
     password: str
     ruolo: UserRole
     costo_orario: Optional[Decimal] = None
+    clickup_user_id: Optional[str] = None
     data_inizio: Optional[date] = None
 
 class UserUpdate(BaseModel):
