@@ -392,6 +392,8 @@ async def update_commessa(
         c.costi_diretti = data.costi_diretti
     if data.note is not None:
         c.note = data.note
+    if 'fattura_id' in data.model_fields_set:
+        c.fattura_id = data.fattura_id
 
     if data.righe_progetto:
         from fastapi import HTTPException

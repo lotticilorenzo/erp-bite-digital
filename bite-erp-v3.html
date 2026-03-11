@@ -176,6 +176,11 @@ const normalizeCommessaFromApi = cm => {
     aggiustamenti:cm.aggiustamenti||[],
     margine_percentuale:safeNum(cm.margine_percentuale),
     righe_progetto:righe,
+    fattura_id:cm.fattura_id||null,
+    fattura_numero:cm.fattura_numero||null,
+    fattura_stato:cm.fattura_stato||null,
+    data_inizio:cm.data_inizio||null,
+    data_fine:cm.data_fine||null,
   };
 };
 
@@ -1278,6 +1283,7 @@ function ClienteDetailScreen({state,dispatch,clienteId,setPage,setDrillProgetto}
 // SCREEN: PROGETTI
 // ─────────────────────────────────────────────────────────
 function ProgettiScreen({state,dispatch,setPage,setDrillProgetto,api}) {
+  const [searchQ,setSearchQ]=useState('');
   const [modal,setModal]=useState(null);
   const [confirm,setConfirm]=useState(null);
   const [form,setForm]=useState({});
@@ -1286,6 +1292,14 @@ function ProgettiScreen({state,dispatch,setPage,setDrillProgetto,api}) {
   const [servizi,setServizi]=useState([]);
   const [loadingServizi,setLoadingServizi]=useState(false);
   const clienteMap=useMemo(()=>Object.fromEntries(state.clienti.map(c=>[c.id,c])),[state.clienti]);
+  const progettiFiltered=useMemo(()=>{
+    const q=searchQ.trim().toLowerCase();
+    if(!q) return state.progetti;
+    return state.progetti.filter(p=>{
+      const cl=clienteMap[p.cliente_id];
+      return p.nome?.toLowerCase().includes(q)||(cl?.nome||'').toLowerCase().includes(q);
+    });
+  },[state.progetti,clienteMap,searchQ]);
 
   const emptyServizio=()=>({_id:'new_'+Date.now(),tipo:'SOCIAL',nome:'',valore_fisso:0,valore_variabile:0,contenuti_previsti:'',cadenza:'MENSILE',attivo:true,isNew:true});
 
@@ -1303,7 +1317,7 @@ function ProgettiScreen({state,dispatch,setPage,setDrillProgetto,api}) {
       setLoadingServizi(true);
       try{
         const sv=await api.listServizi(p.id);
-        setServizi(sv.length>0?sv:[emptyServizio()]);
+        setServizi(sv.length>0?sv.map(s=>({...s,mese_inizio:s.mese_inizio?s.mese_inizio.substring(0,7):null})):[emptyServizio()]);
       }catch(e){ setServizi(p.servizi?.length>0?p.servizi:[emptyServizio()]); }
       finally{ setLoadingServizi(false); }
     } else {
@@ -1352,10 +1366,10 @@ function ProgettiScreen({state,dispatch,setPage,setDrillProgetto,api}) {
           if(item.stato&&item.stato!=='ATTIVO')
             saved=await api.updateProgetto(saved.id,{stato:item.stato},{local:item});
           for(const s of serviziValidi){
-            await api.createServizio(saved.id,{tipo:s.tipo,nome:s.nome||s.tipo,valore_fisso:parseFloat(s.valore_fisso)||0,valore_variabile:parseFloat(s.valore_variabile)||0,contenuti_previsti:parseInt(s.contenuti_previsti)||null,cadenza:s.cadenza||'MENSILE',attivo:true,note:null});
+            await api.createServizio(saved.id,{tipo:s.tipo,nome:s.nome||s.tipo,valore_fisso:parseFloat(s.valore_fisso)||0,valore_variabile:parseFloat(s.valore_variabile)||0,contenuti_previsti:parseInt(s.contenuti_previsti)||null,cadenza:s.cadenza||'MENSILE',mese_inizio:s.mese_inizio?(s.mese_inizio+'-01'):null,attivo:true,note:null});
           }
         }else{
-          saved=await api.updateProgetto(modal.id,{nome:payload.nome,tipo:payload.tipo,stato:item.stato,importo_fisso:payload.importo_fisso,importo_variabile:payload.importo_variabile,delivery_attesa:payload.delivery_attesa,note:payload.note},{local:item});
+          saved=await api.updateProgetto(modal.id,{cliente_id:payload.cliente_id,nome:payload.nome,tipo:payload.tipo,stato:item.stato,importo_fisso:payload.importo_fisso,importo_variabile:payload.importo_variabile,delivery_attesa:payload.delivery_attesa,note:payload.note},{local:item});
           const idAttuali=servizi.filter(s=>!s.isNew&&s.id).map(s=>s.id);
           const svPrecedenti=await api.listServizi(modal.id);
           const daEliminare=svPrecedenti.filter(s=>!idAttuali.includes(s.id));
@@ -1365,10 +1379,10 @@ function ProgettiScreen({state,dispatch,setPage,setDrillProgetto,api}) {
           const esistenti=servizi.filter(s=>!s.isNew&&s.id);
           const nuovi=servizi.filter(s=>s.isNew);
           for(const s of esistenti){
-            await api.updateServizio(modal.id,s.id,{tipo:s.tipo,nome:s.nome||s.tipo,valore_fisso:parseFloat(s.valore_fisso)||0,valore_variabile:parseFloat(s.valore_variabile)||0,contenuti_previsti:parseInt(s.contenuti_previsti)||null,cadenza:s.cadenza||'MENSILE',attivo:s.attivo});
+            await api.updateServizio(modal.id,s.id,{tipo:s.tipo,nome:s.nome||s.tipo,valore_fisso:parseFloat(s.valore_fisso)||0,valore_variabile:parseFloat(s.valore_variabile)||0,contenuti_previsti:parseInt(s.contenuti_previsti)||null,cadenza:s.cadenza||'MENSILE',mese_inizio:s.mese_inizio?(s.mese_inizio+'-01'):null,attivo:s.attivo});
           }
           for(const s of nuovi){
-            await api.createServizio(modal.id,{tipo:s.tipo,nome:s.nome||s.tipo,valore_fisso:parseFloat(s.valore_fisso)||0,valore_variabile:parseFloat(s.valore_variabile)||0,contenuti_previsti:parseInt(s.contenuti_previsti)||null,cadenza:s.cadenza||'MENSILE',attivo:true});
+            await api.createServizio(modal.id,{tipo:s.tipo,nome:s.nome||s.tipo,valore_fisso:parseFloat(s.valore_fisso)||0,valore_variabile:parseFloat(s.valore_variabile)||0,contenuti_previsti:parseInt(s.contenuti_previsti)||null,cadenza:s.cadenza||'MENSILE',mese_inizio:s.mese_inizio?(s.mese_inizio+'-01'):null,attivo:true});
           }
           const svAgg=await api.listServizi(modal.id);
           saved={...saved,servizi:svAgg};
@@ -1458,6 +1472,7 @@ function ProgettiScreen({state,dispatch,setPage,setDrillProgetto,api}) {
                   <option value='UNA_TANTUM'>Una tantum</option>
                 </select>
               </FRow>}
+              {(s.tipo==='WEB'||s.tipo==='CONSULENZA')&&(s.cadenza==='SEMESTRALE'||s.cadenza==='ANNUALE')&&<FRow label='Mese di inizio'><input type='month' value={s.mese_inizio||''} onChange={e=>upd('mese_inizio',e.target.value)} required/></FRow>}
               {s.tipo==='SOCIAL'&&(parseFloat(s.valore_variabile)||0)>0&&(parseInt(s.contenuti_previsti)||0)>0&&
                 <div style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)',marginTop:4}}>Prezzo unitario: {fmtEuro((parseFloat(s.valore_variabile)||0)/(parseInt(s.contenuti_previsti)||1))}/contenuto</div>}
             </div>;
@@ -1478,12 +1493,17 @@ function ProgettiScreen({state,dispatch,setPage,setDrillProgetto,api}) {
         <KPI label='Consulenza' value={state.progetti.filter(p=>(p.servizi||[]).some(s=>s.tipo==='CONSULENZA')).length} delay={.14} color='var(--amber)'/>
       </div>
       <Card>
-        <CH title='Tutti i progetti' meta={`${state.progetti.length} progetti`} action={<Btn v='primary' onClick={openNew} s={{fontSize:11,padding:'5px 10px'}}>+ Nuovo</Btn>}/>
+        <CH title='Tutti i progetti' meta={`${progettiFiltered.length}/${state.progetti.length} progetti`}
+          action={<div style={{display:'flex',gap:8,alignItems:'center'}}>
+            <input placeholder='Cerca cliente o progetto…' value={searchQ} onChange={e=>setSearchQ(e.target.value)} style={{padding:'6px 12px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12,width:200,outline:'none'}}/>
+            {searchQ&&<button onClick={()=>setSearchQ('')} style={{background:'none',border:'none',color:'var(--g4)',cursor:'pointer',fontSize:14}}>✕</button>}
+            <Btn v='primary' onClick={openNew} s={{fontSize:11,padding:'5px 10px'}}>+ Nuovo</Btn>
+          </div>}/>
         {state.progetti.length===0?<Empty msg='Nessun progetto'/>:
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
           <thead><tr><Th c='Cliente'/><Th c='Progetto'/><Th c='Cat.'/><Th c='Struttura economica'/><Th c='Stato'/><Th c=''/></tr></thead>
           <tbody>
-            {state.progetti.map(p=>{
+            {progettiFiltered.map(p=>{
               const cl=clienteMap[p.cliente_id];
               const svList=p.servizi||[];
               const tipoColMap={SOCIAL:'var(--violet)',WEB:'#60a5fa',CONSULENZA:'#34d399',SPOT:'#fbbf24'};
@@ -1515,9 +1535,9 @@ function ProgettiScreen({state,dispatch,setPage,setDrillProgetto,api}) {
 const STATI_CM=['APERTA','PRONTA_CHIUSURA','CHIUSA','FATTURATA','INCASSATA'];
 
 function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) {
+  const [searchQ,setSearchQ]=useState('');
   const [filterStato,setFilterStato]=useState('TUTTI');
   const [filterMese,setFilterMese]=useState(currMese());
-  const [filterSearch,setFilterSearch]=useState('');
   const [modal,setModal]=useState(null);
   const [confirm,setConfirm]=useState(null);
   const [form,setForm]=useState({});
@@ -1586,6 +1606,8 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
             righe_progetto:buildRighePayload(item),
             costi_diretti:item.costi_diretti,
             aggiustamenti:item.aggiustamenti||[],
+            data_inizio:item.data_inizio||null,
+            data_fine:item.data_fine||null,
             note:item.note||'',
           };
           saved=await api.createCommessa(createPayload);
@@ -1600,6 +1622,9 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
             costi_diretti:item.costi_diretti,
             aggiustamenti:item.aggiustamenti||[],
             note:item.note||'',
+            fattura_id:item.fattura_id||null,
+            data_inizio:item.data_inizio||null,
+            data_fine:item.data_fine||null,
             righe_progetto:buildRighePayload(item).map(r=>({
               progetto_id:r.progetto_id,
               importo_fisso:r.importo_fisso,
@@ -1642,12 +1667,17 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
   };
 
   const mesiDisponibili=useMemo(()=>{const s=new Set(state.commesse.map(c=>c.mese_competenza));s.add(currMese());return [...s].sort().reverse();},[state.commesse]);
-  const fil=state.commesse.filter(c=>{
-    const cl=clienteMap[c.cliente_id];
-    const search=filterSearch.toLowerCase();
-    return (filterStato==='TUTTI'||c.stato===filterStato)&&(!filterMese||c.mese_competenza===filterMese)&&(!search||cl?.ragione_sociale?.toLowerCase().includes(search)||cl?.codice?.toLowerCase().includes(search));
-  });
-  const totFatt=fil.reduce((s,cm)=>s+previewFatt(cm),0);
+  const commesseFiltered=useMemo(()=>{
+    const q=searchQ.trim().toLowerCase();
+    return state.commesse.filter(cm=>{
+      const cl=clienteMap[cm.cliente_id];
+      const matchQ=!q||(cl?.nome||cl?.ragione_sociale||'').toLowerCase().includes(q);
+      const matchS=filterStato==='TUTTI'||cm.stato===filterStato;
+      const matchM=!filterMese||cm.mese_competenza?.startsWith(filterMese);
+      return matchQ&&matchS&&matchM;
+    });
+  },[state.commesse,clienteMap,searchQ,filterStato,filterMese]);
+  const totFatt=commesseFiltered.reduce((s,cm)=>s+previewFatt(cm),0);
 
   return <div className='fu'>
     {confirm&&<Confirm msg='Eliminare questa commessa?' onConfirm={()=>del(confirm.id)} onClose={()=>setConfirm(null)}/>}
@@ -1734,6 +1764,10 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
           </div>
         </div>}
         <FGrid>
+          <FRow label='Data inizio'><input type='date' value={form.data_inizio||''} onChange={e=>setForm({...form,data_inizio:e.target.value})}/></FRow>
+          <FRow label='Data fine'><input type='date' value={form.data_fine||''} onChange={e=>{const v=e.target.value;setForm(f=>({...f,data_fine:v,mese_competenza:v?v.substring(0,7):f.mese_competenza}));}}/></FRow>
+        </FGrid>
+        <FGrid>
           <FRow label='Mese competenza'><input type='month' value={form.mese_competenza||currMese()} onChange={e=>setForm({...form,mese_competenza:e.target.value})} required/></FRow>
           <FRow label='Stato'><select value={form.stato||'APERTA'} onChange={e=>setForm({...form,stato:e.target.value})}>{STATI_CM.map(s=><option key={s} value={s}>{s.replace(/_/g,' ')}</option>)}</select></FRow>
         </FGrid>
@@ -1743,13 +1777,21 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
         <FRow label='Costi diretti (€)'>
           <input type='number' min='0' step='0.01' value={form.costi_diretti||0} onChange={e=>setForm({...form,costi_diretti:e.target.value})}/>
         </FRow>
+
+        <FRow label='Fattura collegata'>
+          <select value={form.fattura_id||''} onChange={e=>setForm({...form,fattura_id:e.target.value||null})}>
+            <option value=''>— Nessuna fattura —</option>
+            {(state.fatture_attive||[]).filter(fa=>fa.cliente_id===form.cliente_id).sort((a,b)=>(b.data_emissione||'').localeCompare(a.data_emissione||'')).map(fa=>{const cl=clienteMap[fa.cliente_id];const imp=parseFloat(fa.importo_netto)||parseFloat(fa.importo_totale)||0;const dataFmt=fa.data_emissione?fa.data_emissione.split('-').reverse().join('/'):'';return <option key={fa.id} value={fa.id}>{cl?.ragione_sociale||''} · {fa.numero} · {dataFmt} · {fmtEuro(imp)}</option>;})}
+          </select>
+        </FRow>
         <FRow label='Note'><textarea value={form.note||''} onChange={e=>setForm({...form,note:e.target.value})}/></FRow>
         <FActions onCancel={closeModal} submitLabel={saving?'Salvataggio...':'Salva'}/>
       </form>
     </Modal>}
 
     <Topbar title='Commesse'>
-      <input type='text' placeholder='Cerca cliente...' value={filterSearch} onChange={e=>setFilterSearch(e.target.value)} style={{width:160,height:34,padding:'0 12px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g1)',color:'var(--fg)',fontSize:13}}/>
+      <input placeholder='Cerca cliente…' value={searchQ} onChange={e=>setSearchQ(e.target.value)} style={{padding:'6px 12px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12,width:180,outline:'none',height:34}}/>
+      {searchQ&&<button onClick={()=>setSearchQ('')} style={{background:'none',border:'none',color:'var(--g4)',cursor:'pointer',fontSize:14}}>✕</button>}
       <select value={filterMese} onChange={e=>setFilterMese(e.target.value)} style={{width:140,height:34,padding:'0 10px'}}>
         <option value=''>Tutti i mesi</option>
         {mesiDisponibili.map(m=><option key={m} value={m}>{meseFmt(m)}</option>)}
@@ -1764,27 +1806,33 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
     <div style={{padding:'22px 26px'}}>
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:22}}>
         <KPI label='Fatturabile (filtro)' value={fmtEuro(totFatt)} delay={.05}/>
-        <KPI label='Pronte chiusura' value={fil.filter(c=>c.stato==='PRONTA_CHIUSURA').length} delay={.08} warn={fil.filter(c=>c.stato==='PRONTA_CHIUSURA').length>0}/>
-        <KPI label='Commesse visualizzate' value={fil.length} delay={.11}/>
-        <KPI label='Sotto soglia 30%' value={fil.filter(cm=>{const f=previewFatt(cm);const mo=cm.costo_manodopera||0;return f>0&&Math.round((f-mo)/f*100)<30;}).length} delay={.14} warn/>
+        <KPI label='Pronte chiusura' value={commesseFiltered.filter(c=>c.stato==='PRONTA_CHIUSURA').length} delay={.08} warn={commesseFiltered.filter(c=>c.stato==='PRONTA_CHIUSURA').length>0}/>
+        <KPI label='Commesse visualizzate' value={commesseFiltered.length} delay={.11}/>
+        <KPI label='Sotto soglia 30%' value={commesseFiltered.filter(cm=>{const f=previewFatt(cm);const mo=cm.costo_manodopera||0;return f>0&&Math.round((f-mo)/f*100)<30;}).length} delay={.14} warn/>
       </div>
       <Card>
-        <CH title='Commesse aggregate per cliente' meta={`${fil.length} commesse`} action={<Btn v='primary' onClick={openNew} s={{fontSize:11,padding:'5px 10px'}}>+ Nuova</Btn>}/>
-        {fil.length===0?<Empty msg='Nessuna commessa'/>:
+        <CH title='Commesse aggregate per cliente' meta={`${commesseFiltered.length} commesse`} action={<Btn v='primary' onClick={openNew} s={{fontSize:11,padding:'5px 10px'}}>+ Nuova</Btn>}/>
+        {commesseFiltered.length===0?<Empty msg='Nessuna commessa'/>:
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
-          <thead><tr><Th c='Cliente'/><Th c='Progetti'/><Th c='Fatturabile'/><Th c='Costo M.O.'/><Th c='Margine'/><Th c='Stato'/><Th c=''/></tr></thead>
+          <thead><tr><Th c='Progetti'/><Th c='Cliente'/><Th c='Competenza'/><Th c='Fatturabile'/><Th c='Costo M.O.'/><Th c='Margine'/><Th c='Stato'/><Th c='Fattura'/><Th c=''/></tr></thead>
           <tbody>
-            {fil.map(cm=>{
+            {commesseFiltered.map(cm=>{
               const cl=clienteMap[cm.cliente_id];
               const f=previewFatt(cm); const mo=cm.costo_manodopera||0;
               const mp=f>0?Math.round((f-mo)/f*100):0;
               return <TR key={cm.id} onClick={()=>{setDrillCommessa(cm.id);setPage('commessa_detail');}}>
-                <Td><div style={{fontWeight:700}}>{cl?.ragione_sociale||'—'}</div><div style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--violet)'}}>{cl?.codice} · {meseFmt(cm.mese_competenza)}</div></Td>
-                <Td><div style={{display:'flex',gap:4,flexWrap:'wrap'}}>{cm.progetti_ids.map(pid=>{const p=progettoMap[pid];return p?<Badge key={pid} s={p.categoria}/>:null;})}<span style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',alignSelf:'center'}}>{cm.progetti_ids.length} proj.</span></div></Td>
+                <Td><div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:2}}>{cm.progetti_ids.map(pid=>{const p=progettoMap[pid];return p?<span key={pid} style={{fontWeight:700,fontSize:12}}>{p.nome}</span>:null;}).reduce((acc,el,i)=>i===0?[el]:[...acc,<span key={'sep'+i} style={{color:'var(--g4)'}}>|</span>,el],[])} </div><div style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)'}}>{cm.progetti_ids.length} progetto/i</div></Td>
+                <Td><div style={{fontWeight:600}}>{cl?.ragione_sociale||'—'}</div><div style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)'}}>{cl?.codice}</div></Td>
+                <Td><span style={{fontFamily:'var(--fm)',fontSize:12,fontWeight:700,color:'var(--violet)'}}>{meseFmt(cm.mese_competenza)}</span></Td>
                 <Td mono>{fmtEuro(f)}</Td>
                 <Td mono>{fmtEuro(mo)}</Td>
                 <Td><MBar pct={mp}/></Td>
                 <Td><Badge s={cm.stato}/></Td>
+                <Td>
+                  {cm.fattura_numero
+                    ?<span style={{fontFamily:'var(--fm)',fontSize:11,fontWeight:700,color:'var(--violet)',letterSpacing:.5}}>{cm.fattura_numero}</span>
+                    :<span style={{color:'var(--g4)',fontSize:11}}>—</span>}
+                </Td>
                 <Td><div onClick={e=>e.stopPropagation()} style={{display:'flex',gap:6}}>
                   {(cm.stato==='APERTA'||cm.stato==='PRONTA_CHIUSURA')&&<Btn v='success' onClick={e=>{e.stopPropagation();onChiudi&&onChiudi(cm.id);}} s={{padding:'4px 8px',fontSize:11}}>✓ Chiudi</Btn>}
                   <Btn v='ghost' onClick={()=>openEdit(cm)} s={{padding:'4px 8px',fontSize:11}}>Modifica</Btn>
@@ -2175,6 +2223,7 @@ function FinanziariaScreen({state,dispatch}) {
   const [fpDal,setFpDal]=useState('');
   const [fpAl,setFpAl]=useState('');
   const [fpStato,setFpStato]=useState('TUTTI');
+  const [filtroNome,setFiltroNome]=useState('');
   const [filtroStato,setFiltroStato]=useState('TUTTI');
   const [filtroDal,setFiltroDal]=useState('');
   const [filtroAl,setFiltroAl]=useState('');
@@ -2192,6 +2241,7 @@ function FinanziariaScreen({state,dispatch}) {
   });
   // Totali filtrati (rispettano filtroStato, filtroDal, filtroAl)
   const fattureFiltrate=fattureAttiveEffettive.filter(fa=>{
+    if(filtroNome){const cl=clienteMap[fa.cliente_id];if(!(cl?.nome||cl?.ragione_sociale||'').toLowerCase().includes(filtroNome.toLowerCase()))return false;}
     if(filtroStato!=='TUTTI'&&fa.stato!==filtroStato)return false;
     if(filtroDal&&fa.data_emissione&&fa.data_emissione<filtroDal)return false;
     if(filtroAl&&fa.data_emissione&&fa.data_emissione>filtroAl)return false;
@@ -2593,6 +2643,8 @@ function FinanziariaScreen({state,dispatch}) {
       {tab==='fatture_attive'&&<Card>
         <CH title='Fatture emesse ai clienti' meta={`${state.fatture_attive.length} fatture`}/>
         <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap',alignItems:'center'}}>
+          <input placeholder='Cerca cliente…' value={filtroNome} onChange={e=>setFiltroNome(e.target.value)} style={{padding:'6px 12px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12,width:200,outline:'none'}}/>
+          {filtroNome&&<button onClick={()=>setFiltroNome('')} style={{background:'none',border:'none',color:'var(--g4)',cursor:'pointer',fontSize:14}}>✕</button>}
           <select value={filtroStato} onChange={e=>setFiltroStato(e.target.value)} style={{padding:'6px 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12}}>
             <option value='TUTTI'>Tutti gli stati</option>
             <option value='ATTESA'>In attesa</option>
@@ -2611,7 +2663,7 @@ function FinanziariaScreen({state,dispatch}) {
         </div>
         {state.fatture_attive.length===0?<Empty msg='Nessuna fattura'/>:
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
-          <thead><tr><Th c='N°'/><Th c='Cliente'/><Th c='Importo Netto'/><Th c='Importo Totale'/><Th c='Emissione'/><Th c='Scadenza'/><Th c='Incasso'/><Th c='Stato'/><Th c='Azioni'/></tr></thead>
+          <thead><tr><Th c='N°'/><Th c='Cliente'/><Th c='Importo Netto'/><Th c='Importo Totale'/><Th c='Emissione'/><Th c='Scadenza'/><Th c='Incasso'/><Th c='Stato'/><Th c='Commessa'/><Th c='Azioni'/></tr></thead>
           <tbody>
             {[...fattureAttiveEffettive]
               .filter(fa=>{
@@ -2632,6 +2684,7 @@ function FinanziariaScreen({state,dispatch}) {
                 <Td mono>{fmtDate(fa.data_scadenza)}{gg!==null&&<span style={{color:'var(--red)',marginLeft:6,fontFamily:'var(--fm)',fontSize:10}}>+{gg}gg</span>}</Td>
                 <Td mono style={{color:'var(--green)'}}>{fa.data_ultimo_incasso?fmtDate(fa.data_ultimo_incasso):<span style={{color:'var(--g4)'}}>—</span>}</Td>
                 <Td><Badge s={fa.stato}/></Td>
+                <Td><div onClick={e=>e.stopPropagation()}><select value={(state.commesse||[]).find(cm=>cm.fattura_id===fa.id)?.id||''} onChange={async e=>{const cid=e.target.value||null;const prevCm=(state.commesse||[]).find(cm=>cm.fattura_id===fa.id);const res=await fetch('/api/v1/commesse/'+(cid||prevCm?.id)+'/fattura',{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+(localStorage.getItem('BITE_ERP_TOKEN')||'')},body:JSON.stringify({fattura_id:cid?fa.id:null})});if(res.ok){const saved=await res.json();dispatch({type:'UPSERT',entity:'commesse',item:saved});if(prevCm&&prevCm.id!==saved.id)dispatch({type:'UPSERT',entity:'commesse',item:{...prevCm,fattura_id:null}});}}} style={{fontSize:11,padding:'3px 6px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',maxWidth:140}}><option value=''>— Nessuna —</option>{(state.commesse||[]).filter(cm=>cm.cliente_id===fa.cliente_id).map(cm=>{const pNames=(cm.progetti_ids||[]).map(pid=>(state.progetti||[]).find(p=>p.id===pid)?.nome||'').filter(Boolean).join(' | ');return <option key={cm.id} value={cm.id}>{pNames||'—'} {meseFmt(cm.mese_competenza)}</option>;})}</select></div></Td>
                 <Td><div style={{display:'flex',gap:5}}>
                   {fa.stato==='ATTESA'&&<><Btn v='success' onClick={()=>cambiaStatoFattAttiva(fa.id,'INCASSATA')} s={{padding:'4px 8px',fontSize:11}}>✓ Incassata</Btn><Btn v='danger' onClick={()=>cambiaStatoFattAttiva(fa.id,'SCADUTA')} s={{padding:'4px 8px',fontSize:11}}>Scaduta</Btn></>}
                   {fa.stato==='SCADUTA'&&<Btn v='success' onClick={()=>cambiaStatoFattAttiva(fa.id,'INCASSATA')} s={{padding:'4px 8px',fontSize:11}}>✓ Incassata</Btn>}
@@ -5133,9 +5186,9 @@ function App(){
         dispatch({type:'SET_ENTITY',entity:'fatture_attive',items:(data.fatture_attive||[]).map(f=>({
           id:f.id, fic_id:f.fic_id, cliente_id:f.cliente_id,
           numero:f.numero, data_emissione:f.data_emissione, data_scadenza:f.data_scadenza,
-          importo:parseFloat(f.importo_totale)||0, importo_pagato:parseFloat(f.importo_pagato)||0,
+          importo:parseFloat(f.importo_totale)||0, importo_netto:parseFloat(f.importo_netto)||0, importo_pagato:parseFloat(f.importo_pagato)||0,
           importo_residuo:parseFloat(f.importo_residuo)||0, stato:f.stato_pagamento==='paid'?'INCASSATA':f.stato_pagamento==='partial'?'PARZIALE':'ATTESA', data_ultimo_incasso:f.data_ultimo_incasso||null,
-          valuta:f.valuta||'EUR',
+          valuta:f.valuta||'EUR', commessa_id:f.commessa_id||null,
         }))});
       }
       if(data.risorse){

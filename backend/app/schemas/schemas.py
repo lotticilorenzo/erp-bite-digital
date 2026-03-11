@@ -140,6 +140,7 @@ class ServizioProgettoCreate(BaseModel):
     valore_variabile: float = 0
     contenuti_previsti: Optional[int] = None
     cadenza: str = "MENSILE"
+    mese_inizio: Optional[date] = None
     attivo: bool = True
     note: Optional[str] = None
 
@@ -150,6 +151,7 @@ class ServizioProgettoUpdate(BaseModel):
     valore_variabile: Optional[float] = None
     contenuti_previsti: Optional[int] = None
     cadenza: Optional[str] = None
+    mese_inizio: Optional[date] = None
     attivo: Optional[bool] = None
     note: Optional[str] = None
 
@@ -162,6 +164,7 @@ class ServizioProgettoOut(OrmBase):
     valore_variabile: float = 0
     contenuti_previsti: Optional[int] = None
     cadenza: str = "MENSILE"
+    mese_inizio: Optional[date] = None
     attivo: bool = True
     note: Optional[str] = None
     created_at: Optional[datetime] = None
@@ -178,6 +181,7 @@ class ProgettoCreate(BaseModel):
 
 class ProgettoUpdate(BaseModel):
     nome: Optional[str] = None
+    cliente_id: Optional[uuid.UUID] = None
     tipo: Optional[ProjectType] = None
     stato: Optional[ProjectStatus] = None
     importo_fisso: Optional[Decimal] = None
@@ -235,6 +239,8 @@ class CommessaCreate(BaseModel):
     mese_competenza: date
     progetto_ids: Optional[List[uuid.UUID]] = None
     righe_progetto: Optional[List[CommessaRigaCreate]] = None
+    data_inizio: Optional[date] = None
+    data_fine: Optional[date] = None
     costi_diretti: Decimal = Decimal("0")
     note: Optional[str] = None
 
@@ -251,6 +257,9 @@ class CommessaUpdate(BaseModel):
     righe_progetto: Optional[List[CommessaRigaUpdate]] = None
     aggiustamenti: Optional[List[dict]] = None
     note: Optional[str] = None
+    fattura_id: Optional[uuid.UUID] = None
+    data_inizio: Optional[date] = None
+    data_fine: Optional[date] = None
 
 class CommessaOut(OrmBase):
     id: uuid.UUID
@@ -260,6 +269,8 @@ class CommessaOut(OrmBase):
     righe_progetto: List[CommessaRigaOut] = Field(default_factory=list)
     costo_manodopera: Decimal
     costi_diretti: Decimal
+    data_inizio: Optional[date] = None
+    data_fine: Optional[date] = None
     data_chiusura: Optional[date]
     note: Optional[str]
     created_at: datetime
@@ -270,6 +281,11 @@ class CommessaOut(OrmBase):
     coefficiente_allocazione: Optional[Decimal] = None
     margine_euro: Optional[Decimal] = None
     margine_percentuale: Optional[float] = None
+    fattura_id: Optional[uuid.UUID] = None
+    fattura_numero: Optional[str] = None
+    fattura_data: Optional[date] = None
+    fattura_importo: Optional[Decimal] = None
+    fattura_stato: Optional[str] = None
 
 class CommessaWithCliente(CommessaOut):
     cliente: ClienteOut
@@ -415,6 +431,8 @@ class FatturaAttivaOut(OrmBase):
     data_emissione: Optional[date]
     data_scadenza: Optional[date]
     importo_totale: Decimal
+    importo_netto: Optional[Decimal] = None
+    importo_iva: Optional[Decimal] = None
     importo_pagato: Decimal
     importo_residuo: Decimal
     stato_pagamento: str

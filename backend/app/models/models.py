@@ -184,6 +184,7 @@ class ServizioProgetto(Base):
     valore_variabile: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     contenuti_previsti: Mapped[Optional[int]] = mapped_column(Integer)
     cadenza: Mapped[ServiceCadenza] = mapped_column(SAEnum(ServiceCadenza, name="servicecadenza"), default=ServiceCadenza.MENSILE)
+    mese_inizio: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     attivo: Mapped[bool] = mapped_column(Boolean, default=True)
     note: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -201,7 +202,12 @@ class Commessa(Base):
     mese_competenza: Mapped[date] = mapped_column(Date)
     stato: Mapped[CommessaStatus] = mapped_column(SAEnum(CommessaStatus, name="commessa_status"), default=CommessaStatus.APERTA)
     costo_manodopera: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    fattura_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey('fatture_attive.id'), nullable=True)
     costi_diretti: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    data_inizio: Mapped[Optional[date]] = mapped_column(Date)
+    data_fine: Mapped[Optional[date]] = mapped_column(Date)
+    data_inizio: Mapped[Optional[date]] = mapped_column(Date)
+    data_fine: Mapped[Optional[date]] = mapped_column(Date)
     data_chiusura: Mapped[Optional[date]] = mapped_column(Date)
     aggiustamenti: Mapped[Optional[list]] = mapped_column(JSON, default=list)
     valore_fatturabile_override: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
@@ -215,6 +221,7 @@ class Commessa(Base):
         cascade="all, delete-orphan",
     )
     timesheet: Mapped[List["Timesheet"]] = relationship(back_populates="commessa")
+    fattura: Mapped[Optional["FatturaAttiva"]] = relationship(foreign_keys="[Commessa.fattura_id]", back_populates="commesse")
 
     @property
     def valore_fatturabile_calc(self) -> Decimal:
@@ -450,6 +457,7 @@ class FatturaAttiva(Base):
     fic_raw_data: Mapped[Optional[dict]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    commesse: Mapped[List["Commessa"]] = relationship(foreign_keys="[Commessa.fattura_id]", back_populates="fattura")
 
     cliente: Mapped[Optional["Cliente"]] = relationship()
 

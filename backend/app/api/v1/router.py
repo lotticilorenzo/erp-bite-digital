@@ -5,7 +5,7 @@ import uuid
 from datetime import date
 from decimal import Decimal
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -13,7 +13,7 @@ from app.core.security import (
     verify_password, create_access_token,
     get_current_user, require_roles
 )
-from app.models.models import User, UserRole, CommessaStatus, TimesheetStatus
+from app.models.models import User, UserRole, CommessaStatus, TimesheetStatus, FatturaAttiva
 from app.schemas.schemas import (
     LoginRequest, TokenResponse, UserOut, UserCreate, UserUpdate,
     ClienteCreate, ClienteUpdate, ClienteOut,
@@ -209,12 +209,31 @@ async def patch_progetto(
 # ═══════════════════════════════════════════════════════
 async def _enrich_commessa(db: AsyncSession, c, coeff_cache: Optional[dict[date, Decimal]] = None) -> dict:
     """Aggiunge i campi calcolati alla commessa prima della serializzazione."""
+    from sqlalchemy import text as _text
+    # Refresh esplicito per caricare fattura_id dal DB (evita lazy load async)
+    await db.refresh(c)
+    row = await db.execute(
+        _text("""
+            SELECT fa.id, fa.numero, fa.data_emissione, fa.importo_netto, fa.stato_pagamento
+            FROM commesse cm
+            LEFT JOIN fatture_attive fa ON fa.id = cm.fattura_id
+            WHERE cm.id = :cid
+        """),
+        {"cid": str(c.id)}
+    )
+    fa = row.fetchone()
     d = CommessaOut.model_validate(c).model_dump()
     metriche = await calcola_metriche_commessa(db, c, coeff_cache)
     d.update(metriche)
+    if fa and fa[0] is not None:
+        d["fattura_id"] = fa[0]
+        d["fattura_numero"] = fa[1]
+        d["fattura_data"] = str(fa[2]) if fa[2] else None
+        d["fattura_importo"] = float(fa[3]) if fa[3] else None
+        d["fattura_stato"] = fa[4]
     return d
 
-@router.get("/commesse", response_model=List[CommessaOut], tags=["Commesse"])
+@router.get("/commesse", tags=["Commesse"])
 async def get_commesse(
     mese: Optional[date] = Query(None, description="Formato YYYY-MM-01"),
     stato: Optional[CommessaStatus] = Query(None),
@@ -230,7 +249,7 @@ async def get_commesse(
         enriched.append(await _enrich_commessa(db, c, coeff_cache))
     return enriched
 
-@router.get("/commesse/{commessa_id}", response_model=CommessaOut, tags=["Commesse"])
+@router.get("/commesse/{commessa_id}", tags=["Commesse"])
 async def get_single_commessa(
     commessa_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -241,7 +260,7 @@ async def get_single_commessa(
         raise HTTPException(status_code=404, detail="Commessa non trovata")
     return await _enrich_commessa(db, c)
 
-@router.post("/commesse", response_model=CommessaOut, status_code=201, tags=["Commesse"])
+@router.post("/commesse", status_code=201, tags=["Commesse"])
 async def add_commessa(
     data: CommessaCreate,
     db: AsyncSession = Depends(get_db),
@@ -250,7 +269,7 @@ async def add_commessa(
     c = await create_commessa(db, data)
     return await _enrich_commessa(db, c)
 
-@router.patch("/commesse/{commessa_id}", response_model=CommessaOut, tags=["Commesse"])
+@router.patch("/commesse/{commessa_id}", tags=["Commesse"])
 async def patch_commessa(
     commessa_id: uuid.UUID,
     data: CommessaUpdate,
@@ -640,6 +659,31 @@ async def delete_progetto(progetto_id: uuid.UUID, db: AsyncSession = Depends(get
 
 
 # ── DELETE COMMESSA ───────────────────────────────────────
+@router.patch("/commesse/{commessa_id}/fattura", response_model=CommessaOut, tags=["Commesse"])
+async def collega_fattura_commessa(
+    commessa_id: uuid.UUID,
+    body: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    """Collega o scollega una fattura da una commessa. body: {fattura_id: uuid | null}"""
+    from sqlalchemy import select as _sel
+    c = await get_commessa(db, commessa_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Commessa non trovata")
+    fattura_id = body.get("fattura_id")
+    if fattura_id:
+        fa_res = await db.execute(_sel(FatturaAttiva).where(FatturaAttiva.id == uuid.UUID(str(fattura_id))))
+        fa = fa_res.scalar_one_or_none()
+        if not fa:
+            raise HTTPException(status_code=404, detail="Fattura non trovata")
+        c.fattura_id = fa.id
+    else:
+        c.fattura_id = None
+    await db.commit()
+    await db.refresh(c)
+    return await _enrich_commessa(db, c)
+
 @router.delete("/commesse/{commessa_id}", status_code=204, tags=["Commesse"])
 async def delete_commessa(commessa_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     from app.models.models import Commessa
