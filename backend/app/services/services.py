@@ -1372,6 +1372,14 @@ async def incassa_fattura(db: AsyncSession, fattura_id: uuid.UUID, data_incasso)
     await db.commit()
     await db.refresh(fattura)
 
+    # Sincronizza stato commessa collegata
+    from app.models.models import Commessa, CommessaStatus
+    cm_result = await db.execute(select(Commessa).where(Commessa.fattura_id == fattura_id))
+    commessa = cm_result.scalar_one_or_none()
+    if commessa and commessa.stato not in (CommessaStatus.INCASSATA,):
+        commessa.stato = CommessaStatus.INCASSATA
+        await db.commit()
+
     # Push a FIC
     import httpx, os
     fic_key = os.getenv('FIC_API_KEY','')

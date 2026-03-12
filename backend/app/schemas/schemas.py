@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from app.models.models import (
     UserRole, ProjectType, ProjectStatus, CommessaStatus,
     TaskStatus, TimesheetStatus, CostoTipo
@@ -250,6 +250,13 @@ class CommessaCreate(BaseModel):
         """Normalizza sempre al primo del mese."""
         return v.replace(day=1)
 
+    @model_validator(mode="after")
+    def derive_mese_from_data_fine(self):
+        """Se data_fine presente, mese_competenza = primo del mese di data_fine."""
+        if self.data_fine:
+            self.mese_competenza = self.data_fine.replace(day=1)
+        return self
+
 class CommessaUpdate(BaseModel):
     stato: Optional[CommessaStatus] = None
     mese_competenza: Optional[date] = None
@@ -260,6 +267,22 @@ class CommessaUpdate(BaseModel):
     fattura_id: Optional[uuid.UUID] = None
     data_inizio: Optional[date] = None
     data_fine: Optional[date] = None
+
+    @model_validator(mode="after")
+    def derive_mese_from_data_fine(self):
+        """Se data_fine presente, mese_competenza = primo del mese di data_fine."""
+        if self.data_fine:
+            self.mese_competenza = self.data_fine.replace(day=1)
+        return self
+
+    @model_validator(mode="after")
+    def derive_mese_from_data_fine(self):
+        """Se data_fine presente, mese_competenza = primo del mese di data_fine."""
+        if self.data_fine and self.mese_competenza is None:
+            self.mese_competenza = self.data_fine.replace(day=1)
+        elif self.data_fine:
+            self.mese_competenza = self.data_fine.replace(day=1)
+        return self
 
 class CommessaOut(OrmBase):
     id: uuid.UUID

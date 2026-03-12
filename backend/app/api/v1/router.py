@@ -483,6 +483,13 @@ async def patch_movimento_cassa(
         if fa and fa.stato_pagamento not in ('INCASSATA', 'paid'):
             fa.stato_pagamento = 'INCASSATA'
             fa.data_ultimo_incasso = mov.data_valuta
+            # Sincronizza stato commessa collegata alla fattura
+            from app.models.models import Commessa, CommessaStatus
+            from sqlalchemy import select as _sel
+            cm_res = await db.execute(_sel(Commessa).where(Commessa.fattura_id == fa.id))
+            cm = cm_res.scalar_one_or_none()
+            if cm and cm.stato not in (CommessaStatus.INCASSATA,):
+                cm.stato = CommessaStatus.INCASSATA
 
     # Se si sta riconciliando con fattura passiva -> aggiorna fattura se ancora in ATTESA
     if payload.get('fattura_passiva_id') and payload.get('riconciliato'):
