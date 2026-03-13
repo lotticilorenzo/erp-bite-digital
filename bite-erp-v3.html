@@ -544,7 +544,8 @@ function BackendConnectModal({apiBaseUrl,onApiBaseUrlChange,onClose,onLogin,load
 // ─────────────────────────────────────────────────────────
 // SCREEN: DASHBOARD
 // ─────────────────────────────────────────────────────────
-function DashboardScreen({state,setPage,setDrillCliente,setDrillCommessa}) {
+function DashboardScreen({state,setPage,setDrillCliente,setDrillCommessa,authUser}) {
+  const isAdmin=(authUser?.ruolo==='ADMIN'||authUser?.ruolo==='PM');
   const progettoMap=useMemo(()=>Object.fromEntries(state.progetti.map(p=>[p.id,p])),[state.progetti]);
   const clienteMap =useMemo(()=>Object.fromEntries(state.clienti.map(c=>[c.id,c])),[state.clienti]);
   const userMap    =useMemo(()=>Object.fromEntries(state.users.map(u=>[u.id,u])),[state.users]);
@@ -581,7 +582,9 @@ function DashboardScreen({state,setPage,setDrillCliente,setDrillCommessa}) {
   const margMedio=margini.length>0?Math.round(margini.reduce((a,b)=>a+b,0)/margini.length):0;
 
   // Costo struttura (costi fissi mese corrente)
-  const costoStruttura=state.costi_fissi.filter(c=>c.mese===mese).reduce((s,c)=>s+(c.importo||0),0);
+  const costoFissiMese=(state.costi_fissi||[]).filter(c=>c.attivo).reduce((s,c)=>{const p=(c.periodicita||'mensile').toLowerCase();if(p==='mensile')return s+(parseFloat(c.importo)||0);if(p==='annuale')return s+(parseFloat(c.importo)||0)/12;if(p==='trimestrale')return s+(parseFloat(c.importo)||0)/3;if(p==='semestrale')return s+(parseFloat(c.importo)||0)/6;return s;},0);
+  const costoFattPassiveStruttura=(state.fatture_passive||[]).filter(fp=>fp.categoria==='STRUTTURA'&&fp.data_emissione&&fp.data_emissione.startsWith(mese)).reduce((s,fp)=>s+(parseFloat(fp.importo_netto)||parseFloat(fp.importo)||0),0);
+  const costoStruttura=costoFissiMese+costoFattPassiveStruttura;
 
   // Commesse aperte
   const commAperte=commMese.filter(c=>c.stato==='APERTA'||c.stato==='PRONTA_CHIUSURA').length;
@@ -594,7 +597,67 @@ function DashboardScreen({state,setPage,setDrillCliente,setDrillCommessa}) {
   });
 
   const pending=state.timesheet.filter(t=>t.stato==='PENDING').length;
-  const fattScadute=state.fatture_attive.filter(f=>f.stato==='SCADUTA').reduce((s,f)=>s+f.importo,0);
+  const fattScadute=(state.fatture_attive||[]).filter(f=>f.stato==='SCADUTA').reduce((s,f)=>s+f.importo,0);
+
+  // Calcoli per vista Team
+  const oreApprovate=state.timesheet.filter(t=>t.mese_competenza===mese&&t.stato==='APPROVATO').reduce((s,t)=>s+(t.durata_minuti||0),0);
+  const orePending=state.timesheet.filter(t=>t.mese_competenza===mese&&t.stato==='PENDING').reduce((s,t)=>s+(t.durata_minuti||0),0);
+  const oreTotali=oreApprovate+orePending;
+  const oreStr=h=>h>=60?Math.floor(h/60)+'h '+(h%60)+'m':h+'m';
+  const progettiAttivi=state.progetti.filter(p=>p.stato==='ATTIVO').length;
+  const now48=new Date(); now48.setHours(now48.getHours()-48);
+  const progettiInattivi=state.progetti.filter(p=>{
+    if(p.stato!=='ATTIVO') return false;
+    return !state.timesheet.some(t=>{
+      const d=new Date(t.data_attivita);
+      const cm=state.commesse.find(c=>c.id===t.commessa_id);
+      return (cm&&(cm.progetti_ids||[]).includes(p.id))&&d>=now48;
+    });
+  });
+
+  if(!isAdmin) return <div className='fu'>
+    <Topbar title={`Dashboard Team — ${meseFmt(mese)}`}/>
+    <div style={{padding:'22px 26px'}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:14}}>
+        <KPI label='Ore registrate (mese)' value={oreStr(oreTotali)} sub={`${oreStr(oreApprovate)} approvate`} delay={.05} color='var(--violet)'/>
+        <KPI label='Ore in approvazione' value={oreStr(orePending)} sub='Da approvare' delay={.08} color='var(--amber)'/>
+        <KPI label='Progetti attivi' value={progettiAttivi} sub='In corso questo mese' delay={.11}/>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:16}}>
+        <Card>
+          <CH title='Delivery contenuti' meta={`${meseFmt(mese)}`}/>
+          {commMese.length===0?<Empty msg='Nessuna commessa aperta'/>:
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
+            <thead><tr><Th c='Progetto'/><Th c='Previsti'/><Th c='Consuntivi'/><Th c='Avanzamento'/></tr></thead>
+            <tbody>
+              {commMese.map(cm=>cm.progetti_ids.map(pid=>{const p=progettoMap[pid];if(!p)return null;
+                const prev=p.delivery_attesa||0; const cons=(cm.delivery_per_progetto||{})[pid]||0;
+                const pct=prev>0?Math.round(cons/prev*100):0;
+                return <TR key={pid}>
+                  <Td><div style={{fontWeight:700}}>{p.nome}</div></Td>
+                  <Td mono>{prev} contenuti</Td>
+                  <Td mono>{cons} contenuti</Td>
+                  <Td><MBar pct={pct}/></Td>
+                </TR>;
+              }))}
+            </tbody>
+          </table>}
+        </Card>
+        <Card>
+          <CH title='Attenzione' meta={`${(pending>0?1:0)+(progettiInattivi.length>0?1:0)} notifiche`}/>
+          {pending===0&&progettiInattivi.length===0&&<div style={{padding:'14px 18px',fontFamily:'var(--fm)',fontSize:11,color:'var(--green)'}}>✓ Tutto in ordine</div>}
+          {pending>0&&<div style={{display:'flex',gap:10,padding:'11px 18px',borderBottom:'1px solid rgba(255,255,255,.04)',cursor:'pointer'}} onClick={()=>setPage('timesheet')}>
+            <div style={{width:28,height:28,borderRadius:8,background:'rgba(245,158,11,.12)',display:'flex',alignItems:'center',justifyContent:'center',color:'#fbbf24',fontSize:13,flexShrink:0}}>⏱</div>
+            <div><div style={{fontSize:12,fontWeight:600}}>{pending} timesheet da approvare</div><div style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)'}}>Clicca per gestire</div></div>
+          </div>}
+          {progettiInattivi.map(p=><div key={p.id} style={{display:'flex',gap:10,padding:'11px 18px',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
+            <div style={{width:28,height:28,borderRadius:8,background:'rgba(239,68,68,.12)',display:'flex',alignItems:'center',justifyContent:'center',color:'#f87171',fontSize:13,flexShrink:0}}>⏰</div>
+            <div><div style={{fontSize:12,fontWeight:600}}>{p.nome}</div><div style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--red)'}}>Nessuna attività nelle ultime 48h</div></div>
+          </div>)}
+        </Card>
+      </div>
+    </div>
+  </div>;
 
   return <div className='fu'>
     <Topbar title={`Dashboard — ${meseFmt(mese)}`}/>
@@ -608,7 +671,7 @@ function DashboardScreen({state,setPage,setDrillCliente,setDrillCommessa}) {
       </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:22}}>
         <KPI label='Commesse aperte' value={commAperte} sub={`${commMese.filter(c=>c.stato==='PRONTA_CHIUSURA').length} pronte chiusura`} delay={.14}/>
-        <KPI label='Costo struttura' value={fmtEuro(costoStruttura)} sub='Costi fissi mese' delay={.17}/>
+        <KPI label='Costo struttura' value={fmtEuro(costoStruttura)} sub={`Fissi ${fmtEuro(costoFissiMese)} + Passive ${fmtEuro(costoFattPassiveStruttura)}`} delay={.17}/>
         <KPI label='Margini sotto soglia' value={sottoSoglia.length} sub='< 30%' delay={.2} warn={sottoSoglia.length>0}/>
       </div>
 
@@ -664,7 +727,7 @@ function DashboardScreen({state,setPage,setDrillCliente,setDrillCommessa}) {
           {/* FATTURE SCADUTE */}
           {fattScadute>0&&<Card s={{border:'1px solid rgba(239,68,68,.2)'}}>
             <CH title='Crediti scaduti' meta={fmtEuro(fattScadute)}/>
-            {state.fatture_attive.filter(f=>f.stato==='SCADUTA').map(fa=>{
+            {(state.fatture_attive||[]).filter(f=>f.stato==='SCADUTA').map(fa=>{
               const cl=clienteMap[fa.cliente_id];
               const gg=diffDays(fa.data_scadenza,nowDate());
               return <div key={fa.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 18px',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
@@ -2234,7 +2297,7 @@ function FinanziariaScreen({state,dispatch}) {
 
   // FATTURE ATTIVE — stato effettivo (scaduta se data_scadenza < oggi e non incassata)
   const todayStr=nowDate();
-  const fattureAttiveEffettive=state.fatture_attive.map(f=>{
+  const fattureAttiveEffettive=(state.fatture_attive||[]).map(f=>{
     if(f.stato!=='INCASSATA'&&f.data_scadenza&&f.data_scadenza<todayStr)
       return {...f,stato:'SCADUTA'};
     return f;
@@ -2251,8 +2314,8 @@ function FinanziariaScreen({state,dispatch}) {
   const totScadute=fattureFiltrate.filter(f=>f.stato==='SCADUTA').reduce((s,f)=>s+f.importo,0);
   const totIncassate=fattureFiltrate.filter(f=>f.stato==='INCASSATA').reduce((s,f)=>s+f.importo,0);
   // FATTURE PASSIVE
-  const totPassiveAttese=state.fatture_passive.filter(f=>f.stato==='ATTESA').reduce((s,f)=>s+f.importo,0);
-  const totPagate=state.fatture_passive.filter(f=>f.stato==='PAGATA').reduce((s,f)=>s+f.importo,0);
+  const totPassiveAttese=(state.fatture_passive||[]).filter(f=>f.stato==='ATTESA').reduce((s,f)=>s+f.importo,0);
+  const totPagate=(state.fatture_passive||[]).filter(f=>f.stato==='PAGATA').reduce((s,f)=>s+f.importo,0);
   // COSTI FISSI
   const mese=currMese();
   const costiMese=state.costi_fissi.filter(c=>c.mese===mese);
@@ -2289,7 +2352,7 @@ function FinanziariaScreen({state,dispatch}) {
 
       // Previsionale (futuro + corrente non ancora incassato): fatture attive non incassate per data_scadenza
       const entratePrev=(isFuture||isCurrent)
-        ?state.fatture_attive
+        ?(state.fatture_attive||[])
           .filter(f=>f.stato!=='INCASSATA'&&f.data_scadenza?.substring(0,7)===mKey)
           .reduce((s,f)=>s+(f.importo_residuo||f.importo||0),0)
         :0;
@@ -2304,7 +2367,7 @@ function FinanziariaScreen({state,dispatch}) {
 
       // Previsionale (futuro + corrente non ancora pagato): fatture passive non pagate per data_emissione
       const uscitePrev=(isFuture||isCurrent)
-        ?state.fatture_passive
+        ?(state.fatture_passive||[])
           .filter(f=>f.stato!=='PAGATA'&&f.data_emissione?.substring(0,7)===mKey)
           .reduce((s,f)=>s+(f.importo||0),0)
         :0;
@@ -2427,12 +2490,12 @@ function FinanziariaScreen({state,dispatch}) {
         const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
         const res=await fetch('/api/v1/fatture-attive/'+id+'/incassa',{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({data_incasso:data})});
         console.log('INCASSO status:',res.status);
-        if(res.ok){const f=state.fatture_attive.find(x=>x.id===id);if(f)dispatch({type:'UPDATE',entity:'fatture_attive',item:{...f,stato:'INCASSATA',data_ultimo_incasso:data}});}
+        if(res.ok){const f=(state.fatture_attive||[]).find(x=>x.id===id);if(f)dispatch({type:'UPDATE',entity:'fatture_attive',item:{...f,stato:'INCASSATA',data_ultimo_incasso:data}});}
         else{const err=await res.json().catch(()=>({}));alert('Errore: '+JSON.stringify(err));}
       }catch(e){console.error(e);}
       return;
     }
-    const f=state.fatture_attive.find(x=>x.id===id);if(f)dispatch({type:'UPDATE',entity:'fatture_attive',item:{...f,stato}});
+    const f=(state.fatture_attive||[]).find(x=>x.id===id);if(f)dispatch({type:'UPDATE',entity:'fatture_attive',item:{...f,stato}});
   };
   const cambiaStatoFattPassiva=async(id,stato)=>{
     if(stato==='PAGATA'){
@@ -2444,12 +2507,12 @@ function FinanziariaScreen({state,dispatch}) {
       try{
         const token=localStorage.getItem('BITE_ERP_TOKEN')||'';
         const res=await fetch('/api/v1/fatture-passive/'+id,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({stato_pagamento:'paid',data_ultimo_pagamento:data})});
-        if(res.ok){const f=state.fatture_passive.find(x=>x.id===id);if(f)dispatch({type:'UPDATE',entity:'fatture_passive',item:{...f,stato:'PAGATA',data_ultimo_pagamento:data}});}
+        if(res.ok){const f=(state.fatture_passive||[]).find(x=>x.id===id);if(f)dispatch({type:'UPDATE',entity:'fatture_passive',item:{...f,stato:'PAGATA',data_ultimo_pagamento:data}});}
         else{const err=await res.json().catch(()=>({}));alert('Errore: '+JSON.stringify(err));}
       }catch(e){console.error(e);}
       return;
     }
-    const f=state.fatture_passive.find(x=>x.id===id);if(f)dispatch({type:'UPDATE',entity:'fatture_passive',item:{...f,stato}});
+    const f=(state.fatture_passive||[]).find(x=>x.id===id);if(f)dispatch({type:'UPDATE',entity:'fatture_passive',item:{...f,stato}});
   };
   const TABS=[{id:'fatture_attive',label:'Fatture attive'},{id:'fatture_passive',label:'Fatture passive'},{id:'costi_fissi',label:'Costi fissi'},{id:'cashflow',label:'Cash flow'},{id:'insight',label:'Insight'}];
 
@@ -2641,7 +2704,7 @@ function FinanziariaScreen({state,dispatch}) {
 
       {/* FATTURE ATTIVE */}
       {tab==='fatture_attive'&&<Card>
-        <CH title='Fatture emesse ai clienti' meta={`${state.fatture_attive.length} fatture`}/>
+        <CH title='Fatture emesse ai clienti' meta={`${(state.fatture_attive||[]).length} fatture`}/>
         <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap',alignItems:'center'}}>
           <input placeholder='Cerca cliente…' value={filtroNome} onChange={e=>setFiltroNome(e.target.value)} style={{padding:'6px 12px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12,width:200,outline:'none'}}/>
           {filtroNome&&<button onClick={()=>setFiltroNome('')} style={{background:'none',border:'none',color:'var(--g4)',cursor:'pointer',fontSize:14}}>✕</button>}
@@ -2684,7 +2747,7 @@ function FinanziariaScreen({state,dispatch}) {
                 <Td mono>{fmtDate(fa.data_scadenza)}{gg!==null&&<span style={{color:'var(--red)',marginLeft:6,fontFamily:'var(--fm)',fontSize:10}}>+{gg}gg</span>}</Td>
                 <Td mono style={{color:'var(--green)'}}>{fa.data_ultimo_incasso?fmtDate(fa.data_ultimo_incasso):<span style={{color:'var(--g4)'}}>—</span>}</Td>
                 <Td><Badge s={fa.stato}/></Td>
-                <Td><div onClick={e=>e.stopPropagation()}><select value={(state.commesse||[]).find(cm=>cm.fattura_id===fa.id)?.id||''} onChange={async e=>{const cid=e.target.value||null;const prevCm=(state.commesse||[]).find(cm=>cm.fattura_id===fa.id);const res=await fetch('/api/v1/commesse/'+(cid||prevCm?.id)+'/fattura',{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'Bearer '+(localStorage.getItem('BITE_ERP_TOKEN')||'')},body:JSON.stringify({fattura_id:cid?fa.id:null})});if(res.ok){const saved=await res.json();dispatch({type:'UPSERT',entity:'commesse',item:saved});if(prevCm&&prevCm.id!==saved.id)dispatch({type:'UPSERT',entity:'commesse',item:{...prevCm,fattura_id:null}});}}} style={{fontSize:11,padding:'3px 6px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',maxWidth:140}}><option value=''>— Nessuna —</option>{(state.commesse||[]).filter(cm=>cm.cliente_id===fa.cliente_id).map(cm=>{const pNames=(cm.progetti_ids||[]).map(pid=>(state.progetti||[]).find(p=>p.id===pid)?.nome||'').filter(Boolean).join(' | ');return <option key={cm.id} value={cm.id}>{pNames||'—'} {meseFmt(cm.mese_competenza)}</option>;})}</select></div></Td>
+                <Td><div onClick={e=>e.stopPropagation()}><select value={(state.commesse||[]).find(cm=>cm.fattura_id===fa.id)?.id||''} onChange={async e=>{const cid=e.target.value||null;const prevCm=(state.commesse||[]).find(cm=>cm.fattura_id===fa.id);const tok=localStorage.getItem('BITE_ERP_TOKEN')||'';const hdrs={'Content-Type':'application/json','Authorization':'Bearer '+tok};if(prevCm&&prevCm.id!==cid){await fetch('/api/v1/commesse/'+prevCm.id+'/fattura',{method:'PATCH',headers:hdrs,body:JSON.stringify({fattura_id:null})});dispatch({type:'UPSERT',entity:'commesse',item:{...prevCm,fattura_id:null}});}if(cid){const res=await fetch('/api/v1/commesse/'+cid+'/fattura',{method:'PATCH',headers:hdrs,body:JSON.stringify({fattura_id:fa.id})});if(res.ok){const saved=await res.json();dispatch({type:'UPSERT',entity:'commesse',item:normalizeCommessaFromApi(saved)});}}}} style={{fontSize:11,padding:'3px 6px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',maxWidth:140}}><option value=''>— Nessuna —</option>{(state.commesse||[]).filter(cm=>cm.cliente_id===fa.cliente_id).map(cm=>{const pNames=(cm.progetti_ids||[]).map(pid=>(state.progetti||[]).find(p=>p.id===pid)?.nome||'').filter(Boolean).join(' | ');return <option key={cm.id} value={cm.id}>{pNames||'—'} {meseFmt(cm.mese_competenza)}</option>;})}</select></div></Td>
                 <Td><div style={{display:'flex',gap:5}}>
                   {fa.stato==='ATTESA'&&<><Btn v='success' onClick={()=>cambiaStatoFattAttiva(fa.id,'INCASSATA')} s={{padding:'4px 8px',fontSize:11}}>✓ Incassata</Btn><Btn v='danger' onClick={()=>cambiaStatoFattAttiva(fa.id,'SCADUTA')} s={{padding:'4px 8px',fontSize:11}}>Scaduta</Btn></>}
                   {fa.stato==='SCADUTA'&&<Btn v='success' onClick={()=>cambiaStatoFattAttiva(fa.id,'INCASSATA')} s={{padding:'4px 8px',fontSize:11}}>✓ Incassata</Btn>}
@@ -2703,7 +2766,7 @@ function FinanziariaScreen({state,dispatch}) {
 
       {/* FATTURE PASSIVE */}
       {tab==='fatture_passive'&&<Card>
-        <CH title='Fatture da fornitori' meta={`${state.fatture_passive.length} fatture`}/>
+        <CH title='Fatture da fornitori' meta={`${(state.fatture_passive||[]).length} fatture`}/>
         {/* FILTRI */}
         <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap',alignItems:'center'}}>
           <input placeholder='Cerca fornitore...' value={fpSearch} onChange={e=>setFpSearch(e.target.value)}
@@ -2920,7 +2983,7 @@ function FinanziariaScreen({state,dispatch}) {
       {/* INSIGHT */}
       {tab==='insight'&&(()=>{
 
-        const fattureFiltrate=state.fatture_attive.filter(fa=>{
+        const fattureFiltrate=(state.fatture_attive||[]).filter(fa=>{
           const anno=fa.data_emissione?.substring(0,4);
           if(insightAnno&&anno!==insightAnno)return false;
           if(insightPeriodo!=='anno'){
@@ -3883,7 +3946,7 @@ function AlertSettingsModal({state,dispatch,onClose}) {
 
   const save=()=>{setSaved(true);setTimeout(()=>{setSaved(false);},2000);};
 
-  const fattureInScadenza=state.fatture_attive.filter(f=>{
+  const fattureInScadenza=(state.fatture_attive||[]).filter(f=>{
     if(f.stato!=='ATTESA') return false;
     const gg=diffDays(nowDate(),f.data_scadenza);
     return gg>=0&&gg<=giorniFatture;
@@ -3936,38 +3999,70 @@ function AlertSettingsModal({state,dispatch,onClose}) {
 // SCREEN: REPORT MENSILE STAMPABILE
 // ─────────────────────────────────────────────────────────
 function ReportMensileScreen({state,setPage}) {
-  const [mese,setMese]=useState(currMese());
+  const [dal,setDal]=useState(currMese()+'-01');
+  const [al,setAl]=useState(nowDate());
+  const [filtroCliente,setFiltroCliente]=useState('');
   const progettoMap=useMemo(()=>Object.fromEntries(state.progetti.map(p=>[p.id,p])),[state.progetti]);
   const clienteMap=useMemo(()=>Object.fromEntries(state.clienti.map(c=>[c.id,c])),[state.clienti]);
 
-  const commesseMese=state.commesse.filter(c=>c.mese_competenza===mese);
-  const mesiDisponibili=useMemo(()=>{const s=new Set(state.commesse.map(c=>c.mese_competenza));s.add(currMese());return [...s].sort().reverse();},[state.commesse]);
+  const setRange=(d,a)=>{setDal(d);setAl(a);};
+  const y=new Date().getFullYear();
+  const shortcuts=[
+    {l:'Mese corrente',d:currMese()+'-01',a:nowDate()},
+    {l:'Mese prec.',d:prevMese()+'-01',a:prevMese()+'-28'},
+    {l:'Q1',d:y+'-01-01',a:y+'-03-31'},
+    {l:'Q2',d:y+'-04-01',a:y+'-06-30'},
+    {l:'Q3',d:y+'-07-01',a:y+'-09-30'},
+    {l:'Q4',d:y+'-10-01',a:y+'-12-31'},
+    {l:String(y),d:y+'-01-01',a:y+'-12-31'},
+  ];
 
-  const totFatt=commesseMese.reduce((s,cm)=>s+cm.progetti_ids.reduce((ps,pid)=>{const p=progettoMap[pid];if(!p)return ps;const dc=(cm.delivery_per_progetto||{})[pid]||0;return ps+fatt(p.importo_fisso,p.importo_variabile,p.delivery_attesa,dc);},0),0);
-  const totMO=commesseMese.reduce((s,cm)=>s+(cm.costo_manodopera||0),0);
-  const costoFissi=state.costi_fissi.filter(c=>c.mese===mese).reduce((s,c)=>s+c.importo,0);
+  const commesseFiltrate=useMemo(()=>state.commesse.filter(cm=>{
+    const mc=cm.mese_competenza;
+    if(dal&&mc<dal.substring(0,7))return false;
+    if(al&&mc>al.substring(0,7))return false;
+    if(filtroCliente&&cm.cliente_id!==filtroCliente)return false;
+    return true;
+  }),[state.commesse,dal,al,filtroCliente]);
+
+  const calcFatt=cm=>cm.progetti_ids.reduce((ps,pid)=>{const p=progettoMap[pid];if(!p)return ps;const dc=(cm.delivery_per_progetto||{})[pid]||0;return ps+fatt(p.importo_fisso,p.importo_variabile,p.delivery_attesa,dc);},0);
+
+  const totFatt=commesseFiltrate.reduce((s,cm)=>s+calcFatt(cm),0);
+  const totMO=commesseFiltrate.reduce((s,cm)=>s+(cm.costo_manodopera||0),0);
+  const costoFissi=(state.costi_fissi||[]).filter(c=>c.attivo).reduce((s,c)=>{const p=(c.periodicita||'mensile').toLowerCase();if(p==='mensile')return s+(parseFloat(c.importo)||0);if(p==='annuale')return s+(parseFloat(c.importo)||0)/12;if(p==='trimestrale')return s+(parseFloat(c.importo)||0)/3;if(p==='semestrale')return s+(parseFloat(c.importo)||0)/6;return s;},0);
+  const mesiRange=new Set(commesseFiltrate.map(cm=>cm.mese_competenza)).size||1;
+  const costoFissiRange=costoFissi*mesiRange;
   const margLordo=totFatt-totMO;
-  const margNetto=margLordo-costoFissi;
+  const margNetto=margLordo-costoFissiRange;
   const margPctLordo=totFatt>0?Math.round(margLordo/totFatt*100):0;
   const margPctNetto=totFatt>0?Math.round(margNetto/totFatt*100):0;
 
   const print=()=>window.print();
 
+  const periodoLabel=dal===al?fmtDate(dal):`${fmtDate(dal)} — ${fmtDate(al)}`;
+
   return <div className='fu'>
     <style>{`@media print{aside,button,.no-print{display:none!important}main{margin-left:0!important}.print-page{padding:24px!important}}`}</style>
-    <Topbar title='Report mensile' sub={meseFmt(mese)} className='no-print'>
-      <select value={mese} onChange={e=>setMese(e.target.value)} style={{width:160,height:34,padding:'0 10px'}}>
-        {mesiDisponibili.map(m=><option key={m} value={m}>{meseFmt(m)}</option>)}
+    <Topbar title='Report & Analisi' className='no-print'>
+      <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+        {shortcuts.map(s=><button key={s.l} onClick={()=>setRange(s.d,s.a)} style={{padding:'4px 8px',borderRadius:6,border:'1px solid var(--g3)',background:dal===s.d&&al===s.a?'var(--purple)':'var(--g2)',color:dal===s.d&&al===s.a?'white':'var(--g5)',fontSize:11,cursor:'pointer'}}>{s.l}</button>)}
+      </div>
+      <input type='date' value={dal} onChange={e=>setDal(e.target.value)} style={{height:34,padding:'0 8px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12}}/>
+      <span style={{color:'var(--g4)',fontSize:12}}>→</span>
+      <input type='date' value={al} onChange={e=>setAl(e.target.value)} style={{height:34,padding:'0 8px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12}}/>
+      <select value={filtroCliente} onChange={e=>setFiltroCliente(e.target.value)} style={{height:34,padding:'0 10px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12,minWidth:160}}>
+        <option value=''>Tutti i clienti</option>
+        {state.clienti.map(c=><option key={c.id} value={c.id}>{c.ragione_sociale}</option>)}
       </select>
       <Btn v='ghost' onClick={()=>setPage('dashboard')}>← Dashboard</Btn>
       <Btn v='primary' onClick={print}>⎙ Stampa / PDF</Btn>
     </Topbar>
-    <div className='print-page' style={{padding:'28px 32px',maxWidth:900,margin:'0 auto'}}>
+    <div className='print-page' style={{padding:'28px 32px',maxWidth:1000,margin:'0 auto'}}>
       {/* Header report */}
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:28,paddingBottom:20,borderBottom:'2px solid var(--g2)'}}>
         <div>
-          <div style={{fontSize:24,fontWeight:800,letterSpacing:-.5}}>Report mensile</div>
-          <div style={{fontSize:15,color:'var(--violet)',fontWeight:600,marginTop:2}}>{meseFmt(mese)}</div>
+          <div style={{fontSize:24,fontWeight:800,letterSpacing:-.5}}>Report & Analisi</div>
+          <div style={{fontSize:15,color:'var(--violet)',fontWeight:600,marginTop:2}}>{periodoLabel}</div>
           <div style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)',marginTop:4}}>Generato il {fmtDate(nowDate())} · Bite Digital Studio</div>
         </div>
         <div style={{width:44,height:44,background:'linear-gradient(135deg,var(--purple),var(--violet))',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,fontWeight:800,color:'white'}}>B</div>
@@ -3990,33 +4085,49 @@ function ReportMensileScreen({state,setPage}) {
       {/* Dettaglio per cliente */}
       <div style={{marginBottom:24}}>
         <div style={{fontSize:14,fontWeight:700,marginBottom:12,paddingBottom:8,borderBottom:'1px solid var(--g2)'}}>Dettaglio clienti</div>
-        {commesseMese.length===0?<Empty msg={`Nessuna commessa per ${meseFmt(mese)}`}/>:
+        {commesseFiltrate.length===0?<Empty msg='Nessuna commessa nel periodo selezionato'/>:
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
-          <thead><tr><Th c='Cliente'/><Th c='Progetti'/><Th c='Fatturabile'/><Th c='Costo M.O.'/><Th c='Margine €'/><Th c='Margine %'/><Th c='Stato'/></tr></thead>
+          <thead><tr><Th c='Cliente'/><Th c='Mese'/><Th c='Progetti'/><Th c='Fatturabile'/><Th c='Costo M.O.'/><Th c='Margine €'/><Th c='Margine %'/><Th c='Incasso'/><Th c='Stato'/></tr></thead>
           <tbody>
-            {commesseMese.map(cm=>{
+            {commesseFiltrate.map(cm=>{
               const cl=clienteMap[cm.cliente_id];
-              const f=cm.progetti_ids.reduce((ps,pid)=>{const p=progettoMap[pid];if(!p)return ps;const dc=(cm.delivery_per_progetto||{})[pid]||0;return ps+fatt(p.importo_fisso,p.importo_variabile,p.delivery_attesa,dc);},0);
+              const f=calcFatt(cm);
               const mo=cm.costo_manodopera||0; const mp=f>0?Math.round((f-mo)/f*100):0;
-              return <TR key={cm.id}>
-                <Td><div style={{fontWeight:700}}>{cl?.ragione_sociale}</div><div style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--violet)'}}>{cl?.codice}</div></Td>
-                <Td><div style={{display:'flex',gap:4,flexWrap:'wrap'}}>{cm.progetti_ids.map(pid=>{const p=progettoMap[pid];return p?<Badge key={pid} s={p.categoria}/>:null;})}</div></Td>
-                <Td mono>{fmtEuro(f)}</Td>
-                <Td mono>{fmtEuro(mo)}</Td>
-                <Td mono style={{color:f-mo>=0?'var(--green)':'var(--red)'}}>{fmtEuro(f-mo)}</Td>
-                <Td><MBar pct={mp}/></Td>
-                <Td><Badge s={cm.stato}/></Td>
-              </TR>;
+              const hasSocial=cm.progetti_ids.some(pid=>progettoMap[pid]?.tipo==='RETAINER'||(progettoMap[pid]?.servizi||[]).some(s=>s.tipo==='SOCIAL'));
+              const dataIncasso=cm.fattura_stato==='INCASSATA'||cm.fattura_stato==='paid'?cm.fattura_data:null;
+              return <React.Fragment key={cm.id}>
+                <TR>
+                  <Td><div style={{fontWeight:700}}>{cl?.ragione_sociale}</div><div style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--violet)'}}>{cl?.codice}</div></Td>
+                  <Td mono muted>{meseFmt(cm.mese_competenza)}</Td>
+                  <Td><div style={{display:'flex',gap:4,flexWrap:'wrap'}}>{cm.progetti_ids.map(pid=>{const p=progettoMap[pid];return p?<Badge key={pid} s={p.categoria}/>:null;})}</div></Td>
+                  <Td mono>{fmtEuro(f)}</Td>
+                  <Td mono>{fmtEuro(mo)}</Td>
+                  <Td mono style={{color:f-mo>=0?'var(--green)':'var(--red)'}}>{fmtEuro(f-mo)}</Td>
+                  <Td><MBar pct={mp}/></Td>
+                  <Td mono style={{color:dataIncasso?'var(--green)':'var(--g4)'}}>{dataIncasso?fmtDate(dataIncasso):'—'}</Td>
+                  <Td><Badge s={cm.stato}/></Td>
+                </TR>
+                {hasSocial&&cm.progetti_ids.filter(pid=>{const p=progettoMap[pid];return p&&(p.delivery_attesa||0)>0;}).map(pid=>{
+                  const p=progettoMap[pid]; if(!p)return null;
+                  const prev=p.delivery_attesa||0; const cons=(cm.delivery_per_progetto||{})[pid]||0;
+                  const delta=cons-prev; const pct=prev>0?Math.round(cons/prev*100):0;
+                  return <tr key={'social_'+pid} style={{background:'rgba(139,92,246,.04)'}}>
+                    <td colSpan={2} style={{padding:'4px 14px',paddingLeft:28,fontFamily:'var(--fm)',fontSize:10,color:'var(--violet)'}}>↳ Social: {p.nome}</td>
+                    <td colSpan={2} style={{padding:'4px 14px',fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)'}}>Previsti: {prev} · Effettivi: {cons} · <span style={{color:delta>=0?'var(--green)':'var(--red)',fontWeight:600}}>{delta>=0?'+':''}{delta}</span></td>
+                    <td colSpan={5} style={{padding:'4px 14px'}}><MBar pct={pct}/></td>
+                  </tr>;
+                })}
+              </React.Fragment>;
             })}
           </tbody>
           <tfoot>
             <tr style={{background:'var(--g2)'}}>
-              <td colSpan={2} style={{padding:'10px 14px',fontWeight:700,fontSize:13}}>Totale</td>
+              <td colSpan={3} style={{padding:'10px 14px',fontWeight:700,fontSize:13}}>Totale ({commesseFiltrate.length} commesse)</td>
               <Td mono><b>{fmtEuro(totFatt)}</b></Td>
               <Td mono><b>{fmtEuro(totMO)}</b></Td>
               <Td mono style={{color:margLordo>=0?'var(--green)':'var(--red)'}}><b>{fmtEuro(margLordo)}</b></Td>
               <Td><div style={{fontFamily:'var(--fm)',fontSize:13,fontWeight:800,color:margPctLordo>=30?'var(--green)':'var(--red)'}}>{margPctLordo}%</div></Td>
-              <Td/>
+              <Td/><Td/>
             </tr>
           </tfoot>
         </table>}
@@ -4028,17 +4139,17 @@ function ReportMensileScreen({state,setPage}) {
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
           <thead><tr><Th c='Voce'/><Th c='Categoria'/><Th c='Importo'/><Th c='Tipo'/></tr></thead>
           <tbody>
-            {state.costi_fissi.filter(c=>c.mese===mese).map(c=><TR key={c.id}>
+            {(state.costi_fissi||[]).filter(c=>c.attivo).map(c=>{const p=(c.periodicita||'mensile').toLowerCase();const imp=p==='mensile'?parseFloat(c.importo):p==='annuale'?parseFloat(c.importo)/12:p==='trimestrale'?parseFloat(c.importo)/3:p==='semestrale'?parseFloat(c.importo)/6:parseFloat(c.importo);return <TR key={c.id}>
               <Td>{c.descrizione}</Td>
               <Td><Badge s={c.categoria}/></Td>
-              <Td mono style={{color:'var(--red)'}}>−{fmtEuro(c.importo)}</Td>
-              <Td muted>{c.ricorrente?'↻ ricorrente':'una tantum'}</Td>
-            </TR>)}
+              <Td mono style={{color:'var(--red)'}}>−{fmtEuro(imp)}/mese</Td>
+              <Td muted>{c.periodicita||'mensile'}</Td>
+            </TR>;})}
           </tbody>
           <tfoot>
             <tr style={{background:'var(--g2)'}}>
-              <td colSpan={2} style={{padding:'10px 14px',fontWeight:700}}>Totale costi</td>
-              <Td mono style={{color:'var(--red)'}}><b>−{fmtEuro(costoFissi)}</b></Td>
+              <td colSpan={2} style={{padding:'10px 14px',fontWeight:700}}>Totale costi ({mesiRange} {mesiRange===1?'mese':'mesi'})</td>
+              <Td mono style={{color:'var(--red)'}}><b>−{fmtEuro(costoFissiRange)}</b></Td>
               <Td/>
             </tr>
           </tfoot>
@@ -4058,7 +4169,7 @@ function ReportMensileScreen({state,setPage}) {
 // ─────────────────────────────────────────────────────────
 const NAV=[
   {id:'dashboard',label:'Dashboard',icon:'⊞',section:'Generale'},
-  {id:'report',label:'Report mensile',icon:'⎙',section:'Generale'},
+  {id:'report',label:'Report & Analisi',icon:'⎙',section:'Generale'},
   {id:'profilo',label:'Profilo',icon:'👤',section:'Generale'},
   {id:'clienti',label:'Clienti',icon:'◎',section:'Gestione'},
   {id:'fornitori',label:'Fornitori',icon:'🏭',section:'Gestione'},
@@ -5393,7 +5504,7 @@ function App(){
   };
 
   const pending=state.timesheet.filter(t=>t.stato==='PENDING').length;
-  const fatScadute=state.fatture_attive.filter(f=>f.stato==='SCADUTA').length;
+  const fatScadute=(state.fatture_attive||[]).filter(f=>f.stato==='SCADUTA').length;
   const alerts=state.commesse.filter(cm=>{
     const progettoMap=Object.fromEntries(state.progetti.map(p=>[p.id,p]));
     const f=cm.progetti_ids.reduce((s,pid)=>{const p=progettoMap[pid];if(!p)return s;const dc=(cm.delivery_per_progetto||{})[pid]||0;return s+fatt(p.importo_fisso,p.importo_variabile,p.delivery_attesa,dc);},0);
@@ -5410,7 +5521,7 @@ function App(){
 
   const renderPage=()=>{
     switch(page){
-      case 'dashboard':        return <DashboardScreen state={state} setPage={setPage} setDrillCliente={setDrillCliente} setDrillCommessa={setDrillCommessa}/>;
+      case 'dashboard':        return <DashboardScreen state={state} setPage={setPage} setDrillCliente={setDrillCliente} setDrillCommessa={setDrillCommessa} authUser={authUser}/>;
       case 'report':           return <ReportMensileScreen state={state} setPage={setPage}/>;
       case 'profilo':          return <ProfiloScreen authUser={authUser} api={usersApi} onAuthUserUpdate={updateAuthUser}/>;
       case 'clienti':          return <ClientiScreen state={state} dispatch={dispatch} setPage={setPage} setDrillCliente={setDrillCliente} api={clientiApi}/>
