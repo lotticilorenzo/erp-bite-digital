@@ -32,6 +32,8 @@ textarea{resize:vertical;min-height:70px}
 @keyframes scaleIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
 .fu{animation:fadeUp .28s ease both}
 </style>
+<script src="https://apis.google.com/js/api.js"></script>
+<script src="https://accounts.google.com/gsi/client"></script>
 </head>
 <body>
 <div id="root"></div>
@@ -42,6 +44,9 @@ const {useState,useReducer,useMemo,useEffect} = React;
 // UTILS
 // ─────────────────────────────────────────────────────────
 const uid = () => Math.random().toString(36).slice(2,10);
+const GOOGLE_API_KEY='AIzaSyAzZnJhDaFLFvq3iFfsZug2XN8DPrh5ssw';
+const GOOGLE_CLIENT_ID='1059760810835-ona664i8ts3iaeas42q9h4ujua91u53t.apps.googleusercontent.com';
+const GOOGLE_PICKER_SCOPE='https://www.googleapis.com/auth/drive.readonly';
 const nowDate = () => new Date().toISOString().slice(0,10);
 const currMese = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
 const prevMese = () => { const d=new Date(); d.setMonth(d.getMonth()-1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
@@ -1042,6 +1047,74 @@ function FornitoriScreen({state,dispatch}){
 }
 
 
+
+function GoogleDrivePicker({onFilesSelected,children}) {
+  const [tokenClient,setTokenClient]=React.useState(null);
+  const [accessToken,setAccessToken]=React.useState(null);
+  const [pickerLoaded,setPickerLoaded]=React.useState(false);
+
+  React.useEffect(()=>{
+    // Carica gapi
+    if(window.gapi){
+      window.gapi.load('picker',()=>setPickerLoaded(true));
+    }
+    // Init token client
+    if(window.google?.accounts?.oauth2){
+      const tc=window.google.accounts.oauth2.initTokenClient({
+        client_id:GOOGLE_CLIENT_ID,
+        scope:GOOGLE_PICKER_SCOPE,
+        callback:(resp)=>{
+          if(resp.access_token){
+            setAccessToken(resp.access_token);
+          }
+        }
+      });
+      setTokenClient(tc);
+    }
+  },[]);
+
+  const openPicker=()=>{
+    if(!tokenClient) return;
+    if(accessToken){
+      showPicker(accessToken);
+    } else {
+      tokenClient.requestAccessToken({prompt:'consent'});
+      // Aspetta che accessToken venga settato
+      const interval=setInterval(()=>{
+        if(accessToken){
+          clearInterval(interval);
+          showPicker(accessToken);
+        }
+      },300);
+    }
+  };
+
+  const showPicker=(token)=>{
+    if(!window.google?.picker||!pickerLoaded) return;
+    const picker=new window.google.picker.PickerBuilder()
+      .addView(window.google.picker.ViewId.DOCS)
+      .setOAuthToken(token)
+      .setDeveloperKey(GOOGLE_API_KEY)
+      .setCallback((data)=>{
+        if(data.action===window.google.picker.Action.PICKED){
+          const files=data.docs.map(d=>({
+            id:d.id,
+            name:d.name,
+            url:d.url||`https://drive.google.com/file/d/${d.id}/view`,
+            mimeType:d.mimeType,
+            iconUrl:d.iconUrl,
+          }));
+          onFilesSelected(files);
+        }
+      })
+      .enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED)
+      .build();
+    picker.setVisible(true);
+  };
+
+  return <span onClick={openPicker} style={{cursor:'pointer'}}>{children}</span>;
+}
+
 function ClientiScreen({state,dispatch,setPage,setDrillCliente,api}) {
   const [search,setSearch]=useState('');
   const [modal,setModal]=useState(null);
@@ -1049,14 +1122,16 @@ function ClientiScreen({state,dispatch,setPage,setDrillCliente,api}) {
   const [form,setForm]=useState({});
   const [codicErr,setCodicErr]=useState('');
   const [saving,setSaving]=useState(false);
+  const [driveFiles,setDriveFiles]=useState([]);
 
   const nextNum=()=>state.clienti.length>0?Math.max(...state.clienti.map(c=>c.numero||0))+1:1;
 
   const openNew=()=>{
     setForm({codice:'',numero:nextNum(),ragione_sociale:'',piva:'',sdi:'',pec:'',condizioni:'',attivo:true});
+    setDriveFiles([]);
     setCodicErr(''); setModal('new');
   };
-  const openEdit=c=>{setForm({...c});setCodicErr('');setModal(c);};
+  const openEdit=c=>{setForm({...c});setDriveFiles(c.drive_files||[]);setCodicErr('');setModal(c);};
   const closeModal=()=>{setModal(null);setForm({});setCodicErr('');};
 
   const validateCodice=(cod,excludeId)=>{
@@ -1096,6 +1171,7 @@ function ClientiScreen({state,dispatch,setPage,setDrillCliente,api}) {
           note_indirizzo:item.note_indirizzo||null,
           email:item.email||null,
           condizioni_pagamento:item.condizioni||null,
+          drive_files:driveFiles,
         };
         let saved;
         if(modal==='new'){
@@ -1190,6 +1266,21 @@ function ClientiScreen({state,dispatch,setPage,setDrillCliente,api}) {
         <FRow label='Accordo di pagamento'><input value={form.condizioni||''} onChange={e=>setForm({...form,condizioni:e.target.value})} placeholder='es. 30gg DFFM'/></FRow>
         <FRow label='Note'><textarea rows={3} value={form.note||''} onChange={e=>setForm({...form,note:e.target.value})} style={{width:'100%',background:'var(--g1)',border:'1px solid var(--g3)',borderRadius:8,padding:'8px 12px',color:'var(--tx)',resize:'vertical'}}/></FRow>
         <FRow label='Stato'><select value={form.attivo?'true':'false'} onChange={e=>setForm({...form,attivo:e.target.value==='true'})}><option value='true'>Attivo</option><option value='false'>Inattivo</option></select></FRow>
+        <div style={{fontSize:11,fontWeight:700,color:'var(--acc)',textTransform:'uppercase',letterSpacing:1,margin:'14px 0 8px'}}>📎 File collegati (Drive)</div>
+        <div style={{marginBottom:12}}>
+          {driveFiles.length>0&&<div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:10}}>
+            {driveFiles.map((f,i)=><div key={f.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px',background:'var(--g2)',borderRadius:6,border:'1px solid var(--g3)'}}>
+              <span style={{fontSize:13}}>📄</span>
+              <a href={f.url} target='_blank' rel='noopener noreferrer' style={{flex:1,fontSize:12,color:'var(--violet)',textDecoration:'none',fontWeight:600}}>{f.name}</a>
+              <button type='button' onClick={()=>setDriveFiles(driveFiles.filter((_,j)=>j!==i))} style={{background:'none',border:'none',color:'var(--g4)',cursor:'pointer',fontSize:14,padding:'0 4px'}}>✕</button>
+            </div>)}
+          </div>}
+          <GoogleDrivePicker onFilesSelected={files=>setDriveFiles(prev=>{const ids=new Set(prev.map(f=>f.id));return [...prev,...files.filter(f=>!ids.has(f.id))];})}>
+            <div style={{display:'inline-flex',alignItems:'center',gap:6,padding:'7px 12px',borderRadius:8,border:'1px dashed var(--g3)',color:'var(--g4)',fontSize:12,cursor:'pointer',transition:'all .15s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--violet)';e.currentTarget.style.color='var(--violet)';}} onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--g3)';e.currentTarget.style.color='var(--g4)';}}>
+              <span style={{fontSize:16}}>+</span> Collega file da Google Drive
+            </div>
+          </GoogleDrivePicker>
+        </div>
         <FActions onCancel={closeModal} submitLabel={saving?'Salvataggio...':'Salva'}/>
       </form>
     </Modal>}
@@ -2304,7 +2395,7 @@ function FinanziariaScreen({state,dispatch}) {
   });
   // Totali filtrati (rispettano filtroStato, filtroDal, filtroAl)
   const fattureFiltrate=fattureAttiveEffettive.filter(fa=>{
-    if(filtroNome){const cl=clienteMap[fa.cliente_id];if(!(cl?.nome||cl?.ragione_sociale||'').toLowerCase().includes(filtroNome.toLowerCase()))return false;}
+    if(filtroNome){const cl=clienteMap[fa.cliente_id];if(!(cl?.ragione_sociale||'').toLowerCase().includes(filtroNome.toLowerCase()))return false;}
     if(filtroStato!=='TUTTI'&&fa.stato!==filtroStato)return false;
     if(filtroDal&&fa.data_emissione&&fa.data_emissione<filtroDal)return false;
     if(filtroAl&&fa.data_emissione&&fa.data_emissione>filtroAl)return false;
@@ -2728,13 +2819,7 @@ function FinanziariaScreen({state,dispatch}) {
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
           <thead><tr><Th c='N°'/><Th c='Cliente'/><Th c='Importo Netto'/><Th c='Importo Totale'/><Th c='Emissione'/><Th c='Scadenza'/><Th c='Incasso'/><Th c='Stato'/><Th c='Commessa'/><Th c='Azioni'/></tr></thead>
           <tbody>
-            {[...fattureAttiveEffettive]
-              .filter(fa=>{
-                if(filtroStato!=='TUTTI'&&fa.stato!==filtroStato)return false;
-                if(filtroDal&&fa.data_emissione&&fa.data_emissione<filtroDal)return false;
-                if(filtroAl&&fa.data_emissione&&fa.data_emissione>filtroAl)return false;
-                return true;
-              })
+            {[...fattureFiltrate]
               .sort((a,b)=>b.data_emissione?.localeCompare(a.data_emissione||'')).map(fa=>{
               const cl=clienteMap[fa.cliente_id];
               const gg=fa.stato==='SCADUTA'?diffDays(fa.data_scadenza,nowDate()):null;
@@ -4731,20 +4816,21 @@ function RisorseScreen({state,dispatch}){
   const filtered=risorse.filter(r=>filterAttivo==='TUTTI'||String(r.attivo)===(filterAttivo==='ATTIVI'?'true':'false'));
 
   const costoOrarioEffettivo=r=>parseFloat(r.costo_orario_override||r.costo_orario_calcolato||0);
-  const costoMensile=r=>{
-    if(r.tipo_contratto==='FREELANCER'||r.tipo_contratto==='PRESTAZIONE_OCCASIONALE')
-      return parseFloat(r.compenso_fisso_mensile||0);
-    if(r.tipo_contratto==='FONDATORE')
-      return 0; // compenso variabile — non contabilizzato nel costo fisso mensile
-    const co=costoOrarioEffettivo(r);
-    const oreSettimana=parseFloat(r.ore_settimanali||40);
-    return co*oreSettimana*4.33;
+  const costoAnnuoReale=r=>{
+    const t=r.tipo_contratto;
+    if(t==='FREELANCER'||t==='PRESTAZIONE_OCCASIONALE'||t==='FONDATORE')
+      return parseFloat(r.compenso_fisso_mensile||0)*12;
+    const ral=parseFloat(r.ral||0);
+    const contrib=parseFloat(r.contributi_percentuale||30)/100;
+    const tfr=parseFloat(r.tfr_percentuale||6.91)/100;
+    return ral*(1+contrib+tfr);
   };
-  const costoAnno=r=>costoMensile(r)*12;
+  const costoMensile=r=>costoAnnuoReale(r)/12;
+  const costoAnno=r=>costoAnnuoReale(r);
 
   const openNew=()=>{setForm({tipo_contratto:'DIPENDENTE',ore_settimanali:40,contributi_percentuale:30,tfr_percentuale:6.91,attivo:true});setModal('new');};
   const openEdit=r=>{setForm({...r,_editId:r.id});setModal('edit');};
-  const closeModal=()=>{setModal(null);setForm({});setServizi([]);};
+  const closeModal=()=>{setModal(null);setForm({});};
 
   const save=async()=>{
     setSaving(true);
