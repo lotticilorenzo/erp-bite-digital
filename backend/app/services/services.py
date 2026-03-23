@@ -1769,33 +1769,49 @@ async def save_imputazioni_movimento(db: AsyncSession, movimento_id: uuid.UUID, 
 
 # ── RISORSE (HR) ──────────────────────────────────────────
 def calcola_costo_orario(r) -> float:
-    """Calcola costo orario reale dalla struttura contrattuale."""
-    ore_anno = float(r.get('ore_settimanali', 40)) * 52 - 176 - 88  # ferie + festività
+    """Calcola costo orario reale dalla struttura contrattuale.
+    
+    Formula: (Costo annuo / Ore vendibili anno) * 1.30 overhead
+    Ore vendibili = (ore_sett * 52 - festivi 88h - ferie 208h - malattia 24h) * 70% saturazione
+    Dipendenti CCNL Commercio: 14 mensilita, contributi 40% (dipendente) o 15.81% (apprendistato)
+    Fondatori: compenso_fisso_mensile * 12, nessun contributo
+    Freelancer: compenso_fisso_mensile / ore_mese
+    """
     tipo = r.get('tipo_contratto', '')
+    ore_sett = float(r.get('ore_settimanali', 40))
+    ferie_giorni = float(r.get('giorni_ferie', 26))
+    malattia_giorni = float(r.get('giorni_malattia', 3))
 
-    if tipo == 'FONDATORE':
-        # Usa compenso obiettivo se presente, altrimenti 0
-        compenso = float(r.get('compenso_obiettivo') or 0)
-        if compenso == 0:
+    if tipo in ('FONDATORE',):
+        compenso_mensile = float(r.get('compenso_fisso_mensile') or 0)
+        if compenso_mensile == 0:
             return 0.0
-        costo_anno = compenso * 12 * (1 + float(r.get('contributi_percentuale', 30)) / 100 + float(r.get('tfr_percentuale', 6.91)) / 100)
-        return round(costo_anno / ore_anno, 2)
+        costo_anno = compenso_mensile * 12
+        ore_vendibili = (ore_sett * 52 - 88 - ferie_giorni * 8 - malattia_giorni * 8) * 0.70
+        if ore_vendibili <= 0:
+            return 0.0
+        return round(costo_anno / ore_vendibili * 1.30, 2)
 
     if tipo in ('FREELANCER', 'PRESTAZIONE_OCCASIONALE'):
         compenso_mensile = float(r.get('compenso_fisso_mensile') or 0)
         if compenso_mensile == 0:
             return 0.0
-        ore_mese = float(r.get('ore_settimanali', 40)) * 4.33
+        ore_mese = ore_sett * 4.33
+        if ore_mese <= 0:
+            return 0.0
         return round(compenso_mensile / ore_mese, 2)
 
-    # Dipendenti (APPRENDISTATO, TEMPO_DETERMINATO, DIPENDENTE)
+    # Dipendenti: APPRENDISTATO, TEMPO_DETERMINATO, DIPENDENTE
     ral = float(r.get('ral') or 0)
     if ral == 0:
         return 0.0
     contributi = float(r.get('contributi_percentuale', 30)) / 100
     tfr = float(r.get('tfr_percentuale', 6.91)) / 100
     costo_anno = ral * (1 + contributi + tfr)
-    return round(costo_anno / ore_anno, 2)
+    ore_vendibili = (ore_sett * 52 - 88 - ferie_giorni * 8 - malattia_giorni * 8) * 0.70
+    if ore_vendibili <= 0:
+        return 0.0
+    return round(costo_anno / ore_vendibili * 1.30, 2)
 
 
 async def list_risorse(db: AsyncSession):

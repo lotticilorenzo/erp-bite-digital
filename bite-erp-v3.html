@@ -4880,9 +4880,44 @@ function RisorseScreen({state,dispatch}){
     return 'ral';
   };
 
+  const isFondatore=form.tipo_contratto==='FONDATORE';
+  const isFreelancer=form.tipo_contratto==='FREELANCER'||form.tipo_contratto==='PRESTAZIONE_OCCASIONALE';
+  const isDipendente=form.tipo_contratto==='DIPENDENTE'||form.tipo_contratto==='APPRENDISTATO'||form.tipo_contratto==='TEMPO_DETERMINATO';
+  const contributiDefault=form.tipo_contratto==='APPRENDISTATO'?15.81:form.tipo_contratto==='FONDATORE'?0:40;
+
+  // Preview costo calcolato nel modal
+  const previewCostoOrario=()=>{
+    const t=form.tipo_contratto;
+    const oreSett=parseFloat(form.ore_settimanali||40);
+    const ferie=parseFloat(form.giorni_ferie||26);
+    const malattia=parseFloat(form.giorni_malattia||3);
+    if(isFondatore){
+      const comp=parseFloat(form.compenso_fisso_mensile||0);
+      if(!comp) return null;
+      const oreVend=(oreSett*52-88-ferie*8-malattia*8)*0.70;
+      return Math.round(comp*12/oreVend*1.30*100)/100;
+    }
+    if(isFreelancer){
+      const comp=parseFloat(form.compenso_fisso_mensile||0);
+      if(!comp) return null;
+      const oreMese=oreSett*4.33;
+      return Math.round(comp/oreMese*1.30*100)/100;
+    }
+    const ral=parseFloat(form.ral||0);
+    if(!ral) return null;
+    const contrib=parseFloat(form.contributi_percentuale||contributiDefault)/100;
+    const tfr=parseFloat(form.tfr_percentuale||6.91)/100;
+    const costoAnno=ral*(1+contrib+tfr);
+    const oreVend=(oreSett*52-88-ferie*8-malattia*8)*0.70;
+    return Math.round(costoAnno/oreVend*1.30*100)/100;
+  };
+
   return <div className='fu'>
-    {modal&&<Modal title={modal==='new'?'Nuova risorsa':'Modifica risorsa'} onClose={closeModal} width={560}>
+    {modal&&<Modal title={modal==='new'?'Nuova risorsa':'Modifica risorsa'} onClose={closeModal} width={580}>
       <div style={{display:'flex',flexDirection:'column',gap:0}}>
+
+        {/* Sezione: Anagrafica */}
+        <div style={{fontSize:11,fontWeight:700,color:'var(--acc)',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Anagrafica</div>
         <FGrid>
           <FRow label='Nome'><input required value={form.nome||''} onChange={e=>setForm({...form,nome:e.target.value})}/></FRow>
           <FRow label='Cognome'><input required value={form.cognome||''} onChange={e=>setForm({...form,cognome:e.target.value})}/></FRow>
@@ -4890,41 +4925,98 @@ function RisorseScreen({state,dispatch}){
         <FRow label='Ruolo'><input value={form.ruolo||''} onChange={e=>setForm({...form,ruolo:e.target.value})} placeholder='es. Art Director, Copywriter...'/></FRow>
         <FGrid>
           <FRow label='Tipo contratto'>
-            <select value={form.tipo_contratto||'DIPENDENTE'} onChange={e=>setForm({...form,tipo_contratto:e.target.value,contributi_percentuale:e.target.value==='APPRENDISTATO'?10:e.target.value==='FONDATORE'?0:30})}>
+            <select value={form.tipo_contratto||'DIPENDENTE'} onChange={e=>{
+              const t=e.target.value;
+              const contrib=t==='APPRENDISTATO'?15.81:t==='FONDATORE'?0:t==='FREELANCER'||t==='PRESTAZIONE_OCCASIONALE'?0:40;
+              setForm({...form,tipo_contratto:t,contributi_percentuale:contrib});
+            }}>
               {TIPI.map(t=><option key={t.v} value={t.v}>{t.l}</option>)}
             </select>
           </FRow>
           <FRow label='Ore/settimana'><input type='number' min='1' max='60' step='0.5' value={form.ore_settimanali||40} onChange={e=>setForm({...form,ore_settimanali:e.target.value})}/></FRow>
         </FGrid>
-        <FGrid>
-          <FRow label='Data inizio'><input type='date' value={form.data_inizio||''} onChange={e=>setForm({...form,data_inizio:e.target.value})}/></FRow>
-          <FRow label='Data fine'><input type='date' value={form.data_fine||''} onChange={e=>setForm({...form,data_fine:e.target.value})}/></FRow>
-        </FGrid>
 
-        {/* Compenso base */}
-        {(form.tipo_contratto==='FREELANCER'||form.tipo_contratto==='PRESTAZIONE_OCCASIONALE')?
-          <FRow label='Compenso mensile (€)'><input type='number' min='0' step='0.01' value={form.compenso_fisso_mensile||''} onChange={e=>setForm({...form,compenso_fisso_mensile:e.target.value})} placeholder='es. 500'/></FRow>:
-          <FRow label='RAL (€)'><input type='number' min='0' step='100' value={form.ral||''} onChange={e=>setForm({...form,ral:e.target.value})} placeholder='es. 22000'/></FRow>
-        }
+        {/* FONDATORE */}
+        {isFondatore&&<>
+          <div style={{fontSize:11,fontWeight:700,color:'var(--acc)',textTransform:'uppercase',letterSpacing:1,margin:'14px 0 8px'}}>Compenso fondatore</div>
+          <FGrid>
+            <FRow label='Data inizio'><input type='date' value={form.data_inizio||''} onChange={e=>setForm({...form,data_inizio:e.target.value})}/></FRow>
+            <FRow label='Socio operativo'>
+              <select value={form.socio_operativo||'si'} onChange={e=>setForm({...form,socio_operativo:e.target.value})}>
+                <option value='si'>Sì</option>
+                <option value='no'>No</option>
+              </select>
+            </FRow>
+          </FGrid>
+          <FGrid>
+            <FRow label='Compenso mensile attuale (€)' hint='Compenso che percepisce oggi'>
+              <input type='number' min='0' step='100' value={form.compenso_fisso_mensile||''} onChange={e=>setForm({...form,compenso_fisso_mensile:e.target.value})} placeholder='es. 1200'/>
+            </FRow>
+            <FRow label='Compenso obiettivo mensile (€)' hint='Target a regime'>
+              <input type='number' min='0' step='100' value={form.compenso_obiettivo?parseFloat(form.compenso_obiettivo)/12:''} onChange={e=>setForm({...form,compenso_obiettivo:e.target.value?parseFloat(e.target.value)*12:''})} placeholder='es. 2000'/>
+            </FRow>
+          </FGrid>
+        </>}
 
-        <FRow label='Compenso obiettivo (€/anno)'>
-          <input type='number' min='0' step='100' value={form.compenso_obiettivo||''} onChange={e=>setForm({...form,compenso_obiettivo:e.target.value})} placeholder='es. 30000 — compenso target a regime'/>
-        </FRow>
-
-        {/* Parametri costo */}
-        {form.tipo_contratto!=='FREELANCER'&&form.tipo_contratto!=='PRESTAZIONE_OCCASIONALE'&&<FGrid>
-          <FRow label='Contributi azienda (%)'>
-            <input type='number' min='0' max='50' step='0.1' value={form.contributi_percentuale||30} onChange={e=>setForm({...form,contributi_percentuale:e.target.value})}/>
-            <span style={{fontSize:10,color:'var(--g4)',marginTop:3,display:'block'}}>
-              {form.tipo_contratto==='APPRENDISTATO'?'Apprendistato: ~10%':'Standard: ~30%'}
-            </span>
+        {/* FREELANCER / PRESTAZIONE OCCASIONALE */}
+        {isFreelancer&&<>
+          <div style={{fontSize:11,fontWeight:700,color:'var(--acc)',textTransform:'uppercase',letterSpacing:1,margin:'14px 0 8px'}}>Compenso</div>
+          <FGrid>
+            <FRow label='Data inizio'><input type='date' value={form.data_inizio||''} onChange={e=>setForm({...form,data_inizio:e.target.value})}/></FRow>
+            <FRow label='Data fine'><input type='date' value={form.data_fine||''} onChange={e=>setForm({...form,data_fine:e.target.value})}/></FRow>
+          </FGrid>
+          <FRow label='Compenso mensile (€)' hint='Importo fisso mensile concordato'>
+            <input type='number' min='0' step='0.01' value={form.compenso_fisso_mensile||''} onChange={e=>setForm({...form,compenso_fisso_mensile:e.target.value})} placeholder='es. 600'/>
           </FRow>
-          <FRow label='TFR (%)'>
-            <input type='number' min='0' max='10' step='0.01' value={form.tfr_percentuale||6.91} onChange={e=>setForm({...form,tfr_percentuale:e.target.value})}/>
-          </FRow>
-        </FGrid>}
+        </>}
 
-        <FRow label='Override costo orario (€/h)'>
+        {/* DIPENDENTE / APPRENDISTATO / TEMPO DETERMINATO */}
+        {isDipendente&&<>
+          <div style={{fontSize:11,fontWeight:700,color:'var(--acc)',textTransform:'uppercase',letterSpacing:1,margin:'14px 0 8px'}}>Contratto</div>
+          <FGrid>
+            <FRow label='Data inizio'><input type='date' value={form.data_inizio||''} onChange={e=>setForm({...form,data_inizio:e.target.value})}/></FRow>
+            <FRow label='Data fine'><input type='date' value={form.data_fine||''} onChange={e=>setForm({...form,data_fine:e.target.value})}/></FRow>
+          </FGrid>
+          <div style={{fontSize:11,fontWeight:700,color:'var(--acc)',textTransform:'uppercase',letterSpacing:1,margin:'14px 0 8px'}}>Retribuzione</div>
+          <FGrid>
+            <FRow label='RAL lorda annua (€)'>
+              <input type='number' min='0' step='100' value={form.ral||''} onChange={e=>setForm({...form,ral:e.target.value})} placeholder='es. 22000'/>
+            </FRow>
+            <FRow label='Compenso obiettivo annuo (€)' hint='Target a regime'>
+              <input type='number' min='0' step='100' value={form.compenso_obiettivo||''} onChange={e=>setForm({...form,compenso_obiettivo:e.target.value})} placeholder='es. 30000'/>
+            </FRow>
+          </FGrid>
+          <div style={{fontSize:11,fontWeight:700,color:'var(--acc)',textTransform:'uppercase',letterSpacing:1,margin:'14px 0 8px'}}>Parametri costo aziendale</div>
+          <FGrid>
+            <FRow label='Contributi azienda (%)'>
+              <input type='number' min='0' max='50' step='0.01' value={form.contributi_percentuale??contributiDefault} onChange={e=>setForm({...form,contributi_percentuale:e.target.value})}/>
+              <span style={{fontSize:10,color:'var(--g4)',marginTop:3,display:'block'}}>
+                {form.tipo_contratto==='APPRENDISTATO'?'CCNL Commercio apprendistato: 15,81%':'CCNL Commercio dipendente: 40%'}
+              </span>
+            </FRow>
+            <FRow label='TFR (%)'>
+              <input type='number' min='0' max='10' step='0.01' value={form.tfr_percentuale||6.91} onChange={e=>setForm({...form,tfr_percentuale:e.target.value})}/>
+            </FRow>
+          </FGrid>
+          <FGrid>
+            <FRow label='Giorni ferie/anno'>
+              <input type='number' min='0' max='40' value={form.giorni_ferie||26} onChange={e=>setForm({...form,giorni_ferie:e.target.value})}/>
+              <span style={{fontSize:10,color:'var(--g4)',marginTop:3,display:'block'}}>CCNL Commercio: 26 giorni</span>
+            </FRow>
+            <FRow label='Giorni malattia stimati/anno'>
+              <input type='number' min='0' max='30' value={form.giorni_malattia||3} onChange={e=>setForm({...form,giorni_malattia:e.target.value})}/>
+            </FRow>
+          </FGrid>
+        </>}
+
+        {/* Preview costo calcolato */}
+        {previewCostoOrario()!==null&&<div style={{margin:'12px 0',padding:'10px 14px',background:'rgba(139,92,246,.08)',borderRadius:8,border:'1px solid rgba(139,92,246,.2)'}}>
+          <span style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)'}}>Costo orario stimato: </span>
+          <span style={{fontFamily:'var(--fm)',fontSize:15,fontWeight:800,color:'var(--violet)'}}>{fmtEuro(previewCostoOrario())}/h</span>
+          <span style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',marginLeft:8}}>(include overhead 1.30)</span>
+        </div>}
+
+        <FRow label='Override costo orario (€/h)' hint='Sovrascrive il calcolo automatico'>
           <input type='number' min='0' step='0.01' value={form.costo_orario_override||''} onChange={e=>setForm({...form,costo_orario_override:e.target.value})} placeholder='Lascia vuoto per calcolo automatico'/>
         </FRow>
         <FRow label='Note'><textarea value={form.note||''} onChange={e=>setForm({...form,note:e.target.value})} rows={2}/></FRow>
