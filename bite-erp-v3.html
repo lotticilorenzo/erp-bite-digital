@@ -1768,7 +1768,7 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
           if(item.stato&&item.stato!=='APERTA'){
             saved=await api.updateCommessa(saved.id,{stato:item.stato});
           }
-          dispatch({type:'UPSERT',entity:'commesse',item:saved});
+          dispatch({type:'UPSERT',entity:'commesse',item:normalizeCommessaFromApi(saved)});
         }else{
           const updatePayload={
             stato:item.stato,

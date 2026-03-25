@@ -210,8 +210,17 @@ async def patch_progetto(
 async def _enrich_commessa(db: AsyncSession, c, coeff_cache: Optional[dict[date, Decimal]] = None) -> dict:
     """Aggiunge i campi calcolati alla commessa prima della serializzazione."""
     from sqlalchemy import text as _text
-    # Refresh esplicito per caricare fattura_id dal DB (evita lazy load async)
-    await db.refresh(c)
+    from sqlalchemy.orm import selectinload as _sil
+    from sqlalchemy import select as _sel2
+    from app.models.models import Commessa as _Commessa, CommessaProgetto as _CP
+    # Ricarica con relazioni esplicite per evitare MissingGreenlet
+    res = await db.execute(
+        _sel2(_Commessa).options(
+            _sil(_Commessa.righe_progetto).selectinload(_CP.progetto),
+            _sil(_Commessa.cliente)
+        ).where(_Commessa.id == c.id)
+    )
+    c = res.scalar_one_or_none() or c
     row = await db.execute(
         _text("""
             SELECT fa.id, fa.numero, fa.data_emissione, fa.importo_netto, fa.stato_pagamento
@@ -222,9 +231,25 @@ async def _enrich_commessa(db: AsyncSession, c, coeff_cache: Optional[dict[date,
         {"cid": str(c.id)}
     )
     fa = row.fetchone()
-    d = CommessaOut.model_validate(c).model_dump()
+    # Escludi campi computed che richiedono lazy load
+    d = CommessaOut.model_validate(c, from_attributes=True, strict=False).model_dump(warnings=False)
+    # Calcola margine manualmente dalle righe già caricate
+    try:
+        fattCalc = sum(r.valore_fatturabile_calc for r in c.righe_progetto)
+        for ag in (c.aggiustamenti or []):
+            from decimal import Decimal as _D
+            fattCalc += _D(str(ag.get('importo', 0)))
+        d['margine_euro'] = float(fattCalc - (c.costo_manodopera or 0) - (c.costi_diretti or 0))
+        d['margine_percentuale'] = round(d['margine_euro'] / float(fattCalc) * 100, 1) if fattCalc > 0 else None
+    except Exception:
+        d['margine_euro'] = None
+        d['margine_percentuale'] = None
     metriche = await calcola_metriche_commessa(db, c, coeff_cache)
     d.update(metriche)
+    # Override espliciti per campi che potrebbero non essere serializzati correttamente
+    d["aggiustamenti"] = c.aggiustamenti or []
+    d["data_inizio"] = str(c.data_inizio) if c.data_inizio else None
+    d["data_fine"] = str(c.data_fine) if c.data_fine else None
     if fa and fa[0] is not None:
         d["fattura_id"] = fa[0]
         d["fattura_numero"] = fa[1]
@@ -267,6 +292,7 @@ async def add_commessa(
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
 ):
     c = await create_commessa(db, data)
+    c = await get_commessa(db, c.id)
     return await _enrich_commessa(db, c)
 
 @router.patch("/commesse/{commessa_id}", tags=["Commesse"])
