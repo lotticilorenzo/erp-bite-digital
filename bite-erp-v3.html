@@ -4185,6 +4185,211 @@ function AlertSettingsModal({state,dispatch,onClose}) {
 // ─────────────────────────────────────────────────────────
 // SCREEN: REPORT MENSILE STAMPABILE
 // ─────────────────────────────────────────────────────────
+
+function PianificazioneScreen({state,dispatch}) {
+  const [filtroCliente,setFiltroCliente]=useState('');
+  const [filtroMese,setFiltroMese]=useState(currMese());
+  const [selectedKey,setSelectedKey]=useState(null);
+  const [piano,setPiano]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const [saving,setSaving]=useState(false);
+  const [margineTarget,setMargineTarget]=useState(40);
+  const [righe,setRighe]=useState([]);
+  const [noteGenerali,setNoteGenerali]=useState('');
+
+  const tok=()=>localStorage.getItem('BITE_ERP_TOKEN')||'';
+  const progettoMap=useMemo(()=>Object.fromEntries((state.progetti||[]).map(p=>[p.id,p])),[state.progetti]);
+  const clienteMap=useMemo(()=>Object.fromEntries((state.clienti||[]).map(c=>[c.id,c])),[state.clienti]);
+  const risorse=(state.risorse||[]).filter(r=>r.attivo);
+
+  const costoOrarioAziendale=useMemo(()=>{
+    const attivi=(state.risorse||[]).filter(r=>r.attivo);
+    const totCosti=attivi.reduce((s,r)=>{
+      const t=r.tipo_contratto;
+      if(t==='FREELANCER'||t==='PRESTAZIONE_OCCASIONALE'||t==='FONDATORE')
+        return s+parseFloat(r.compenso_fisso_mensile||0)*12;
+      const ral=parseFloat(r.ral||0);
+      const contrib=parseFloat(r.contributi_percentuale||30)/100;
+      const tfr=parseFloat(r.tfr_percentuale||6.91)/100;
+      return s+ral*(1+contrib+tfr);
+    },0);
+    const totOre=attivi.reduce((s,r)=>{
+      const t=r.tipo_contratto;
+      const oreSett=parseFloat(r.ore_settimanali||40);
+      const ferie=parseFloat(r.giorni_ferie||26);
+      const malattia=parseFloat(r.giorni_malattia||3);
+      if(t==='DIPENDENTE'||t==='APPRENDISTATO'||t==='TEMPO_DETERMINATO'||t==='FONDATORE')
+        return s+(oreSett*52-88-ferie*8-malattia*8)*0.70;
+      return s+oreSett*52*0.70;
+    },0);
+    return totOre>0?Math.round(totCosti/totOre*1.30*100)/100:0;
+  },[state.risorse]);
+
+  const mesiDisponibili=useMemo(()=>{
+    const s=new Set((state.commesse||[]).map(c=>c.mese_competenza));
+    s.add(currMese()); return [...s].sort().reverse();
+  },[state.commesse]);
+
+  const righeProgetti=useMemo(()=>{
+    const items=[];
+    (state.commesse||[]).filter(cm=>{
+      if(filtroMese&&cm.mese_competenza!==filtroMese) return false;
+      if(filtroCliente&&cm.cliente_id!==filtroCliente) return false;
+      return true;
+    }).forEach(cm=>{
+      (cm.progetti_ids||[]).forEach(pid=>{
+        const p=progettoMap[pid]; if(!p) return;
+        const dc=(cm.delivery_per_progetto||{})[pid]||0;
+        const f=parseFloat(p.importo_fisso||0)+parseFloat(p.importo_variabile||0);
+        const delivery_attesa=parseInt(p.delivery_attesa)||0;
+        items.push({commessa:cm,progetto:p,fatturabile:f,delivery_attesa,key:cm.id+'|'+pid});
+      });
+    });
+    return items;
+  },[state.commesse,progettoMap,filtroMese,filtroCliente]);
+
+  const selectItem=async(item)=>{
+    setSelectedKey(item.key);
+    setLoading(true);
+    try{
+      const res=await fetch('/api/v1/piano-commessa/'+item.commessa.id+'/'+item.progetto.id,{headers:{'Authorization':'Bearer '+tok()}});
+      if(res.ok){
+        const data=await res.json();
+        if(data){setPiano(data);setMargineTarget(parseFloat(data.margine_target_pct)||40);setNoteGenerali(data.note||'');setRighe(data.righe||[]);}
+        else{setPiano(null);setMargineTarget(40);setNoteGenerali('');setRighe([]);}
+      }
+    }catch(e){console.error(e);}
+    setLoading(false);
+  };
+
+  const selectedItem=righeProgetti.find(i=>i.key===selectedKey);
+  const fatturabile=selectedItem?.fatturabile||0;
+  const budgetProduttivo=fatturabile*(1-margineTarget/100);
+  const oreBudget=costoOrarioAziendale>0?Math.round(budgetProduttivo/costoOrarioAziendale*10)/10:0;
+  const orePianificate=righe.reduce((s,r)=>s+(parseFloat(r.ore_pianificate)||0),0);
+  const oreDelta=oreBudget-orePianificate;
+  const budgetUsato=orePianificate*costoOrarioAziendale;
+  const budgetDelta=budgetProduttivo-budgetUsato;
+
+  const LAVORAZIONI=['Strategia','Copywriting','Grafica/Design','Sviluppo Web','Account/Coordinamento','Video/Editing','Fotografia','Altro'];
+  const addRiga=()=>setRighe([...righe,{id:'new_'+Date.now(),lavorazione:'Strategia',risorsa_id:'',ore_pianificate:0,note:''}]);
+  const updateRiga=(idx,field,val)=>setRighe(righe.map((r,i)=>i===idx?{...r,[field]:val}:r));
+  const removeRiga=idx=>setRighe(righe.filter((_,i)=>i!==idx));
+
+  const savePiano=async()=>{
+    if(!selectedItem) return;
+    setSaving(true);
+    try{
+      const payload={margine_target_pct:margineTarget,budget_produttivo:budgetProduttivo,ore_budget:oreBudget,costo_orario_snapshot:costoOrarioAziendale,note:noteGenerali,
+        righe:righe.map(r=>({risorsa_id:r.risorsa_id||null,lavorazione:r.lavorazione,ore_pianificate:parseFloat(r.ore_pianificate)||0,note:r.note||null}))};
+      const res=await fetch('/api/v1/piano-commessa/'+selectedItem.commessa.id+'/'+selectedItem.progetto.id,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok()},body:JSON.stringify(payload)});
+      if(res.ok){setPiano(await res.json());alert('Piano salvato');}
+      else{const e=await res.json().catch(()=>({}));alert('Errore: '+(e.detail||JSON.stringify(e)));}
+    }catch(e){alert('Errore di rete: '+e.message);}
+    setSaving(false);
+  };
+
+  return <div className='fu'>
+    <Topbar title='Pianificazione' sub='Budget e ore per progetto'>
+      {selectedItem&&<Btn v='primary' onClick={savePiano} disabled={saving}>{saving?'Salvo...':'Salva piano'}</Btn>}
+    </Topbar>
+    <div style={{padding:'22px 26px',display:'grid',gridTemplateColumns:'300px 1fr',gap:20,alignItems:'start'}}>
+      <div>
+        <Card>
+          <CH title='Seleziona progetto'/>
+          <div style={{padding:'8px 12px',borderBottom:'1px solid var(--g2)'}}>
+            <select value={filtroMese} onChange={e=>setFiltroMese(e.target.value)} style={{width:'100%',marginBottom:6,padding:'5px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12}}>
+              <option value=''>Tutti i mesi</option>
+              {mesiDisponibili.map(m=><option key={m} value={m}>{meseFmt(m)}</option>)}
+            </select>
+            <select value={filtroCliente} onChange={e=>setFiltroCliente(e.target.value)} style={{width:'100%',padding:'5px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12}}>
+              <option value=''>Tutti i clienti</option>
+              {(state.clienti||[]).map(c=><option key={c.id} value={c.id}>{c.ragione_sociale}</option>)}
+            </select>
+          </div>
+          <div style={{maxHeight:500,overflowY:'auto'}}>
+            {righeProgetti.length===0?<Empty msg='Nessun progetto nel periodo'/>:
+            righeProgetti.map(item=>{
+              const cl=clienteMap[item.commessa.cliente_id];
+              const isSelected=selectedKey===item.key;
+              return <div key={item.key} onClick={()=>selectItem(item)}
+                style={{padding:'10px 14px',cursor:'pointer',borderBottom:'1px solid rgba(255,255,255,.03)',background:isSelected?'rgba(139,92,246,.15)':'transparent',borderLeft:isSelected?'3px solid var(--violet)':'3px solid transparent',transition:'all .15s'}}>
+                <div style={{fontWeight:700,fontSize:12}}>{item.progetto.nome}</div>
+                <div style={{fontSize:11,color:'var(--g4)',marginTop:1}}>{cl?.ragione_sociale}</div>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:4}}>
+                  <div style={{display:'flex',gap:4}}><Badge s={item.progetto.categoria}/><Badge s={item.commessa.stato}/></div>
+                  <span style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--violet)',fontWeight:600}}>{fmtEuro(item.fatturabile)}</span>
+                </div>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:2}}><span style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)'}}>{meseFmt(item.commessa.mese_competenza)}</span>{item.delivery_attesa>0&&<span style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--amber)',fontWeight:600}}>{item.delivery_attesa} contenuti</span>}</div>
+              </div>;
+            })}
+          </div>
+        </Card>
+      </div>
+      <div>
+        {!selectedItem?<Card><Empty msg='Seleziona un progetto per pianificare'/></Card>:
+        loading?<Card><div style={{padding:24,textAlign:'center',color:'var(--g4)'}}>Caricamento...</div></Card>:
+        <div style={{display:'flex',flexDirection:'column',gap:16}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>
+            <KPI label='Fatturabile' value={fmtEuro(fatturabile)} delay={.04}/>
+            <KPI label='Margine target' value={margineTarget+'%'} color='var(--violet)' delay={.07}/>
+            <KPI label='Budget produttivo' value={fmtEuro(budgetProduttivo)} color='var(--amber)' delay={.10}/>
+            <KPI label='Ore disponibili' value={oreBudget+'h'} sub={'@ '+fmtEuro(costoOrarioAziendale)+'/h'} delay={.13}/>
+          </div>
+          <Card>
+            <div style={{padding:'16px 18px'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                <div style={{fontWeight:700,fontSize:13}}>Margine target</div>
+                <div style={{fontFamily:'var(--fm)',fontSize:20,fontWeight:800,color:'var(--violet)'}}>{margineTarget}%</div>
+              </div>
+              <input type='range' min='10' max='80' step='1' value={margineTarget} onChange={e=>setMargineTarget(parseInt(e.target.value))} style={{width:'100%',accentColor:'var(--violet)',marginBottom:8}}/>
+              <div style={{display:'flex',justifyContent:'space-between',fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)'}}>
+                <span>Budget: <b style={{color:'var(--amber)'}}>{fmtEuro(budgetProduttivo)}</b></span>
+                <span>Ore: <b style={{color:'var(--violet)'}}>{oreBudget}h</b></span>
+                <span>Costo/h: <b style={{color:'var(--g5)'}}>{fmtEuro(costoOrarioAziendale)}/h</b></span>
+              </div>
+            </div>
+          </Card>
+          <Card>
+            <CH title='Distribuzione ore' meta={orePianificate+'h / '+oreBudget+'h'} action={<Btn v='primary' onClick={addRiga} s={{fontSize:11,padding:'5px 10px'}}>+ Lavorazione</Btn>}/>
+            <div style={{padding:'0 18px 12px'}}>
+              <div style={{display:'flex',justifyContent:'space-between',fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)',marginBottom:4}}>
+                <span>Pianificate: <b style={{color:oreDelta>=0?'var(--green)':'var(--red)'}}>{orePianificate}h</b></span>
+                <span style={{color:oreDelta>=0?'var(--green)':'var(--red)',fontWeight:700}}>{oreDelta>=0?'+'+Math.round(oreDelta*10)/10+'h rimanenti':Math.abs(Math.round(oreDelta*10)/10)+'h sforamento'}</span>
+              </div>
+              <div style={{height:8,background:'var(--g2)',borderRadius:4,overflow:'hidden'}}>
+                <div style={{height:'100%',width:Math.min(oreBudget>0?orePianificate/oreBudget*100:0,100)+'%',background:oreDelta>=0?'linear-gradient(90deg,var(--purple),var(--violet))':'var(--red)',borderRadius:4,transition:'width .3s'}}/>
+              </div>
+              <div style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)',marginTop:4}}>Budget usato: <b style={{color:budgetDelta>=0?'var(--green)':'var(--red)'}}>{fmtEuro(budgetUsato)}</b> / {fmtEuro(budgetProduttivo)}</div>
+            </div>
+            {righe.length===0?<Empty msg='Aggiungi lavorazioni'/>:
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
+              <thead><tr><Th c='Lavorazione'/><Th c='Risorsa'/><Th c='Ore'/><Th c='Costo stimato'/><Th c='Note'/><Th c=''/></tr></thead>
+              <tbody>
+                {righe.map((r,idx)=><TR key={r.id||idx}>
+                  <Td><select value={r.lavorazione} onChange={e=>updateRiga(idx,'lavorazione',e.target.value)} style={{padding:'4px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',fontSize:12,width:'100%'}}>{LAVORAZIONI.map(l=><option key={l} value={l}>{l}</option>)}</select></Td>
+                  <Td><select value={r.risorsa_id||''} onChange={e=>updateRiga(idx,'risorsa_id',e.target.value)} style={{padding:'4px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',fontSize:12,width:'100%'}}><option value=''>— Nessuna —</option>{risorse.map(rs=><option key={rs.id} value={rs.id}>{rs.nome} {rs.cognome}</option>)}</select></Td>
+                  <Td><input type='number' min='0' step='0.5' value={r.ore_pianificate||0} onChange={e=>updateRiga(idx,'ore_pianificate',e.target.value)} style={{width:70,padding:'4px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',fontSize:12,textAlign:'right'}}/></Td>
+                  <Td mono style={{color:'var(--amber)'}}>{fmtEuro((parseFloat(r.ore_pianificate)||0)*costoOrarioAziendale)}</Td>
+                  <Td><input value={r.note||''} onChange={e=>updateRiga(idx,'note',e.target.value)} placeholder='...' style={{width:'100%',padding:'4px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',fontSize:12}}/></Td>
+                  <Td><button type='button' onClick={()=>removeRiga(idx)} style={{background:'none',border:'none',color:'var(--red)',cursor:'pointer',fontSize:14}}>x</button></Td>
+                </TR>)}
+              </tbody>
+              <tfoot><tr style={{background:'var(--g2)'}}><td colSpan={2} style={{padding:'10px 14px',fontWeight:700,fontSize:12}}>Totale</td><Td mono><b>{orePianificate}h</b></Td><Td mono style={{color:budgetDelta>=0?'var(--green)':'var(--red)'}}><b>{fmtEuro(budgetUsato)}</b></Td><Td/><Td/></tr></tfoot>
+            </table>}
+          </Card>
+          <Card>
+            <div style={{padding:'14px 18px'}}>
+              <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>Note piano</div>
+              <textarea value={noteGenerali} onChange={e=>setNoteGenerali(e.target.value)} rows={3} style={{width:'100%',background:'var(--g1)',border:'1px solid var(--g3)',borderRadius:8,padding:'8px 12px',color:'var(--tx)',resize:'vertical',fontSize:12}} placeholder='Annotazioni sul piano...'/>
+            </div>
+          </Card>
+        </div>}
+      </div>
+    </div>
+  </div>;
+}
+
 function ReportMensileScreen({state,setPage}) {
   const [dal,setDal]=useState(currMese()+'-01');
   const [al,setAl]=useState(nowDate());
@@ -4356,6 +4561,7 @@ function ReportMensileScreen({state,setPage}) {
 // ─────────────────────────────────────────────────────────
 const NAV=[
   {id:'dashboard',label:'Dashboard',icon:'⊞',section:'Generale'},
+  {id:'pianificazione',label:'Pianificazione',icon:'◎',section:'Generale'},
   {id:'report',label:'Report & Analisi',icon:'⎙',section:'Generale'},
   {id:'profilo',label:'Profilo',icon:'👤',section:'Generale'},
   {id:'clienti',label:'Clienti',icon:'◎',section:'Gestione'},
@@ -5802,6 +6008,7 @@ function App(){
   const renderPage=()=>{
     switch(page){
       case 'dashboard':        return <DashboardScreen state={state} setPage={setPage} setDrillCliente={setDrillCliente} setDrillCommessa={setDrillCommessa} authUser={authUser}/>;
+      case 'pianificazione':   return <PianificazioneScreen state={state} dispatch={dispatch}/>;
       case 'report':           return <ReportMensileScreen state={state} setPage={setPage}/>;
       case 'profilo':          return <ProfiloScreen authUser={authUser} api={usersApi} onAuthUserUpdate={updateAuthUser}/>;
       case 'clienti':          return <ClientiScreen state={state} dispatch={dispatch} setPage={setPage} setDrillCliente={setDrillCliente} api={clientiApi}/>
@@ -5947,12 +6154,12 @@ function App(){
     />}
     {showAlertSettings&&<AlertSettingsModal state={state} dispatch={dispatch} onClose={()=>setShowAlertSettings(false)}/>}
     {chiusuraCommessaId&&<ChiusuraCommessaModal state={state} dispatch={dispatch} commessaId={chiusuraCommessaId} onClose={()=>setChiusuraCommessaId(null)} api={commesseApi}/>}
-    <aside style={{width:216,minHeight:'100vh',background:'var(--g1)',borderRight:'1px solid var(--g2)',display:'flex',flexDirection:'column',position:'fixed',left:0,top:0,zIndex:100}}>
+    <aside style={{width:216,height:'100vh',background:'var(--g1)',borderRight:'1px solid var(--g2)',display:'flex',flexDirection:'column',position:'fixed',left:0,top:0,zIndex:100,overflow:'hidden'}}>
       <div style={{padding:'18px 16px 14px',borderBottom:'1px solid var(--g2)',display:'flex',alignItems:'center',gap:10}}>
         <div style={{width:32,height:32,background:'linear-gradient(135deg,var(--purple),var(--violet))',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:800,color:'white',flexShrink:0}}>B</div>
         <div><div style={{fontSize:14,fontWeight:700}}>Bite <span style={{color:'var(--violet)'}}>ERP</span></div><div style={{fontFamily:'var(--fm)',fontSize:9,color:'var(--g4)'}}>v3 · {authToken?'api':'demo'}</div></div>
       </div>
-      <div style={{flex:1,overflowY:'auto',padding:'8px 8px 0'}}>
+      <div style={{flex:1,overflowY:'auto',padding:'8px 8px 0',height:0,minHeight:0}}>
         {sections.map(sec=>(
           <div key={sec}>
             <div style={{fontFamily:'var(--fm)',fontSize:9,color:'var(--g4)',letterSpacing:'.1em',textTransform:'uppercase',padding:'10px 10px 5px'}}>{sec}</div>

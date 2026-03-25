@@ -735,6 +735,38 @@ async def del_risorsa(risorsa_id: uuid.UUID, db: AsyncSession = Depends(get_db),
     if not ok:
         raise HTTPException(status_code=404, detail="Risorsa non trovata")
 
+
+# ── PIANIFICAZIONE COMMESSA ──────────────────────────────
+@router.get("/piano-commessa/{commessa_id}/{progetto_id}", tags=["Pianificazione"])
+async def get_piano_commessa(commessa_id: uuid.UUID, progetto_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from sqlalchemy import text
+    row = await db.execute(text("SELECT * FROM piano_commessa WHERE commessa_id=:cid AND progetto_id=:pid"), {"cid": str(commessa_id), "pid": str(progetto_id)})
+    piano = row.mappings().fetchone()
+    if not piano:
+        return None
+    righe = await db.execute(text("SELECT pcr.*, r.nome||chr(32)||r.cognome as risorsa_nome FROM piano_commessa_righe pcr LEFT JOIN risorse r ON r.id=pcr.risorsa_id WHERE pcr.piano_id=:pid ORDER BY pcr.created_at"), {"pid": str(piano["id"])})
+    return {**dict(piano), "righe": [dict(r) for r in righe.mappings().fetchall()]}
+
+@router.post("/piano-commessa/{commessa_id}/{progetto_id}", tags=["Pianificazione"])
+async def save_piano_commessa(commessa_id: uuid.UUID, progetto_id: uuid.UUID, payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from sqlalchemy import text
+    existing = await db.execute(text("SELECT id FROM piano_commessa WHERE commessa_id=:cid AND progetto_id=:pid"), {"cid": str(commessa_id), "pid": str(progetto_id)})
+    row = existing.fetchone()
+    if row:
+        piano_id = str(row[0])
+        await db.execute(text("UPDATE piano_commessa SET margine_target_pct=:m, budget_produttivo=:b, ore_budget=:o, costo_orario_snapshot=:c, note=:n, updated_at=NOW() WHERE id=:piano_id"),
+            {"m": payload.get("margine_target_pct", 40), "b": payload.get("budget_produttivo"), "o": payload.get("ore_budget"), "c": payload.get("costo_orario_snapshot"), "n": payload.get("note"), "piano_id": piano_id})
+    else:
+        res = await db.execute(text("INSERT INTO piano_commessa (commessa_id, progetto_id, margine_target_pct, budget_produttivo, ore_budget, costo_orario_snapshot, note) VALUES (:cid,:pid,:m,:b,:o,:c,:n) RETURNING id"),
+            {"cid": str(commessa_id), "pid": str(progetto_id), "m": payload.get("margine_target_pct", 40), "b": payload.get("budget_produttivo"), "o": payload.get("ore_budget"), "c": payload.get("costo_orario_snapshot"), "n": payload.get("note")})
+        piano_id = str(res.fetchone()[0])
+    await db.execute(text("DELETE FROM piano_commessa_righe WHERE piano_id=:piano_id"), {"piano_id": piano_id})
+    for riga in payload.get("righe", []):
+        await db.execute(text("INSERT INTO piano_commessa_righe (piano_id, risorsa_id, lavorazione, ore_pianificate, note) VALUES (:piano_id,:rid,:l,:o,:n)"),
+            {"piano_id": piano_id, "rid": riga.get("risorsa_id") or None, "l": riga.get("lavorazione",""), "o": riga.get("ore_pianificate", 0), "n": riga.get("note")})
+    await db.commit()
+    return await get_piano_commessa(commessa_id, progetto_id, db, current_user)
+
 # ── SERVIZI PROGETTO ──────────────────────────────────────
 @router.get("/progetti/{progetto_id}/servizi")
 async def list_servizi_progetto_endpoint(progetto_id: uuid.UUID, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
