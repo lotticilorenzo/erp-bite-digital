@@ -767,6 +767,41 @@ async def save_piano_commessa(commessa_id: uuid.UUID, progetto_id: uuid.UUID, pa
     await db.commit()
     return await get_piano_commessa(commessa_id, progetto_id, db, current_user)
 
+@router.get("/piano-commessa/{commessa_id}/{progetto_id}/consuntivo", tags=["Pianificazione"])
+async def get_consuntivo_commessa(commessa_id: uuid.UUID, progetto_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from sqlalchemy import text
+    # Ore timesheet approvate per questa commessa, raggruppate per servizio e utente
+    righe = await db.execute(text("""
+        SELECT 
+            t.servizio,
+            r.nome||' '||r.cognome as risorsa_nome,
+            SUM(t.durata_minuti) as minuti_totali,
+            SUM(t.costo_lavoro) as costo_totale,
+            COUNT(*) as n_record,
+            MIN(t.data_attivita) as prima_data,
+            MAX(t.data_attivita) as ultima_data
+        FROM timesheet t
+        LEFT JOIN risorse r ON r.user_id=t.user_id
+        WHERE t.commessa_id=:cid
+          AND t.stato='APPROVATO'
+        GROUP BY t.servizio, r.nome, r.cognome
+        ORDER BY minuti_totali DESC
+    """), {"cid": str(commessa_id)})
+    rows = [dict(r) for r in righe.mappings().fetchall()]
+    
+    # Totali
+    totali = await db.execute(text("""
+        SELECT 
+            SUM(t.durata_minuti) as minuti_totali,
+            SUM(t.costo_lavoro) as costo_totale,
+            COUNT(*) as n_record
+        FROM timesheet t
+        WHERE t.commessa_id=:cid AND t.stato='APPROVATO'
+    """), {"cid": str(commessa_id)})
+    tot = dict(totali.mappings().fetchone() or {})
+    
+    return {"righe": rows, "totali": tot}
+
 # ── SERVIZI PROGETTO ──────────────────────────────────────
 @router.get("/progetti/{progetto_id}/servizi")
 async def list_servizi_progetto_endpoint(progetto_id: uuid.UUID, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
