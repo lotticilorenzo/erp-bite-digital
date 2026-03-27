@@ -216,6 +216,9 @@ const normalizeTimesheetFromApi = (t,{commesseMap={},existingTimesheet=[]}={}) =
     stato:t.stato||'PENDING',
     servizio:t.servizio||existing?.servizio||'',
     note:t.note||'',
+    costo_lavoro:parseFloat(t.costo_lavoro||0),
+    costo_orario_snapshot:parseFloat(t.costo_orario_snapshot||0),
+    task_display_name:t.task_display_name||'',
   };
 };
 
@@ -275,6 +278,7 @@ const INIT = {
     {id:'t2',user_id:'u2',progetto_id:'p2',clickup_task_id:'cu5',data_attivita:nowDate(),mese_competenza:currMese(),durata_minuti:240,stato:'PENDING',note:''},
     {id:'t3',user_id:'u3',progetto_id:'p1',clickup_task_id:'cu3',data_attivita:nowDate(),mese_competenza:currMese(),durata_minuti:90,stato:'APPROVATO',note:''},
   ],
+  piani: [],
   fatture_attive: [
     {id:'fa1',cliente_id:'c1',numero:'FT-2025-001',data_emissione:prevMese()+'-28',data_scadenza:currMese()+'-15',importo:700,stato:'SCADUTA',note:''},
     {id:'fa2',cliente_id:'c2',numero:'FT-2025-002',data_emissione:prevMese()+'-28',data_scadenza:currMese()+'-28',importo:2800,stato:'ATTESA',note:''},
@@ -1689,6 +1693,7 @@ function ProgettiScreen({state,dispatch,setPage,setDrillProgetto,api}) {
 const STATI_CM=['APERTA','PRONTA_CHIUSURA','CHIUSA','FATTURATA','INCASSATA'];
 
 function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) {
+  const [tab,setTab]=useState('commesse');
   const [searchQ,setSearchQ]=useState('');
   const [filterStato,setFilterStato]=useState('TUTTI');
   const [filterMese,setFilterMese]=useState(currMese());
@@ -1696,6 +1701,81 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
   const [confirm,setConfirm]=useState(null);
   const [form,setForm]=useState({});
   const [saving,setSaving]=useState(false);
+  const [pianoModal,setPianoModal]=useState(false);
+  const [pianoForm,setPianoForm]=useState({});
+  const [pianoRighe,setPianoRighe]=useState([]);
+  const [pianoSaving,setPianoSaving]=useState(false);
+  const [pianoConfermaCommessa,setPianoConfermaCommessa]=useState(null);
+
+  const tok=()=>localStorage.getItem('BITE_ERP_TOKEN')||'';
+  const risorse=(state.risorse||[]).filter(r=>r.attivo);
+
+  const costoOrarioAziendale=useMemo(()=>{
+    const attivi=(state.risorse||[]).filter(r=>r.attivo);
+    const totCosti=attivi.reduce((s,r)=>{
+      const t=r.tipo_contratto;
+      if(t==='FREELANCER'||t==='PRESTAZIONE_OCCASIONALE'||t==='FONDATORE') return s+parseFloat(r.compenso_fisso_mensile||0)*12;
+      const ral=parseFloat(r.ral||0); const contrib=parseFloat(r.contributi_percentuale||30)/100; const tfr=parseFloat(r.tfr_percentuale||6.91)/100;
+      return s+ral*(1+contrib+tfr);
+    },0);
+    const totOre=attivi.reduce((s,r)=>{
+      const t=r.tipo_contratto; const oreSett=parseFloat(r.ore_settimanali||40);
+      const ferie=parseFloat(r.giorni_ferie||26); const malattia=parseFloat(r.giorni_malattia||3);
+      if(t==='DIPENDENTE'||t==='APPRENDISTATO'||t==='TEMPO_DETERMINATO'||t==='FONDATORE') return s+(oreSett*52-88-ferie*8-malattia*8)*0.70;
+      return s+oreSett*52*0.70;
+    },0);
+    return totOre>0?Math.round(totCosti/totOre*1.30*100)/100:0;
+  },[state.risorse]);
+
+  const openNuovoPiano=()=>{
+    const cl=state.clienti[0];
+    const prevCalc=cl?(state.progetti||[]).filter(p=>p.cliente_id===cl.id&&p.stato==='ATTIVO').reduce((s,p)=>s+parseFloat(p.importo_fisso||0)+parseFloat(p.importo_variabile||0),0):0;
+    setPianoForm({cliente_id:cl?.id||'',mese_competenza:currMese(),preventivo:prevCalc,margine_target_pct:40});
+    setPianoRighe([]);
+    setPianoModal(true);
+  };
+
+  const onPianoClienteChange=cid=>{
+    const prevCalc=(state.progetti||[]).filter(p=>p.cliente_id===cid&&p.stato==='ATTIVO').reduce((s,p)=>s+parseFloat(p.importo_fisso||0)+parseFloat(p.importo_variabile||0),0);
+    setPianoForm(f=>({...f,cliente_id:cid,preventivo:prevCalc}));
+  };
+
+  const pianoBudget=useMemo(()=>{
+    const prev=parseFloat(pianoForm.preventivo||0);
+    const marg=parseFloat(pianoForm.margine_target_pct||40);
+    const budget=prev*(1-marg/100);
+    const ore=costoOrarioAziendale>0?Math.round(budget/costoOrarioAziendale*10)/10:0;
+    return {budget,ore};
+  },[pianoForm.preventivo,pianoForm.margine_target_pct,costoOrarioAziendale]);
+
+  const pianoOrePianificate=pianoRighe.reduce((s,r)=>s+(parseFloat(r.ore_pianificate)||0),0);
+  const LAVORAZIONI=['Strategia','Copywriting','Grafica/Design','Sviluppo Web','Account/Coordinamento','Video/Editing','Fotografia','Altro'];
+
+  const savePiano=async(apriCommessa=false)=>{
+    if(!pianoForm.cliente_id){alert('Seleziona un cliente');return;}
+    setPianoSaving(true);
+    try{
+      const payload={
+        cliente_id:pianoForm.cliente_id,
+        mese_competenza:pianoForm.mese_competenza?monthToApi(pianoForm.mese_competenza):null,
+        preventivo:parseFloat(pianoForm.preventivo||0),
+        margine_target_pct:parseFloat(pianoForm.margine_target_pct||40),
+        budget_produttivo:pianoBudget.budget,
+        ore_budget:pianoBudget.ore,
+        costo_orario_snapshot:costoOrarioAziendale,
+        note:pianoForm.note||null,
+        righe:pianoRighe.map(r=>({risorsa_id:r.risorsa_id||null,lavorazione:r.lavorazione,ore_pianificate:parseFloat(r.ore_pianificate)||0,note:r.note||null}))
+      };
+      const res=await fetch('/api/v1/piani',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok()},body:JSON.stringify(payload)});
+      if(res.ok){
+        const saved=await res.json();
+        dispatch({type:'ADD',entity:'piani',item:saved});
+        setPianoModal(false);
+        if(apriCommessa) setPianoConfermaCommessa(saved);
+      } else {const e=await res.json().catch(()=>({}));alert('Errore: '+(e.detail||JSON.stringify(e)));}
+    }catch(e){alert('Errore: '+e.message);}
+    setPianoSaving(false);
+  };
 
   const progettoMap=useMemo(()=>Object.fromEntries(state.progetti.map(p=>[p.id,p])),[state.progetti]);
   const clienteMap =useMemo(()=>Object.fromEntries(state.clienti.map(c=>[c.id,c])),[state.clienti]);
@@ -1833,8 +1913,128 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
   },[state.commesse,clienteMap,searchQ,filterStato,filterMese]);
   const totFatt=commesseFiltered.reduce((s,cm)=>s+previewFatt(cm),0);
 
+  // Piani senza commessa
+  const pianiSenzaCommessa=(state.piani||[]).filter(p=>!p.commessa_id);
+  const clienteMap2=useMemo(()=>Object.fromEntries((state.clienti||[]).map(c=>[c.id,c])),[state.clienti]);
+
   return <div className='fu'>
-    {confirm&&<Confirm msg='Eliminare questa commessa?' onConfirm={()=>del(confirm.id)} onClose={()=>setConfirm(null)}/>}
+    {/* MODAL CONFERMA CREAZIONE COMMESSA */}
+    {pianoConfermaCommessa&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.7)',zIndex:300,display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style={{background:'var(--g1)',borderRadius:16,padding:32,width:480,border:'1px solid var(--g2)'}}>
+        <div style={{fontSize:18,fontWeight:700,marginBottom:8}}>Piano salvato!</div>
+        <div style={{color:'var(--g4)',fontSize:13,marginBottom:24}}>Vuoi creare anche la commessa corrispondente per <b style={{color:'var(--violet)'}}>{clienteMap2[pianoConfermaCommessa.cliente_id]?.ragione_sociale}</b>?</div>
+        <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+          <Btn v='ghost' onClick={()=>setPianoConfermaCommessa(null)}>No, solo piano</Btn>
+          <Btn v='primary' onClick={()=>{
+            const p=pianoConfermaCommessa;
+            const cl=state.clienti.find(c=>c.id===p.cliente_id);
+            const pIds=(state.progetti||[]).filter(pr=>pr.cliente_id===p.cliente_id&&pr.stato==='ATTIVO').map(pr=>pr.id);
+            setForm({cliente_id:p.cliente_id,mese_competenza:p.mese_competenza?p.mese_competenza.substring(0,7):currMese(),stato:'APERTA',progetti_ids:pIds,delivery_per_progetto:Object.fromEntries(pIds.map(pid=>[pid,0])),costo_manodopera:0,costi_diretti:0,note:'',piano_id:p.id,preventivo:p.preventivo});
+            setPianoConfermaCommessa(null);
+            setModal('new');
+          }}>Sì, crea commessa</Btn>
+        </div>
+      </div>
+    </div>}
+
+    {/* MODAL PIANIFICAZIONE A PAGINA INTERA */}
+    {pianoModal&&<div style={{position:'fixed',inset:0,background:'#0f0f13',zIndex:200,overflowY:'auto'}}>
+      <div style={{maxWidth:900,margin:'0 auto',padding:'24px 32px'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:24}}>
+          <div>
+            <div style={{fontSize:22,fontWeight:800}}>Nuova pianificazione</div>
+            <div style={{fontFamily:'var(--fm)',fontSize:12,color:'var(--g4)',marginTop:2}}>Definisci budget e ore per il progetto</div>
+          </div>
+          <div style={{display:'flex',gap:8}}>
+            <Btn v='ghost' onClick={()=>setPianoModal(false)}>Annulla</Btn>
+            <Btn v='ghost' onClick={()=>savePiano(false)} disabled={pianoSaving}>Salva senza commessa</Btn>
+            <Btn v='primary' onClick={()=>savePiano(true)} disabled={pianoSaving}>{pianoSaving?'Salvo...':'Salva e crea commessa'}</Btn>
+          </div>
+        </div>
+
+        {/* Sezione cliente e mese */}
+        <Card style={{marginBottom:16}}>
+          <div style={{padding:'16px 18px'}}>
+            <div style={{fontSize:11,fontWeight:700,color:'var(--acc)',textTransform:'uppercase',letterSpacing:1,marginBottom:12}}>Cliente e periodo</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
+              <FRow label='Cliente'>
+                <select value={pianoForm.cliente_id||''} onChange={e=>onPianoClienteChange(e.target.value)} style={{width:'100%'}}>
+                  <option value=''>Seleziona cliente</option>
+                  {(state.clienti||[]).map(c=><option key={c.id} value={c.id}>{c.codice_cliente} — {c.ragione_sociale}</option>)}
+                </select>
+              </FRow>
+              <FRow label='Mese competenza'>
+                <input type='month' value={pianoForm.mese_competenza||currMese()} onChange={e=>setPianoForm(f=>({...f,mese_competenza:e.target.value}))} style={{width:'100%'}}/>
+              </FRow>
+              <FRow label='Preventivo contrattuale (€)' hint='Somma di tutti i servizi mensili'>
+                <input type='number' min='0' step='0.01' value={pianoForm.preventivo||''} onChange={e=>setPianoForm(f=>({...f,preventivo:e.target.value}))} style={{width:'100%'}} placeholder='es. 650'/>
+              </FRow>
+            </div>
+          </div>
+        </Card>
+
+        {/* KPI budget */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:16}}>
+          <KPI label='Preventivo' value={fmtEuro(parseFloat(pianoForm.preventivo||0))} delay={.04}/>
+          <KPI label='Margine target' value={(pianoForm.margine_target_pct||40)+'%'} color='var(--violet)' delay={.07}/>
+          <KPI label='Budget produttivo' value={fmtEuro(pianoBudget.budget)} color='var(--amber)' delay={.10}/>
+          <KPI label='Ore disponibili' value={pianoBudget.ore+'h'} sub={'@ '+fmtEuro(costoOrarioAziendale)+'/h'} delay={.13}/>
+        </div>
+
+        {/* Slider margine */}
+        <Card style={{marginBottom:16}}>
+          <div style={{padding:'16px 18px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+              <div style={{fontWeight:700,fontSize:13}}>Margine target</div>
+              <div style={{fontFamily:'var(--fm)',fontSize:20,fontWeight:800,color:'var(--violet)'}}>{pianoForm.margine_target_pct||40}%</div>
+            </div>
+            <input type='range' min='10' max='80' step='1' value={pianoForm.margine_target_pct||40} onChange={e=>setPianoForm(f=>({...f,margine_target_pct:parseInt(e.target.value)}))} style={{width:'100%',accentColor:'var(--violet)',marginBottom:8}}/>
+            <div style={{display:'flex',justifyContent:'space-between',fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)'}}>
+              <span>Budget: <b style={{color:'var(--amber)'}}>{fmtEuro(pianoBudget.budget)}</b></span>
+              <span>Ore: <b style={{color:'var(--violet)'}}>{pianoBudget.ore}h</b></span>
+              <span>Costo/h az.: <b style={{color:'var(--g5)'}}>{fmtEuro(costoOrarioAziendale)}/h</b></span>
+            </div>
+          </div>
+        </Card>
+
+        {/* Distribuzione ore */}
+        <Card style={{marginBottom:16}}>
+          <CH title='Distribuzione ore per lavorazione' meta={pianoOrePianificate+'h / '+pianoBudget.ore+'h'}
+            action={<Btn v='primary' onClick={()=>setPianoRighe(r=>[...r,{id:'new_'+Date.now(),lavorazione:'Strategia',risorsa_id:'',ore_pianificate:0,note:''}])} s={{fontSize:11,padding:'5px 10px'}}>+ Lavorazione</Btn>}/>
+          <div style={{padding:'0 18px 12px'}}>
+            <div style={{height:8,background:'var(--g2)',borderRadius:4,overflow:'hidden',marginBottom:6}}>
+              <div style={{height:'100%',width:Math.min(pianoBudget.ore>0?pianoOrePianificate/pianoBudget.ore*100:0,100)+'%',background:pianoOrePianificate<=pianoBudget.ore?'linear-gradient(90deg,var(--purple),var(--violet))':'var(--red)',borderRadius:4,transition:'width .3s'}}/>
+            </div>
+            <div style={{fontFamily:'var(--fm)',fontSize:11,color:pianoOrePianificate<=pianoBudget.ore?'var(--green)':'var(--red)',fontWeight:600}}>
+              {pianoOrePianificate<=pianoBudget.ore?'+'+Math.round((pianoBudget.ore-pianoOrePianificate)*10)/10+'h rimanenti':Math.round((pianoOrePianificate-pianoBudget.ore)*10)/10+'h sforamento'}
+            </div>
+          </div>
+          {pianoRighe.length===0?<Empty msg='Aggiungi lavorazioni per distribuire le ore'/>:
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
+            <thead><tr><Th c='Lavorazione'/><Th c='Risorsa'/><Th c='Ore'/><Th c='Costo stimato'/><Th c='Note'/><Th c=''/></tr></thead>
+            <tbody>
+              {pianoRighe.map((r,idx)=><TR key={r.id||idx}>
+                <Td><select value={r.lavorazione} onChange={e=>setPianoRighe(righe=>righe.map((x,i)=>i===idx?{...x,lavorazione:e.target.value}:x))} style={{padding:'4px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',fontSize:12,width:'100%'}}>{LAVORAZIONI.map(l=><option key={l} value={l}>{l}</option>)}</select></Td>
+                <Td><select value={r.risorsa_id||''} onChange={e=>setPianoRighe(righe=>righe.map((x,i)=>i===idx?{...x,risorsa_id:e.target.value}:x))} style={{padding:'4px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',fontSize:12,width:'100%'}}><option value=''>— Nessuna —</option>{risorse.map(rs=><option key={rs.id} value={rs.id}>{rs.nome} {rs.cognome}</option>)}</select></Td>
+                <Td><input type='number' min='0' step='0.5' value={r.ore_pianificate||0} onChange={e=>setPianoRighe(righe=>righe.map((x,i)=>i===idx?{...x,ore_pianificate:e.target.value}:x))} style={{width:70,padding:'4px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',fontSize:12,textAlign:'right'}}/></Td>
+                <Td mono style={{color:'var(--amber)'}}>{fmtEuro((parseFloat(r.ore_pianificate)||0)*costoOrarioAziendale)}</Td>
+                <Td><input value={r.note||''} onChange={e=>setPianoRighe(righe=>righe.map((x,i)=>i===idx?{...x,note:e.target.value}:x))} placeholder='...' style={{width:'100%',padding:'4px 8px',borderRadius:6,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g5)',fontSize:12}}/></Td>
+                <Td><button type='button' onClick={()=>setPianoRighe(r=>r.filter((_,i)=>i!==idx))} style={{background:'none',border:'none',color:'var(--red)',cursor:'pointer',fontSize:14}}>✕</button></Td>
+              </TR>)}
+            </tbody>
+          </table>}
+        </Card>
+
+        <Card>
+          <div style={{padding:'14px 18px'}}>
+            <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>Note</div>
+            <textarea value={pianoForm.note||''} onChange={e=>setPianoForm(f=>({...f,note:e.target.value}))} rows={3} style={{width:'100%',background:'var(--g1)',border:'1px solid var(--g3)',borderRadius:8,padding:'8px 12px',color:'var(--tx)',resize:'vertical',fontSize:12}} placeholder='Annotazioni...'/>
+          </div>
+        </Card>
+      </div>
+    </div>}
+
+    {confirm&&<Confirm msg='Eliminare questa commessa?' onConfirm={()=>del(confirm.id)} onClose={()=>setConfirm(null)}/>}}
     {modal&&<Modal title={modal==='new'?'Nuova commessa':'Modifica commessa'} onClose={closeModal} width={620}>
       <form onSubmit={save}>
         <FRow label='Cliente'>
@@ -1944,20 +2144,64 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
     </Modal>}
 
     <Topbar title='Commesse'>
-      <input placeholder='Cerca cliente…' value={searchQ} onChange={e=>setSearchQ(e.target.value)} style={{padding:'6px 12px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12,width:180,outline:'none',height:34}}/>
-      {searchQ&&<button onClick={()=>setSearchQ('')} style={{background:'none',border:'none',color:'var(--g4)',cursor:'pointer',fontSize:14}}>✕</button>}
-      <select value={filterMese} onChange={e=>setFilterMese(e.target.value)} style={{width:140,height:34,padding:'0 10px'}}>
-        <option value=''>Tutti i mesi</option>
-        {mesiDisponibili.map(m=><option key={m} value={m}>{meseFmt(m)}</option>)}
-      </select>
-      <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
-        {['TUTTI',...STATI_CM].map(s=>(
-          <button key={s} onClick={()=>setFilterStato(s)} style={{padding:'5px 9px',borderRadius:20,fontSize:10,fontFamily:'var(--fm)',fontWeight:500,cursor:'pointer',border:filterStato===s?'none':'1px solid var(--g3)',background:filterStato===s?'linear-gradient(135deg,var(--purple),var(--violet))':'var(--g2)',color:filterStato===s?'white':'var(--g5)',whiteSpace:'nowrap'}}>{s.replace(/_/g,' ')}</button>
-        ))}
-      </div>
-      <Btn v='primary' onClick={openNew}>+ Nuova</Btn>
+      {tab==='commesse'&&<>
+        <input placeholder='Cerca cliente…' value={searchQ} onChange={e=>setSearchQ(e.target.value)} style={{padding:'6px 12px',borderRadius:8,border:'1px solid var(--g3)',background:'var(--g2)',color:'var(--g6)',fontSize:12,width:180,outline:'none',height:34}}/>
+        {searchQ&&<button onClick={()=>setSearchQ('')} style={{background:'none',border:'none',color:'var(--g4)',cursor:'pointer',fontSize:14}}>✕</button>}
+        <select value={filterMese} onChange={e=>setFilterMese(e.target.value)} style={{width:140,height:34,padding:'0 10px'}}>
+          <option value=''>Tutti i mesi</option>
+          {mesiDisponibili.map(m=><option key={m} value={m}>{meseFmt(m)}</option>)}
+        </select>
+        <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+          {['TUTTI',...STATI_CM].map(s=>(
+            <button key={s} onClick={()=>setFilterStato(s)} style={{padding:'5px 9px',borderRadius:20,fontSize:10,fontFamily:'var(--fm)',fontWeight:500,cursor:'pointer',border:filterStato===s?'none':'1px solid var(--g3)',background:filterStato===s?'linear-gradient(135deg,var(--purple),var(--violet))':'var(--g2)',color:filterStato===s?'white':'var(--g5)',whiteSpace:'nowrap'}}>{s.replace(/_/g,' ')}</button>
+          ))}
+        </div>
+        <Btn v='primary' onClick={openNew}>+ Nuova</Btn>
+      </>}
+      <Btn v='primary' onClick={openNuovoPiano}>+ Nuova pianificazione</Btn>
     </Topbar>
+    <div style={{display:'flex',gap:0,padding:'0 26px',borderBottom:'1px solid var(--g2)',marginBottom:0}}>
+      {[{id:'commesse',label:'Commesse'},{id:'pianificazioni',label:'Pianificazioni',badge:pianiSenzaCommessa.length}].map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{padding:'12px 20px',background:'none',border:'none',borderBottom:tab===t.id?'2px solid var(--violet)':'2px solid transparent',color:tab===t.id?'var(--violet)':'var(--g4)',fontSize:13,fontWeight:tab===t.id?700:500,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
+        {t.label}{t.badge>0&&<span style={{background:'var(--amber)',color:'#000',fontSize:9,fontFamily:'var(--fm)',padding:'1px 5px',borderRadius:10,fontWeight:700}}>{t.badge}</span>}
+      </button>)}
+    </div>
     <div style={{padding:'22px 26px'}}>
+      {tab==='pianificazioni'&&<>
+        {pianiSenzaCommessa.length===0?<Card><Empty msg='Nessuna pianificazione senza commessa'/></Card>:
+        <Card>
+          <CH title='Pianificazioni in attesa' meta={pianiSenzaCommessa.length+' piani'}/>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
+            <thead><tr><Th c='Cliente'/><Th c='Mese'/><Th c='Preventivo'/><Th c='Margine target'/><Th c='Budget'/><Th c='Ore'/><Th c='Creato'/><Th c=''/></tr></thead>
+            <tbody>
+              {pianiSenzaCommessa.map(p=>{
+                const cl=clienteMap2[p.cliente_id];
+                return <TR key={p.id}>
+                  <Td><div style={{fontWeight:700}}>{cl?.ragione_sociale||'—'}</div><div style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--violet)'}}>{cl?.codice_cliente}</div></Td>
+                  <Td mono muted>{p.mese_competenza?meseFmt(p.mese_competenza.substring(0,7)):'—'}</Td>
+                  <Td mono>{fmtEuro(p.preventivo)}</Td>
+                  <Td><span style={{color:'var(--violet)',fontWeight:700}}>{p.margine_target_pct}%</span></Td>
+                  <Td mono style={{color:'var(--amber)'}}>{fmtEuro(p.budget_produttivo)}</Td>
+                  <Td mono>{p.ore_budget}h</Td>
+                  <Td muted>{fmtDate(p.created_at)}</Td>
+                  <Td><div style={{display:'flex',gap:6}}>
+                    <Btn v='primary' s={{padding:'4px 8px',fontSize:11}} onClick={()=>{
+                      const pIds=(state.progetti||[]).filter(pr=>pr.cliente_id===p.cliente_id&&pr.stato==='ATTIVO').map(pr=>pr.id);
+                      setForm({cliente_id:p.cliente_id,mese_competenza:p.mese_competenza?p.mese_competenza.substring(0,7):currMese(),stato:'APERTA',progetti_ids:pIds,delivery_per_progetto:Object.fromEntries(pIds.map(pid=>[pid,0])),costo_manodopera:0,costi_diretti:0,note:'',piano_id:p.id,preventivo:p.preventivo});
+                      setModal('new');
+                    }}>Crea commessa</Btn>
+                    <Btn v='danger' s={{padding:'4px 8px',fontSize:11}} onClick={async()=>{
+                      if(!window.confirm('Eliminare questo piano?')) return;
+                      await fetch('/api/v1/piani/'+p.id,{method:'DELETE',headers:{'Authorization':'Bearer '+tok()}});
+                      dispatch({type:'REMOVE',entity:'piani',id:p.id});
+                    }}>✕</Btn>
+                  </div></Td>
+                </TR>;
+              })}
+            </tbody>
+          </table>
+        </Card>}
+      </>}
+      {tab==='commesse'&&<>
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:22}}>
         <KPI label='Fatturabile (filtro)' value={fmtEuro(totFatt)} delay={.05}/>
         <KPI label='Pronte chiusura' value={commesseFiltered.filter(c=>c.stato==='PRONTA_CHIUSURA').length} delay={.08} warn={commesseFiltered.filter(c=>c.stato==='PRONTA_CHIUSURA').length>0}/>
@@ -1997,6 +2241,8 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
           </tbody>
         </table>}
       </Card>
+    </>
+    }
     </div>
   </div>;
 }
@@ -2004,126 +2250,221 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
 // ─────────────────────────────────────────────────────────
 // SCREEN: COMMESSA DETAIL
 // ─────────────────────────────────────────────────────────
-function CommessaDetailScreen({state,commessaId,setPage,onChiudi}) {
-  const cm=state.commesse.find(c=>c.id===commessaId);
-  const progettoMap=useMemo(()=>Object.fromEntries(state.progetti.map(p=>[p.id,p])),[state.progetti]);
-  const clienteMap =useMemo(()=>Object.fromEntries(state.clienti.map(c=>[c.id,c])),[state.clienti]);
-  const userMap    =useMemo(()=>Object.fromEntries(state.users.map(u=>[u.id,u])),[state.users]);
-  if(!cm) return <div style={{padding:32,color:'var(--g4)'}}>Commessa non trovata</div>;
+function CommessaDetailScreen({state,commessaId,setPage,onChiudi,dispatch}) {
+  const cm=useMemo(()=>(state.commesse||[]).find(c=>c.id===commessaId),[state.commesse,commessaId]);
+  const progettoMap=useMemo(()=>Object.fromEntries((state.progetti||[]).map(p=>[p.id,p])),[state.progetti]);
+  const clienteMap=useMemo(()=>Object.fromEntries((state.clienti||[]).map(c=>[c.id,c])),[state.clienti]);
+  const risorse=state.risorse||[];
+  const tok=()=>localStorage.getItem('BITE_ERP_TOKEN')||'';
 
+  if(!cm) return <div style={{padding:32,color:'var(--g4)'}}>Commessa non trovata</div>;
   const cl=clienteMap[cm.cliente_id];
-  const rigaData = pid => {
+
+  // Calcoli fatturabile
+  const rigaData=pid=>{
     const p=progettoMap[pid]||{};
     const snap=(cm.snapshot_per_progetto||{})[pid]||{};
-    const dc=(cm.delivery_per_progetto||{})[pid] ?? snap.delivery_consuntiva ?? 0;
-    return {
-      p,
-      dc,
-      importo_fisso:snap.importo_fisso ?? p.importo_fisso ?? 0,
-      importo_variabile:snap.importo_variabile ?? p.importo_variabile ?? 0,
-      delivery_attesa:snap.delivery_attesa ?? p.delivery_attesa ?? 0,
-    };
+    const dc=(cm.delivery_per_progetto||{})[pid]??snap.delivery_consuntiva??0;
+    return {p,dc,importo_fisso:snap.importo_fisso??p.importo_fisso??0,importo_variabile:snap.importo_variabile??p.importo_variabile??0,delivery_attesa:snap.delivery_attesa??p.delivery_attesa??0};
   };
-  const totFatt=cm.progetti_ids.reduce((s,pid)=>{const r=rigaData(pid);return s+fatt(r.importo_fisso,r.importo_variabile,r.delivery_attesa,r.dc);},0);
-  const mo=cm.costo_manodopera||0;
-  const mp=totFatt>0?Math.round((totFatt-mo)/totFatt*100):0;
+  const totFatt=(cm.progetti_ids||[]).reduce((s,pid)=>{const r=rigaData(pid);return s+fatt(r.importo_fisso,r.importo_variabile,r.delivery_attesa,r.dc);},0);
+  const preventivo=parseFloat(cm.preventivo||0);
+  const mo=parseFloat(cm.costo_manodopera||0);
+  const cd=parseFloat(cm.costi_diretti||0);
 
-  // timesheet della commessa
-  const tsComm=state.timesheet.filter(t=>cm.progetti_ids.includes(t.progetto_id)&&t.mese_competenza===cm.mese_competenza);
-  const oreAppr=tsComm.filter(t=>t.stato==='APPROVATO').reduce((s,t)=>s+t.durata_minuti,0);
+  // Costo struttura allocato (proporzionale al fatturabile)
+  const totFattAzienda=(state.commesse||[]).filter(c=>c.mese_competenza===cm.mese_competenza).reduce((s,c)=>{
+    return s+(c.progetti_ids||[]).reduce((ps,pid)=>{
+      const p2=progettoMap[pid]||{};
+      const snap2=(c.snapshot_per_progetto||{})[pid]||{};
+      const dc2=(c.delivery_per_progetto||{})[pid]||0;
+      const if2=snap2.importo_fisso??p2.importo_fisso??0;
+      const iv2=snap2.importo_variabile??p2.importo_variabile??0;
+      const da2=snap2.delivery_attesa??p2.delivery_attesa??0;
+      return ps+fatt(if2,iv2,da2,dc2);
+    },0);
+  },0);
+  const nomiRisorse=(state.risorse||[]).filter(r=>r.attivo).flatMap(r=>[r.nome?.toLowerCase(),r.cognome?.toLowerCase()].filter(Boolean));
+  const isPersonale=desc=>nomiRisorse.some(n=>n&&desc?.toLowerCase().includes(n));
+  const costoStruttMese=(state.costi_fissi||[]).filter(c=>c.attivo&&!isPersonale(c.descrizione)).reduce((s,c)=>{
+    const p=(c.periodicita||'mensile').toLowerCase();
+    if(p==='mensile')return s+parseFloat(c.importo||0);
+    if(p==='annuale')return s+parseFloat(c.importo||0)/12;
+    if(p==='trimestrale')return s+parseFloat(c.importo||0)/3;
+    if(p==='semestrale')return s+parseFloat(c.importo||0)/6;
+    return s;
+  },0);
+  const quotaStrutt=totFattAzienda>0?(totFatt/totFattAzienda)*costoStruttMese:0;
+  const margLordo=totFatt-mo-cd;
+  const margNetto=margLordo-quotaStrutt;
+  const margLordoPct=totFatt>0?Math.round(margLordo/totFatt*100):0;
+  const margNettoPct=totFatt>0?Math.round(margNetto/totFatt*100):0;
 
-  // task ClickUp associati ai progetti della commessa
-  const tasks=CLICKUP_TASKS.filter(t=>cm.progetti_ids.includes(t.project_id));
-  const taskDone=tasks.filter(t=>t.status==='complete').length;
+  // Piano collegato
+  const piano=cm.piano_id?(state.piani||[]).find(p=>p.id===cm.piano_id):null;
+  const margineTarget=piano?parseFloat(piano.margine_target_pct||40):null;
+  const deltaFatt=preventivo>0?totFatt-preventivo:null;
+  const deltaMarg=margineTarget!==null?margNettoPct-margineTarget:null;
+
+  // Timesheet commessa
+  const tsComm=(state.timesheet||[]).filter(t=>t.commessa_id===cm.id&&t.stato==='APPROVATO');
+  const oreAppr=tsComm.reduce((s,t)=>s+t.durata_minuti,0);
+  const costoTS=tsComm.reduce((s,t)=>s+parseFloat(t.costo_lavoro||0),0);
+
+  // Storico commesse stesso cliente (ultimi 4 mesi escluso corrente)
+  const storicoComm=(state.commesse||[])
+    .filter(c=>c.cliente_id===cm.cliente_id&&c.id!==cm.id)
+    .sort((a,b)=>b.mese_competenza.localeCompare(a.mese_competenza))
+    .slice(0,4);
+
+  // Timesheet per servizio (consuntivo)
+  const tsPerServizio=tsComm.reduce((map,t)=>{
+    const k=t.servizio||'Altro';
+    if(!map[k])map[k]={servizio:k,minuti:0,costo:0,risorse:new Set()};
+    map[k].minuti+=t.durata_minuti;
+    map[k].costo+=parseFloat(t.costo_lavoro||0);
+    const r=(risorse||[]).find(r=>r.user_id===t.user_id);
+    if(r)map[k].risorse.add(r.nome+' '+r.cognome);
+    return map;
+  },{});
+
+  const margColor=pct=>pct>=40?'var(--green)':pct>=20?'var(--amber)':'var(--red)';
 
   return <div className='fu'>
-    <Topbar title={cl?.ragione_sociale||'Commessa'} sub={`Commessa ${meseFmt(cm.mese_competenza)} · ${cm.progetti_ids.length} progetti`}>
+    <Topbar title={cl?.ragione_sociale||'Commessa'} sub={meseFmt(cm.mese_competenza)+' · '+cm.stato}>
       <Btn v='ghost' onClick={()=>setPage('commesse')}>← Commesse</Btn>
-      {(cm.stato==='APERTA'||cm.stato==='PRONTA_CHIUSURA')&&onChiudi&&<Btn v='primary' onClick={()=>onChiudi(cm.id)}>✓ Chiudi commessa</Btn>}
+      {(cm.stato==='APERTA'||cm.stato==='PRONTA_CHIUSURA')&&onChiudi&&<Btn v='success' onClick={()=>onChiudi(cm.id)}>✓ Chiudi</Btn>}
       <Badge s={cm.stato}/>
     </Topbar>
-    <div style={{padding:'22px 26px'}}>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:22}}>
-        <KPI label='Fatturabile totale' value={fmtEuro(totFatt)} delay={.05}/>
-        <KPI label='Costo manodopera' value={fmtEuro(mo)} delay={.08}/>
-        <KPI label='Margine' value={`${mp}%`} color={mp>=50?'var(--violet)':mp>=30?'var(--amber)':'var(--red)'} delay={.11}/>
-        <KPI label='Ore approvate' value={fmtMin(oreAppr)} delay={.14}/>
+    <div style={{padding:'22px 26px',display:'flex',flexDirection:'column',gap:16}}>
+
+      {/* KPI RIGA 1: Valori assoluti */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12}}>
+        {preventivo>0&&<KPI label='Preventivo contrattuale' value={fmtEuro(preventivo)} delay={.03}/>}
+        <KPI label='Fatturabile' value={fmtEuro(totFatt)} color={deltaFatt!==null?(deltaFatt>=0?'var(--green)':'var(--red)'):'var(--white)'} sub={deltaFatt!==null?(deltaFatt>=0?'+'+fmtEuro(deltaFatt):fmtEuro(deltaFatt))+' vs preventivo':null} delay={.05}/>
+        <KPI label='Costo M.O.' value={fmtEuro(mo)} color='var(--red)' delay={.07}/>
+        <KPI label='Costi diretti' value={fmtEuro(cd)} color={cd>0?'var(--red)':'var(--g4)'} delay={.09}/>
+        <KPI label='Quota struttura' value={fmtEuro(quotaStrutt)} color='var(--g4)' delay={.11}/>
       </div>
 
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
+      {/* KPI RIGA 2: Margini */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>
+        <KPI label='Margine lordo' value={margLordoPct+'%'} sub={fmtEuro(margLordo)} color={margColor(margLordoPct)} delay={.04}/>
+        <KPI label='Margine netto' value={margNettoPct+'%'} sub={fmtEuro(margNetto)} color={margColor(margNettoPct)} delay={.06}/>
+        {margineTarget!==null&&<KPI label='Margine target' value={margineTarget+'%'} color='var(--violet)' delay={.08}/>}
+        {deltaMarg!==null&&<KPI label='Delta vs target' value={(deltaMarg>=0?'+':'')+deltaMarg+'pp'} color={deltaMarg>=0?'var(--green)':'var(--red)'} delay={.10}/>}
+      </div>
+
+      {/* NOTA FORMULA */}
+      <div style={{padding:'8px 14px',background:'rgba(139,92,246,.06)',borderRadius:8,border:'1px solid rgba(139,92,246,.15)',fontFamily:'var(--fm)',fontSize:11,color:'var(--g4)'}}>
+        Margine netto = Fatturabile − Costo M.O. (${fmtEuro(mo)}) − Costi diretti (${fmtEuro(cd)}) − Quota struttura (${fmtEuro(quotaStrutt)})
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+
         {/* DETTAGLIO PER PROGETTO */}
         <Card>
           <CH title='Dettaglio per progetto'/>
-          {cm.progetti_ids.map(pid=>{
+          {(cm.progetti_ids||[]).map(pid=>{
             const {p,dc,importo_fisso,importo_variabile,delivery_attesa}=rigaData(pid); if(!p.id) return null;
             const pFatt=fatt(importo_fisso,importo_variabile,delivery_attesa,dc);
-            const cl2=clienteMap[p.cliente_id];
             return <div key={pid} style={{padding:'14px 18px',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
                 <div style={{display:'flex',gap:8,alignItems:'center'}}><Badge s={p.categoria}/><span style={{fontWeight:700}}>{p.nome}</span></div>
                 <span style={{fontFamily:'var(--fm)',fontWeight:700,color:'var(--violet)'}}>{fmtEuro(pFatt)}</span>
               </div>
-              {delivery_attesa>0&&<div style={{marginBottom:6}}><Pips total={delivery_attesa} done={dc}/>{dc>delivery_attesa&&<span style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--amber)',marginLeft:8}}>⬆ over delivery</span>}</div>}
-              {p.categoria==='WEB'&&p.milestone?.length>0&&<div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
-                {p.milestone.map(m=><span key={m.id} style={{display:'inline-flex',alignItems:'center',gap:4,fontFamily:'var(--fm)',fontSize:10,padding:'2px 7px',borderRadius:20,...(BADGE_MAP[m.stato]||['var(--g2)','var(--g5)']).reduce((o,v,i)=>({...o,[i===0?'background':'color']:v}),{})}}>
-                  {m.stato==='DONE'?'✓':m.stato==='IN_PROGRESS'?'⋯':'○'} {m.nome}
-                </span>)}
-              </div>}
-              {p.categoria==='MARKETING'&&<div style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--amber)'}}>Budget campagna: {fmtEuro(p.budget_campagna)}/mese</div>}
+              {delivery_attesa>0&&<div style={{marginBottom:4}}><Pips total={delivery_attesa} done={dc}/></div>}
+              <div style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)'}}>
+                Fisso: {fmtEuro(importo_fisso)} · Variabile: {fmtEuro(importo_variabile)}
+                {delivery_attesa>0&&<> · {dc}/{delivery_attesa} contenuti</>}
+              </div>
             </div>;
           })}
+          {/* Aggiustamenti */}
+          {(cm.aggiustamenti||[]).length>0&&<div style={{padding:'10px 18px',borderTop:'1px solid rgba(255,255,255,.04)'}}>
+            {(cm.aggiustamenti||[]).map((ag,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',fontFamily:'var(--fm)',fontSize:11,color:parseFloat(ag.importo)>=0?'var(--green)':'var(--red)'}}>
+              <span>{ag.descrizione||'Aggiustamento'}</span><span>{parseFloat(ag.importo)>=0?'+':''}{fmtEuro(ag.importo)}</span>
+            </div>)}
+          </div>}
         </Card>
 
-        {/* TASK CLICKUP */}
+        {/* PIANO COLLEGATO + CONSUNTIVO ORE */}
         <Card>
-          <CH title='Task ClickUp' meta={`${taskDone}/${tasks.length} completate`}/>
-          {tasks.length===0?<Empty msg='Nessun task associato'/>:
-          tasks.map(t=>{
-            const p=progettoMap[t.project_id];
-            return <div key={t.id} style={{display:'flex',gap:10,padding:'11px 18px',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
-              <div style={{width:6,borderRadius:3,flexShrink:0,background:t.status==='complete'?'var(--green)':t.status==='in progress'?'var(--amber)':'var(--g3)'}}/>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name}</div>
-                <div style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)'}}>{p?.nome||'—'}</div>
-              </div>
-              <Badge s={t.status}/>
-            </div>;
-          })}
+          <CH title='Budget ore' meta={piano?'Piano collegato':'Nessun piano'}/>
+          {piano?<div style={{padding:'14px 18px'}}>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:12}}>
+              {[
+                {l:'Ore budget',v:piano.ore_budget+'h',c:'var(--violet)'},
+                {l:'Ore lavorate',v:Math.round(oreAppr/60*10)/10+'h',c:'var(--g5)'},
+                {l:'Scostamento',v:(piano.ore_budget-Math.round(oreAppr/60*10)/10>=0?'+':'')+Math.round((piano.ore_budget-oreAppr/60)*10)/10+'h',c:piano.ore_budget-oreAppr/60>=0?'var(--green)':'var(--red)'},
+              ].map((k,i)=><div key={i} style={{background:'var(--g2)',borderRadius:8,padding:'10px 12px'}}>
+                <div style={{fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',marginBottom:4}}>{k.l}</div>
+                <div style={{fontSize:15,fontWeight:800,color:k.c}}>{k.v}</div>
+              </div>)}
+            </div>
+            <div style={{height:6,background:'var(--g2)',borderRadius:3,overflow:'hidden'}}>
+              <div style={{height:'100%',width:Math.min(piano.ore_budget>0?oreAppr/60/piano.ore_budget*100:0,100)+'%',background:'linear-gradient(90deg,var(--green),var(--violet))',borderRadius:3}}/>
+            </div>
+          </div>:<div style={{padding:'14px 18px'}}>
+            <div style={{color:'var(--g4)',fontSize:12,marginBottom:8}}>Ore timesheet approvate: <b style={{color:'var(--g5)'}}>{Math.round(oreAppr/60*10)/10}h</b></div>
+            <div style={{color:'var(--g4)',fontSize:12}}>Costo M.O. da timesheet: <b style={{color:'var(--red)'}}>{fmtEuro(costoTS)}</b></div>
+          </div>}
         </Card>
       </div>
 
-      {/* TIMESHEET COMMESSA */}
+      {/* CONSUNTIVO TIMESHEET */}
       {tsComm.length>0&&<Card>
-        <CH title='Timesheet' meta={`${tsComm.length} registrazioni · ${fmtMin(oreAppr)} approvate`}/>
-        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
-          <thead><tr><Th c='Risorsa'/><Th c='Progetto'/><Th c='Task'/><Th c='Data'/><Th c='Durata'/><Th c='Stato'/></tr></thead>
+        <CH title='Timesheet consuntivo' meta={Math.round(oreAppr/60*10)/10+'h · '+tsComm.length+' registrazioni'}/>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+          <thead><tr style={{background:'rgba(0,0,0,.2)'}}>
+            <th style={{padding:'6px 14px',textAlign:'left',fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',fontWeight:600}}>Servizio</th>
+            <th style={{padding:'6px 14px',textAlign:'left',fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',fontWeight:600}}>Risorse</th>
+            <th style={{padding:'6px 14px',textAlign:'right',fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',fontWeight:600}}>Ore</th>
+            <th style={{padding:'6px 14px',textAlign:'right',fontFamily:'var(--fm)',fontSize:10,color:'var(--g4)',fontWeight:600}}>Costo</th>
+          </tr></thead>
           <tbody>
-            {tsComm.map(t=>{
-              const u=userMap[t.user_id]; const p=progettoMap[t.progetto_id];
-              const _brandNote=t.note?t.note.replace('[CSV]','').split('|')[0].trim():null;
-              const _brandNome=p?.nome||_brandNote||'—';
-              const task=CLICKUP_TASKS.find(x=>x.id===t.clickup_task_id);
-              const brandNote=t.note?t.note.replace('[CSV]','').split('|')[0].trim():null;
-              const brandNome=p?.nome||brandNote||'—';
-              return <TR key={t.id}>
-                <Td>{u?<div style={{display:'flex',alignItems:'center',gap:6}}><Av u={u} size={20}/><span style={{fontWeight:600}}>{u.nome}</span></div>:'—'}</Td>
-                <Td muted>{brandNome}</Td>
-                <Td>{task?.name||'—'}</Td>
-                <Td mono muted>{t.data_attivita}</Td>
-                <Td mono>{fmtMin(t.durata_minuti)}</Td>
-                <Td><Badge s={t.stato}/></Td>
-              </TR>;
-            })}
+            {Object.values(tsPerServizio).sort((a,b)=>b.minuti-a.minuti).map((r,i)=><tr key={i} style={{borderTop:'1px solid rgba(255,255,255,.04)'}}>
+              <td style={{padding:'7px 14px',fontSize:12,color:'var(--g5)'}}>{r.servizio}</td>
+              <td style={{padding:'7px 14px',fontSize:11,color:'var(--violet)'}}>{[...r.risorse].join(', ')||'—'}</td>
+              <td style={{padding:'7px 14px',textAlign:'right',fontFamily:'var(--fm)',fontSize:12,fontWeight:600}}>{Math.round(r.minuti/60*10)/10}h</td>
+              <td style={{padding:'7px 14px',textAlign:'right',fontFamily:'var(--fm)',fontSize:12,color:'var(--amber)'}}>{fmtEuro(r.costo)}</td>
+            </tr>)}
           </tbody>
+          <tfoot><tr style={{background:'var(--g2)'}}>
+            <td colSpan={2} style={{padding:'8px 14px',fontWeight:700,fontSize:12}}>Totale</td>
+            <td style={{padding:'8px 14px',textAlign:'right',fontFamily:'var(--fm)',fontWeight:700}}>{Math.round(oreAppr/60*10)/10}h</td>
+            <td style={{padding:'8px 14px',textAlign:'right',fontFamily:'var(--fm)',fontWeight:700,color:'var(--amber)'}}>{fmtEuro(costoTS)}</td>
+          </tr></tfoot>
         </table>
       </Card>}
+
+      {/* STORICO ULTIMI 4 MESI */}
+      {storicoComm.length>0&&<Card>
+        <CH title='Storico commesse' meta='ultimi 4 mesi'/>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:0}}>
+          {storicoComm.map(sc=>{
+            const scFatt=(sc.progetti_ids||[]).reduce((s,pid)=>{
+              const r=rigaData(pid);
+              return s+fatt(r.importo_fisso,r.importo_variabile,r.delivery_attesa,(sc.delivery_per_progetto||{})[pid]||0);
+            },0);
+            const scMo=parseFloat(sc.costo_manodopera||0);
+            const scMarg=scFatt>0?Math.round((scFatt-scMo)/scFatt*100):0;
+            return <div key={sc.id} onClick={()=>{}} style={{padding:'16px 18px',borderRight:'1px solid var(--g2)',cursor:'pointer',transition:'background .15s'}}
+              onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,.02)'}
+              onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+              <div style={{fontFamily:'var(--fm)',fontSize:11,color:'var(--violet)',fontWeight:600,marginBottom:6}}>{meseFmt(sc.mese_competenza)}</div>
+              <div style={{fontSize:16,fontWeight:800,marginBottom:4}}>{fmtEuro(scFatt)}</div>
+              <div style={{fontFamily:'var(--fm)',fontSize:12,color:margColor(scMarg),fontWeight:700}}>{scMarg}% margine</div>
+              <div style={{marginTop:6}}><Badge s={sc.stato}/></div>
+            </div>;
+          })}
+        </div>
+      </Card>}
+
     </div>
   </div>;
 }
 
-// ─────────────────────────────────────────────────────────
-// SCREEN: TIMESHEET (con task ClickUp simulati)
-// ─────────────────────────────────────────────────────────
 function TimesheetScreen({state,dispatch,api,authUser}) {
   const [filterStato,setFilterStato]=useState('TUTTI');
   const [modal,setModal]=useState(false);
@@ -4637,7 +4978,6 @@ function ReportMensileScreen({state,setPage}) {
 // ─────────────────────────────────────────────────────────
 const NAV=[
   {id:'dashboard',label:'Dashboard',icon:'⊞',section:'Generale'},
-  {id:'pianificazione',label:'Pianificazione',icon:'◎',section:'Generale'},
   {id:'report',label:'Report & Analisi',icon:'⎙',section:'Generale'},
   {id:'profilo',label:'Profilo',icon:'👤',section:'Generale'},
   {id:'clienti',label:'Clienti',icon:'◎',section:'Gestione'},
@@ -5798,6 +6138,7 @@ function App(){
           {key:'progetti',run:()=>apiFetch('/progetti',{tokenOverride:tk})},
           {key:'commesse',run:()=>apiFetch('/commesse',{tokenOverride:tk})},
           {key:'users',run:()=>apiFetch('/users',{tokenOverride:tk})},
+          {key:'piani',run:()=>apiFetch('/piani',{tokenOverride:tk})},
           {key:'fatture_attive',run:()=>apiFetch('/fatture-attive',{tokenOverride:tk})},
           {key:'fatture_passive',run:()=>apiFetch('/fatture-passive',{tokenOverride:tk})},
           {key:'risorse',run:()=>apiFetch('/risorse',{tokenOverride:tk})},
@@ -5855,6 +6196,7 @@ function App(){
           items:(data.timesheet||[]).map(t=>normalizeTimesheetFromApi(t,{commesseMap,existingTimesheet:state.timesheet})),
         });
       }
+      if(data.piani){dispatch({type:'SET',entity:'piani',items:data.piani});}
       if(data.fatture_attive){
         dispatch({type:'SET_ENTITY',entity:'fatture_attive',items:(data.fatture_attive||[]).map(f=>({
           id:f.id, fic_id:f.fic_id, cliente_id:f.cliente_id,
@@ -6084,7 +6426,6 @@ function App(){
   const renderPage=()=>{
     switch(page){
       case 'dashboard':        return <DashboardScreen state={state} setPage={setPage} setDrillCliente={setDrillCliente} setDrillCommessa={setDrillCommessa} authUser={authUser}/>;
-      case 'pianificazione':   return <PianificazioneScreen state={state} dispatch={dispatch}/>;
       case 'report':           return <ReportMensileScreen state={state} setPage={setPage}/>;
       case 'profilo':          return <ProfiloScreen authUser={authUser} api={usersApi} onAuthUserUpdate={updateAuthUser}/>;
       case 'clienti':          return <ClientiScreen state={state} dispatch={dispatch} setPage={setPage} setDrillCliente={setDrillCliente} api={clientiApi}/>

@@ -763,70 +763,111 @@ async def del_risorsa(risorsa_id: uuid.UUID, db: AsyncSession = Depends(get_db),
 
 
 # ── PIANIFICAZIONE COMMESSA ──────────────────────────────
-@router.get("/piano-commessa/{commessa_id}/{progetto_id}", tags=["Pianificazione"])
-async def get_piano_commessa(commessa_id: uuid.UUID, progetto_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+@router.get("/piani", tags=["Pianificazione"])
+async def list_piani(db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     from sqlalchemy import text
-    row = await db.execute(text("SELECT * FROM piano_commessa WHERE commessa_id=:cid AND progetto_id=:pid"), {"cid": str(commessa_id), "pid": str(progetto_id)})
+    rows = await db.execute(text("""
+        SELECT p.*, cl.ragione_sociale as cliente_nome, cl.codice_cliente
+        FROM piano_commessa p
+        JOIN clienti cl ON cl.id=p.cliente_id
+        ORDER BY p.created_at DESC
+    """))
+    return [dict(r) for r in rows.mappings().fetchall()]
+
+@router.get("/piani/{piano_id}", tags=["Pianificazione"])
+async def get_piano(piano_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from sqlalchemy import text
+    row = await db.execute(text("SELECT p.*, cl.ragione_sociale as cliente_nome, cl.codice_cliente FROM piano_commessa p JOIN clienti cl ON cl.id=p.cliente_id WHERE p.id=:pid"), {"pid": str(piano_id)})
     piano = row.mappings().fetchone()
     if not piano:
         return None
-    righe = await db.execute(text("SELECT pcr.*, r.nome||chr(32)||r.cognome as risorsa_nome FROM piano_commessa_righe pcr LEFT JOIN risorse r ON r.id=pcr.risorsa_id WHERE pcr.piano_id=:pid ORDER BY pcr.created_at"), {"pid": str(piano["id"])})
+    righe = await db.execute(text("SELECT pcr.*, r.nome||' '||r.cognome as risorsa_nome FROM piano_commessa_righe pcr LEFT JOIN risorse r ON r.id=pcr.risorsa_id WHERE pcr.piano_id=:pid ORDER BY pcr.created_at"), {"pid": str(piano_id)})
     return {**dict(piano), "righe": [dict(r) for r in righe.mappings().fetchall()]}
 
-@router.post("/piano-commessa/{commessa_id}/{progetto_id}", tags=["Pianificazione"])
-async def save_piano_commessa(commessa_id: uuid.UUID, progetto_id: uuid.UUID, payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+@router.post("/piani", tags=["Pianificazione"])
+async def create_piano(payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     from sqlalchemy import text
-    existing = await db.execute(text("SELECT id FROM piano_commessa WHERE commessa_id=:cid AND progetto_id=:pid"), {"cid": str(commessa_id), "pid": str(progetto_id)})
-    row = existing.fetchone()
-    if row:
-        piano_id = str(row[0])
-        await db.execute(text("UPDATE piano_commessa SET margine_target_pct=:m, budget_produttivo=:b, ore_budget=:o, costo_orario_snapshot=:c, note=:n, updated_at=NOW() WHERE id=:piano_id"),
-            {"m": payload.get("margine_target_pct", 40), "b": payload.get("budget_produttivo"), "o": payload.get("ore_budget"), "c": payload.get("costo_orario_snapshot"), "n": payload.get("note"), "piano_id": piano_id})
-    else:
-        res = await db.execute(text("INSERT INTO piano_commessa (commessa_id, progetto_id, margine_target_pct, budget_produttivo, ore_budget, costo_orario_snapshot, note) VALUES (:cid,:pid,:m,:b,:o,:c,:n) RETURNING id"),
-            {"cid": str(commessa_id), "pid": str(progetto_id), "m": payload.get("margine_target_pct", 40), "b": payload.get("budget_produttivo"), "o": payload.get("ore_budget"), "c": payload.get("costo_orario_snapshot"), "n": payload.get("note")})
-        piano_id = str(res.fetchone()[0])
-    await db.execute(text("DELETE FROM piano_commessa_righe WHERE piano_id=:piano_id"), {"piano_id": piano_id})
+    from datetime import date
+    from datetime import date as _date
+    mese_str = payload.get("mese_competenza")
+    mese = None
+    if mese_str:
+        try:
+            parts = str(mese_str).split("-")
+            mese = _date(int(parts[0]), int(parts[1]), 1)
+        except: mese = None
+    res = await db.execute(text("""
+        INSERT INTO piano_commessa (cliente_id, preventivo, margine_target_pct, budget_produttivo, ore_budget, costo_orario_snapshot, mese_competenza, note)
+        VALUES (:cid, :prev, :marg, :budg, :ore, :co, :mese, :note) RETURNING id
+    """), {
+        "cid": payload["cliente_id"], "prev": payload.get("preventivo", 0),
+        "marg": payload.get("margine_target_pct", 40), "budg": payload.get("budget_produttivo"),
+        "ore": payload.get("ore_budget"), "co": payload.get("costo_orario_snapshot"),
+        "mese": mese, "note": payload.get("note")
+    })
+    piano_id = str(res.fetchone()[0])
     for riga in payload.get("righe", []):
-        await db.execute(text("INSERT INTO piano_commessa_righe (piano_id, risorsa_id, lavorazione, ore_pianificate, note) VALUES (:piano_id,:rid,:l,:o,:n)"),
-            {"piano_id": piano_id, "rid": riga.get("risorsa_id") or None, "l": riga.get("lavorazione",""), "o": riga.get("ore_pianificate", 0), "n": riga.get("note")})
+        await db.execute(text("INSERT INTO piano_commessa_righe (piano_id, risorsa_id, lavorazione, ore_pianificate, note) VALUES (:pid,:rid,:l,:o,:n)"),
+            {"pid": piano_id, "rid": riga.get("risorsa_id") or None, "l": riga.get("lavorazione",""), "o": riga.get("ore_pianificate", 0), "n": riga.get("note")})
     await db.commit()
-    return await get_piano_commessa(commessa_id, progetto_id, db, current_user)
+    return await get_piano(uuid.UUID(piano_id), db, current_user)
 
-@router.get("/piano-commessa/{commessa_id}/{progetto_id}/consuntivo", tags=["Pianificazione"])
-async def get_consuntivo_commessa(commessa_id: uuid.UUID, progetto_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+@router.patch("/piani/{piano_id}", tags=["Pianificazione"])
+async def update_piano(piano_id: uuid.UUID, payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     from sqlalchemy import text
-    # Ore timesheet approvate per questa commessa, raggruppate per servizio e utente
+    await db.execute(text("""
+        UPDATE piano_commessa SET preventivo=:prev, margine_target_pct=:marg, budget_produttivo=:budg,
+        ore_budget=:ore, costo_orario_snapshot=:co, mese_competenza=:mese, note=:note, updated_at=NOW()
+        WHERE id=:pid
+    """), {
+        "prev": payload.get("preventivo", 0), "marg": payload.get("margine_target_pct", 40),
+        "budg": payload.get("budget_produttivo"), "ore": payload.get("ore_budget"),
+        "co": payload.get("costo_orario_snapshot"), "mese": payload.get("mese_competenza"),
+        "note": payload.get("note"), "pid": str(piano_id)
+    })
+    await db.execute(text("DELETE FROM piano_commessa_righe WHERE piano_id=:pid"), {"pid": str(piano_id)})
+    for riga in payload.get("righe", []):
+        await db.execute(text("INSERT INTO piano_commessa_righe (piano_id, risorsa_id, lavorazione, ore_pianificate, note) VALUES (:pid,:rid,:l,:o,:n)"),
+            {"pid": str(piano_id), "rid": riga.get("risorsa_id") or None, "l": riga.get("lavorazione",""), "o": riga.get("ore_pianificate", 0), "n": riga.get("note")})
+    await db.commit()
+    return await get_piano(piano_id, db, current_user)
+
+@router.patch("/piani/{piano_id}/collega-commessa", tags=["Pianificazione"])
+async def collega_commessa_piano(piano_id: uuid.UUID, payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from sqlalchemy import text
+    commessa_id = payload.get("commessa_id")
+    await db.execute(text("UPDATE piano_commessa SET commessa_id=:cid, updated_at=NOW() WHERE id=:pid"),
+        {"cid": commessa_id, "pid": str(piano_id)})
+    if commessa_id:
+        await db.execute(text("UPDATE commesse SET piano_id=:pid, preventivo=COALESCE((SELECT preventivo FROM piano_commessa WHERE id=:pid),0) WHERE id=:cid"),
+            {"pid": str(piano_id), "cid": commessa_id})
+    await db.commit()
+    return {"ok": True}
+
+@router.get("/piani/{piano_id}/consuntivo", tags=["Pianificazione"])
+async def get_consuntivo_piano(piano_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from sqlalchemy import text
+    piano = await db.execute(text("SELECT commessa_id FROM piano_commessa WHERE id=:pid"), {"pid": str(piano_id)})
+    p = piano.fetchone()
+    if not p or not p[0]:
+        return {"righe": [], "totali": {}}
+    commessa_id = str(p[0])
     righe = await db.execute(text("""
-        SELECT 
-            t.servizio,
-            r.nome||' '||r.cognome as risorsa_nome,
-            SUM(t.durata_minuti) as minuti_totali,
-            SUM(t.costo_lavoro) as costo_totale,
-            COUNT(*) as n_record,
-            MIN(t.data_attivita) as prima_data,
-            MAX(t.data_attivita) as ultima_data
-        FROM timesheet t
-        LEFT JOIN risorse r ON r.user_id=t.user_id
-        WHERE t.commessa_id=:cid
-          AND t.stato='APPROVATO'
-        GROUP BY t.servizio, r.nome, r.cognome
-        ORDER BY minuti_totali DESC
-    """), {"cid": str(commessa_id)})
-    rows = [dict(r) for r in righe.mappings().fetchall()]
-    
-    # Totali
-    totali = await db.execute(text("""
-        SELECT 
-            SUM(t.durata_minuti) as minuti_totali,
-            SUM(t.costo_lavoro) as costo_totale,
-            COUNT(*) as n_record
-        FROM timesheet t
+        SELECT t.servizio, r.nome||' '||r.cognome as risorsa_nome,
+            SUM(t.durata_minuti) as minuti_totali, SUM(t.costo_lavoro) as costo_totale,
+            MIN(t.data_attivita) as prima_data, MAX(t.data_attivita) as ultima_data
+        FROM timesheet t LEFT JOIN risorse r ON r.user_id=t.user_id
         WHERE t.commessa_id=:cid AND t.stato='APPROVATO'
-    """), {"cid": str(commessa_id)})
-    tot = dict(totali.mappings().fetchone() or {})
-    
-    return {"righe": rows, "totali": tot}
+        GROUP BY t.servizio, r.nome, r.cognome ORDER BY minuti_totali DESC
+    """), {"cid": commessa_id})
+    totali = await db.execute(text("SELECT SUM(durata_minuti) as minuti_totali, SUM(costo_lavoro) as costo_totale FROM timesheet WHERE commessa_id=:cid AND stato='APPROVATO'"), {"cid": commessa_id})
+    return {"righe": [dict(r) for r in righe.mappings().fetchall()], "totali": dict(totali.mappings().fetchone() or {})}
+
+@router.delete("/piani/{piano_id}", status_code=204, tags=["Pianificazione"])
+async def delete_piano(piano_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+    from sqlalchemy import text
+    await db.execute(text("DELETE FROM piano_commessa WHERE id=:pid"), {"pid": str(piano_id)})
+    await db.commit()
 
 # ── SERVIZI PROGETTO ──────────────────────────────────────
 @router.get("/progetti/{progetto_id}/servizi")

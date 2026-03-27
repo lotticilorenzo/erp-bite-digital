@@ -81,6 +81,7 @@ class ClienteCreate(BaseModel):
     pec: Optional[str] = None
     indirizzo: Optional[str] = None
     condizioni_pagamento: Optional[str] = None
+    drive_files: Optional[list] = None
 
 class ClienteUpdate(BaseModel):
     codice_cliente: Optional[str] = None
@@ -103,6 +104,7 @@ class ClienteUpdate(BaseModel):
     note_indirizzo: Optional[str] = None
     condizioni_pagamento: Optional[str] = None
     attivo: Optional[bool] = None
+    drive_files: Optional[list] = None
 
 class ClienteOut(OrmBase):
     id: uuid.UUID
@@ -127,6 +129,7 @@ class ClienteOut(OrmBase):
     condizioni_pagamento: Optional[str] = None
     fic_cliente_id: Optional[str] = None
     attivo: bool = True
+    drive_files: Optional[list] = None
     created_at: Optional[datetime] = None
 
 
@@ -309,6 +312,8 @@ class CommessaOut(OrmBase):
     fattura_data: Optional[date] = None
     fattura_importo: Optional[Decimal] = None
     fattura_stato: Optional[str] = None
+    piano_id: Optional[uuid.UUID] = None
+    preventivo: Optional[Decimal] = None
 
 class CommessaWithCliente(CommessaOut):
     cliente: ClienteOut
