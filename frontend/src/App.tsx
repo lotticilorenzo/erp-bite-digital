@@ -2,6 +2,7 @@ import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "@/pages/Login";
 import DashboardPage from "@/pages/Dashboard";
+import ClientiPage from "@/pages/Clienti";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import GenericPlaceholder from "@/components/GenericPlaceholder";
 import { useAuth } from "@/hooks/useAuth";
@@ -44,7 +45,7 @@ function App() {
         element={
           <ProtectedRoute>
             <DashboardLayout>
-              <GenericPlaceholder title="Clienti" />
+              <ClientiPage />
             </DashboardLayout>
           </ProtectedRoute>
         }

@@ -1,16 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
-import type { Cliente, Progetto, Commessa, Timesheet, FatturaAttiva } from "@/types";
-
-export function useClienti(attivo?: boolean) {
-  return useQuery({
-    queryKey: ["clienti", { attivo }],
-    queryFn: async () => {
-      const { data } = await api.get<Cliente[]>("/clienti", { params: { attivo } });
-      return data;
-    },
-  });
-}
+import type { Progetto, Commessa, Timesheet, FatturaAttiva } from "@/types";
+export * from "./useClienti";
 
 export function useProgetti(clienteId?: string) {
   return useQuery({
