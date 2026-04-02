@@ -8,8 +8,9 @@ import ProgettoDetailPage from "@/pages/ProgettoDetail";
 import CommessePage from "@/pages/Commesse";
 import CommessaDetailPage from "@/pages/CommessaDetail";
 import TimesheetPage from "@/pages/Timesheet";
+import StudioPage from "@/pages/Studio";
+import { StudioProvider } from "@/context/StudioContext";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import GenericPlaceholder from "@/components/GenericPlaceholder";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2 } from "lucide-react";
 
@@ -109,9 +110,11 @@ function App() {
         path="/studio-os"
         element={
           <ProtectedRoute>
-            <DashboardLayout>
-              <GenericPlaceholder title="Studio OS" />
-            </DashboardLayout>
+            <StudioProvider>
+              <DashboardLayout>
+                <StudioPage />
+              </DashboardLayout>
+            </StudioProvider>
           </ProtectedRoute>
         }
       />

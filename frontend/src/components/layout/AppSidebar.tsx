@@ -9,6 +9,7 @@ import {
   LogOut,
   User,
   Zap,
+  BarChart3,
 } from "lucide-react";
 
 import {
@@ -35,7 +36,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
 import { Link, useLocation } from "react-router-dom";
-import { BarChart3 } from "lucide-react";
+import { StudioSidebar } from "@/components/studio/StudioSidebar";
 
 const navItems = [
   {
@@ -83,44 +84,50 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="px-3 mt-4 space-y-2">
-        {navItems.map((group) => (
-          <SidebarGroup key={group.title} className="pb-2">
-            <SidebarGroupLabel className="px-3 mb-2 text-[10px] uppercase font-black tracking-[0.25em] text-[#475569]">
-              {group.title}
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {group.items.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={location.pathname === item.url}
-                      tooltip={item.title}
-                      className={`
-                        transition-all duration-300 h-10 rounded-xl px-3 mb-1.5 group/btn
-                        ${location.pathname === item.url 
-                          ? "bg-[#1e293b] text-white border border-[#334155] shadow-lg" 
-                          : "text-[#94a3b8] hover:text-white hover:bg-[#1e293b]/40"
-                        }
-                      `}
-                    >
-                      <Link to={item.url} className="flex items-center gap-3">
-                        <item.icon className={`h-4.5 w-4.5 transition-all duration-300 ${
-                          location.pathname === item.url 
-                            ? "text-primary scale-110" 
-                            : "opacity-70 group-hover/btn:opacity-100 group-hover/btn:scale-110"
-                        }`} />
-                        <span className={`text-sm tracking-wide ${location.pathname === item.url ? "font-black" : "font-bold"}`}>
-                          {item.title}
-                        </span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+        {isStudioOS ? (
+          <div className="flex-1 overflow-hidden h-full">
+            <StudioSidebar />
+          </div>
+        ) : (
+          navItems.map((group) => (
+            <SidebarGroup key={group.title} className="pb-2">
+              <SidebarGroupLabel className="px-3 mb-2 text-[10px] uppercase font-black tracking-[0.25em] text-[#475569]">
+                {group.title}
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {group.items.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={location.pathname === item.url}
+                        tooltip={item.title}
+                        className={`
+                          transition-all duration-300 h-10 rounded-xl px-3 mb-1.5 group/btn
+                          ${location.pathname === item.url 
+                            ? "bg-[#1e293b] text-white border border-[#334155] shadow-lg" 
+                            : "text-[#94a3b8] hover:text-white hover:bg-[#1e293b]/40"
+                          }
+                        `}
+                      >
+                        <Link to={item.url} className="flex items-center gap-3">
+                          <item.icon className={`h-4.5 w-4.5 transition-all duration-300 ${
+                            location.pathname === item.url 
+                              ? "text-primary scale-110" 
+                              : "opacity-70 group-hover/btn:opacity-100 group-hover/btn:scale-110"
+                          }`} />
+                          <span className={`text-sm tracking-wide ${location.pathname === item.url ? "font-black" : "font-bold"}`}>
+                            {item.title}
+                          </span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          ))
+        )}
       </SidebarContent>
 
       <div className="mt-auto px-4 py-4 space-y-4">
