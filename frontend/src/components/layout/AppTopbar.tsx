@@ -3,10 +3,10 @@ import {
   Bell, 
   Search, 
   SwitchCamera, 
-  Timer, 
   Plus
 } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { TimerWidget } from "./TimerWidget";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -79,11 +79,8 @@ export function AppTopbar() {
           </kbd>
         </div>
 
-        <div className="flex items-center space-x-1 border-x border-[#1e293b] px-2 h-8">
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-[#22c55e]/10 border border-[#22c55e]/20 text-[#22c55e] animate-pulse">
-            <Timer className="h-3.5 w-3.5" />
-            <span className="text-xs font-black tabular-nums">00:00:00</span>
-          </div>
+        <div className="flex items-center px-4 h-8 border-x border-[#1e293b]">
+          <TimerWidget />
         </div>
 
         <div className="flex items-center gap-1">

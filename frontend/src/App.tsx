@@ -7,6 +7,7 @@ import ProgettiPage from "@/pages/Progetti";
 import ProgettoDetailPage from "@/pages/ProgettoDetail";
 import CommessePage from "@/pages/Commesse";
 import CommessaDetailPage from "@/pages/CommessaDetail";
+import TimesheetPage from "@/pages/Timesheet";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import GenericPlaceholder from "@/components/GenericPlaceholder";
 import { useAuth } from "@/hooks/useAuth";
@@ -99,7 +100,7 @@ function App() {
         element={
           <ProtectedRoute>
             <DashboardLayout>
-              <GenericPlaceholder title="Timesheet" />
+              <TimesheetPage />
             </DashboardLayout>
           </ProtectedRoute>
         }

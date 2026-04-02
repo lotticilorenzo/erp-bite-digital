@@ -117,6 +117,10 @@ export interface Timesheet {
   note?: string;
   created_at: string;
   user?: User;
+  // ClickUp integration fields
+  clickup_task_id?: string;
+  clickup_parent_task_id?: string;
+  task_display_name?: string;
 }
 
 export interface FatturaAttiva {
