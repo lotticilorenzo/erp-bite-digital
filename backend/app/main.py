@@ -1,6 +1,8 @@
 import logging
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, func, text
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -12,6 +14,16 @@ from app.models.models import User, UserRole
 from app.api.v1.router import router
 from app.services.services import sync_fic_data
 
+app = FastAPI(
+    title=settings.APP_NAME,
+    version=settings.APP_VERSION,
+    docs_url="/docs",
+    redoc_url=None,
+)
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 def _parse_cors_origins(origins_raw: str) -> list[str]:
     origins: list[str] = []
@@ -21,13 +33,6 @@ def _parse_cors_origins(origins_raw: str) -> list[str]:
             origins.append(origin)
     return origins or ["*"]
 
-
-app = FastAPI(
-    title=settings.APP_NAME,
-    version=settings.APP_VERSION,
-    docs_url="/docs",
-    redoc_url=None,
-)
 logger = logging.getLogger(__name__)
 scheduler: AsyncIOScheduler | None = None
 

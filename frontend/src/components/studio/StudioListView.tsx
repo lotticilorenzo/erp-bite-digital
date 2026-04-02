@@ -6,6 +6,8 @@ import {
   MoreVertical, 
   Clock, 
   User as UserIcon,
+  Play,
+  StopCircle
 } from "lucide-react";
 import { 
   Table, 
@@ -27,15 +29,15 @@ export function StudioListView() {
 
   // Filter tasks by folder/list if selected
   const tasks = React.useMemo(() => {
-    if (!data?.tasks) return [];
-    let filtered = data.tasks;
+    if (!data) return [];
+    let filtered = data;
     if (nav.selectedListId) {
-      filtered = filtered.filter(t => t.list_id === nav.selectedListId);
+      filtered = filtered.filter(t => t.progetto_id === nav.selectedListId);
     } else if (nav.selectedFolderId) {
-      filtered = filtered.filter(t => t.folder_id === nav.selectedFolderId);
+      filtered = filtered.filter(t => t.commessa_id === nav.selectedFolderId);
     }
     return filtered;
-  }, [data?.tasks, nav.selectedFolderId, nav.selectedListId]);
+  }, [data, nav.selectedFolderId, nav.selectedListId]);
 
   return (
     <div className="flex-1 overflow-auto bg-[#020617]/50">
@@ -76,7 +78,7 @@ function TaskRow({ task, depth = 0 }: { task: TaskSO | SubtaskSO; depth: number 
   const [expanded, setExpanded] = React.useState(false);
   const { timer, selectTask } = useStudio();
   const hasSubtasks = 'subtasks' in task && task.subtasks && task.subtasks.length > 0;
-  const isTimerActive = timer.active_task_id === task.id;
+  const isTimerActive = timer.active_session?.task_id === task.id;
 
   const formatTime = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -139,9 +141,30 @@ function TaskRow({ task, depth = 0 }: { task: TaskSO | SubtaskSO; depth: number 
           <span className="text-xs font-bold text-[#334155]">-</span>
         </TableCell>
         <TableCell className="text-center">
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-[#1e293b] hover:text-white group-hover:text-[#475569]">
-            <MoreVertical className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center justify-center gap-1">
+            {!isTimerActive ? (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-7 w-7 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10"
+                onClick={(e) => { e.stopPropagation(); timer.start(task.id); }}
+              >
+                <Play className="h-3.5 w-3.5 fill-current" />
+              </Button>
+            ) : (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-7 w-7 text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                onClick={(e) => { e.stopPropagation(); timer.stop(timer.active_session!.id); }}
+              >
+                <StopCircle className="h-3.5 w-3.5 fill-current" />
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-[#1e293b] hover:text-white group-hover:text-[#475569]">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </div>
         </TableCell>
       </TableRow>
       {expanded && hasSubtasks && (task as TaskSO).subtasks.map((sub) => (

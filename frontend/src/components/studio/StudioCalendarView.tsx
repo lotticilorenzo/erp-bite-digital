@@ -42,9 +42,9 @@ export function StudioCalendarView() {
   });
 
   const tasks = React.useMemo(() => {
-    if (!data?.tasks) return [];
-    return data.tasks.filter(t => t.due_date); // Only tasks with dates
-  }, [data?.tasks]);
+    if (!data) return [];
+    return data.filter(t => t.due_date); // Only tasks with dates
+  }, [data]);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[#020617]/50">

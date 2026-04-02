@@ -1,60 +1,85 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import type { TaskSO } from "@/types/studio";
 
-export interface ClickUpTasksResponse {
-  clienti: {
-    cliente_nome: string;
-    folder_id: string;
-    tasks: any[];
-  }[];
-  totale_task: number;
+export function useTasks(filters?: { 
+  progetto_id?: string; 
+  commessa_id?: string; 
+  assegnatario_id?: string; 
+  parent_only?: boolean;
+}) {
+  return useQuery({
+    queryKey: ["studio-tasks", filters],
+    queryFn: async () => {
+      const { data } = await api.get<any[]>("/tasks", { params: filters });
+      
+      const mapTask = (t: any): TaskSO => ({
+        id: t.id,
+        title: t.titolo,
+        desc: t.descrizione || "",
+        state_id: t.stato,
+        assignees: t.assegnatario_id ? [t.assegnatario_id] : [],
+        start_date: null,
+        due_date: t.data_scadenza,
+        estimated_hours: t.stima_minuti ? t.stima_minuti / 60 : 0,
+        subtasks: (t.subtasks || []).map((st: any) => ({
+          id: st.id,
+          title: st.titolo,
+          stateId: st.stato,
+          subtasks: [] // Recursive subtasks flattened or limited for now
+        })),
+        progetto_id: t.progetto_id,
+        commessa_id: t.commessa_id,
+        parent_id: t.parent_id
+      });
+
+      return data.map(mapTask);
+    },
+  });
 }
 
-export function useTasks() {
+export function useTask(id: string | null) {
   return useQuery({
-    queryKey: ["clickup-tasks"],
+    queryKey: ["studio-task", id],
     queryFn: async () => {
-      try {
-        const { data } = await api.get<ClickUpTasksResponse>("/clickup/tasks");
-        
-        // Flatten all tasks and map them to our TaskSO type
-        const allTasks: TaskSO[] = [];
-        data.clienti.forEach(c => {
-          c.tasks.forEach(t => {
-            allTasks.push({
-              id: t.id,
-              title: t.name,
-              desc: "", 
-              state_id: t.status,
-              assignees: [],
-              start_date: null,
-              due_date: null,
-              estimated_hours: 0,
-              subtasks: [],
-              clickup_id: t.id,
-              folder_id: t.folder_id,
-              list_id: t.list_id
-            });
-          });
-        });
-        
-        return { 
-          tasks: allTasks, 
-          grouped: data.clienti,
-          total: data.totale_task,
-          error: null
-        };
-      } catch (err: any) {
-        console.error("ClickUp Fetch Error:", err);
-        return {
-          tasks: [],
-          grouped: [],
-          total: 0,
-          error: err.response?.data?.detail || "Errore caricamento ClickUp"
-        };
-      }
+      if (!id || id === "new") return null;
+      const { data } = await api.get<any>(`/tasks/${id}`);
+      return {
+        id: data.id,
+        title: data.titolo,
+        desc: data.descrizione || "",
+        state_id: data.stato,
+        assignees: data.assegnatario_id ? [data.assegnatario_id] : [],
+        start_date: null,
+        due_date: data.data_scadenza,
+        estimated_hours: data.stima_minuti ? data.stima_minuti / 60 : 0,
+        subtasks: (data.subtasks || []),
+        progetto_id: data.progetto_id,
+        commessa_id: data.commessa_id,
+        parent_id: data.parent_id
+      } as TaskSO;
     },
-    refetchInterval: 60000,
+    enabled: !!id && id !== "new",
   });
+}
+
+export function useTaskMutations() {
+  const queryClient = useQueryClient();
+
+  const createTask = useMutation({
+    mutationFn: (data: any) => api.post("/tasks", data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["studio-tasks"] }),
+  });
+
+  const updateTask = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => api.patch(`/tasks/${id}`, data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["studio-tasks"] }),
+  });
+
+  const deleteTask = useMutation({
+    mutationFn: (id: string) => api.delete(`/tasks/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["studio-tasks"] }),
+  });
+
+  return { createTask, updateTask, deleteTask };
 }

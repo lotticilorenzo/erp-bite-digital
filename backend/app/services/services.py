@@ -15,7 +15,7 @@ from app.models.models import (
     User, Cliente, Progetto, Commessa, CommessaProgetto, Timesheet, Task,
     Costo, AuditLog, CoefficienteAllocazione,
     Fornitore, FatturaAttiva, FatturaPassiva, FicSyncRun,
-    UserRole, CommessaStatus, TimesheetStatus
+    UserRole, CommessaStatus, TimesheetStatus, TimerSession
 )
 from app.schemas.schemas import (
     UserCreate, UserUpdate, ClienteCreate, ClienteUpdate,
@@ -657,6 +657,69 @@ async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None)
             "num_commesse": row.num_commesse,
         })
     return result
+
+
+# ── TASK SERVICE ──────────────────────────────────────────
+async def list_tasks(
+    db: AsyncSession,
+    progetto_id: Optional[uuid.UUID] = None,
+    commessa_id: Optional[uuid.UUID] = None,
+    assegnatario_id: Optional[uuid.UUID] = None,
+    stato: Optional[TaskStatus] = None,
+    parent_only: bool = False
+) -> List[Task]:
+    q = select(Task).options(
+        selectinload(Task.subtasks),
+        selectinload(Task.assegnatario)
+    )
+    if progetto_id:
+        q = q.where(Task.progetto_id == progetto_id)
+    if commessa_id:
+        q = q.where(Task.commessa_id == commessa_id)
+    if assegnatario_id:
+        q = q.where(Task.assegnatario_id == assegnatario_id)
+    if stato:
+        q = q.where(Task.stato == stato)
+    if parent_only:
+        q = q.where(Task.parent_id == None)
+    
+    result = await db.execute(q.order_by(Task.created_at.desc()))
+    return result.unique().scalars().all()
+
+async def get_task(db: AsyncSession, task_id: uuid.UUID) -> Optional[Task]:
+    result = await db.execute(
+        select(Task).options(
+            selectinload(Task.subtasks),
+            selectinload(Task.assegnatario)
+        ).where(Task.id == task_id)
+    )
+    return result.scalar_one_or_none()
+
+async def create_task(db: AsyncSession, data: Any) -> Task: # data: TaskCreate
+    t = Task(**data.model_dump())
+    db.add(t)
+    await db.flush()
+    return await get_task(db, t.id)
+
+async def update_task(db: AsyncSession, task_id: uuid.UUID, data: Any, by_user_id: uuid.UUID) -> Optional[Task]: # data: TaskUpdate
+    t = await get_task(db, task_id)
+    if not t:
+        return None
+    prima = {"stato": t.stato, "titolo": t.titolo}
+    for field, val in data.model_dump(exclude_none=True).items():
+        setattr(t, field, val)
+    await write_audit(db, by_user_id, "tasks", task_id, "UPDATE", prima)
+    await db.flush()
+    return await get_task(db, t.id)
+
+async def delete_task(db: AsyncSession, task_id: uuid.UUID, by_user_id: uuid.UUID) -> bool:
+    t = await get_task(db, task_id)
+    if not t:
+        return False
+    await write_audit(db, by_user_id, "tasks", task_id, "DELETE", {"titolo": t.titolo})
+    await db.delete(t)
+    await db.flush()
+    return True
 
 
 # ── FIC SYNC SERVICE ───────────────────────────────────────
@@ -1999,3 +2062,116 @@ async def aggiorna_mese_competenza_bulk(
     await db.flush()
     await db.commit()
     return {"aggiornati": count}
+
+
+# ── TIMER SYSTEM ──────────────────────────────────────────
+async def start_timer(db: AsyncSession, task_id: uuid.UUID, user_id: uuid.UUID) -> TimerSession:
+    # 1. Stop any active timer for this user
+    result = await db.execute(
+        select(TimerSession)
+        .where(TimerSession.user_id == user_id)
+        .where(TimerSession.stopped_at == None)
+    )
+    active_session = result.scalar_one_or_none()
+    if active_session:
+        await stop_timer(db, active_session.id)
+    
+    # 2. Create new session
+    # We use datetime.now(timezone.utc) to ensure we have a timezone-aware datetime
+    new_session = TimerSession(
+        task_id=task_id,
+        user_id=user_id,
+        started_at=datetime.now(timezone.utc),
+        salvato_timesheet=False
+    )
+    db.add(new_session)
+    await db.commit()
+    await db.refresh(new_session)
+    return new_session
+
+async def stop_timer(db: AsyncSession, session_id: uuid.UUID, note: Optional[str] = None) -> Optional[TimerSession]:
+    result = await db.execute(select(TimerSession).where(TimerSession.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session or session.stopped_at:
+        return session
+    
+    session.stopped_at = datetime.now(timezone.utc)
+    if note:
+        session.note = note
+    
+    # Calculate duration in minutes (rounded up)
+    delta = session.stopped_at - session.started_at
+    session.durata_minuti = max(1, int(delta.total_seconds() / 60))
+    
+    await db.commit()
+    await db.refresh(session)
+    return session
+
+async def get_active_timer(db: AsyncSession, user_id: uuid.UUID) -> Optional[TimerSession]:
+    result = await db.execute(
+        select(TimerSession)
+        .where(TimerSession.user_id == user_id)
+        .where(TimerSession.stopped_at == None)
+        .order_by(TimerSession.started_at.desc())
+    )
+    return result.scalar_one_or_none()
+
+async def list_timer_sessions(db: AsyncSession, task_id: uuid.UUID) -> List[TimerSession]:
+    result = await db.execute(
+        select(TimerSession)
+        .where(TimerSession.task_id == task_id)
+        .order_by(TimerSession.started_at.desc())
+    )
+    return result.scalars().all()
+
+async def save_timer_to_timesheet(
+    db: AsyncSession, 
+    session_ids: List[uuid.UUID], 
+    user: User,
+    commessa_id: Optional[uuid.UUID] = None,
+    note: Optional[str] = None
+) -> List[Timesheet]:
+    result = await db.execute(
+        select(TimerSession)
+        .where(TimerSession.id.in_(session_ids))
+        .where(TimerSession.user_id == user.id)
+        .where(TimerSession.stopped_at != None)
+        .where(TimerSession.salvato_timesheet == False)
+    )
+    sessions = result.scalars().all()
+    if not sessions:
+        return []
+    
+    # Group by task_id and date
+    groups = {}
+    for s in sessions:
+        key = (s.task_id, s.started_at.date())
+        if key not in groups:
+            groups[key] = {"durata": 0, "sessions": []}
+        groups[key]["durata"] += s.durata_minuti or 0
+        groups[key]["sessions"].append(s)
+    
+    created_timesheets = []
+    for (task_id, data_attivita), info in groups.items():
+        # Create timesheet entry
+        ts = Timesheet(
+            user_id=user.id,
+            task_id=task_id,
+            commessa_id=commessa_id,
+            data_attivita=data_attivita,
+            mese_competenza=data_attivita.replace(day=1),
+            durata_minuti=info["durata"],
+            note=note or "; ".join([s.note for s in info["sessions"] if s.note]),
+            stato=TimesheetStatus.PENDING
+        )
+        db.add(ts)
+        # Mark sessions as saved
+        for s in info["sessions"]:
+            s.salvato_timesheet = True
+        
+        created_timesheets.append(ts)
+    
+    await db.commit()
+    for ts in created_timesheets:
+        await db.refresh(ts)
+    return created_timesheets

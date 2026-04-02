@@ -1,125 +1,78 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "@/pages/Login";
 import DashboardPage from "@/pages/Dashboard";
-import ClientiPage from "@/pages/Clienti";
-import ProgettiPage from "@/pages/Progetti";
-import ProgettoDetailPage from "@/pages/ProgettoDetail";
-import CommessePage from "@/pages/Commesse";
-import CommessaDetailPage from "@/pages/CommessaDetail";
-import TimesheetPage from "@/pages/Timesheet";
-import StudioPage from "@/pages/Studio";
 import { StudioProvider } from "@/context/StudioContext";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
-import { Loader2 } from "lucide-react";
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+const ClientiPage = React.lazy(() => import("./pages/Clienti"));
+const ProgettiPage = React.lazy(() => import("./pages/Progetti"));
+const ProgettoDetailPage = React.lazy(() => import("./pages/ProgettoDetail"));
+const CommessePage = React.lazy(() => import("./pages/Commesse"));
+const CommessaDetailPage = React.lazy(() => import("./pages/CommessaDetail"));
+const TimesheetPage = React.lazy(() => import("./pages/Timesheet"));
+const FatturePage = React.lazy(() => import("./pages/Fatture"));
+const CassaPage = React.lazy(() => import("./pages/Cassa"));
+const StudioPage = React.lazy(() => import("./pages/Studio"));
+const AnalyticsPage = React.lazy(() => import("./pages/Analytics"));
+const ReportsPage = React.lazy(() => import("./pages/Reports"));
+const PlanningPage = React.lazy(() => import("./pages/Planning"));
+
+function App() {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#020617]">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <div className="flex items-center justify-center min-h-screen bg-[#020617]">
+        <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
       </div>
     );
   }
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  return <>{children}</>;
-}
-
-function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <DashboardPage />
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/clienti"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <ClientiPage />
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/progetti"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <ProgettiPage />
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/progetti/:id"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <ProgettoDetailPage />
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/commesse"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <CommessePage />
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/commesse/:id"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <CommessaDetailPage />
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/timesheet"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <TimesheetPage />
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/studio-os"
-        element={
-          <ProtectedRoute>
-            <StudioProvider>
-              <DashboardLayout>
-                <StudioPage />
-              </DashboardLayout>
-            </StudioProvider>
-          </ProtectedRoute>
-        }
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen bg-[#020617]">
+        <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+      </div>
+    }>
+      <Routes>
+        <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" />} />
+        
+        <Route
+          path="/"
+          element={
+            user ? (
+              <StudioProvider>
+                <DashboardLayout />
+              </StudioProvider>
+            ) : (
+              <Navigate to="/login" />
+            )
+          }
+        >
+          <Route index element={<DashboardPage />} />
+          <Route path="/clienti" element={<ClientiPage />} />
+          <Route path="/progetti" element={<ProgettiPage />} />
+          <Route path="/progetti/:id" element={<ProgettoDetailPage />} />
+          <Route path="/commesse" element={<CommessePage />} />
+          <Route path="/commesse/:id" element={<CommessaDetailPage />} />
+          <Route path="/timesheet" element={<TimesheetPage />} />
+          <Route path="/fatture" element={<FatturePage />} />
+          <Route path="/cassa" element={<CassaPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/report" element={<ReportsPage />} />
+          <Route path="/planning" element={<PlanningPage />} />
+          
+          <Route 
+            path="/studio-os/*" 
+            element={<StudioPage />} 
+          />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </Suspense>
   );
 }
 

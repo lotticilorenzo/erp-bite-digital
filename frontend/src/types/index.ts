@@ -42,6 +42,7 @@ export interface Cliente {
   condizioni_pagamento?: string;
   fic_cliente_id?: string;
   attivo: boolean;
+  logo_url?: string | null;
   drive_files?: any[];
   created_at?: string;
 }
@@ -167,4 +168,17 @@ export interface AuthResponse {
   access_token: string;
   token_type: string;
   user: User;
+}
+
+export type NotificationType = 'URGENTE' | 'AVVISO' | 'FATTURA' | 'APPROVAZIONE' | 'INFO';
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  description: string;
+  timestamp: string;
+  link: string;
+  isRead: boolean;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
 }

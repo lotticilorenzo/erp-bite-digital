@@ -10,6 +10,9 @@ import {
   User,
   Zap,
   BarChart3,
+  FileText,
+  Wallet,
+  PieChart,
 } from "lucide-react";
 
 import {
@@ -43,6 +46,7 @@ const navItems = [
     title: "Generale",
     items: [
       { title: "Dashboard", url: "/", icon: LayoutDashboard },
+      { title: "Analytics", url: "/analytics", icon: PieChart },
       { title: "Timesheet", url: "/timesheet", icon: Timer },
     ],
   },
@@ -52,6 +56,20 @@ const navItems = [
       { title: "Clienti", url: "/clienti", icon: Users },
       { title: "Progetti", url: "/progetti", icon: Briefcase },
       { title: "Commesse", url: "/commesse", icon: ClipboardList },
+      { title: "Planning", url: "/planning", icon: ClipboardList },
+    ],
+  },
+  {
+    title: "Documenti",
+    items: [
+      { title: "Report Mensili", url: "/report", icon: FileText },
+    ],
+  },
+  {
+    title: "Amministrazione",
+    items: [
+      { title: "Fatture", url: "/fatture", icon: FileText },
+      { title: "Cassa", url: "/cassa", icon: Wallet },
     ],
   },
 ];

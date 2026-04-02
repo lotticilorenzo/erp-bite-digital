@@ -23,6 +23,7 @@ class UserCreate(BaseModel):
     password: str
     ruolo: UserRole
     costo_orario: Optional[Decimal] = None
+    ore_settimanali: int = 40
     clickup_user_id: Optional[str] = None
     data_inizio: Optional[date] = None
 
@@ -32,6 +33,7 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
     ruolo: Optional[UserRole] = None
     costo_orario: Optional[Decimal] = None
+    ore_settimanali: Optional[int] = None
     attivo: Optional[bool] = None
     data_fine: Optional[date] = None
 
@@ -42,9 +44,20 @@ class UserOut(OrmBase):
     email: str
     ruolo: UserRole
     costo_orario: Optional[Decimal]
+    ore_settimanali: int
     attivo: bool
     data_inizio: Optional[date]
     created_at: datetime
+
+class RisorsaOut(OrmBase):
+    id: uuid.UUID
+    user_id: Optional[uuid.UUID]
+    nome: str
+    cognome: str
+    ruolo: Optional[str]
+    tipo_contratto: str
+    ore_settimanali: Decimal
+    attivo: bool
 
 
 # ── AUTH ──────────────────────────────────────────────────
@@ -82,6 +95,7 @@ class ClienteCreate(BaseModel):
     indirizzo: Optional[str] = None
     condizioni_pagamento: Optional[str] = None
     drive_files: Optional[list] = None
+    logo_url: Optional[str] = None
 
 class ClienteUpdate(BaseModel):
     codice_cliente: Optional[str] = None
@@ -105,6 +119,7 @@ class ClienteUpdate(BaseModel):
     condizioni_pagamento: Optional[str] = None
     attivo: Optional[bool] = None
     drive_files: Optional[list] = None
+    logo_url: Optional[str] = None
 
 class ClienteOut(OrmBase):
     id: uuid.UUID
@@ -130,6 +145,7 @@ class ClienteOut(OrmBase):
     fic_cliente_id: Optional[str] = None
     attivo: bool = True
     drive_files: Optional[list] = None
+    logo_url: Optional[str] = None
     created_at: Optional[datetime] = None
 
 
@@ -395,17 +411,71 @@ class TimesheetOut(OrmBase):
 
 
 # ── TASK ──────────────────────────────────────────────────
+class TaskCreate(BaseModel):
+    progetto_id: Optional[uuid.UUID] = None
+    commessa_id: Optional[uuid.UUID] = None
+    assegnatario_id: Optional[uuid.UUID] = None
+    parent_id: Optional[uuid.UUID] = None
+    titolo: str
+    descrizione: Optional[str] = None
+    stato: TaskStatus = TaskStatus.DA_FARE
+    data_scadenza: Optional[date] = None
+    stima_minuti: Optional[int] = None
+
+class TaskUpdate(BaseModel):
+    progetto_id: Optional[uuid.UUID] = None
+    commessa_id: Optional[uuid.UUID] = None
+    assegnatario_id: Optional[uuid.UUID] = None
+    revisore_id: Optional[uuid.UUID] = None
+    parent_id: Optional[uuid.UUID] = None
+    titolo: Optional[str] = None
+    descrizione: Optional[str] = None
+    stato: Optional[TaskStatus] = None
+    data_scadenza: Optional[date] = None
+    stima_minuti: Optional[int] = None
+
 class TaskOut(OrmBase):
     id: uuid.UUID
-    clickup_task_id: Optional[str]
-    progetto_id: Optional[uuid.UUID]
-    commessa_id: Optional[uuid.UUID]
-    assegnatario_id: Optional[uuid.UUID]
+    clickup_task_id: Optional[str] = None
+    progetto_id: Optional[uuid.UUID] = None
+    commessa_id: Optional[uuid.UUID] = None
+    assegnatario_id: Optional[uuid.UUID] = None
+    parent_id: Optional[uuid.UUID] = None
     titolo: str
+    descrizione: Optional[str] = None
     stato: TaskStatus
-    data_scadenza: Optional[date]
-    stima_minuti: Optional[int]
-    clickup_synced_at: Optional[datetime]
+    data_scadenza: Optional[date] = None
+    stima_minuti: Optional[int] = None
+    clickup_synced_at: Optional[datetime] = None
+    created_at: datetime
+    subtasks: List[TaskOut] = []
+
+
+# ── TIMER SESSION ─────────────────────────────────────────
+class TimerSessionBase(BaseModel):
+    task_id: uuid.UUID
+    note: Optional[str] = None
+
+class TimerSessionCreate(TimerSessionBase):
+    user_id: uuid.UUID
+    started_at: datetime
+
+class TimerSessionUpdate(BaseModel):
+    stopped_at: Optional[datetime] = None
+    durata_minuti: Optional[int] = None
+    salvato_timesheet: Optional[bool] = None
+    note: Optional[str] = None
+
+class TimerSessionOut(OrmBase):
+    id: uuid.UUID
+    task_id: uuid.UUID
+    user_id: uuid.UUID
+    started_at: datetime
+    stopped_at: Optional[datetime] = None
+    durata_minuti: Optional[int] = None
+    salvato_timesheet: bool
+    note: Optional[str]
+    created_at: datetime
 
 
 # ── COSTO ─────────────────────────────────────────────────
@@ -576,3 +646,11 @@ class DashboardKpi(BaseModel):
 
 class FatturaIncassaRequest(BaseModel):
     data_incasso: date
+
+# ── AI ASSISTANT ──────────────────────────────────────────
+class AIChatRequest(BaseModel):
+    message: str
+    context: Optional[dict] = None
+
+class AIChatResponse(BaseModel):
+    response: str

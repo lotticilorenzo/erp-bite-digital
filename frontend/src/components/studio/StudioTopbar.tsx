@@ -5,7 +5,6 @@ import {
   Calendar as CalendarIcon,
   Settings,
   MoreVertical,
-  Activity,
   Filter,
   ArrowUpDown,
   Layers
@@ -116,11 +115,6 @@ export function StudioTopbar() {
       </div>
 
       <div className="flex items-center gap-3">
-        <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0f172a]/50 border border-[#1e293b]/50">
-          <Activity className="h-3.5 w-3.5 text-[#10b981] animate-pulse" />
-          <span className="text-[10px] font-black text-[#94a3b8] uppercase tracking-tighter">Live Sync</span>
-        </div>
-
         <div className="h-6 w-[1px] bg-[#1e293b] mx-2" />
 
         <Button variant="ghost" size="icon" className="h-8 w-8 text-[#475569] hover:text-white hover:bg-white/5">

@@ -22,7 +22,9 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCreateCliente, useUpdateCliente } from "@/hooks/useClienti";
 import type { Cliente } from "@/types";
-import { Loader2 } from "lucide-react";
+import { Loader2, Upload, X } from "lucide-react";
+import { ClientAvatar } from "../common/ClientAvatar";
+import api from "@/lib/api";
 
 const clienteSchema = z.object({
   ragione_sociale: z.string().min(2, "Ragione sociale obbligatoria"),
@@ -52,6 +54,10 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
   const createCliente = useCreateCliente();
   const updateCliente = useUpdateCliente();
   const isEditing = !!cliente;
+  
+  const [logoFile, setLogoFile] = React.useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const form = useForm<ClienteFormValues>({
     resolver: zodResolver(clienteSchema) as any,
@@ -106,7 +112,29 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
         note: "",
       });
     }
+    
+    // Reset logo states
+    setLogoFile(null);
+    setPreviewUrl(cliente?.logo_url || null);
   }, [cliente, form]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        alert("File troppo grande. Massimo 2MB.");
+        return;
+      }
+      setLogoFile(file);
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    setLogoFile(null);
+    setPreviewUrl(null);
+  };
 
   const onSubmit = async (values: ClienteFormValues) => {
     // Convert empty strings to undefined for the backend
@@ -115,11 +143,29 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
     ) as Partial<Cliente>;
 
     try {
+      let clienteId = cliente?.id;
+      
       if (isEditing && cliente) {
         await updateCliente.mutateAsync({ id: cliente.id, data: cleanedValues });
       } else {
-        await createCliente.mutateAsync(cleanedValues);
+        const newCliente = await createCliente.mutateAsync(cleanedValues);
+        clienteId = newCliente.id;
       }
+      
+      // Gestione Upload/Delete Logo
+      if (clienteId) {
+        if (logoFile) {
+          const formData = new FormData();
+          formData.append('file', logoFile);
+          await api.post(`/clienti/${clienteId}/logo`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+        } else if (previewUrl === null && cliente?.logo_url) {
+          // Logo è stato rimosso
+          await api.delete(`/clienti/${clienteId}/logo`);
+        }
+      }
+
       onOpenChange(false);
     } catch (error) {
       console.error("Errore durante il salvataggio del cliente:", error);
@@ -139,6 +185,59 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+            {/* Logo Section */}
+            <div className="flex items-center gap-6 pb-4 border-b border-[#1e293b]">
+              <div className="relative group">
+                <ClientAvatar 
+                  name={form.watch("ragione_sociale") || "C"} 
+                  logoUrl={previewUrl} 
+                  size="xl" 
+                  className="rounded-xl border-2 border-[#334155]"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl"
+                >
+                  <Upload className="w-6 h-6 text-white" />
+                </button>
+              </div>
+              
+              <div className="flex flex-col gap-2">
+                <h4 className="text-sm font-medium text-[#f1f5f9]">Logo Aziendale</h4>
+                <p className="text-xs text-[#94a3b8]">PNG, JPG o SVG. Max 2MB.</p>
+                <div className="flex gap-2 mt-1">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 text-xs border-[#334155] bg-transparent text-[#94a3b8] hover:text-white"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    Carica nuovo
+                  </Button>
+                  {previewUrl && (
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-400/10"
+                      onClick={handleRemoveLogo}
+                    >
+                      <X className="w-3 h-3 mr-1" /> Rimuovi
+                    </Button>
+                  )}
+                </div>
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleFileChange} 
+                  accept="image/*" 
+                  className="hidden" 
+                />
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control as any}

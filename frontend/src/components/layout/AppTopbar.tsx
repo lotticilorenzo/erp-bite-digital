@@ -1,12 +1,12 @@
 import { Fragment } from "react";
 import { 
-  Bell, 
   Search, 
   SwitchCamera, 
   Plus
 } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { TimerWidget } from "./TimerWidget";
+import { NotificationDropdown } from "./NotificationDropdown";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -84,9 +84,7 @@ export function AppTopbar() {
         </div>
 
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-[#94a3b8] hover:text-white hover:bg-[#1e293b] rounded-lg active:scale-95 transition-all">
-            <Bell className="h-4 w-4" />
-          </Button>
+          <NotificationDropdown />
           <Button variant="ghost" size="icon" className="h-8 w-8 text-[#94a3b8] hover:text-white hover:bg-[#1e293b] rounded-lg active:scale-95 transition-all">
             <SwitchCamera className="h-4 w-4" />
           </Button>

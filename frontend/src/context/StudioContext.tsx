@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import type { StudioState, StudioView, StudioTimer, SpaceSO } from "@/types/studio";
 import { useClienti } from "@/hooks/useClienti";
 import { useProgetti } from "@/hooks/useProgetti";
+import { useActiveTimer, useStartTimer, useStopTimer } from "@/hooks/useTimer";
 import type { Cliente, Progetto } from "@/types";
 
 interface StudioContextType {
@@ -20,7 +21,7 @@ interface StudioContextType {
   openNewTask: (folderId?: string | null, listId?: string | null) => void;
   timer: StudioTimer & {
     start: (taskId: string) => void;
-    pause: (taskId: string) => void;
+    stop: (sessionId: string, note?: string) => void;
     getElapsed: (taskId: string) => number;
   };
 }
@@ -28,7 +29,6 @@ interface StudioContextType {
 const StudioContext = createContext<StudioContextType | undefined>(undefined);
 
 const STUDIO_NAV_KEY = "studio_os_nav";
-const STUDIO_TIMER_KEY = "studio_os_timer";
 
 export function StudioProvider({ children }: { children: React.ReactNode }) {
   const { data: clienti = [], isLoading: isLoadingClienti } = useClienti();
@@ -51,32 +51,20 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(STUDIO_NAV_KEY, JSON.stringify(nav));
   }, [nav]);
 
-  // Timer State
-  const [timer, setTimer] = useState<StudioTimer>(() => {
-    const saved = localStorage.getItem(STUDIO_TIMER_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return { active_task_id: null, started_at: null, elapsed: {} };
-      }
-    }
-    return { active_task_id: null, started_at: null, elapsed: {} };
-  });
+  // Timer State (Backend Synced)
+  const { data: activeSession, isLoading: isLoadingTimer } = useActiveTimer();
+  const startTimerMutation = useStartTimer();
+  const stopTimerMutation = useStopTimer();
 
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    if (!timer.active_task_id) return;
+    if (!activeSession) return;
     const interval = setInterval(() => {
       setTick((t) => t + 1);
     }, 1000);
     return () => clearInterval(interval);
-  }, [timer.active_task_id]);
-
-  useEffect(() => {
-    localStorage.setItem(STUDIO_TIMER_KEY, JSON.stringify(timer));
-  }, [timer]);
+  }, [activeSession]);
 
   // Actions
   const setView = useCallback((view: StudioView) => {
@@ -108,45 +96,20 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const startTimer = useCallback((taskId: string) => {
-    const now = Date.now();
-    setTimer((prev) => {
-      let newElapsed = { ...prev.elapsed };
-      if (prev.active_task_id && prev.active_task_id !== taskId && prev.started_at) {
-        const session = now - prev.started_at;
-        newElapsed[prev.active_task_id] = (newElapsed[prev.active_task_id] || 0) + session;
-      }
-      return {
-        active_task_id: taskId,
-        started_at: now,
-        elapsed: newElapsed,
-      };
-    });
-  }, []);
+    startTimerMutation.mutate(taskId);
+  }, [startTimerMutation]);
 
-  const pauseTimer = useCallback((taskId: string) => {
-    const now = Date.now();
-    setTimer((prev) => {
-      if (prev.active_task_id !== taskId || !prev.started_at) return prev;
-      const session = now - prev.started_at;
-      const newElapsed = { 
-        ...prev.elapsed,
-        [taskId]: (prev.elapsed[taskId] || 0) + session 
-      };
-      return {
-        active_task_id: null,
-        started_at: null,
-        elapsed: newElapsed,
-      };
-    });
-  }, []);
+  const stopTimer = useCallback((sessionId: string, note?: string) => {
+    stopTimerMutation.mutate({ sessionId, note });
+  }, [stopTimerMutation]);
 
   const getElapsedTime = useCallback((taskId: string) => {
-    const base = timer.elapsed[taskId] || 0;
-    if (timer.active_task_id === taskId && timer.started_at) {
-      return base + (Date.now() - timer.started_at);
+    if (activeSession?.task_id === taskId && activeSession.started_at) {
+      const start = new Date(activeSession.started_at).getTime();
+      return Date.now() - start;
     }
-    return base;
-  }, [timer, tick]);
+    return 0;
+  }, [activeSession, tick]);
 
   // Hierarchy Data
   const spaces = useMemo<SpaceSO[]>(() => {
@@ -202,9 +165,9 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     getFolderProjects,
     folderProjects,
     timer: {
-      ...timer,
+      active_session: activeSession || null,
       start: startTimer,
-      pause: pauseTimer,
+      stop: stopTimer,
       getElapsed: getElapsedTime
     }
   };

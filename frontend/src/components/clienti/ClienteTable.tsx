@@ -32,6 +32,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Cliente } from "@/types";
 import { useDeleteCliente } from "@/hooks/useClienti";
+import { ClientAvatar } from "../common/ClientAvatar";
 import {
   Dialog,
   DialogContent,
@@ -132,9 +133,12 @@ export function ClienteTable({ clienti, isLoading, onEdit, onNew }: ClienteTable
                 >
                   <TableCell className="py-4">
                     <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold border border-primary/20 group-hover:bg-primary/20 transition-colors">
-                        {cliente.ragione_sociale.charAt(0).toUpperCase()}
-                      </div>
+                      <ClientAvatar 
+                        name={cliente.ragione_sociale} 
+                        logoUrl={cliente.logo_url} 
+                        size="sm" 
+                        className="rounded-lg border-[#1e293b]"
+                      />
                       <div className="flex flex-col">
                         <span className="font-bold text-[#f1f5f9] group-hover:text-primary transition-colors">
                           {cliente.ragione_sociale}

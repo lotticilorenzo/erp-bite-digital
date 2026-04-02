@@ -12,7 +12,11 @@ import {
   ChevronRight,
   MessageSquare,
   Link as LinkIcon,
-  Paperclip
+  Paperclip,
+  Save,
+  Briefcase,
+  History,
+  StopCircle
 } from "lucide-react";
 import { 
   Dialog, 
@@ -21,33 +25,104 @@ import {
   DialogTitle 
 } from "@/components/ui/dialog";
 import { useStudio } from "@/hooks/useStudio";
-import { useTasks } from "@/hooks/useTasks";
+import { useTasks, useTaskMutations } from "@/hooks/useTasks";
+import { useCommesse } from "@/hooks/useCommesse";
+import { useTimerSessions, useSaveTimerToTimesheet } from "@/hooks/useTimer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
+import { toast } from "sonner";
 
 export function StudioTaskModal() {
   const { nav, selectTask, timer } = useStudio();
-  const { data } = useTasks();
-  const [newTitle, setNewTitle] = React.useState("");
+  const { data: tasks } = useTasks();
+  const { data: commesse } = useCommesse();
+  const { createTask, updateTask, deleteTask } = useTaskMutations();
 
   const task = React.useMemo(() => {
-    if (nav.selectedTaskId === "new") return {
-      id: "new",
-      title: "",
-      desc: "",
-      state_id: "to do",
-      subtasks: [],
-      assignees: []
-    } as any;
-    return data?.tasks.find(t => t.id === nav.selectedTaskId) || null;
-  }, [data?.tasks, nav.selectedTaskId]);
+    if (nav.selectedTaskId === "new") return null;
+    return tasks?.find(t => t.id === nav.selectedTaskId) || null;
+  }, [tasks, nav.selectedTaskId]);
+
+  const { data: sessions = [] } = useTimerSessions(task?.id || null);
+  const saveToTimesheetMutation = useSaveTimerToTimesheet();
+
+  const [formData, setFormData] = React.useState({
+    titolo: "",
+    descrizione: "",
+    commessa_id: "none",
+    stato: "DA_FARE",
+    data_scadenza: "",
+  });
+
+  React.useEffect(() => {
+    if (task) {
+      setFormData({
+        titolo: task.title,
+        descrizione: task.desc || "",
+        commessa_id: task.commessa_id || "none",
+        stato: task.state_id,
+        data_scadenza: task.due_date || "",
+      });
+    } else {
+      setFormData({
+        titolo: "",
+        descrizione: "",
+        commessa_id: "none",
+        stato: "DA_FARE",
+        data_scadenza: "",
+      });
+    }
+  }, [task, nav.selectedTaskId]);
 
   if (!nav.selectedTaskId) return null;
 
   const isNew = nav.selectedTaskId === "new";
-  const isTimerActive = !isNew && timer.active_task_id === task?.id;
+  const isTimerActive = !isNew && task && timer.active_session?.task_id === task.id;
+
+  const handleSave = async () => {
+    if (!formData.titolo) return toast.error("Il titolo è obbligatorio");
+
+    const payload = {
+      ...formData,
+      commessa_id: formData.commessa_id === "none" ? null : formData.commessa_id,
+      progetto_id: nav.selectedListId,
+      stima_minuti: 0,
+    };
+
+    try {
+      if (isNew) {
+        await createTask.mutateAsync(payload);
+        toast.success("Task creata con successo");
+      } else {
+        await updateTask.mutateAsync({ id: task!.id, data: payload });
+        toast.success("Task aggiornata");
+      }
+      selectTask(null);
+    } catch (err) {
+      toast.error("Errore durante il salvataggio");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (window.confirm("Sei sicuro di voler eliminare questa task?")) {
+      try {
+        await deleteTask.mutateAsync(task!.id);
+        toast.success("Task eliminata");
+        selectTask(null);
+      } catch (err) {
+        toast.error("Errore durante l'eliminazione");
+      }
+    }
+  };
 
   const formatTime = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -65,16 +140,25 @@ export function StudioTaskModal() {
             <Badge variant="outline" className="bg-primary/10 border-primary/20 text-primary text-[10px] font-black uppercase tracking-widest">
               {isNew ? 'NUOVA TASK' : 'DETTAGLIO TASK'}
             </Badge>
-            {!isNew && <span className="text-[10px] font-black text-[#475569] uppercase tracking-widest">ID: {task?.id}</span>}
+            {!isNew && <span className="text-[10px] font-black text-[#475569] uppercase tracking-widest">ID: {task?.id.split('-')[0]}</span>}
           </div>
           <div className="flex items-center gap-2">
-            {isNew ? (
-              <Button onClick={() => selectTask(null)} className="h-9 px-6 bg-primary text-white font-black uppercase tracking-widest text-[10px]">
-                Salva Attività
-              </Button>
-            ) : (
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-[#475569] hover:text-white">
-                <MoreHorizontal className="h-4 w-4" />
+            <Button 
+              onClick={handleSave} 
+              disabled={createTask.isPending || updateTask.isPending}
+              className="h-9 px-6 bg-primary text-white font-black uppercase tracking-widest text-[10px] gap-2"
+            >
+              <Save className="h-3.5 w-3.5" />
+              {isNew ? 'Crea Task' : 'Salva Modifiche'}
+            </Button>
+            {!isNew && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={handleDelete}
+                className="h-9 w-9 text-red-500/50 hover:text-red-500 hover:bg-red-500/10"
+              >
+                <Trash2 className="h-4 w-4" />
               </Button>
             )}
           </div>
@@ -86,92 +170,127 @@ export function StudioTaskModal() {
             <ScrollArea className="flex-1 px-8 py-8">
               <div className="space-y-8">
                 <div className="space-y-4">
-                  {isNew ? (
-                    <input 
-                      autoFocus
-                      placeholder="Titolo dell'attività..."
-                      className="text-3xl font-black text-white bg-transparent border-none outline-none w-full placeholder:text-[#1e293b] tracking-tighter"
-                      value={newTitle}
-                      onChange={(e) => setNewTitle(e.target.value)}
-                    />
-                  ) : (
-                    <DialogTitle className="text-3xl font-black text-white leading-tight tracking-tighter">
-                      {task?.title}
-                    </DialogTitle>
-                  )}
+                  <input 
+                    autoFocus
+                    placeholder="Titolo dell'attività..."
+                    className="text-3xl font-black text-white bg-transparent border-none outline-none w-full placeholder:text-[#1e293b] tracking-tighter"
+                    value={formData.titolo}
+                    onChange={(e) => setFormData(prev => ({ ...prev, titolo: e.target.value }))}
+                  />
                   <textarea 
-                    placeholder={isNew ? "Aggiungi una descrizione..." : "Nessuna descrizione per questa attività."}
-                    className="w-full bg-transparent border-none outline-none text-sm text-[#94a3b8] font-medium leading-relaxed resize-none min-h-[100px]"
-                    defaultValue={task?.desc}
+                    placeholder="Aggiungi una descrizione..."
+                    className="w-full bg-transparent border-none outline-none text-sm text-[#94a3b8] font-medium leading-relaxed resize-none min-h-[150px]"
+                    value={formData.descrizione}
+                    onChange={(e) => setFormData(prev => ({ ...prev, descrizione: e.target.value }))}
                   />
                 </div>
 
                 {!isNew && (
-                  <>
-                    <div className="space-y-6">
-                      <div className="flex items-center gap-2 text-xs font-black text-white uppercase tracking-widest italic">
-                        <CheckCircle2 className="h-4 w-4 text-primary" />
-                        Checklist / Subtasks
-                      </div>
-                      <div className="space-y-2">
-                        {task?.subtasks?.map((sub: any) => (
-                          <div key={sub.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors group cursor-pointer border border-transparent hover:border-[#1e293b]/50">
-                            <div className="h-5 w-5 rounded-md border-2 border-[#1e293b] group-hover:border-primary/50 transition-colors" />
-                            <span className="text-sm font-bold text-[#94a3b8] group-hover:text-white transition-colors">
-                              {sub.title || sub.name}
-                            </span>
-                          </div>
-                        ))}
-                        <Button variant="ghost" className="w-full justify-start h-10 px-3 text-[10px] font-black uppercase tracking-widest text-[#475569] hover:text-primary hover:bg-transparent group">
-                          <Plus className="h-4 w-4 mr-2" />
-                          Aggiungi Subtask
-                        </Button>
-                      </div>
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-2 text-xs font-black text-white uppercase tracking-widest italic">
+                      <CheckCircle2 className="h-4 w-4 text-primary" />
+                      Checklist / Subtasks
                     </div>
+                    <div className="space-y-2">
+                      {task?.subtasks?.map((sub: any) => (
+                        <div key={sub.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors group cursor-pointer border border-transparent hover:border-[#1e293b]/50">
+                          <div className="h-5 w-5 rounded-md border-2 border-[#1e293b] group-hover:border-primary/50 transition-colors" />
+                          <span className="text-sm font-bold text-[#94a3b8] group-hover:text-white transition-colors">
+                            {sub.title}
+                          </span>
+                        </div>
+                      ))}
+                      <Button variant="ghost" className="w-full justify-start h-10 px-3 text-[10px] font-black uppercase tracking-widest text-[#475569] hover:text-primary hover:bg-transparent group">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Aggiungi Subtask
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
-                    <div className="space-y-6">
-                      <div className="flex items-center gap-2 text-xs font-black text-white uppercase tracking-widest italic">
-                        <MessageSquare className="h-4 w-4 text-primary" />
-                        Commenti
-                      </div>
-                      <div className="bg-[#0f172a]/50 rounded-2xl p-4 border border-[#1e293b]/50 text-center py-12">
-                         <p className="text-xs text-[#475569] font-bold uppercase tracking-widest">Nessun commento</p>
-                         <Button variant="link" className="text-[10px] text-primary font-black uppercase tracking-widest mt-2 h-auto p-0">Sii il primo a commentare</Button>
-                      </div>
+                {!isNew && sessions.length > 0 && (
+                   <div className="space-y-6">
+                    <div className="flex items-center gap-2 text-xs font-black text-white uppercase tracking-widest italic">
+                      <History className="h-4 w-4 text-emerald-500" />
+                      Cronologia Sessioni
                     </div>
-                  </>
+                    <div className="space-y-2">
+                       {sessions.map((session) => (
+                         <div key={session.id} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10">
+                            <div className="flex flex-col">
+                               <span className="text-xs font-bold text-white">
+                                 {format(new Date(session.started_at), "dd MMM yyyy HH:mm")}
+                               </span>
+                               <span className="text-[10px] text-[#64748b] uppercase font-black">
+                                 {session.note || "Nessuna nota"}
+                               </span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                               <span className="text-xs font-black text-emerald-400 tabular-nums">
+                                 {session.durata_minuti || 0} min
+                               </span>
+                               {session.salvato_timesheet ? (
+                                 <Badge className="bg-emerald-500/20 text-emerald-500 border-none text-[8px] h-4">SAVED</Badge>
+                               ) : (
+                                 <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="h-6 px-2 text-[8px] font-black uppercase tracking-widest text-purple-400 hover:text-purple-300 hover:bg-purple-500/10"
+                                  onClick={() => saveToTimesheetMutation.mutate({ session_ids: [session.id], commessa_id: task?.commessa_id })}
+                                 >
+                                   Salva Timesheet
+                                 </Button>
+                               )}
+                            </div>
+                         </div>
+                       ))}
+                    </div>
+                   </div>
                 )}
               </div>
             </ScrollArea>
-
-            {!isNew && (
-              <div className="p-4 bg-[#0f172a]/80 backdrop-blur-md border-t border-[#1e293b]/50 shrink-0">
-                <div className="relative group">
-                  <input 
-                    placeholder="Scrivi un commento..." 
-                    className="w-full h-12 bg-[#020617] border-[#1e293b] rounded-xl px-4 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
-                  />
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-[#475569] hover:text-[#94a3b8]"><Paperclip className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-[#475569] hover:text-[#94a3b8]"><LinkIcon className="h-4 w-4" /></Button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Sidebar */}
           <div className="w-80 bg-[#0f172a]/20 shrink-0 p-6 space-y-8 overflow-y-auto">
             <div className="space-y-6">
-              <div className="space-y-4">
+              <div className="space-y-2">
                  <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Stato</span>
-                 <Button variant="outline" className="w-full justify-between bg-[#1e293b]/30 border-[#1e293b] hover:bg-[#1e293b]/50 h-10 rounded-xl px-4">
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-primary shadow-[0_0_8px_rgba(124,58,237,0.5)]" />
-                      <span className="text-xs font-black uppercase tracking-widest text-[#f1f5f9]">{task?.state_id}</span>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-[#475569]" />
-                 </Button>
+                 <Select 
+                   value={formData.stato} 
+                   onValueChange={(val) => setFormData(prev => ({ ...prev, stato: val }))}
+                 >
+                   <SelectTrigger className="w-full bg-[#1e293b]/30 border-[#1e293b] hover:bg-[#1e293b]/50 h-10 rounded-xl px-4 text-xs font-black uppercase tracking-widest">
+                     <SelectValue />
+                   </SelectTrigger>
+                   <SelectContent className="bg-[#0f172a] border-[#1e293b] text-white">
+                      <SelectItem value="DA_FARE">DA FARE</SelectItem>
+                      <SelectItem value="IN_CORSO">IN CORSO</SelectItem>
+                      <SelectItem value="REVISIONE">REVISIONE</SelectItem>
+                      <SelectItem value="COMPLETATO">COMPLETATO</SelectItem>
+                   </SelectContent>
+                 </Select>
+              </div>
+
+              <div className="space-y-2">
+                 <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Commessa ERP</span>
+                 <Select 
+                   value={formData.commessa_id} 
+                   onValueChange={(val) => setFormData(prev => ({ ...prev, commessa_id: val }))}
+                 >
+                   <SelectTrigger className="w-full bg-[#1e293b]/30 border-[#1e293b] hover:bg-[#1e293b]/50 h-10 rounded-xl px-4 text-xs font-bold truncate">
+                     <Briefcase className="h-3.5 w-3.5 mr-2 text-primary" />
+                     <SelectValue placeholder="Collega a Commessa" />
+                   </SelectTrigger>
+                   <SelectContent className="bg-[#0f172a] border-[#1e293b] text-white">
+                      <SelectItem value="none">Nessuna Commessa</SelectItem>
+                      {commesse?.map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.cliente?.ragione_sociale} - {new Date(c.mese_competenza).toLocaleDateString('it-IT', { month: 'short', year: 'numeric' })}
+                        </SelectItem>
+                      ))}
+                   </SelectContent>
+                 </Select>
               </div>
 
               {!isNew && (
@@ -188,13 +307,10 @@ export function StudioTaskModal() {
                               className={`flex-1 rounded-xl font-black uppercase tracking-widest text-[10px] gap-2 h-9 shadow-lg transition-all ${
                                 isTimerActive ? "bg-red-500 hover:bg-red-600 shadow-red-500/20" : "bg-primary hover:bg-primary/90 shadow-primary/20"
                               }`}
-                              onClick={() => isTimerActive ? timer.pause(task!.id) : timer.start(task!.id)}
+                              onClick={() => isTimerActive ? timer.stop(timer.active_session!.id) : timer.start(task!.id)}
                             >
-                              {isTimerActive ? <Pause className="h-3.5 w-3.5 fill-current" /> : <Play className="h-3.5 w-3.5 fill-current" />}
-                              {isTimerActive ? "Pausa" : "Avvia"}
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl border border-[#1e293b] text-[#475569] hover:text-white">
-                              <Trash2 className="h-4 w-4" />
+                              {isTimerActive ? <StopCircle className="h-3.5 w-3.5 fill-current" /> : <Play className="h-3.5 w-3.5 fill-current" />}
+                              {isTimerActive ? "Ferma" : "Avvia"}
                             </Button>
                         </div>
                       </div>
@@ -203,30 +319,14 @@ export function StudioTaskModal() {
               )}
 
               <div className="space-y-4">
-                 <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Proprietà</span>
-                 <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                       <div className="flex items-center gap-2 text-[#475569]">
-                         <UserIcon className="h-3.5 w-3.5" />
-                         <span className="text-[10px] font-black uppercase tracking-widest">Assegnatario</span>
-                       </div>
-                       <Avatar className="h-6 w-6 border border-[#1e293b]">
-                          <AvatarFallback className="bg-primary/20 text-primary text-[8px] font-black">LL</AvatarFallback>
-                       </Avatar>
-                    </div>
-                    <div className="flex items-center justify-between">
-                       <div className="flex items-center gap-2 text-[#475569]">
-                         <CalendarIcon className="h-3.5 w-3.5" />
-                         <span className="text-[10px] font-black uppercase tracking-widest">Scadenza</span>
-                       </div>
-                       <span className="text-[10px] font-black text-white uppercase tracking-widest">No Date</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                       <div className="flex items-center gap-2 text-[#475569]">
-                         <Clock className="h-3.5 w-3.5" />
-                         <span className="text-[10px] font-black uppercase tracking-widest">Stima</span>
-                       </div>
-                       <span className="text-[10px] font-black text-white uppercase tracking-widest">0h</span>
+                 <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Eseguito da</span>
+                 <div className="flex items-center gap-3 bg-[#1e293b]/20 p-3 rounded-xl border border-[#1e293b]">
+                    <Avatar className="h-8 w-8 border border-primary/20">
+                      <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-black">LL</AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-black text-white uppercase tracking-widest">Lorenzo Lotti</span>
+                      <span className="text-[9px] font-bold text-[#475569] uppercase">Product Manager</span>
                     </div>
                  </div>
               </div>

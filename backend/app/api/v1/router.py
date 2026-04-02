@@ -5,7 +5,9 @@ import uuid
 from datetime import date
 from decimal import Decimal
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Request, status, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query, Body, File, UploadFile
+import os
+import shutil
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -21,22 +23,30 @@ from app.schemas.schemas import (
     CommessaCreate, CommessaUpdate, CommessaOut,
     TimesheetCreate, TimesheetOut, TimesheetApprova,
     FornitoreOut, FatturaAttivaOut, FatturaPassivaOut, FicSyncStatusOut,
+    TaskCreate, TaskUpdate, TaskOut
 )
 from app.schemas.schemas import FatturaIncassaRequest, FatturaPassivaUpdate, FornitoreUpdate, FornitoreOut
 import httpx
 from app.services.services import (
-    get_user_by_email, create_user, list_users, update_user,
+    list_tasks, get_task, create_task, update_task, delete_task,
+    list_users, get_user_by_email, create_user, update_user,
     list_clienti, get_cliente, create_cliente, update_cliente, delete_cliente,
     list_progetti, get_progetto, create_progetto, update_progetto, get_progetto_with_servizi,
-    get_servizi_progetto, create_servizio_progetto, update_servizio_progetto, delete_servizio_progetto,
-    list_commesse, get_commessa, create_commessa, update_commessa,
-    create_timesheet, list_timesheet, approva_timesheet, elimina_timesheet_bulk, aggiorna_mese_competenza_bulk,
-    calcola_metriche_commessa,
+    list_commesse, get_commessa, create_commessa, update_commessa, calcola_metriche_commessa,
+    list_timesheet, create_timesheet, approva_timesheet,
     get_dashboard_kpi, get_marginalita_clienti,
-    sync_fic_data, get_last_fic_sync_status, list_fornitori, list_fatture_attive, list_fatture_passive, incassa_fattura, update_fattura_passiva, list_fornitori_full, update_fornitore, list_movimenti_cassa, list_costi_fissi, create_costo_fisso, update_costo_fisso, delete_costo_fisso,
+    sync_fic_data, get_last_fic_sync_status, list_fatture_attive, incassa_fattura,
+    list_fornitori_full, update_fornitore, list_fatture_passive, update_fattura_passiva, list_fornitori,
+    list_movimenti_cassa, list_costi_fissi, create_costo_fisso, update_costo_fisso, delete_costo_fisso
 )
+from app.api.v1 import timer
+from app.api.v1 import ai
+from app.api.v1 import planning
 
 router = APIRouter()
+router.include_router(timer.router)
+router.include_router(ai.router)
+router.include_router(planning.router)
 
 
 # ═══════════════════════════════════════════════════════
@@ -147,6 +157,78 @@ async def patch_cliente(
     if not c:
         raise HTTPException(status_code=404, detail="Cliente non trovato")
     return c
+
+@router.post("/clienti/{cliente_id}/logo", tags=["Clienti"])
+async def upload_cliente_logo(
+    cliente_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    # Validazione estensione
+    allowed_exts = {".png", ".jpg", ".jpeg", ".webp", ".svg"}
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in allowed_exts:
+        raise HTTPException(status_code=400, detail="Formato file non supportato")
+
+    # Validazione dimensione (2MB)
+    MAX_SIZE = 2 * 1024 * 1024
+    content = await file.read()
+    if len(content) > MAX_SIZE:
+        raise HTTPException(status_code=400, detail="File troppo grande (max 2MB)")
+    
+    # Rinomina file in modo univoco
+    filename = f"{cliente_id}_{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join("static", "logos", filename)
+    
+    # Salvataggio fisico
+    with open(filepath, "wb") as f:
+        f.write(content)
+    
+    # Aggiornamento DB
+    from app.models.models import Cliente
+    from sqlalchemy import select as _sel_c
+    res = await db.execute(_sel_c(Cliente).where(Cliente.id == cliente_id))
+    c = res.scalar_one_or_none()
+    if not c:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        raise HTTPException(status_code=404, detail="Cliente non trovato")
+    
+    # Cancella vecchio logo se presente e se diverso
+    if c.logo_url and c.logo_url.startswith("/static/logos/"):
+        old_path = c.logo_url.lstrip("/")
+        if os.path.exists(old_path) and old_path != filepath:
+            try: os.remove(old_path)
+            except: pass
+
+    c.logo_url = f"/static/logos/{filename}"
+    await db.commit()
+    await db.refresh(c)
+    return {"logo_url": c.logo_url}
+
+@router.delete("/clienti/{cliente_id}/logo", tags=["Clienti"])
+async def delete_cliente_logo(
+    cliente_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    from app.models.models import Cliente
+    from sqlalchemy import select as _sel_c
+    res = await db.execute(_sel_c(Cliente).where(Cliente.id == cliente_id))
+    c = res.scalar_one_or_none()
+    if not c:
+        raise HTTPException(status_code=404, detail="Cliente non trovato")
+    
+    if c.logo_url and c.logo_url.startswith("/static/logos/"):
+        path = c.logo_url.lstrip("/")
+        if os.path.exists(path):
+            try: os.remove(path)
+            except: pass
+    
+    c.logo_url = None
+    await db.commit()
+    return {"success": True}
 
 
 # ═══════════════════════════════════════════════════════
@@ -1131,3 +1213,62 @@ async def add_timesheet_manuale(
     await db.commit()
     await db.refresh(ts)
     return ts
+
+
+# ═══════════════════════════════════════════════════════
+# TASKS (NATIVI)
+# ═══════════════════════════════════════════════════════
+
+@router.get("/tasks", response_model=List[TaskOut], tags=["Tasks"])
+async def get_tasks(
+    progetto_id: Optional[uuid.UUID] = Query(None),
+    commessa_id: Optional[uuid.UUID] = Query(None),
+    assegnatario_id: Optional[uuid.UUID] = Query(None),
+    stato: Optional[TaskStatus] = Query(None),
+    parent_only: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return await list_tasks(db, progetto_id, commessa_id, assegnatario_id, stato, parent_only)
+
+@router.get("/tasks/{task_id}", response_model=TaskOut, tags=["Tasks"])
+async def get_single_task(
+    task_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    t = await get_task(db, task_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Task non trovata")
+    return t
+
+@router.post("/tasks", response_model=TaskOut, status_code=201, tags=["Tasks"])
+async def add_task(
+    data: TaskCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return await create_task(db, data)
+
+@router.patch("/tasks/{task_id}", response_model=TaskOut, tags=["Tasks"])
+async def patch_task(
+    task_id: uuid.UUID,
+    data: TaskUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    t = await update_task(db, task_id, data, current_user.id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Task non trovata")
+    return t
+
+@router.delete("/tasks/{task_id}", status_code=204, tags=["Tasks"])
+async def remove_task(
+    task_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    ok = await delete_task(db, task_id, current_user.id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Task non trovata")
+    await db.commit()

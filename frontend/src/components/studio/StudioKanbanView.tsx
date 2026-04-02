@@ -20,15 +20,15 @@ export function StudioKanbanView() {
   const { data } = useTasks();
 
   const tasks = React.useMemo(() => {
-    if (!data?.tasks) return [];
-    let filtered = data.tasks;
+    if (!data) return [];
+    let filtered = data;
     if (nav.selectedListId) {
-      filtered = filtered.filter(t => t.list_id === nav.selectedListId);
+      filtered = filtered.filter(t => t.progetto_id === nav.selectedListId);
     } else if (nav.selectedFolderId) {
-      filtered = filtered.filter(t => t.folder_id === nav.selectedFolderId);
+      filtered = filtered.filter(t => t.commessa_id === nav.selectedFolderId);
     }
     return filtered;
-  }, [data?.tasks, nav.selectedFolderId, nav.selectedListId]);
+  }, [data, nav.selectedFolderId, nav.selectedListId]);
 
   // Group tasks by status
   // For now we use ClickUp statuses mapped to our local IDs loosely
@@ -84,7 +84,7 @@ export function StudioKanbanView() {
 
 function KanbanCard({ task }: { task: TaskSO }) {
   const { timer, selectTask } = useStudio();
-  const isTimerActive = timer.active_task_id === task.id;
+  const isTimerActive = timer.active_session?.task_id === task.id;
 
   return (
     <div 

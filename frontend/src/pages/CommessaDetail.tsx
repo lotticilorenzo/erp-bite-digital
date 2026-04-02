@@ -25,11 +25,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PDFDownloadLink } from "@react-pdf/renderer";
+import { CommessaReportPDF } from "@/components/commesse/CommessaReportPDF";
+import { useTimesheets } from "@/hooks/useTimesheet";
+import { Download } from "lucide-react";
+import { ClientAvatar } from "@/components/common/ClientAvatar";
 
 export default function CommessaDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: commessa, isLoading, error } = useCommessa(id);
+  const { data: timesheets = [] } = useTimesheets({ commessa_id: id });
 
   if (isLoading) {
     return (
@@ -72,13 +78,21 @@ export default function CommessaDetailPage() {
             Indietro
           </Button>
           <div className="h-4 w-px bg-[#1e293b]" />
-          <div>
-            <h1 className="text-2xl font-bold text-[#f1f5f9]">
-              Commessa {commessa.cliente?.ragione_sociale}
-            </h1>
-            <p className="text-[#64748b] text-sm">
-              Competenza: {format(parseISO(commessa.mese_competenza), "MMMM yyyy", { locale: it })}
-            </p>
+          <div className="flex items-center gap-4">
+            <ClientAvatar 
+              name={commessa.cliente?.ragione_sociale || "C"} 
+              logoUrl={commessa.cliente?.logo_url} 
+              size="lg" 
+              className="rounded-xl border-[#1e293b]"
+            />
+            <div>
+              <h1 className="text-2xl font-bold text-[#f1f5f9]">
+                Commessa {commessa.cliente?.ragione_sociale}
+              </h1>
+              <p className="text-[#64748b] text-sm">
+                Competenza: {format(parseISO(commessa.mese_competenza), "MMMM yyyy", { locale: it })}
+              </p>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -90,6 +104,21 @@ export default function CommessaDetailPage() {
           <Button variant="outline" className="bg-[#1e293b] border-[#334155] text-white">
             <LinkIcon className="w-4 h-4 mr-2" /> Collega Fattura
           </Button>
+          
+          <PDFDownloadLink 
+            document={<CommessaReportPDF commessa={commessa} timesheets={timesheets} />} 
+            fileName={`Report_${commessa.cliente?.ragione_sociale}_${commessa.mese_competenza}.pdf`}
+          >
+            {({ loading }) => (
+              <Button 
+                disabled={loading}
+                className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl gap-2 font-black uppercase text-[10px] tracking-widest shadow-[0_0_20px_rgba(124,58,237,0.3)]"
+              >
+                <Download className="w-4 h-4" />
+                {loading ? "Generazione..." : "Prospetto Mensile"}
+              </Button>
+            )}
+          </PDFDownloadLink>
         </div>
       </div>
 
@@ -171,11 +200,34 @@ export default function CommessaDetailPage() {
                 Dettaglio Ore Lavorate
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              {/* Qui andrà la lista dei timesheet quando implementata */}
-              <div className="text-center py-12 border-2 border-dashed border-[#1e293b] rounded-xl">
-                 <p className="text-[#64748b]">Nessun timesheet approvato per questa commessa.</p>
-              </div>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-[#1e293b] hover:bg-transparent text-[#64748b]">
+                    <TableHead className="pl-6 font-medium uppercase text-[10px] tracking-wider">Data</TableHead>
+                    <TableHead className="font-medium uppercase text-[10px] tracking-wider">Risorsa</TableHead>
+                    <TableHead className="font-medium uppercase text-[10px] tracking-wider">Servizio</TableHead>
+                    <TableHead className="pr-6 font-medium uppercase text-[10px] tracking-wider text-right">Durata</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {timesheets.map((ts) => (
+                    <TableRow key={ts.id} className="border-[#1e293b] hover:bg-[#1e293b]/20">
+                      <TableCell className="pl-6 text-[#f1f5f9]">{format(parseISO(ts.data_attivita), "dd/MM/yyyy")}</TableCell>
+                      <TableCell className="text-[#cbd5e1]">{ts.user?.nome} {ts.user?.cognome}</TableCell>
+                      <TableCell className="text-[#cbd5e1]">{ts.task_display_name || ts.servizio || "-"}</TableCell>
+                      <TableCell className="pr-6 text-right text-purple-400 font-semibold">
+                        {Math.floor(ts.durata_minuti / 60)}h {ts.durata_minuti % 60}m
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!timesheets.length && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="h-24 text-center text-[#475569]">Nessun timesheet associato</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </div>

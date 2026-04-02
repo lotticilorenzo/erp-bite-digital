@@ -32,10 +32,10 @@ export default function StudioHome() {
   }
 
   const stats = [
-    { title: "Task Totali", value: data?.total || 0, icon: Zap, color: "text-primary" },
-    { title: "In Corso", value: data?.tasks.filter(t => t.state_id === "process").length || 0, icon: Clock, color: "text-blue-400" },
+    { title: "Task Totali", value: data?.length || 0, icon: Zap, color: "text-primary" },
+    { title: "In Corso", value: data?.filter(t => t.state_id === "process").length || 0, icon: Clock, color: "text-blue-400" },
     { title: "Scadenze Oggi", value: 0, icon: CalendarIcon, color: "text-yellow-400" },
-    { title: "Completate", value: data?.tasks.filter(t => t.state_id === "closed").length || 0, icon: CheckCircle2, color: "text-emerald-400" },
+    { title: "Completate", value: data?.filter(t => t.state_id === "closed").length || 0, icon: CheckCircle2, color: "text-emerald-400" },
   ];
 
   return (
@@ -45,7 +45,7 @@ export default function StudioHome() {
           <h1 className="text-4xl font-black text-white tracking-tighter mb-2">
             Benvenuto in <span className="text-primary italic">Studio OS</span>
           </h1>
-          <p className="text-[#64748b] font-medium">Hai {data?.total} attività che richiedono la tua attenzione.</p>
+          <p className="text-[#64748b] font-medium">Hai {data?.length} attività che richiedono la tua attenzione.</p>
         </div>
         <div className="flex items-center gap-3">
           <Button size="lg" className="rounded-xl font-black uppercase tracking-widest px-8 shadow-[0_0_20px_rgba(124,58,237,0.3)] hover:scale-105 transition-all">
@@ -90,7 +90,7 @@ export default function StudioHome() {
             </CardHeader>
             <CardContent className="p-0">
               <div className="divide-y divide-[#1e293b]/30">
-                {data?.tasks.slice(0, 5).map((task) => (
+                {data?.slice(0, 5).map((task) => (
                   <div key={task.id} className="p-6 flex items-center gap-4 hover:bg-white/5 transition-colors cursor-pointer group">
                     <div className="h-10 w-10 shrink-0 rounded-xl bg-[#1e293b]/50 border border-[#334155]/50 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
                       <Zap className="h-5 w-5" />
@@ -107,7 +107,7 @@ export default function StudioHome() {
                       <p className="text-xs text-[#64748b] truncate">Folder ID: {task.folder_id}</p>
                     </div>
                     <div className="flex items-center gap-4 shrink-0">
-                      {timer.active_task_id === task.id && (
+                      {timer.active_session?.task_id === task.id && (
                         <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-primary/20 border border-primary/30 animate-pulse">
                           <Clock className="h-3 w-3 text-primary" />
                           <span className="text-[10px] font-black text-primary">RECORDING</span>

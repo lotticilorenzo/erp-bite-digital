@@ -22,6 +22,7 @@ import { useStudio } from "@/hooks/useStudio";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ClientAvatar } from "../common/ClientAvatar";
 
 export function StudioSidebar() {
   const { nav, selectFolder, setView, spaces } = useStudio();
@@ -83,7 +84,12 @@ export function StudioSidebar() {
                             className={`h-9 px-3 rounded-lg group ${isFolderSelected ? "text-white font-bold" : "text-[#94a3b8] hover:text-white"}`}
                             onClick={() => selectFolder(folder.id)}
                           >
-                            <Folder className={`h-4 w-4 transition-colors ${isFolderSelected ? "text-primary" : "group-hover:text-primary/70 text-[#475569]"}`} />
+                            <ClientAvatar 
+                              name={folder.ragione_sociale} 
+                              logoUrl={folder.logo_url} 
+                              size="xs" 
+                              className="rounded-md border-[#1e293b]"
+                            />
                             <span className="text-xs truncate">{folder.ragione_sociale}</span>
                             <ChevronRight className={`ml-auto h-3.5 w-3.5 text-[#475569] transition-transform duration-300 group-data-[state=open]/collapsible:rotate-90`} />
                           </SidebarMenuButton>

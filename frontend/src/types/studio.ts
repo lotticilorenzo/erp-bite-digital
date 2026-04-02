@@ -39,9 +39,11 @@ export type TaskSO = {
   estimated_hours: number;
   subtasks: SubtaskSO[];
   custom_values?: Record<string, any>;
-  // Support for ClickUp mapping
-  clickup_id?: string;
+  progetto_id?: string;
+  commessa_id?: string;
   parent_id?: string;
+  // Deprecated ClickUp fields
+  clickup_id?: string;
   folder_id?: string;
   list_id?: string;
 }
@@ -73,10 +75,19 @@ export type CustomField = {
   type: "text" | "number" | "progress";
 }
 
+export interface TimerSessionSO {
+  id: string;
+  task_id: string;
+  user_id: string;
+  started_at: string;
+  stopped_at: string | null;
+  durata_minuti: number | null;
+  note: string | null;
+  salvato_timesheet: boolean;
+}
+
 export type StudioTimer = {
-  active_task_id: string | null;
-  started_at: number | null;
-  elapsed: Record<string, number>; // taskId -> ms
+  active_session: TimerSessionSO | null;
 }
 
 export const DEFAULT_STATES: StudioStatus[] = [

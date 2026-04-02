@@ -83,6 +83,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     ruolo: Mapped[UserRole] = mapped_column(SAEnum(UserRole, name="user_role"))
     costo_orario: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    ore_settimanali: Mapped[int] = mapped_column(Integer, default=40)
     clickup_user_id: Mapped[Optional[str]] = mapped_column(String(50))
     attivo: Mapped[bool] = mapped_column(Boolean, default=True)
     data_inizio: Mapped[Optional[date]] = mapped_column(Date)
@@ -128,6 +129,7 @@ class Cliente(Base):
     condizioni_pagamento: Mapped[Optional[str]] = mapped_column(String(100))
     drive_files: Mapped[Optional[list]] = mapped_column(JSON, default=list)
     fic_cliente_id: Mapped[Optional[str]] = mapped_column(String(100))
+    logo_url: Mapped[Optional[str]] = mapped_column(String(500))
     attivo: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -308,6 +310,7 @@ class Task(Base):
     commessa_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("commesse.id"))
     assegnatario_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     revisore_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=True)
     titolo: Mapped[str] = mapped_column(String(500))
     descrizione: Mapped[Optional[str]] = mapped_column(Text)
     stato: Mapped[TaskStatus] = mapped_column(SAEnum(TaskStatus, name="task_status"), default=TaskStatus.DA_FARE)
@@ -319,6 +322,14 @@ class Task(Base):
 
     assegnatario: Mapped[Optional["User"]] = relationship(foreign_keys=[assegnatario_id], back_populates="tasks_assegnati")
     timesheet: Mapped[List["Timesheet"]] = relationship(back_populates="task")
+    subtasks: Mapped[List["Task"]] = relationship(
+        back_populates="parent",
+        cascade="all, delete-orphan",
+    )
+    parent: Mapped[Optional["Task"]] = relationship(
+        back_populates="subtasks",
+        remote_side=[id],
+    )
 
 
 # ── TIMESHEET ─────────────────────────────────────────────
@@ -640,3 +651,21 @@ class Risorsa(Base):
     note: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# ── TIMER SESSION ─────────────────────────────────────────
+class TimerSession(Base):
+    __tablename__ = "timer_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"))
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    stopped_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    durata_minuti: Mapped[Optional[int]] = mapped_column(Integer)
+    salvato_timesheet: Mapped[bool] = mapped_column(Boolean, default=False)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    task: Mapped["Task"] = relationship()
+    user: Mapped["User"] = relationship()
