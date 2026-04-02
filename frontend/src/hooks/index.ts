@@ -1,25 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
-import type { Commessa, Timesheet, FatturaAttiva } from "@/types";
+import type { FatturaAttiva } from "@/types";
 
 export * from "./useClienti";
 export * from "./useProgetti";
-
-export function useCommesse(params?: { mese?: string; stato?: string; cliente_id?: string }) {
-  return useQuery({
-    queryKey: ["commesse", params],
-    queryFn: async () => {
-      const { data } = await api.get<Commessa[]>("/commesse", { params });
-      return data;
-    },
-  });
-}
+export * from "./useCommesse";
 
 export function useTimesheet(params?: { user_id?: string; mese_competenza?: string }) {
   return useQuery({
     queryKey: ["timesheet", params],
     queryFn: async () => {
-      const { data } = await api.get<Timesheet[]>("/timesheet", { params });
+      const { data } = await api.get<any[]>("/timesheet", { params });
       return data;
     },
   });
