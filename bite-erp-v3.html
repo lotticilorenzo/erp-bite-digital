@@ -11,16 +11,16 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --black:#09090b;--purple:#7513a4;--violet:#b060e0;--vdim:rgba(176,96,224,.12);
-  --white:#f4f0fa;--g1:#1a1a1e;--g2:#2a2a30;--g3:#3a3a42;--g4:#6b6b78;--g5:#9a9aaa;
+  --black:#020617;--purple:#7c3aed;--violet:#a78bfa;--vdim:rgba(124,58,237,.12);
+  --white:#ffffff;--g1:#0f172a;--g2:#1e293b;--g3:#334155;--g4:#cbd5e1;--g5:#f1f5f9;
   --green:#22c55e;--amber:#f59e0b;--red:#ef4444;--blue:#3b82f6;
   --fd:'Plus Jakarta Sans',sans-serif;--fm:'DM Mono',monospace;
 }
 html{font-size:14px}
-body{background:var(--black);color:var(--white);font-family:var(--fd);overflow-x:hidden}
-::-webkit-scrollbar{width:5px;height:5px}
+body{background:var(--black);color:var(--white);font-family:var(--fd);overflow-x:hidden;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--g3);border-radius:3px}
+::-webkit-scrollbar-thumb{background:var(--g3);border-radius:10px}
 button{cursor:pointer;font-family:var(--fd)}
 input,select,textarea{font-family:var(--fd);background:var(--g2);border:1px solid var(--g3);
   color:var(--white);border-radius:8px;padding:8px 12px;font-size:13px;outline:none;
@@ -59,9 +59,12 @@ const diffDays= (a,b) => Math.round((new Date(b)-new Date(a))/(1000*60*60*24));
 const initials= u => ((u.nome||'?')[0]+(u.cognome||'?')[0]).toUpperCase();
 const PAL = ['#7513a4','#1d4ed8','#065f46','#92400e','#be185d','#0e7490','#4338ca','#b45309'];
 const uCol = id => PAL[parseInt((id||'0').replace(/\D/g,''),36)%PAL.length]||'#7513a4';
-const API_BASE_DEFAULT='https://erp.bitedigitalstudio.com/api/v1';
-// Forza HTTPS nel localStorage se salvato come HTTP
-(function(){const k='BITE_ERP_API_BASE';const v=localStorage.getItem(k);if(v&&v.startsWith('http://'))localStorage.setItem(k,v.replace('http://','https://'));})();
+const API_BASE_DEFAULT = '/api/v1';
+
+// Reset localStorage for local development
+if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+  localStorage.setItem('BITE_ERP_API_BASE', '/api/v1');
+}
 const TOKEN_KEY='BITE_ERP_TOKEN';
 const USER_KEY='BITE_ERP_USER';
 const API_BASE_KEY='BITE_ERP_API_BASE';
@@ -2034,7 +2037,7 @@ function CommesseScreen({state,dispatch,setPage,setDrillCommessa,onChiudi,api}) 
       </div>
     </div>}
 
-    {confirm&&<Confirm msg='Eliminare questa commessa?' onConfirm={()=>del(confirm.id)} onClose={()=>setConfirm(null)}/>}}
+    {confirm&&<Confirm msg='Eliminare questa commessa?' onConfirm={()=>del(confirm.id)} onClose={()=>setConfirm(null)}/>}
     {modal&&<Modal title={modal==='new'?'Nuova commessa':'Modifica commessa'} onClose={closeModal} width={620}>
       <form onSubmit={save}>
         <FRow label='Cliente'>
@@ -6095,10 +6098,11 @@ function App(){
 
   const apiFetch=async(path,{method='GET',body,tokenOverride}={})=>{
     const token=tokenOverride!==undefined?tokenOverride:authToken;
-    const base=(apiBaseUrl||API_BASE_DEFAULT).replace(/\/$/,'');
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const base = isLocal ? '/api/v1' : (apiBaseUrl||API_BASE_DEFAULT).replace(/\/$/,'');
     const headers={'Content-Type':'application/json'};
     if(token) headers.Authorization=`Bearer ${token}`;
-    const res=await fetch(`${base}${path}`,{
+    const res=await fetch(`${base.replace(/\/api\/v1$/,'')}${path.startsWith('/api/v1')?path:'/api/v1'+path}`,{
       method,
       headers,
       body:body?JSON.stringify(body):undefined,
@@ -6605,6 +6609,9 @@ function App(){
         </div>
         {syncingCore&&<div style={{fontFamily:'var(--fm)',fontSize:9,color:'var(--amber)',padding:'2px 10px 6px'}}>Sincronizzazione API...</div>}
         {apiError&&<div style={{fontFamily:'var(--fm)',fontSize:9,color:'var(--red)',padding:'2px 10px 6px'}}>{apiError}</div>}
+        <div onClick={()=>window.location.href='/studio-os.html'} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:8,cursor:'pointer',color:'var(--white)',background:'rgba(117,19,164,.4)',fontSize:12,fontWeight:700,marginBottom:8,transition:'all .12s',border:'1px solid var(--purple)'}}>
+          <span style={{fontSize:13}}>🚀</span><span>Apri Studio OS</span>
+        </div>
         <div onClick={()=>authToken&&setPage('profilo')} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:8,background:'var(--vdim)',border:'1px solid rgba(176,96,224,.15)',cursor:authToken?'pointer':'default'}}>
           <div style={{width:26,height:26,borderRadius:'50%',background:'linear-gradient(135deg,var(--purple),var(--violet))',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:'white',flexShrink:0}}>{profileInitial}</div>
           <div><div style={{fontSize:12,fontWeight:600}}>{profileName}</div><div style={{fontFamily:'var(--fm)',fontSize:9,color:'var(--violet)'}}>{profileRole} · {authToken?'api':'demo'}</div></div>

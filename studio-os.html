@@ -1,0 +1,1306 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Studio OS</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useMemo } = React;
+
+const TOKEN_KEY = 'BITE_ERP_TOKEN';
+const USER_KEY = 'BITE_ERP_USER';
+
+// Redirect to ERP if not logged in
+if (!localStorage.getItem(TOKEN_KEY)) {
+  window.location.href = '/bite-erp-v3.html';
+}
+
+const CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  html,body,#root{height:100%;overflow:hidden;}
+  ::-webkit-scrollbar{width:4px;height:4px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{border-radius:10px;background:#334155;}
+  input,textarea,select,button{font-family:inherit;}
+  *{-webkit-font-smoothing:antialiased;}
+  @keyframes fu{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes si{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+  @keyframes pi{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)}}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .fu{animation:fu .16s ease}
+  .si{animation:si .2s cubic-bezier(.22,.68,0,1.2)}
+  .pi{animation:pi .13s cubic-bezier(.22,.68,0,1.3)}
+  .pulse{animation:pulse 1.4s ease infinite}
+  select option{background:#1a0a3a;color:#f0edff;}
+`;
+
+// ─── THEMES ────────────────────────────────────────────────────────────────
+const DARK = {
+  bg:"#020617",s1:"#0f172a",s2:"#1e293b",s3:"#334155",s4:"#475569",
+  br:"#334155",brL:"#7c3aed",
+  tx:"#ffffff",tx2:"#cbd5e1",tx3:"#94a3b8",
+  ac:"#7c3aed",acB:"#6d28d9",acH:"#a78bfa",acS:"rgba(124,58,237,.18)",
+  gold:"#f59e0b",goldS:"rgba(245,158,11,.15)",
+  green:"#22c55e",greenS:"rgba(34,197,94,.15)",
+  blue:"#3b82f6",blueS:"rgba(59,130,246,.15)",
+  red:"#ef4444",redS:"rgba(239,68,68,.15)",
+  sb:"#020617",sbBr:"rgba(124,58,237,.2)",
+  F:"'Inter',sans-serif",FS:"'Syne',sans-serif",mode:"dark",
+};
+const LIGHT = {
+  bg:"#f8fafc",s1:"#ffffff",s2:"#f1f5f9",s3:"#e2e8f0",s4:"#cbd5e1",
+  br:"#e2e8f0",brL:"#7c3aed",
+  tx:"#0f172a",tx2:"#334155",tx3:"#64748b",
+  ac:"#7c3aed",acB:"#6d28d9",acH:"#4338ca",acS:"rgba(124,58,237,.1)",
+  gold:"#b45309",goldS:"rgba(180,83,9,.1)",
+  green:"#15803d",greenS:"rgba(21,128,61,.1)",
+  blue:"#1d4ed8",blueS:"rgba(29,78,216,.1)",
+  red:"#b91c1c",redS:"rgba(185,28,28,.1)",
+  sb:"#f8fafc",sbBr:"rgba(124,58,237,.15)",
+  F:"'Inter',sans-serif",FS:"'Syne',sans-serif",mode:"light",
+};
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+var SQ = 100;
+function uid(){SQ++;return "x"+SQ;}
+var TODAY = new Date().toISOString().split("T")[0];
+function addDays(b,n){var d=new Date(b+"T00:00:00");d.setDate(d.getDate()+n);return d.toISOString().split("T")[0];}
+function fmtDate(d){if(!d)return "—";return new Date(d+"T00:00:00").toLocaleDateString("it-IT",{day:"2-digit",month:"short"});}
+function cloneObj(x){return JSON.parse(JSON.stringify(x));}
+function isPast(d){return !!(d&&d<TODAY);}
+function isToday(d){return d===TODAY;}
+function isSoon(d){return !!(d&&d>TODAY&&d<=addDays(TODAY,7));}
+function fmtMs(ms){
+  if(!ms||ms<=0)return "00:00";
+  var s=Math.floor(ms/1000),m=Math.floor(s/60),h=Math.floor(m/60);
+  if(h>0)return h+":"+z(m%60)+":"+z(s%60);
+  return z(m)+":"+z(s%60);
+}
+function z(n){return n<10?"0"+n:""+n;}
+
+// ─── ICONS ────────────────────────────────────────────────────────────────────
+var IP={
+  home:"M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z",
+  folder:"M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z",
+  list:"M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z",
+  kanban:"M3 5h6v14H3V5zm7 0h4v8h-4V5zm5 0h6v11h-6V5z",
+  cal:"M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z",
+  dash:"M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm13 2h-2v3h-3v2h3v3h2v-3h3v-2h-3z",
+  plus:"M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z",
+  x:"M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+  check:"M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z",
+  cr:"M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z",
+  gear:"M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.37 1.04.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.57 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z",
+  clock:"M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm.5 5H11v6l5.25 3.15.75-1.23-4.5-2.67V7z",
+  tag:"M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.56-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z",
+  tpl:"M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z",
+  drag:"M9 3H7v2h2V3zm4 0h-2v2h2V3zm4 0h-2v2h2V3zM9 9H7v2h2V9zm4 0h-2v2h2V9zm4 0h-2v2h2V9zm-8 6H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z",
+  sub:"M22 11V3h-7v3H9V3H2v8h7V8h2v10h4v3h7v-8h-7v3h-2V8h2v3z",
+  sun:"M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58a1 1 0 00-1.41 1.41l1.06 1.06a1 1 0 001.41-1.41L5.99 4.58zm12.37 12.37a1 1 0 00-1.41 1.41l1.06 1.06a1 1 0 001.41-1.41l-1.06-1.06zm1.06-12.37a1 1 0 00-1.41 0l-1.06 1.06a1 1 0 001.41 1.41l1.06-1.06a1 1 0 000-1.41zM7.05 18.36a1 1 0 00-1.41 0l-1.06 1.06a1 1 0 001.41 1.41l1.06-1.06a1 1 0 000-1.41z",
+  moon:"M12 3a9 9 0 109 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 01-4.4 2.26 5.403 5.403 0 01-3.14-9.8c-.44-.06-.9-.1-1.36-.1z",
+  play:"M8 5v14l11-7z",
+  pause:"M6 19h4V5H6v14zm8-14v14h4V5h-4z",
+  trash:"M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z",
+  chl:"M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z",
+  chr:"M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z",
+};
+function Ico(props){
+  var n=props.name,sz=props.size||15,c=props.color||"currentColor";
+  return <svg viewBox="0 0 24 24" width={sz} height={sz} fill={c} style={{flexShrink:0,display:"block"}}><path d={IP[n]||""}/></svg>;
+}
+
+// ─── DATA ─────────────────────────────────────────────────────────────────────
+var TEAM=[
+  {id:"u1",name:"Marco Rossi",ini:"MR",col:"#9d4edd"},
+  {id:"u2",name:"Sofia Bianchi",ini:"SB",col:"#06b6d4"},
+  {id:"u3",name:"Luca Ferrari",ini:"LF",col:"#f59e0b"},
+  {id:"u4",name:"Anna Conti",ini:"AC",col:"#10b981"},
+  {id:"u5",name:"Giorgio Mancini",ini:"GM",col:"#f43f5e"},
+];
+function mkSt(){return [{id:uid(),name:"To Do",color:"#64748b",order:0},{id:uid(),name:"In Corso",color:"#9d4edd",order:1},{id:uid(),name:"Completato",color:"#10b981",order:2}];}
+function bList(name,defs){
+  var states=mkSt();
+  var tasks=defs.map(function(d){
+    var subs=(d.sub||[]).map(function(s){
+      var ss=(s.sub||[]).map(function(x){return{id:uid(),title:x.t,stateId:states[x.s||0].id,subtasks:[]};});
+      return{id:uid(),title:s.t,stateId:states[s.s||0].id,subtasks:ss};
+    });
+    return{id:uid(),title:d.t,desc:d.desc||"",assignees:d.a||[],start:addDays(TODAY,-2),due:d.d!=null?addDays(TODAY,d.d):null,stateId:states[d.s||0].id,time:d.h||2,subtasks:subs};
+  });
+  return{id:uid(),name:name,states:states,tasks:tasks,
+    fieldConfig:{
+      visible:{assignees:true,dueDate:true,state:false,timeMax:true,timer:true},
+      custom:[]
+    }
+  };
+}
+function mkData(){
+  var f1={id:uid(),name:"Alfa Studio",lists:[
+    bList("Sito Web",[
+      {t:"Analisi requisiti UX",s:2,a:["u1","u2"],d:-10,h:8,desc:"Raccogliere requisiti, creare wireframe e mappe sito.",sub:[{t:"Interviste stakeholder",s:2,sub:[{t:"Trascrizione",s:2}]},{t:"Wireframe homepage",s:2}]},
+      {t:"Design UI homepage",s:1,a:["u2"],d:3,h:12,sub:[{t:"Mood board",s:2},{t:"Mockup desktop",s:1},{t:"Mockup mobile",s:0}]},
+      {t:"Sviluppo frontend React",s:0,a:["u1","u3"],d:18,h:40},
+      {t:"Integrazione CMS",s:0,a:["u3"],d:25,h:16},
+    ]),
+    bList("Social",[{t:"Piano editoriale Q2",s:1,a:["u2"],d:2,h:6},{t:"Reel Instagram",s:0,a:["u2","u4"],d:9,h:4},{t:"Analisi insight",s:2,a:["u4"],d:-5,h:2}]),
+    bList("Graphic Design",[{t:"Brand identity refresh",s:2,a:["u2"],d:-12,h:20},{t:"Brochure aziendale",s:1,a:["u2"],d:5,h:10}]),
+    bList("Advertising",[{t:"Campagna Google Ads Q2",s:0,a:["u4","u5"],d:12,h:8},{t:"Report performance",s:1,a:["u5"],d:0,h:3}]),
+  ]};
+  var f2={id:uid(),name:"Bianchi & Partners",lists:[
+    bList("Sito Web",[{t:"Restyling corporate",s:1,a:["u1","u2"],d:0,h:30},{t:"SEO on-page",s:0,a:["u3"],d:22,h:12}]),
+    bList("Social",[{t:"Gestione LinkedIn",s:1,a:["u4"],d:-1,h:4},{t:"Employer branding",s:0,a:["u4","u2"],d:14,h:8}]),
+    bList("Graphic Design",[{t:"Template presentazioni",s:0,a:["u2"],d:16,h:8}]),
+    bList("Advertising",[{t:"Meta Ads awareness",s:2,a:["u5"],d:-4,h:6}]),
+  ]};
+  var f3={id:uid(),name:"Caffè Centrale",lists:[
+    bList("Sito Web",[{t:"Sito menu digitale",s:0,a:["u1"],d:30,h:20}]),
+    bList("Social",[{t:"Content plan mensile",s:1,a:["u2","u4"],d:1,h:5},{t:"Reel Instagram",s:0,a:["u4"],d:8,h:3}]),
+    bList("Graphic Design",[{t:"Design menu fisico",s:2,a:["u2"],d:-14,h:8}]),
+    bList("Advertising",[{t:"Promo stagionale",s:0,a:["u5"],d:15,h:4}]),
+  ]};
+  var f4={id:uid(),name:"Delta Group",lists:[
+    bList("Sito Web",[
+      {t:"E-commerce WooCommerce",s:1,a:["u1","u3"],d:0,h:60,sub:[{t:"Setup prodotti",s:1,sub:[{t:"Import CSV",s:2}]},{t:"Config spedizioni",s:0}]},
+      {t:"Pagamenti Stripe",s:0,a:["u3"],d:26,h:10},
+    ]),
+    bList("Social",[{t:"Strategia social 2025",s:2,a:["u2"],d:-6,h:8}]),
+    bList("Graphic Design",[{t:"Packaging prodotti",s:1,a:["u2"],d:11,h:15}]),
+    bList("Advertising",[{t:"Google Shopping",s:0,a:["u5","u4"],d:21,h:8}]),
+  ]};
+  var f5={id:uid(),name:"Epsilon Srl",lists:[
+    bList("Sito Web",[{t:"Landing page hero",s:1,a:["u1"],d:-1,h:15},{t:"Chi siamo",s:0,a:["u1"],d:10,h:6}]),
+    bList("Social",[{t:"Piano contenuti",s:0,a:["u4","u2"],d:12,h:5}]),
+    bList("Graphic Design",[{t:"Logo e brand kit",s:0,a:["u2"],d:13,h:10}]),
+    bList("Advertising",[{t:"Prima campagna Google",s:0,a:["u5"],d:32,h:5}]),
+  ]};
+  var f6={id:uid(),name:"Folio Creative",lists:[
+    bList("Sito Web",[{t:"Portfolio Next.js",s:1,a:["u1","u2"],d:4,h:20},{t:"Case study clienti",s:0,a:["u2"],d:18,h:8}]),
+    bList("Social",[{t:"Strategia B2B",s:0,a:["u2"],d:19,h:6}]),
+    bList("Graphic Design",[{t:"Kit materiali stampa",s:0,a:["u2"],d:24,h:12}]),
+    bList("Advertising",[{t:"Ads LinkedIn B2B",s:0,a:["u5"],d:30,h:7}]),
+  ]};
+  return{
+    workspaces:[{id:"ws1",name:"Clienti",spaces:[
+      {id:"sp1",name:"Fascia 1",folders:[f1,f2]},
+      {id:"sp2",name:"Fascia 2",folders:[f3,f4]},
+      {id:"sp3",name:"Fascia 3",folders:[f5,f6]},
+    ]}],
+    stateTemplates:[
+      {id:"tpl1",name:"Standard",states:[{id:uid(),name:"To Do",color:"#64748b",order:0},{id:uid(),name:"In Corso",color:"#9d4edd",order:1},{id:uid(),name:"Completato",color:"#10b981",order:2}]},
+      {id:"tpl2",name:"Agile",states:[{id:uid(),name:"Backlog",color:"#64748b",order:0},{id:uid(),name:"Pianificato",color:"#60a5fa",order:1},{id:uid(),name:"In Corso",color:"#9d4edd",order:2},{id:uid(),name:"Review",color:"#f59e0b",order:3},{id:uid(),name:"Completato",color:"#10b981",order:4}]},
+    ],
+    team:TEAM,userId:"u1",
+  };
+}
+
+// ─── DATA HELPERS ─────────────────────────────────────────────────────────────
+function getLists(data){
+  var r=[];
+  data.workspaces.forEach(function(ws){ws.spaces.forEach(function(sp){sp.folders.forEach(function(fo){fo.lists.forEach(function(li){r.push({list:li,folder:fo,space:sp,ws:ws});});});});});
+  return r;
+}
+function getList(data,id){return getLists(data).filter(function(x){return x.list.id===id;})[0]||null;}
+function getFolder(data,id){var r=null;data.workspaces.forEach(function(ws){ws.spaces.forEach(function(sp){sp.folders.forEach(function(fo){if(fo.id===id)r={folder:fo,space:sp,ws:ws};});});});return r;}
+function getTask(data,tid){var r=null;getLists(data).forEach(function(x){x.list.tasks.forEach(function(t){if(t.id===tid)r={task:t,list:x.list,folder:x.folder};});});return r;}
+function myTasks(data,uid){var r=[];getLists(data).forEach(function(x){x.list.tasks.forEach(function(t){if(t.assignees.indexOf(uid)>=0)r.push({task:t,list:x.list,folder:x.folder});});});return r;}
+function setList(data,lid,fn){var n=cloneObj(data);getLists(n).forEach(function(x){if(x.list.id===lid)fn(x.list);});return n;}
+function setTask(data,tid,fn){var n=cloneObj(data);getLists(n).forEach(function(x){x.list.tasks.forEach(function(t){if(t.id===tid)fn(t);});});return n;}
+function stOf(list,task){return list.states.filter(function(s){return s.id===task.stateId;})[0]||list.states[0];}
+
+// ─── BASE COMPONENTS ──────────────────────────────────────────────────────────
+function Av(p){
+  var u=p.team.filter(function(x){return x.id===p.uid;})[0];
+  if(!u)return null;
+  var sz=p.size||26;
+  return <div title={u.name} style={{width:sz,height:sz,borderRadius:"50%",background:u.col,display:"flex",alignItems:"center",justifyContent:"center",fontSize:sz*.34,fontWeight:700,color:"#fff",fontFamily:p.t.FS,flexShrink:0,border:p.ov?"2px solid "+p.t.s1:"none",marginLeft:p.ov?-8:0}}>{u.ini}</div>;
+}
+function Avs(p){
+  var ids=p.ids||[],t=p.t,sz=p.size||22;
+  if(!ids.length)return <span style={{color:t.tx3,fontSize:12}}>—</span>;
+  var sh=ids.slice(0,3),ex=ids.length-sh.length;
+  return <div style={{display:"flex",alignItems:"center"}}>{sh.map(function(id,i){return <Av key={id} uid={id} team={p.team} size={sz} ov={i>0} t={t}/>;})}{ex>0&&<div style={{width:sz,height:sz,borderRadius:"50%",background:t.s3,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:t.tx2,marginLeft:-8,border:"2px solid "+t.s1,fontWeight:700}}>+{ex}</div>}</div>;
+}
+
+function Pill(p){
+  var s=p.state;if(!s)return null;
+  return <div style={{display:"inline-flex",alignItems:"center",gap:5,padding:p.sm?"3px 9px":"4px 13px",borderRadius:999,background:s.color+"22",border:"1.5px solid "+s.color+"55",fontSize:p.sm?11:12,color:s.color,fontWeight:700,whiteSpace:"nowrap",letterSpacing:".01em"}}><div style={{width:p.sm?5:7,height:p.sm?5:7,borderRadius:"50%",background:s.color,flexShrink:0,boxShadow:"0 0 6px "+s.color+"99"}}/>{s.name}</div>;
+}
+
+function DChip(p){
+  var d=p.date;
+  if(!d)return <span style={{color:p.t.tx3,fontSize:12}}>—</span>;
+  var past=isPast(d),tod=isToday(d),soon=isSoon(d);
+  var col=past?p.t.red:tod?p.t.gold:soon?p.t.blue:p.t.tx3;
+  var bg=past?p.t.redS:tod?p.t.goldS:soon?p.t.blueS:"transparent";
+  return <span style={{fontSize:11.5,color:col,fontWeight:past||tod?700:400,background:bg,padding:bg!=="transparent"?"2px 9px":"0",borderRadius:999}}>{fmtDate(d)}{tod?" · Oggi":past?" · Scad.":""}</span>;
+}
+
+function Btn(p){
+  var v=p.v||"ghost",sm=p.sm,t=p.t;
+  var base={fontFamily:t.F,fontSize:sm?12:13,fontWeight:600,borderRadius:9,display:"inline-flex",alignItems:"center",gap:6,transition:"opacity .15s",cursor:"pointer",letterSpacing:"-.01em",border:"none"};
+  var vs={
+    primary:{background:"linear-gradient(135deg,"+t.ac+","+t.acB+")",color:"#fff",padding:sm?"6px 14px":"8px 18px",boxShadow:"0 2px 14px "+t.ac+"45"},
+    ghost:{background:p.active?t.acS:"transparent",color:p.active?t.acH:t.tx2,padding:sm?"6px 10px":"8px 14px"},
+    outline:{background:"transparent",color:t.tx,border:"1px solid "+t.br,padding:sm?"6px 13px":"8px 17px"},
+  };
+  return <button onClick={p.onClick} style={Object.assign({},base,vs[v]||vs.ghost,p.style||{})} onMouseEnter={function(e){e.currentTarget.style.opacity=".7";}} onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>{p.children}</button>;
+}
+
+function Row(p){
+  return <div onClick={p.onClick} style={Object.assign({display:"flex",alignItems:"center",gap:12,padding:"11px 16px",background:p.t.s1,borderRadius:10,border:"1px solid "+p.t.br,cursor:"pointer",transition:"all .15s"},p.style||{})}
+    onMouseEnter={function(e){e.currentTarget.style.borderColor=p.t.ac+"66";e.currentTarget.style.background=p.t.s2;e.currentTarget.style.transform="translateX(2px)";}}
+    onMouseLeave={function(e){e.currentTarget.style.borderColor=p.t.br;e.currentTarget.style.background=p.t.s1;e.currentTarget.style.transform="translateX(0)";}}>
+    {p.children}
+  </div>;
+}
+
+// ─── STATE QUICK-CHANGE DOT ───────────────────────────────────────────────────
+function StDot(p){
+  var task=p.task,list=p.list,setData=p.setData,t=p.t;
+  var [open,setOpen]=useState(false);
+  var cur=stOf(list,task);
+  function close(e){e.stopPropagation();setOpen(false);}
+  return (
+    <div style={{position:"relative",flexShrink:0}} onClick={function(e){e.stopPropagation();}}>
+      <button onClick={function(){setOpen(function(o){return !o;});}} title="Cambia stato"
+        style={{width:14,height:14,borderRadius:"50%",background:cur?cur.color:"#888",border:"none",cursor:"pointer",flexShrink:0,display:"block",boxShadow:open?"0 0 0 4px "+(cur?cur.color+"30":"transparent"):"0 0 6px "+(cur?cur.color+"60":"transparent"),transition:"box-shadow .18s"}}/>
+      {open&&(
+        <div className="pi" style={{position:"absolute",top:"calc(100% + 10px)",left:0,background:t.s2,border:"1px solid "+t.br,borderRadius:12,zIndex:9999,minWidth:170,boxShadow:"0 16px 48px rgba(0,0,0,.5),0 0 0 1px "+t.br,overflow:"hidden"}}>
+          <div style={{padding:"8px 12px 4px",fontSize:10,fontWeight:700,color:t.tx3,letterSpacing:".08em",textTransform:"uppercase",fontFamily:t.FS}}>Cambia stato</div>
+          {list.states.map(function(s){
+            var active=s.id===task.stateId;
+            return <div key={s.id} onClick={function(e){e.stopPropagation();setData(function(prev){return setTask(prev,task.id,function(tk){tk.stateId=s.id;});});setOpen(false);}}
+              style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",cursor:"pointer",background:active?t.acS:"transparent",transition:"background .1s"}}
+              onMouseEnter={function(e){if(!active)e.currentTarget.style.background=t.s3;}}
+              onMouseLeave={function(e){if(!active)e.currentTarget.style.background="transparent";}}>
+              <div style={{width:10,height:10,borderRadius:"50%",background:s.color,flexShrink:0}}/>
+              <span style={{fontSize:12,color:active?t.acH:t.tx,fontWeight:active?700:500,flex:1}}>{s.name}</span>
+              {active&&<Ico name="check" size={13} color={t.ac}/>}
+            </div>;
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── TIMER CELL ───────────────────────────────────────────────────────────────
+function TCell(p){
+  var tid=p.taskId,timer=p.timer,t=p.t;
+  var active=timer.active===tid,el=timer.elapsed(tid);
+  return <div style={{display:"flex",alignItems:"center",gap:6}}>
+    <button onClick={function(e){e.stopPropagation();active?timer.pause(tid):timer.start(tid);}}
+      style={{width:28,height:28,borderRadius:"50%",border:"none",background:active?"linear-gradient(135deg,"+t.ac+","+t.acB+")":t.s3,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,boxShadow:active?"0 2px 10px "+t.ac+"55":"none",transition:"all .2s"}}>
+      {active?<span className="pulse"><Ico name="pause" size={11} color="#fff"/></span>:<Ico name="play" size={11} color={el>0?t.ac:t.tx3}/>}
+    </button>
+    <span style={{fontSize:11,fontFamily:"monospace",color:active?t.acH:el>0?t.tx2:t.tx3,minWidth:44,fontWeight:active?700:400}}>{fmtMs(el)}</span>
+  </div>;
+}
+
+// ─── INLINE INPUT ─────────────────────────────────────────────────────────────
+function InlineInput(p){
+  // p: {t, placeholder, onConfirm, onCancel, indent}
+  var [val,setVal]=useState("");
+  var t=p.t;
+  function confirm(){if(val.trim())p.onConfirm(val.trim());else p.onCancel();}
+  return <div style={{paddingLeft:p.indent||0,paddingRight:4,marginTop:3,marginBottom:3}} onClick={function(e){e.stopPropagation();}}>
+    <input autoFocus value={val} onChange={function(e){setVal(e.target.value);}
+    } onKeyDown={function(e){if(e.key==="Enter")confirm();if(e.key==="Escape")p.onCancel();}}
+      placeholder={p.placeholder||"Nome..."}
+      style={{width:"100%",background:t.s3,border:"1.5px solid "+t.ac,borderRadius:7,color:t.tx,fontSize:12,padding:"6px 10px",outline:"none",fontFamily:t.F,fontWeight:500}}/>
+    <div style={{display:"flex",gap:4,marginTop:4}}>
+      <button onClick={confirm} style={{flex:1,padding:"4px 0",borderRadius:6,border:"none",background:"linear-gradient(135deg,"+t.ac+","+t.acB+")",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:t.F}}>Crea</button>
+      <button onClick={p.onCancel} style={{flex:1,padding:"4px 0",borderRadius:6,border:"1px solid "+t.br,background:"transparent",color:t.tx3,fontSize:11,cursor:"pointer",fontFamily:t.F}}>Annulla</button>
+    </div>
+  </div>;
+}
+
+// ─── ADD BUTTON ───────────────────────────────────────────────────────────────
+function AddBtn(p){
+  var t=p.t;
+  return <button onClick={function(e){e.stopPropagation();p.onClick();}}
+    title={p.title||"Aggiungi"}
+    style={{width:18,height:18,borderRadius:5,border:"1px solid "+t.br,background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,transition:"all .14s",color:t.tx3}}
+    onMouseEnter={function(e){e.currentTarget.style.background=t.acS;e.currentTarget.style.borderColor=t.ac;e.currentTarget.style.color=t.ac;}}
+    onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=t.br;e.currentTarget.style.color=t.tx3;}}>
+    <Ico name="plus" size={11} color="currentColor"/>
+  </button>;
+}
+
+// ─── SIDEBAR ─────────────────────────────────────────────────────────────────
+function Sidebar(p){
+  var data=p.data,nav=p.nav,setNav=p.setNav,setData=p.setData,t=p.t;
+  var [oSp,setOSp]=useState({sp1:true,sp2:false,sp3:false});
+  var [oFo,setOFo]=useState({});
+  // "adding" state: null | {type:"ws"} | {type:"sp",wsId} | {type:"fo",wsId,spId} | {type:"li",wsId,spId,foId}
+  var [adding,setAdding]=useState(null);
+
+  function tSp(id){setOSp(function(x){var n=Object.assign({},x);n[id]=!n[id];return n;});}
+  function tFo(id){setOFo(function(x){var n=Object.assign({},x);n[id]=!n[id];return n;});}
+  function stopAdding(){setAdding(null);}
+
+  // ── Create handlers ──
+  function addWorkspace(name){
+    setData(function(prev){
+      var n=cloneObj(prev);
+      n.workspaces.push({id:uid(),name:name,spaces:[]});
+      return n;
+    });
+    setAdding(null);
+  }
+  function addSpace(wsId,name){
+    setData(function(prev){
+      var n=cloneObj(prev);
+      n.workspaces.forEach(function(ws){if(ws.id===wsId)ws.spaces.push({id:uid(),name:name,folders:[]});});
+      return n;
+    });
+    setAdding(null);
+  }
+  function addFolder(wsId,spId,name){
+    var newId=uid();
+    setData(function(prev){
+      var n=cloneObj(prev);
+      n.workspaces.forEach(function(ws){if(ws.id===wsId)ws.spaces.forEach(function(sp){if(sp.id===spId)sp.folders.push({id:newId,name:name,lists:[]});});});
+      return n;
+    });
+    // Auto-open new folder and navigate to it
+    setOFo(function(x){var n=Object.assign({},x);n[newId]=false;return n;});
+    setNav({view:"dash",folderId:newId,listId:null});
+    setAdding(null);
+  }
+  function addList(wsId,spId,foId,name){
+    var newId=uid();
+    var states=[{id:uid(),name:"To Do",color:"#64748b",order:0},{id:uid(),name:"In Corso",color:"#9d4edd",order:1},{id:uid(),name:"Completato",color:"#10b981",order:2}];
+    var fc={visible:{assignees:true,dueDate:true,state:true,timeMax:true,timer:true},custom:[]};
+    setData(function(prev){
+      var n=cloneObj(prev);
+      n.workspaces.forEach(function(ws){if(ws.id===wsId)ws.spaces.forEach(function(sp){if(sp.id===spId)sp.folders.forEach(function(fo){if(fo.id===foId)fo.lists.push({id:newId,name:name,states:states,tasks:[],fieldConfig:fc});});});});
+      return n;
+    });
+    setNav({view:"list",folderId:foId,listId:newId});
+    setAdding(null);
+  }
+
+  var me=data.team.filter(function(u){return u.id===data.userId;})[0];
+
+  return (
+    <div style={{width:252,background:t.sb,borderRight:"1px solid "+t.sbBr,display:"flex",flexDirection:"column",height:"100%",flexShrink:0}}>
+      {/* Brand */}
+      <div style={{padding:"20px 18px 16px",borderBottom:"1px solid "+t.sbBr}}>
+        <div style={{fontFamily:t.FS,fontWeight:800,fontSize:17,color:t.tx,display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:30,height:30,borderRadius:9,background:"linear-gradient(135deg,"+t.ac+","+t.acB+")",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 14px "+t.ac+"50"}}><Ico name="dash" size={16} color="#fff"/></div>
+          Gestionale
+        </div>
+      </div>
+      {/* Home */}
+      <div style={{padding:"10px 8px 4px"}}>
+        <SbRow icon="home" label="Home" active={nav.view==="home"&&!nav.listId&&!nav.folderId} t={t} onClick={function(){setNav({view:"home",folderId:null,listId:null});}}/>
+      </div>
+
+      {/* Tree */}
+      <div style={{flex:1,overflowY:"auto",padding:"4px 8px"}}>
+        {data.workspaces.map(function(ws){return (
+          <div key={ws.id}>
+            {/* Workspace header */}
+            <div style={{display:"flex",alignItems:"center",gap:4,padding:"8px 8px 4px"}}>
+              <span style={{flex:1,fontSize:10,fontWeight:700,color:t.acH,letterSpacing:".1em",textTransform:"uppercase",fontFamily:t.FS}}>{ws.name}</span>
+              <AddBtn t={t} title="Aggiungi space" onClick={function(){setAdding({type:"sp",wsId:ws.id});}}/>
+            </div>
+
+            {/* New space input */}
+            {adding&&adding.type==="sp"&&adding.wsId===ws.id&&(
+              <InlineInput t={t} placeholder="Nome space..." indent={8} onConfirm={function(n){addSpace(ws.id,n);}} onCancel={stopAdding}/>
+            )}
+
+            {ws.spaces.map(function(sp){return (
+              <div key={sp.id}>
+                {/* Space row */}
+                <div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 8px",borderRadius:8,cursor:"pointer",color:t.tx2,fontSize:12,fontWeight:600,transition:"background .12s"}}
+                  onMouseEnter={function(e){e.currentTarget.style.background=t.s2;}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+                  <div onClick={function(){tSp(sp.id);}} style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0}}>
+                    <div style={{transform:oSp[sp.id]?"rotate(90deg)":"rotate(0)",transition:"transform .2s",flexShrink:0}}><Ico name="cr" size={13} color={t.tx3}/></div>
+                    <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sp.name}</span>
+                    <span style={{fontSize:10,color:t.tx3,background:t.s3,padding:"1px 7px",borderRadius:99,flexShrink:0}}>{sp.folders.length}</span>
+                  </div>
+                  <AddBtn t={t} title="Aggiungi cartella" onClick={function(){setOSp(function(x){var n=Object.assign({},x);n[sp.id]=true;return n;});setAdding({type:"fo",wsId:ws.id,spId:sp.id});}}/>
+                </div>
+
+                {oSp[sp.id]&&(
+                  <div>
+                    {/* New folder input */}
+                    {adding&&adding.type==="fo"&&adding.spId===sp.id&&(
+                      <InlineInput t={t} placeholder="Nome cartella..." indent={16} onConfirm={function(n){addFolder(ws.id,sp.id,n);}} onCancel={stopAdding}/>
+                    )}
+
+                    {sp.folders.map(function(fo){
+                      var af=nav.folderId===fo.id&&!nav.listId;
+                      return (
+                        <div key={fo.id} style={{paddingLeft:8}}>
+                          {/* Folder row */}
+                          <div style={{display:"flex",alignItems:"center",gap:6,borderRadius:8,transition:"all .12s"}}
+                            onMouseEnter={function(e){if(!af)e.currentTarget.style.background=t.s2;}} onMouseLeave={function(e){if(!af)e.currentTarget.style.background="transparent";}}>
+                            <div onClick={function(){tFo(fo.id);setNav({view:"dash",folderId:fo.id,listId:null});}}
+                              style={{display:"flex",alignItems:"center",gap:7,flex:1,padding:"6px 8px",cursor:"pointer",color:af?t.tx:t.tx2,background:"transparent",minWidth:0}}>
+                              <div style={{transform:oFo[fo.id]?"rotate(90deg)":"rotate(0)",transition:"transform .2s",flexShrink:0}}><Ico name="cr" size={12} color={t.tx3}/></div>
+                              <div style={{width:7,height:7,borderRadius:2,background:af?t.ac:t.tx3,flexShrink:0}}/>
+                              <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:12,fontWeight:af?600:500}}>{fo.name}</span>
+                            </div>
+                            <div style={{paddingRight:6,flexShrink:0}}>
+                              <AddBtn t={t} title="Aggiungi lista" onClick={function(){setOFo(function(x){var n=Object.assign({},x);n[fo.id]=true;return n;});setAdding({type:"li",wsId:ws.id,spId:sp.id,foId:fo.id});}}/>
+                            </div>
+                          </div>
+
+                          {oFo[fo.id]&&(
+                            <div>
+                              {/* New list input */}
+                              {adding&&adding.type==="li"&&adding.foId===fo.id&&(
+                                <InlineInput t={t} placeholder="Nome lista..." indent={26} onConfirm={function(n){addList(ws.id,sp.id,fo.id,n);}} onCancel={stopAdding}/>
+                              )}
+                              {fo.lists.map(function(li){
+                                var al=nav.listId===li.id;
+                                return <div key={li.id} onClick={function(){setNav({view:"list",folderId:fo.id,listId:li.id});}}
+                                  style={{display:"flex",alignItems:"center",gap:7,padding:"5px 8px 5px 26px",borderRadius:8,cursor:"pointer",fontSize:11.5,color:al?t.acH:t.tx2,fontWeight:al?700:400,background:al?t.acS:"transparent",borderLeft:al?"2px solid "+t.ac:"2px solid transparent",transition:"all .12s"}}
+                                  onMouseEnter={function(e){if(!al)e.currentTarget.style.background=t.s2;}} onMouseLeave={function(e){if(!al)e.currentTarget.style.background="transparent";}}>
+                                  <Ico name="list" size={11} color={al?t.ac:t.tx3}/>{li.name}
+                                </div>;
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );})}
+          </div>
+        );})}
+
+        {/* Add workspace */}
+        <div style={{padding:"8px 4px 4px"}}>
+          {adding&&adding.type==="ws"?(
+            <InlineInput t={t} placeholder="Nome workspace..." indent={0} onConfirm={addWorkspace} onCancel={stopAdding}/>
+          ):(
+            <button onClick={function(){setAdding({type:"ws"});}}
+              style={{width:"100%",display:"flex",alignItems:"center",gap:7,padding:"7px 8px",borderRadius:8,border:"1px dashed "+t.br,background:"transparent",color:t.tx3,fontSize:12,cursor:"pointer",fontFamily:t.F,fontWeight:500,transition:"all .15s"}}
+              onMouseEnter={function(e){e.currentTarget.style.borderColor=t.ac;e.currentTarget.style.color=t.ac;e.currentTarget.style.background=t.acS;}}
+              onMouseLeave={function(e){e.currentTarget.style.borderColor=t.br;e.currentTarget.style.color=t.tx3;e.currentTarget.style.background="transparent";}}>
+              <Ico name="plus" size={13} color="currentColor"/> Nuovo workspace
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* User */}
+      {me&&<div style={{padding:"12px 16px",borderTop:"1px solid "+t.sbBr,display:"flex",alignItems:"center",gap:10}}>
+        <Av uid={me.id} team={data.team} size={30} t={t}/>
+        <div><div style={{fontSize:12,fontWeight:600,color:t.tx}}>{me.name}</div><div style={{fontSize:10,color:t.tx3,marginTop:1}}>Project Manager</div></div>
+      </div>}
+    </div>
+  );
+}
+function SbRow(p){
+  return <div onClick={p.onClick} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:500,color:p.active?p.t.tx:p.t.tx2,background:p.active?p.t.acS:"transparent",transition:"all .12s"}}
+    onMouseEnter={function(e){if(!p.active)e.currentTarget.style.background=p.t.s2;}} onMouseLeave={function(e){if(!p.active)e.currentTarget.style.background="transparent";}}>
+    <Ico name={p.icon} size={14} color={p.active?p.t.ac:p.t.tx3}/>{p.label}
+  </div>;
+}
+
+// ─── TOP BAR ─────────────────────────────────────────────────────────────────
+function TopBar(p){
+  var data=p.data,nav=p.nav,setNav=p.setNav,t=p.t,timer=p.timer,sbOpen=p.sbOpen,setSbOpen=p.setSbOpen;
+  var VIEWS=[{id:"list",icon:"list",label:"Elenco"},{id:"kanban",icon:"kanban",label:"Kanban"},{id:"cal",icon:"cal",label:"Calendario"}];
+  var fr=nav.listId?getList(data,nav.listId):null;
+  var fo=nav.folderId?getFolder(data,nav.folderId):null;
+  var crumbs=[];
+  if(nav.view==="home"&&!nav.listId&&!nav.folderId){crumbs=[{l:"Home"}];}
+  else{if(fo)crumbs.push({l:fo.folder.name});if(fr)crumbs.push({l:fr.list.name});}
+  var aFr=timer.active?getTask(data,timer.active):null;
+  return (
+    <div style={{height:56,background:t.s1,borderBottom:"1px solid "+t.br,display:"flex",alignItems:"center",padding:"0 20px",gap:12,flexShrink:0}}>
+      {/* Sidebar toggle */}
+      <button onClick={function(){setSbOpen(function(o){return !o;});}} style={{width:34,height:34,borderRadius:9,border:"1px solid "+t.br,background:t.s2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,transition:"border-color .15s"}}
+        onMouseEnter={function(e){e.currentTarget.style.borderColor=t.ac;}} onMouseLeave={function(e){e.currentTarget.style.borderColor=t.br;}}>
+        <Ico name={sbOpen?"chl":"chr"} size={17} color={t.tx2}/>
+      </button>
+      {/* Breadcrumb */}
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        {crumbs.map(function(b,i){return <span key={i} style={{display:"flex",alignItems:"center",gap:6}}>{i>0&&<Ico name="cr" size={12} color={t.tx3}/>}<span style={{fontSize:14,fontWeight:i===crumbs.length-1?700:400,color:i===crumbs.length-1?t.tx:t.tx2}}>{b.l}</span></span>;})}
+      </div>
+      {/* Active timer */}
+      {timer.active&&aFr&&<div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 14px",background:t.acS,borderRadius:999,border:"1px solid "+t.ac+"50"}}>
+        <span className="pulse" style={{width:7,height:7,borderRadius:"50%",background:t.ac,display:"inline-block",flexShrink:0}}/>
+        <span style={{color:t.acH,fontWeight:600,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:12}}>{aFr.task.title}</span>
+        <span style={{color:t.ac,fontFamily:"monospace",fontWeight:700,fontSize:12}}>{fmtMs(timer.elapsed(timer.active))}</span>
+        <button onClick={function(){timer.pause(timer.active);}} style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}><Ico name="pause" size={13} color={t.ac}/></button>
+      </div>}
+      {/* Right */}
+      <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
+        <Btn sm v="outline" t={t} onClick={function(){window.location.href='/bite-erp-v3.html';}} style={{marginRight:8}}><Ico name="chl" size={13}/> ERP</Btn>
+        {nav.listId&&<div style={{display:"flex",background:t.s2,borderRadius:10,padding:3,border:"1px solid "+t.br,gap:2}}>
+          {VIEWS.map(function(v){return <button key={v.id} onClick={function(){setNav(function(n){return Object.assign({},n,{view:v.id});});}}
+            style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:7,fontSize:12,fontFamily:t.F,cursor:"pointer",border:"none",background:nav.view===v.id?"linear-gradient(135deg,"+t.ac+","+t.acB+")":"transparent",color:nav.view===v.id?"#fff":t.tx2,fontWeight:nav.view===v.id?700:500,transition:"all .15s",boxShadow:nav.view===v.id?"0 2px 8px "+t.ac+"40":"none"}}>
+            <Ico name={v.icon} size={12} color={nav.view===v.id?"#fff":t.tx3}/>{v.label}
+          </button>;})}
+        </div>}
+        {nav.listId&&<Btn sm v="outline" t={t} onClick={p.openStates}><Ico name="gear" size={13}/> Stati</Btn>}
+        {nav.listId&&<Btn sm v="primary" t={t} onClick={function(){p.addTask(null);}}><Ico name="plus" size={14}/> Nuova Task</Btn>}
+        <button onClick={p.toggleTheme} style={{width:36,height:36,borderRadius:9,border:"1px solid "+t.br,background:t.s2,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"border-color .18s"}}
+          onMouseEnter={function(e){e.currentTarget.style.borderColor=t.ac;}} onMouseLeave={function(e){e.currentTarget.style.borderColor=t.br;}}>
+          <Ico name={p.isDark?"sun":"moon"} size={16} color={t.ac}/>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── HOME ─────────────────────────────────────────────────────────────────────
+function HomeView(p){
+  var data=p.data,t=p.t,openTask=p.openTask;
+  var me=data.team.filter(function(u){return u.id===data.userId;})[0];
+  var all=myTasks(data,data.userId);
+  var todT=all.filter(function(x){return isToday(x.task.due);});
+  var ovT=all.filter(function(x){return isPast(x.task.due);}).sort(function(a,b){return (a.task.due||"").localeCompare(b.task.due||"");});
+  var upT=all.filter(function(x){return x.task.due&&x.task.due>TODAY;}).sort(function(a,b){return a.task.due.localeCompare(b.task.due);});
+  var ndT=all.filter(function(x){return !x.task.due;});
+  return <div style={{flex:1,overflowY:"auto",padding:"32px 36px"}}>
+    <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:28}}>
+      {me&&<Av uid={me.id} team={data.team} size={44} t={t}/>}
+      <div>
+        <h1 style={{fontFamily:t.FS,fontSize:24,fontWeight:800,color:t.tx,letterSpacing:"-.5px"}}>Ciao, {me?me.name.split(" ")[0]:"..."} 👋</h1>
+        <p style={{fontSize:13,color:t.tx2,marginTop:3}}>{new Date().toLocaleDateString("it-IT",{weekday:"long",day:"numeric",month:"long"})}</p>
+      </div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:32}}>
+      <HCard label="Oggi" n={todT.length} c={t.gold} bg={t.goldS} t={t}/>
+      <HCard label="Scadute" n={ovT.length} c={t.red} bg={t.redS} t={t}/>
+      <HCard label="Prossime" n={upT.length} c={t.blue} bg={t.blueS} t={t}/>
+      <HCard label="Senza data" n={ndT.length} c={t.tx3} bg={t.s2} t={t}/>
+    </div>
+    <TSec title="📌 OGGI" items={todT} data={data} openTask={openTask} col={t.gold} empty="Nessuna task in scadenza oggi" t={t}/>
+    <TSec title="⚠️ SCADUTE" items={ovT} data={data} openTask={openTask} col={t.red} empty="Nessuna task scaduta" t={t}/>
+    <TSec title="🔜 PROSSIME" items={upT} data={data} openTask={openTask} col={t.blue} empty="Nessuna task imminente" t={t}/>
+    <TSec title="◌ SENZA DATA" items={ndT} data={data} openTask={openTask} col={t.tx3} empty="Nessuna task senza data" t={t}/>
+  </div>;
+}
+function HCard(p){return <div style={{background:p.bg||p.t.s1,border:"1px solid "+p.t.br,borderRadius:14,padding:"18px 20px"}}><div style={{fontSize:11,fontWeight:600,color:p.t.tx2,marginBottom:10,textTransform:"uppercase",letterSpacing:".05em"}}>{p.label}</div><span style={{fontSize:30,fontWeight:800,fontFamily:p.t.FS,color:p.c}}>{p.n}</span></div>;}
+function TSec(p){
+  var [open,setOpen]=useState(true),t=p.t;
+  return <div style={{marginBottom:22}}>
+    <div onClick={function(){setOpen(function(o){return !o;});}} style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,cursor:"pointer"}}>
+      <div style={{transform:open?"rotate(90deg)":"",transition:"transform .2s"}}><Ico name="cr" size={13} color={p.col}/></div>
+      <span style={{fontSize:11,fontWeight:700,letterSpacing:".08em",color:p.col,fontFamily:t.FS}}>{p.title}</span>
+      <span style={{fontSize:11,color:t.tx3,background:t.s3,padding:"2px 9px",borderRadius:999,fontWeight:600}}>{p.items.length}</span>
+    </div>
+    {open&&<div className="fu" style={{display:"flex",flexDirection:"column",gap:3}}>
+      {p.items.length===0?<div style={{fontSize:13,color:t.tx3,padding:"12px 16px",background:t.s1,borderRadius:10,border:"1px solid "+t.br}}>{p.empty}</div>
+      :p.items.map(function(x){
+        var s=stOf(x.list,x.task);
+        return <Row key={x.task.id} onClick={function(){p.openTask(x.task.id);}} t={t}>
+          <div style={{width:8,height:8,borderRadius:"50%",background:s?s.color:"#888",flexShrink:0}}/>
+          <span style={{flex:1,fontSize:13,color:t.tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500}}>{x.task.title}</span>
+          <span style={{fontSize:11,color:t.tx3,whiteSpace:"nowrap"}}>{x.folder.name} · {x.list.name}</span>
+          <DChip date={x.task.due} t={t}/>
+          <Pill state={s} sm/>
+        </Row>;
+      })}
+    </div>}
+  </div>;
+}
+
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
+function DashView(p){
+  var data=p.data,nav=p.nav,t=p.t,openTask=p.openTask;
+  var fr=getFolder(data,nav.folderId);if(!fr)return null;
+  var fo=fr.folder;
+  var allT=fo.lists.reduce(function(r,l){return r.concat(l.tasks.map(function(tk){return{task:tk,list:l};}));},[]);
+  var ov=allT.filter(function(x){return isPast(x.task.due);});
+  var uids=[];allT.forEach(function(x){x.task.assignees.forEach(function(u){if(uids.indexOf(u)<0)uids.push(u);});});
+  var sc={};fo.lists.forEach(function(l){l.tasks.forEach(function(tk){var s=stOf(l,tk);if(s){sc[s.name]=(sc[s.name]||0)+1;sc["_c_"+s.name]=s.color;}});});
+  return <div style={{flex:1,overflowY:"auto",padding:"32px 36px"}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24}}>
+      <div style={{width:38,height:38,borderRadius:11,background:"linear-gradient(135deg,"+t.ac+","+t.acB+")",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico name="dash" size={19} color="#fff"/></div>
+      <div><h1 style={{fontFamily:t.FS,fontSize:20,fontWeight:700,color:t.tx}}>{fo.name}</h1><p style={{fontSize:12,color:t.tx2}}>Overview cliente</p></div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24}}>
+      <DCard label="Task totali" v={allT.length} c={t.tx} t={t}/>
+      <DCard label="Oggi" v={allT.filter(function(x){return isToday(x.task.due);}).length} c={t.gold} t={t}/>
+      <DCard label="Scadute" v={ov.length} c={t.red} t={t}/>
+      <DCard label="In scadenza" v={allT.filter(function(x){return isSoon(x.task.due);}).length} c={t.blue} t={t}/>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18,marginBottom:22}}>
+      <Panel title="Team" t={t}>
+        {uids.map(function(uid){
+          var u=data.team.filter(function(x){return x.id===uid;})[0];
+          var ut=allT.filter(function(x){return x.task.assignees.indexOf(uid)>=0;});
+          var sc2=ut.filter(function(x){return isPast(x.task.due);}).length;
+          return <div key={uid} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid "+t.br+"33"}}>
+            <Av uid={uid} team={data.team} size={28} t={t}/>
+            <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600,color:t.tx}}>{u?u.name:uid}</div><div style={{fontSize:11,color:t.tx3}}>{ut.length} task</div></div>
+            {sc2>0&&<span style={{fontSize:11,color:t.red,fontWeight:700}}>{sc2} scad.</span>}
+          </div>;
+        })}
+      </Panel>
+      <Panel title="Stato Task" t={t}>
+        {Object.keys(sc).filter(function(k){return k.indexOf("_c_")<0;}).map(function(name){
+          var cnt=sc[name],tot=allT.length||1,pct=Math.round(cnt/tot*100),col=sc["_c_"+name]||t.tx2;
+          return <div key={name} style={{marginBottom:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}><Pill state={{name:name,color:col}} sm/><span style={{fontSize:12,color:t.tx2,fontWeight:700}}>{cnt}</span></div>
+            <div style={{height:6,background:t.s3,borderRadius:4,overflow:"hidden"}}><div style={{height:"100%",width:pct+"%",background:"linear-gradient(90deg,"+col+","+col+"88)",borderRadius:4}}/></div>
+          </div>;
+        })}
+      </Panel>
+    </div>
+    {ov.length>0&&<Panel title="⚠️ Task Scadute" t={t}>
+      {ov.sort(function(a,b){return (a.task.due||"").localeCompare(b.task.due||"");}).map(function(x){
+        return <div key={x.task.id} onClick={function(){openTask(x.task.id);}} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:t.redS,borderRadius:9,cursor:"pointer",border:"1px solid "+t.red+"30",marginBottom:4}} onMouseEnter={function(e){e.currentTarget.style.background=t.red+"22";}} onMouseLeave={function(e){e.currentTarget.style.background=t.redS;}}>
+          <span style={{fontSize:13,flex:1,color:t.tx,fontWeight:500}}>{x.task.title}</span>
+          <DChip date={x.task.due} t={t}/>
+          <Avs ids={x.task.assignees} team={data.team} size={20} t={t}/>
+        </div>;
+      })}
+    </Panel>}
+  </div>;
+}
+function DCard(p){return <div style={{background:p.t.s1,border:"1px solid "+p.t.br,borderRadius:14,padding:"18px 20px"}}><div style={{fontSize:10,color:p.t.tx2,fontWeight:600,marginBottom:8,textTransform:"uppercase",letterSpacing:".05em"}}>{p.label}</div><span style={{fontSize:28,fontWeight:800,fontFamily:p.t.FS,color:p.c}}>{p.v}</span></div>;}
+function Panel(p){return <div style={{background:p.t.s1,border:"1px solid "+p.t.br,borderRadius:14,padding:20}}><div style={{fontSize:11,fontWeight:700,color:p.t.tx2,textTransform:"uppercase",letterSpacing:".07em",marginBottom:14,fontFamily:p.t.FS}}>{p.title}</div>{p.children}</div>;}
+
+// ─── FIELD SYSTEM ─────────────────────────────────────────────────────────────
+var STD_FIELDS = [
+  {id:"assignees", label:"Assegnati",  w:"110px"},
+  {id:"dueDate",   label:"Scadenza",   w:"96px"},
+  {id:"state",     label:"Stato",      w:"130px"},
+  {id:"timeMax",   label:"Tempo Max",  w:"78px"},
+  {id:"timer",     label:"Timer",      w:"148px"},
+];
+var CF_WIDTHS = {text:"120px", number:"80px", progress:"110px"};
+
+function defaultFC(){
+  return {visible:{assignees:true,dueDate:true,state:false,timeMax:true,timer:true},custom:[]};
+}
+function getFC(li){return li.fieldConfig||defaultFC();}
+
+function buildGrid(fc){
+  var cols=["28px","minmax(180px,1fr)"];
+  STD_FIELDS.forEach(function(f){if(fc.visible[f.id])cols.push(f.w);});
+  (fc.custom||[]).forEach(function(cf){cols.push(CF_WIDTHS[cf.type]||"100px");});
+  cols.push("20px");
+  return cols.join(" ");
+}
+function calcMinWidth(fc){
+  var w=28+180+20+56; // dot + title_min + arrow + side padding
+  STD_FIELDS.forEach(function(f){if(fc.visible[f.id])w+=parseInt(f.w)+10;});
+  (fc.custom||[]).forEach(function(cf){w+=parseInt(CF_WIDTHS[cf.type]||"100")+10;});
+  return w;
+}
+function buildHeader(fc){
+  var h=["","Titolo"];
+  STD_FIELDS.forEach(function(f){if(fc.visible[f.id])h.push(f.label);});
+  (fc.custom||[]).forEach(function(cf){h.push(cf.name);});
+  h.push("");
+  return h;
+}
+
+// subtask progress
+function calcProgress(task){
+  var all=0,done=0;
+  function walk(subs){subs.forEach(function(s){all++;if(s.stateId&&s.subtasks){var st=s.stateId;if(st)done++;walk(s.subtasks);}});}
+  if(!task.subtasks||!task.subtasks.length)return null;
+  task.subtasks.forEach(function(s){all++;done+=(s.stateId&&s.subtasks!==undefined)?1:0;walk(s.subtasks||[]);});
+  return all===0?0:Math.round(done/all*100);
+}
+function calcSubProgress(task,list){
+  if(!task.subtasks||!task.subtasks.length)return null;
+  var all=task.subtasks.length;
+  var doneState=list.states.filter(function(s){return s.name==="Completato";})[0];
+  if(!doneState)return 0;
+  var done=task.subtasks.filter(function(s){return s.stateId===doneState.id;}).length;
+  return Math.round(done/all*100);
+}
+
+// ─── FIELDS PANEL ─────────────────────────────────────────────────────────────
+function FieldsPanel(p){
+  var li=p.list,setData=p.setData,t=p.t,onClose=p.onClose;
+  var fc=getFC(li);
+  var [newName,setNewName]=useState("");
+  var [newType,setNewType]=useState("text");
+
+  function toggleStd(fid){
+    setData(function(prev){return setList(prev,li.id,function(l){
+      if(!l.fieldConfig)l.fieldConfig=defaultFC();
+      l.fieldConfig.visible[fid]=!l.fieldConfig.visible[fid];
+    });});
+  }
+  function addCustom(){
+    if(!newName.trim())return;
+    setData(function(prev){return setList(prev,li.id,function(l){
+      if(!l.fieldConfig)l.fieldConfig=defaultFC();
+      l.fieldConfig.custom.push({id:uid(),name:newName.trim(),type:newType});
+    });});
+    setNewName("");
+  }
+  function removeCustom(cfId){
+    setData(function(prev){return setList(prev,li.id,function(l){
+      if(!l.fieldConfig)l.fieldConfig=defaultFC();
+      l.fieldConfig.custom=l.fieldConfig.custom.filter(function(c){return c.id!==cfId;});
+    });});
+  }
+
+  var TYPES=[{id:"text",label:"Testo",ico:"✏️"},{id:"number",label:"Numero",ico:"#"},{id:"progress",label:"Avanzamento",ico:"▰"}];
+
+  return <div className="pi" style={{position:"absolute",top:"calc(100% + 8px)",left:0,width:320,background:t.s1,border:"1px solid "+t.br,borderRadius:14,boxShadow:"0 16px 48px rgba(0,0,0,.4),0 0 0 1px "+t.br,zIndex:500,overflow:"hidden"}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",padding:"12px 16px",borderBottom:"1px solid "+t.br,background:t.s2}}>
+      <span style={{fontSize:13,fontWeight:700,color:t.tx,fontFamily:t.FS}}>Campi visibili</span>
+      <button onClick={onClose} style={{marginLeft:"auto",background:"none",border:"none",cursor:"pointer",color:t.tx3,padding:4,borderRadius:6}} onMouseEnter={function(e){e.currentTarget.style.color=t.tx;}} onMouseLeave={function(e){e.currentTarget.style.color=t.tx3;}}><Ico name="x" size={14} color="currentColor"/></button>
+    </div>
+
+    <div style={{padding:"12px 16px",maxHeight:420,overflowY:"auto"}}>
+      {/* Standard fields */}
+      <div style={{fontSize:10,fontWeight:700,color:t.tx3,letterSpacing:".08em",textTransform:"uppercase",fontFamily:t.FS,marginBottom:8}}>Campi standard</div>
+      <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:16}}>
+        {STD_FIELDS.map(function(f){
+          var on=fc.visible[f.id];
+          return <div key={f.id} onClick={function(){toggleStd(f.id);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:9,cursor:"pointer",background:on?t.acS:t.s2,border:"1px solid "+(on?t.ac+"44":t.br),transition:"all .14s"}}
+            onMouseEnter={function(e){e.currentTarget.style.background=on?t.acS:t.s3;}}
+            onMouseLeave={function(e){e.currentTarget.style.background=on?t.acS:t.s2;}}>
+            <div style={{width:18,height:18,borderRadius:5,border:"2px solid "+(on?t.ac:t.br),background:on?"linear-gradient(135deg,"+t.ac+","+t.acB+")":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .14s"}}>
+              {on&&<Ico name="check" size={11} color="#fff"/>}
+            </div>
+            <span style={{fontSize:13,color:on?t.acH:t.tx,fontWeight:on?600:400,flex:1}}>{f.label}</span>
+          </div>;
+        })}
+      </div>
+
+      {/* Custom fields */}
+      <div style={{fontSize:10,fontWeight:700,color:t.tx3,letterSpacing:".08em",textTransform:"uppercase",fontFamily:t.FS,marginBottom:8}}>Campi personalizzati</div>
+      {fc.custom.length===0&&<div style={{fontSize:12,color:t.tx3,padding:"8px 12px",marginBottom:8}}>Nessun campo personalizzato</div>}
+      <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:12}}>
+        {fc.custom.map(function(cf){
+          var typeInfo=TYPES.filter(function(x){return x.id===cf.type;})[0]||TYPES[0];
+          return <div key={cf.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:9,background:t.s2,border:"1px solid "+t.br}}>
+            <span style={{fontSize:14}}>{typeInfo.ico}</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:13,color:t.tx,fontWeight:500}}>{cf.name}</div>
+              <div style={{fontSize:11,color:t.tx3}}>{typeInfo.label}</div>
+            </div>
+            <button onClick={function(){removeCustom(cf.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:4,borderRadius:6,color:t.tx3,transition:"color .12s"}} onMouseEnter={function(e){e.currentTarget.style.color=t.red;}} onMouseLeave={function(e){e.currentTarget.style.color=t.tx3;}}><Ico name="trash" size={13} color="currentColor"/></button>
+          </div>;
+        })}
+      </div>
+
+      {/* Add custom field */}
+      <div style={{borderTop:"1px solid "+t.br,paddingTop:12}}>
+        <div style={{fontSize:11,fontWeight:600,color:t.tx2,marginBottom:8}}>Aggiungi campo</div>
+        <input value={newName} onChange={function(e){setNewName(e.target.value);}} onKeyDown={function(e){if(e.key==="Enter")addCustom();}} placeholder="Nome campo..." style={{width:"100%",background:t.s2,border:"1px solid "+t.br,borderRadius:8,color:t.tx,fontSize:12,padding:"7px 10px",outline:"none",fontFamily:t.F,marginBottom:8,transition:"border-color .14s"}} onFocus={function(e){e.target.style.borderColor=t.ac;}} onBlur={function(e){e.target.style.borderColor=t.br;}}/>
+        <div style={{display:"flex",gap:5,marginBottom:8}}>
+          {TYPES.map(function(tp){
+            var sel=newType===tp.id;
+            return <button key={tp.id} onClick={function(){setNewType(tp.id);}} style={{flex:1,padding:"6px 4px",borderRadius:8,border:"1.5px solid "+(sel?t.ac:t.br),background:sel?t.acS:"transparent",color:sel?t.acH:t.tx2,fontSize:11,fontWeight:sel?700:500,cursor:"pointer",fontFamily:t.F,display:"flex",alignItems:"center",justifyContent:"center",gap:4,transition:"all .14s"}}>
+              <span>{tp.ico}</span>{tp.label}
+            </button>;
+          })}
+        </div>
+        <button onClick={addCustom} style={{width:"100%",padding:"8px",borderRadius:8,border:"none",background:"linear-gradient(135deg,"+t.ac+","+t.acB+")",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:t.F,opacity:newName.trim()?1:.5,boxShadow:"0 2px 8px "+t.ac+"40"}}>
+          Aggiungi campo
+        </button>
+      </div>
+    </div>
+  </div>;
+}
+
+// ─── CUSTOM CELL (inline editable) ────────────────────────────────────────────
+function CustomCell(p){
+  var task=p.task,cf=p.cf,setData=p.setData,t=p.t;
+  var [editing,setEditing]=useState(false);
+  var vals=task.customValues||{};
+  var val=vals[cf.id]!==undefined?vals[cf.id]:"";
+
+  function save(v){
+    setData(function(prev){return setTask(prev,task.id,function(tk){
+      if(!tk.customValues)tk.customValues={};
+      tk.customValues[cf.id]=v;
+    });});
+    setEditing(false);
+  }
+
+  if(cf.type==="progress"){
+    var pct=calcSubProgress(task,p.list);
+    if(pct===null)return <span style={{color:p.t.tx3,fontSize:12}}>—</span>;
+    return <div style={{display:"flex",alignItems:"center",gap:6}} onClick={function(e){e.stopPropagation();}}>
+      <div style={{flex:1,height:6,background:t.s3,borderRadius:4,overflow:"hidden",minWidth:50}}>
+        <div style={{height:"100%",width:pct+"%",background:"linear-gradient(90deg,"+t.ac+","+t.acH+")",borderRadius:4,transition:"width .3s"}}/>
+      </div>
+      <span style={{fontSize:11,color:t.tx2,fontWeight:600,flexShrink:0}}>{pct}%</span>
+    </div>;
+  }
+
+  if(editing){
+    return <div onClick={function(e){e.stopPropagation();}}>
+      <input autoFocus type={cf.type==="number"?"number":"text"} defaultValue={val}
+        onBlur={function(e){save(e.target.value);}}
+        onKeyDown={function(e){if(e.key==="Enter")save(e.target.value);if(e.key==="Escape")setEditing(false);}}
+        style={{width:"100%",background:t.s3,border:"1.5px solid "+t.ac,borderRadius:6,color:t.tx,fontSize:12,padding:"4px 8px",outline:"none",fontFamily:t.F}}/></div>;
+  }
+
+  return <div onClick={function(e){e.stopPropagation();setEditing(true);}}
+    style={{fontSize:12,color:val!==undefined&&val!==""?t.tx:t.tx3,cursor:"text",padding:"3px 6px",borderRadius:6,border:"1px solid transparent",transition:"border-color .14s",minHeight:24,display:"flex",alignItems:"center"}}
+    onMouseEnter={function(e){e.currentTarget.style.borderColor=t.br;e.currentTarget.style.background=t.s2;}}
+    onMouseLeave={function(e){e.currentTarget.style.borderColor="transparent";e.currentTarget.style.background="transparent";}}>
+    {val!==undefined&&val!==""?String(val):<span style={{color:t.tx3}}>—</span>}
+  </div>;
+}
+
+// ─── LIST VIEW ────────────────────────────────────────────────────────────────
+function ListView(p){
+  var data=p.data,nav=p.nav,setData=p.setData,t=p.t,openTask=p.openTask,addTask=p.addTask,timer=p.timer;
+  var [showSub,setShowSub]=useState(false);
+  var [showFields,setShowFields]=useState(false);
+  var fr=getList(data,nav.listId);if(!fr)return null;
+  var li=fr.list,sorted=li.states.slice().sort(function(a,b){return a.order-b.order;});
+  var fc=getFC(li);
+  var GRD=buildGrid(fc);
+  var HDR=buildHeader(fc);
+
+  var MW=calcMinWidth(fc)+"px";
+
+  return <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+    {/* Toolbar - fixed, no scroll */}
+    <div style={{padding:"18px 28px 0",flexShrink:0}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,padding:"10px 16px",background:t.s1,borderRadius:12,border:"1px solid "+t.br,position:"relative"}}>
+        <button onClick={function(){setShowSub(function(s){return !s;});}}
+          style={{display:"flex",alignItems:"center",gap:7,padding:"6px 15px",borderRadius:8,border:"1.5px solid "+(showSub?t.ac:t.br),background:showSub?"linear-gradient(135deg,"+t.ac+","+t.acB+")":"transparent",color:showSub?"#fff":t.tx2,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:t.F,transition:"all .18s",boxShadow:showSub?"0 2px 10px "+t.ac+"40":"none"}}>
+          <Ico name="sub" size={13} color={showSub?"#fff":t.tx3}/>Sottotask{showSub?" · ON":""}
+        </button>
+
+        {/* Fields button */}
+        <div style={{position:"relative"}}>
+          <button onClick={function(){setShowFields(function(s){return !s;});}}
+            style={{display:"flex",alignItems:"center",gap:7,padding:"6px 13px",borderRadius:8,border:"1.5px solid "+(showFields?t.ac:t.br),background:showFields?t.acS:"transparent",color:showFields?t.acH:t.tx2,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:t.F,transition:"all .18s"}}>
+            <Ico name="list" size={13} color={showFields?t.ac:t.tx3}/>Campi
+            {fc.custom.length>0&&<span style={{background:t.ac,color:"#fff",borderRadius:999,fontSize:10,padding:"1px 6px",fontWeight:800}}>{fc.custom.length}</span>}
+          </button>
+          {showFields&&<FieldsPanel list={li} setData={setData} t={t} onClose={function(){setShowFields(false);}}/>}
+        </div>
+
+        <div style={{width:1,height:20,background:t.br}}/>
+        <div style={{marginLeft:"auto",display:"flex",gap:6}}>
+          {sorted.map(function(s){var cnt=li.tasks.filter(function(tk){return tk.stateId===s.id;}).length;return <div key={s.id} style={{display:"flex",alignItems:"center",gap:5,padding:"3px 11px",borderRadius:999,background:s.color+"18",border:"1.5px solid "+s.color+"44",fontSize:11,color:s.color,fontWeight:700}}><div style={{width:5,height:5,borderRadius:"50%",background:s.color}}/>{s.name}<span style={{opacity:.7}}>({cnt})</span></div>;})}
+        </div>
+      </div>
+    </div>
+
+    {/* Scrollable content area - both axes */}
+    <div style={{flex:1,overflowY:"auto",overflowX:"auto",padding:"0 28px 28px"}}>
+      <div style={{minWidth:MW}}>
+        {sorted.map(function(st){
+          var tasks=li.tasks.filter(function(tk){return tk.stateId===st.id;});
+          return <div key={st.id} style={{marginBottom:28}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+              <div style={{width:10,height:10,borderRadius:"50%",background:st.color,boxShadow:"0 0 8px "+st.color+"70"}}/>
+              <span style={{fontSize:12,fontWeight:700,color:st.color,fontFamily:t.FS,textTransform:"uppercase",letterSpacing:".07em"}}>{st.name}</span>
+              <span style={{fontSize:11,color:st.color,background:st.color+"18",padding:"2px 9px",borderRadius:999,fontWeight:700}}>{tasks.length}</span>
+              <Btn sm t={t} onClick={function(){addTask(st.id);}} style={{marginLeft:"auto"}}><Ico name="plus" size={12}/> Aggiungi</Btn>
+            </div>
+            {/* Header row */}
+            <div style={{display:"grid",gridTemplateColumns:GRD,gap:10,padding:"5px 14px",fontSize:10,color:t.tx3,fontWeight:700,letterSpacing:".07em",textTransform:"uppercase",borderBottom:"1px solid "+t.br,marginBottom:5}}>
+              {HDR.map(function(h,i){return <span key={i}>{h}</span>;})}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:3}}>
+              {tasks.map(function(task){return <div key={task.id}>
+                <TRow task={task} list={li} data={data} setData={setData} openTask={openTask} timer={timer} t={t} fc={fc} grd={GRD}/>
+                {showSub&&task.subtasks&&task.subtasks.length>0&&<div style={{border:"1px solid "+t.br,borderTop:"none",borderRadius:"0 0 10px 10px",overflow:"hidden",background:t.s2}}>
+                  <SRows subs={task.subtasks} list={li} depth={0} t={t}/>
+                </div>}
+              </div>;})}
+              {tasks.length===0&&<div style={{fontSize:12,color:t.tx3,padding:"14px",textAlign:"center",border:"1px dashed "+t.br,borderRadius:10}}>Nessuna task</div>}
+            </div>
+          </div>;
+        })}
+      </div>
+    </div>
+  </div>;
+}
+
+function TRow(p){
+  var task=p.task,li=p.list,t=p.t,fc=p.fc,grd=p.grd;
+  var st=stOf(li,task),hasSub=task.subtasks&&task.subtasks.length>0;
+  return <div onClick={function(){p.openTask(task.id);}}
+    style={{display:"grid",gridTemplateColumns:grd,gap:10,alignItems:"center",padding:"10px 14px",background:t.s1,borderRadius:10,cursor:"pointer",border:"1px solid "+t.br,transition:"all .14s"}}
+    onMouseEnter={function(e){e.currentTarget.style.borderColor=t.ac+"66";e.currentTarget.style.background=t.s2;}}
+    onMouseLeave={function(e){e.currentTarget.style.borderColor=t.br;e.currentTarget.style.background=t.s1;}}>
+    {/* Dot state changer */}
+    <StDot task={task} list={li} setData={p.setData} t={t}/>
+
+    {/* Title – always visible */}
+    <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
+      <span style={{fontSize:13,color:t.tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600,letterSpacing:"-.01em"}}>{task.title}</span>
+      {hasSub&&<span style={{fontSize:10,color:t.tx3,background:t.s3,padding:"2px 7px",borderRadius:999,flexShrink:0,fontWeight:700}}>{task.subtasks.length}</span>}
+    </div>
+
+    {/* Standard fields - conditionally rendered */}
+    {fc.visible.assignees&&<Avs ids={task.assignees} team={p.data.team} size={22} t={t}/>}
+    {fc.visible.dueDate&&<DChip date={task.due} t={t}/>}
+    {fc.visible.state&&<Pill state={st} sm/>}
+    {fc.visible.timeMax&&(task.time>0?<span style={{fontSize:12,color:t.tx2,display:"flex",alignItems:"center",gap:4}}><Ico name="clock" size={11} color={t.tx3}/>{task.time}h</span>:<span style={{color:t.tx3}}>—</span>)}
+    {fc.visible.timer&&<div onClick={function(e){e.stopPropagation();}}><TCell taskId={task.id} timer={p.timer} t={t}/></div>}
+
+    {/* Custom fields */}
+    {(fc.custom||[]).map(function(cf){
+      return <div key={cf.id} onClick={function(e){e.stopPropagation();}}>
+        <CustomCell task={task} cf={cf} list={li} setData={p.setData} t={t}/>
+      </div>;
+    })}
+
+    <Ico name="cr" size={13} color={t.tx3}/>
+  </div>;
+}
+
+function SRows(p){
+  var subs=p.subs,li=p.list,depth=p.depth||0,t=p.t;
+  if(!subs||!subs.length)return null;
+  return <div>{subs.map(function(s){
+    var state=li.states.filter(function(x){return x.id===s.stateId;})[0]||li.states[0];
+    var done=state&&state.name==="Completato";
+    return <div key={s.id}>
+      <div style={{display:"flex",alignItems:"center",gap:9,padding:"7px 14px 7px "+(14+depth*20)+"px",borderBottom:"1px solid "+t.br+"25"}}>
+        <div style={{width:5,height:5,borderRadius:"50%",background:state?state.color:"#888",flexShrink:0}}/>
+        <span style={{flex:1,fontSize:12,color:done?t.tx3:t.tx,textDecoration:done?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{depth>0&&<span style={{color:t.tx3,marginRight:4}}>{"└─ "}</span>}{s.title}</span>
+        <Pill state={state} sm/>
+      </div>
+      <SRows subs={s.subtasks} list={li} depth={depth+1} t={t}/>
+    </div>;
+  })}</div>;
+}
+
+// ─── KANBAN ───────────────────────────────────────────────────────────────────
+function KanbanView(p){
+  var data=p.data,nav=p.nav,setData=p.setData,t=p.t,openTask=p.openTask,addTask=p.addTask;
+  var fr=getList(data,nav.listId);if(!fr)return null;
+  var li=fr.list,sorted=li.states.slice().sort(function(a,b){return a.order-b.order;});
+  return <div style={{flex:1,display:"flex",overflowX:"auto",overflowY:"hidden",padding:"22px 28px",gap:16,alignItems:"flex-start"}}>
+    {sorted.map(function(st){
+      var tasks=li.tasks.filter(function(tk){return tk.stateId===st.id;});
+      return <div key={st.id} style={{width:285,flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:7,padding:"10px 14px",background:st.color+"14",borderRadius:12,border:"1px solid "+st.color+"40",marginBottom:10}}>
+          <div style={{width:9,height:9,borderRadius:"50%",background:st.color,boxShadow:"0 0 8px "+st.color+"80"}}/>
+          <span style={{fontSize:11,fontWeight:700,color:st.color,fontFamily:t.FS,textTransform:"uppercase",letterSpacing:".06em",flex:1}}>{st.name}</span>
+          <span style={{fontSize:11,color:st.color,background:st.color+"20",padding:"2px 8px",borderRadius:999,fontWeight:700}}>{tasks.length}</span>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {tasks.map(function(task){return <KCard key={task.id} task={task} list={li} data={data} setData={setData} openTask={openTask} allStates={sorted} t={t}/>;})}
+        </div>
+        <button onClick={function(){addTask(st.id);}} style={{width:"100%",marginTop:10,padding:"10px",background:"transparent",border:"1px dashed "+t.br,borderRadius:10,color:t.tx3,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontFamily:t.F,fontWeight:600,transition:"all .15s"}}
+          onMouseEnter={function(e){e.currentTarget.style.borderColor=t.ac;e.currentTarget.style.color=t.ac;e.currentTarget.style.background=t.acS;}}
+          onMouseLeave={function(e){e.currentTarget.style.borderColor=t.br;e.currentTarget.style.color=t.tx3;e.currentTarget.style.background="transparent";}}>
+          <Ico name="plus" size={13}/> Aggiungi task
+        </button>
+      </div>;
+    })}
+  </div>;
+}
+function KCard(p){
+  var task=p.task,li=p.list,t=p.t,st=stOf(li,task),[showMove,setShowMove]=useState(false);
+  return <div style={{background:t.s1,border:"1px solid "+t.br,borderRadius:12,padding:"14px 16px",transition:"all .15s"}}
+    onMouseEnter={function(e){e.currentTarget.style.borderColor=t.ac+"55";e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 20px rgba(0,0,0,.2)";}}
+    onMouseLeave={function(e){e.currentTarget.style.borderColor=t.br;e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="none";}}>
+    <div onClick={function(){p.openTask(task.id);}} style={{cursor:"pointer"}}>
+      <div style={{fontSize:13,fontWeight:600,color:t.tx,marginBottom:10,lineHeight:1.45}}>{task.title}</div>
+      {task.desc&&<div style={{fontSize:11,color:t.tx3,marginBottom:10,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",lineHeight:1.5}}>{task.desc}</div>}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+        <Avs ids={task.assignees} team={p.data.team} size={22} t={t}/>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>{task.time>0&&<span style={{fontSize:11,color:t.tx3}}>{task.time}h</span>}<DChip date={task.due} t={t}/></div>
+      </div>
+      <Pill state={st} sm/>
+    </div>
+    <div style={{position:"relative",marginTop:12}}>
+      <button onClick={function(){setShowMove(function(o){return !o;});}} style={{width:"100%",padding:"6px",background:t.s2,borderRadius:8,border:"1px solid "+t.br,color:t.tx3,fontSize:11,cursor:"pointer",fontFamily:t.F,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .12s"}}
+        onMouseEnter={function(e){e.currentTarget.style.borderColor=t.ac;e.currentTarget.style.color=t.ac;}} onMouseLeave={function(e){e.currentTarget.style.borderColor=t.br;e.currentTarget.style.color=t.tx3;}}>
+        Sposta <Ico name="cr" size={11}/>
+      </button>
+      {showMove&&<div className="pi" style={{position:"absolute",bottom:"calc(100% + 8px)",left:0,right:0,background:t.s2,border:"1px solid "+t.br,borderRadius:11,overflow:"hidden",zIndex:100,boxShadow:"0 8px 30px rgba(0,0,0,.4)"}}>
+        {p.allStates.filter(function(s){return s.id!==task.stateId;}).map(function(s){return <div key={s.id} onClick={function(){p.setData(function(prev){return setTask(prev,task.id,function(tk){tk.stateId=s.id;});});setShowMove(false);}} style={{padding:"10px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:10}} onMouseEnter={function(e){e.currentTarget.style.background=t.s3;}} onMouseLeave={function(e){e.currentTarget.style.background="transparent;"}}><div style={{width:9,height:9,borderRadius:"50%",background:s.color}}/><span style={{fontSize:12,color:t.tx,fontWeight:600}}>{s.name}</span></div>;})}</div>}
+    </div>
+  </div>;
+}
+
+// ─── CALENDAR ─────────────────────────────────────────────────────────────────
+function CalView(p){
+  var data=p.data,nav=p.nav,t=p.t,openTask=p.openTask;
+  var [vd,setVd]=useState(new Date());
+  var fr=getList(data,nav.listId);if(!fr)return null;
+  var li=fr.list,yr=vd.getFullYear(),mo=vd.getMonth();
+  var fd=new Date(yr,mo,1).getDay(),dim=new Date(yr,mo+1,0).getDate(),off=fd===0?6:fd-1;
+  function dTasks(d){var ds=yr+"-"+z(mo+1)+"-"+z(d);return li.tasks.filter(function(tk){return tk.due===ds;});}
+  return <div style={{flex:1,overflowY:"auto",padding:"22px 28px"}}>
+    <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20}}>
+      <button onClick={function(){setVd(new Date(yr,mo-1,1));}} style={{background:t.s1,border:"1px solid "+t.br,borderRadius:9,padding:"7px 14px",cursor:"pointer",color:t.tx,fontFamily:t.F,fontSize:15}}>←</button>
+      <h2 style={{fontFamily:t.FS,fontSize:18,fontWeight:700,color:t.tx,minWidth:220,textAlign:"center",textTransform:"capitalize"}}>{vd.toLocaleDateString("it-IT",{month:"long",year:"numeric"})}</h2>
+      <button onClick={function(){setVd(new Date(yr,mo+1,1));}} style={{background:t.s1,border:"1px solid "+t.br,borderRadius:9,padding:"7px 14px",cursor:"pointer",color:t.tx,fontFamily:t.F,fontSize:15}}>→</button>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
+      {["Lun","Mar","Mer","Gio","Ven","Sab","Dom"].map(function(d){return <div key={d} style={{textAlign:"center",fontSize:10,fontWeight:700,color:t.tx3,padding:"8px 0",fontFamily:t.FS,letterSpacing:".06em",textTransform:"uppercase"}}>{d}</div>;})}
+      {Array.from({length:off}).map(function(_,i){return <div key={"e"+i}/>;})}
+      {Array.from({length:dim}).map(function(_,i){
+        var day=i+1,ds=yr+"-"+z(mo+1)+"-"+z(day),tasks=dTasks(day),cur=ds===TODAY;
+        return <div key={day} style={{minHeight:80,background:t.s1,border:"1px solid "+(cur?t.ac:t.br),borderRadius:10,padding:"8px 10px",boxShadow:cur?"0 0 0 2px "+t.ac+"40":"none"}}>
+          <span style={{fontSize:12,fontWeight:cur?700:400,color:cur?t.ac:t.tx2,display:"block",marginBottom:5}}>{day}</span>
+          <div style={{display:"flex",flexDirection:"column",gap:2}}>
+            {tasks.slice(0,3).map(function(tk){var s=stOf(li,tk);return <div key={tk.id} onClick={function(){openTask(tk.id);}} style={{fontSize:10,padding:"2px 6px",borderRadius:5,background:s?s.color+"22":"#88888822",color:s?s.color:"#888",cursor:"pointer",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:600}}>{tk.title}</div>;})}
+            {tasks.length>3&&<span style={{fontSize:10,color:t.tx3,fontWeight:600}}>+{tasks.length-3}</span>}
+          </div>
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
+// ─── TASK MODAL ───────────────────────────────────────────────────────────────
+function TaskModal(p){
+  var data=p.data,setData=p.setData,tid=p.taskId,onClose=p.onClose,t=p.t;
+  var fr=getTask(data,tid);if(!fr)return null;
+  var task=fr.task,li=fr.list,fo=fr.folder;
+  var [title,setTitle]=useState(task.title);
+  var [desc,setDesc]=useState(task.desc);
+  var [time,setTime]=useState(""+task.time);
+  var [start,setStart]=useState(task.start||"");
+  var [due,setDue]=useState(task.due||"");
+  var [assignees,setAssignees]=useState(task.assignees.slice());
+  var [stateId,setStateId]=useState(task.stateId);
+  var [newSub,setNewSub]=useState("");
+  var [showPicker,setShowPicker]=useState(false);
+  var live=(getTask(data,tid)||{task:task}).task;
+  function save(){setData(function(prev){return setTask(prev,tid,function(tk){tk.title=title;tk.desc=desc;tk.time=Number(time)||0;tk.start=start||null;tk.due=due||null;tk.assignees=assignees;tk.stateId=stateId;});});onClose();}
+  function addSub(){if(!newSub.trim())return;var sid=li.states[0]?li.states[0].id:"";setData(function(prev){return setTask(prev,tid,function(tk){tk.subtasks.push({id:uid(),title:newSub.trim(),stateId:sid,subtasks:[]});});});setNewSub("");}
+  function togUser(u){setAssignees(function(prev){return prev.indexOf(u)>=0?prev.filter(function(x){return x!==u;}):prev.concat([u]);});}
+  function delSub(sid){setData(function(prev){return setTask(prev,tid,function(tk){tk.subtasks=flSub(tk.subtasks,sid);});});}
+  function flSub(subs,sid){return subs.filter(function(s){if(s.id===sid)return false;s.subtasks=flSub(s.subtasks,sid);return true;});}
+  function addNest(pid,ttl){var sid=li.states[0]?li.states[0].id:"";setData(function(prev){return setTask(prev,tid,function(tk){inj(tk.subtasks,pid,ttl,sid);});});}
+  function inj(subs,pid,ttl,sid){subs.forEach(function(s){if(s.id===pid){s.subtasks.push({id:uid(),title:ttl,stateId:sid,subtasks:[]});return;}inj(s.subtasks,pid,ttl,sid);});}
+  function togDone(sid){var dn=li.states.filter(function(s){return s.name==="Completato";})[0];var td=li.states.filter(function(s){return s.name==="To Do";})[0]||li.states[0];setData(function(prev){return setTask(prev,tid,function(tk){sss(tk.subtasks,sid,dn,td);});});}
+  function sss(subs,sid,dn,td){subs.forEach(function(s){if(s.id===sid){var c=li.states.filter(function(x){return x.id===s.stateId;})[0];var isd=c&&c.name==="Completato";s.stateId=isd?(td?td.id:s.stateId):(dn?dn.id:s.stateId);return;}sss(s.subtasks,sid,dn,td);});}
+  var curSt=li.states.filter(function(s){return s.id===stateId;})[0]||li.states[0];
+  return <div onClick={function(e){if(e.target===e.currentTarget)onClose();}} style={{position:"fixed",inset:0,background:"rgba(4,4,18,.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:24}}>
+    <div className="si" style={{background:t.s1,border:"1px solid "+t.br,borderRadius:20,width:"100%",maxWidth:860,maxHeight:"92vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 80px rgba(0,0,0,.7),0 0 0 1px "+t.ac+"30"}}>
+      <div style={{display:"flex",alignItems:"center",padding:"16px 22px",borderBottom:"1px solid "+t.br,background:t.s2}}>
+        <span style={{fontSize:11,color:t.tx3,fontWeight:500}}>{fo.name} · {li.name}</span>
+        <div style={{marginLeft:"auto",display:"flex",gap:10,alignItems:"center"}}>
+          <Pill state={curSt}/>
+          <Btn v="primary" sm t={t} onClick={save}>Salva</Btn>
+          <Btn v="ghost" sm t={t} onClick={onClose}><Ico name="x" size={14}/></Btn>
+        </div>
+      </div>
+      <div style={{display:"flex",flex:1,overflow:"hidden"}}>
+        <div style={{flex:1,overflowY:"auto",padding:"22px 26px",borderRight:"1px solid "+t.br}}>
+          <textarea value={title} onChange={function(e){setTitle(e.target.value);}} style={{width:"100%",background:"transparent",border:"none",outline:"none",color:t.tx,fontSize:20,fontWeight:700,fontFamily:t.FS,resize:"none",lineHeight:1.35,marginBottom:16,letterSpacing:"-.3px"}} rows={2}/>
+          <MF label="Descrizione" t={t}>
+            <textarea value={desc} onChange={function(e){setDesc(e.target.value);}} placeholder="Aggiungi una descrizione..." style={{width:"100%",background:t.s2,border:"1px solid "+t.br,borderRadius:10,color:t.tx,fontSize:13,fontFamily:t.F,padding:"12px 14px",outline:"none",resize:"vertical",minHeight:80,lineHeight:1.6}}/>
+          </MF>
+          <div style={{marginTop:20}}>
+            <div style={{fontSize:11,color:t.tx3,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",marginBottom:12,fontFamily:t.FS}}>Sottotask</div>
+            <MSubs subs={live.subtasks} list={li} onToggle={togDone} onDel={delSub} onNest={addNest} depth={0} t={t}/>
+            <div style={{display:"flex",gap:8,marginTop:10}}>
+              <input value={newSub} onChange={function(e){setNewSub(e.target.value);}} onKeyDown={function(e){if(e.key==="Enter")addSub();}} placeholder="Nuova sottotask (Invio)..." style={{flex:1,background:t.s2,border:"1px solid "+t.br,borderRadius:9,color:t.tx,fontSize:13,padding:"9px 13px",outline:"none",fontFamily:t.F}}/>
+              <Btn v="outline" sm t={t} onClick={addSub}><Ico name="plus" size={12}/>Aggiungi</Btn>
+            </div>
+          </div>
+        </div>
+        <div style={{width:250,overflowY:"auto",padding:"22px 20px",display:"flex",flexDirection:"column",gap:18}}>
+          <MF label="Stato" t={t}><select value={stateId} onChange={function(e){setStateId(e.target.value);}} style={{background:t.s2,border:"1px solid "+t.br,borderRadius:9,color:t.tx,fontSize:13,padding:"9px 12px",width:"100%",fontFamily:t.F,outline:"none"}}>{li.states.map(function(s){return <option key={s.id} value={s.id}>{s.name}</option>;})}</select></MF>
+          <MF label="Assegnati" t={t}>
+            <div style={{position:"relative"}}>
+              <div onClick={function(){setShowPicker(function(o){return !o;});}} style={{display:"flex",gap:5,flexWrap:"wrap",padding:"8px 10px",background:t.s2,border:"1px solid "+t.br,borderRadius:9,cursor:"pointer",minHeight:42,alignItems:"center"}}>
+                {assignees.length===0?<span style={{fontSize:12,color:t.tx3}}>Nessuno</span>:assignees.map(function(u){return <Av key={u} uid={u} team={data.team} size={24} t={t}/>;})}
+              </div>
+              {showPicker&&<div className="fu" style={{position:"absolute",top:"100%",left:0,right:0,background:t.s2,border:"1px solid "+t.br,borderRadius:10,marginTop:6,zIndex:200,overflow:"hidden",boxShadow:"0 8px 30px rgba(0,0,0,.3)"}}>
+                {data.team.map(function(u){var sel=assignees.indexOf(u.id)>=0;return <div key={u.id} onClick={function(){togUser(u.id);}} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",background:sel?t.acS:"transparent",transition:"background .1s"}} onMouseEnter={function(e){if(!sel)e.currentTarget.style.background=t.s3;}} onMouseLeave={function(e){if(!sel)e.currentTarget.style.background="transparent";}}><Av uid={u.id} team={data.team} size={24} t={t}/><span style={{fontSize:13,color:t.tx,flex:1,fontWeight:500}}>{u.name}</span>{sel&&<Ico name="check" size={14} color={t.ac}/>}</div>;})}
+              </div>}
+            </div>
+          </MF>
+          <MF label="Data inizio" t={t}><input type="date" value={start} onChange={function(e){setStart(e.target.value);}} style={{width:"100%",background:t.s2,border:"1px solid "+t.br,borderRadius:9,color:t.tx,fontSize:13,padding:"9px 12px",fontFamily:t.F,outline:"none",colorScheme:t.mode}}/></MF>
+          <MF label="Data scadenza" t={t}><input type="date" value={due} onChange={function(e){setDue(e.target.value);}} style={{width:"100%",background:t.s2,border:"1px solid "+t.br,borderRadius:9,color:t.tx,fontSize:13,padding:"9px 12px",fontFamily:t.F,outline:"none",colorScheme:t.mode}}/></MF>
+          <MF label="Tempo Max (h)" t={t}><input type="number" value={time} onChange={function(e){setTime(e.target.value);}} placeholder="0" min={0} style={{width:"100%",background:t.s2,border:"1px solid "+t.br,borderRadius:9,color:t.tx,fontSize:13,padding:"9px 12px",fontFamily:t.F,outline:"none"}}/></MF>
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+function MF(p){return <div style={{marginBottom:4}}><div style={{fontSize:10,fontWeight:700,color:p.t.tx3,marginBottom:7,letterSpacing:".08em",textTransform:"uppercase",fontFamily:p.t.FS}}>{p.label}</div>{p.children}</div>;}
+function MSubs(p){
+  var subs=p.subs,li=p.list,depth=p.depth||0,t=p.t;
+  var [adding,setAdding]=useState(null),[nt,setNt]=useState("");
+  if(!subs||!subs.length)return null;
+  return <div style={{paddingLeft:depth>0?16:0,borderLeft:depth>0?"2px solid "+t.ac+"28":"none",marginLeft:depth>0?6:0,display:"flex",flexDirection:"column",gap:4}}>
+    {subs.map(function(s){
+      var state=li.states.filter(function(x){return x.id===s.stateId;})[0]||li.states[0];
+      var done=state&&state.name==="Completato";
+      return <div key={s.id}>
+        <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:t.s2,borderRadius:9,border:"1px solid "+t.br+"44"}}>
+          <div onClick={function(){p.onToggle(s.id);}} style={{width:18,height:18,borderRadius:5,border:"2px solid "+(done?t.green:t.br),background:done?"linear-gradient(135deg,"+t.green+",#059669)":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>
+            {done&&<Ico name="check" size={11} color="#fff"/>}
+          </div>
+          <span style={{flex:1,fontSize:13,color:done?t.tx3:t.tx,textDecoration:done?"line-through":"none",fontWeight:done?400:500}}>{s.title}</span>
+          <Pill state={state} sm/>
+          {depth<2&&<button onClick={function(){setAdding(function(a){return a===s.id?null:s.id;});}} style={{background:"none",border:"none",cursor:"pointer",padding:3,borderRadius:5,color:t.tx3}} onMouseEnter={function(e){e.currentTarget.style.color=t.ac;}} onMouseLeave={function(e){e.currentTarget.style.color=t.tx3;}}><Ico name="sub" size={12} color="currentColor"/></button>}
+          <button onClick={function(){p.onDel(s.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:3,borderRadius:5,color:t.tx3}} onMouseEnter={function(e){e.currentTarget.style.color=t.red;}} onMouseLeave={function(e){e.currentTarget.style.color=t.tx3;}}><Ico name="x" size={12} color="currentColor"/></button>
+        </div>
+        {adding===s.id&&<div style={{display:"flex",gap:6,marginTop:4,paddingLeft:20}}>
+          <input autoFocus value={nt} onChange={function(e){setNt(e.target.value);}} onKeyDown={function(e){if(e.key==="Enter"&&nt.trim()){p.onNest(s.id,nt.trim());setNt("");setAdding(null);}if(e.key==="Escape"){setAdding(null);setNt("");}}} placeholder="Sotto-sottotask..." style={{flex:1,background:t.s3,border:"1px solid "+t.br,borderRadius:7,color:t.tx,fontSize:12,padding:"7px 10px",outline:"none",fontFamily:t.F}}/>
+        </div>}
+        <MSubs subs={s.subtasks} list={li} onToggle={p.onToggle} onDel={p.onDel} onNest={p.onNest} depth={depth+1} t={t}/>
+      </div>;
+    })}
+  </div>;
+}
+
+// ─── STATES MODAL ─────────────────────────────────────────────────────────────
+function StModal(p){
+  var data=p.data,setData=p.setData,lid=p.listId,onClose=p.onClose,t=p.t;
+  var fr=getList(data,lid);if(!fr)return null;var li=fr.list;
+  var [states,setSt]=useState(li.states.slice().sort(function(a,b){return a.order-b.order;}));
+  var [tplName,setTN]=useState(""),[showSave,setShowSave]=useState(false),[showApply,setShowApply]=useState(false);
+  function add(){setSt(function(p){return p.concat([{id:uid(),name:"Nuovo",color:"#9d4edd",order:p.length}]);});}
+  function rem(id){if(states.length<=1)return;setSt(function(p){return p.filter(function(s){return s.id!==id;});});}
+  function upd(id,k,v){setSt(function(p){return p.map(function(s){if(s.id!==id)return s;var n=Object.assign({},s);n[k]=v;return n;});});}
+  function mv(i,dir){setSt(function(prev){var n=prev.slice();var o=i+dir;if(o<0||o>=n.length)return prev;var tmp=n[i];n[i]=n[o];n[o]=tmp;return n.map(function(s,j){return Object.assign({},s,{order:j});});});}
+  function save(){setData(function(prev){return setList(prev,lid,function(l){l.states=states.map(function(s,i){return Object.assign({},s,{order:i});});});});onClose();}
+  function saveTpl(){if(!tplName.trim())return;setData(function(prev){var n=cloneObj(prev);n.stateTemplates.push({id:uid(),name:tplName.trim(),states:states.map(function(s){return Object.assign({},s,{id:uid()});})});return n;});setTN("");setShowSave(false);}
+  function applyTpl(tpl){setSt(tpl.states.map(function(s,i){return Object.assign({},s,{id:uid(),order:i});}));setShowApply(false);}
+  return <div onClick={function(e){if(e.target===e.currentTarget)onClose();}} style={{position:"fixed",inset:0,background:"rgba(4,4,18,.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1100}}>
+    <div className="si" style={{background:t.s1,border:"1px solid "+t.br,borderRadius:18,width:480,maxHeight:"86vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.5)"}}>
+      <div style={{display:"flex",alignItems:"center",padding:"16px 22px",borderBottom:"1px solid "+t.br,background:t.s2,borderRadius:"18px 18px 0 0"}}>
+        <h2 style={{fontFamily:t.FS,fontSize:15,fontWeight:700,color:t.tx}}>Stati · {li.name}</h2>
+        <div style={{marginLeft:"auto",display:"flex",gap:8}}>
+          <Btn sm v="outline" t={t} onClick={function(){setShowApply(function(o){return !o;});}}>Template</Btn>
+          <Btn sm v="primary" t={t} onClick={save}>Applica</Btn>
+          <Btn sm t={t} onClick={onClose}><Ico name="x" size={14}/></Btn>
+        </div>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"18px 22px"}}>
+        {showApply&&<div className="fu" style={{background:t.s2,borderRadius:12,padding:16,marginBottom:16,border:"1px solid "+t.br}}>
+          <div style={{fontSize:11,fontWeight:700,color:t.tx2,marginBottom:12,textTransform:"uppercase",letterSpacing:".07em",fontFamily:t.FS}}>Applica template</div>
+          {data.stateTemplates.map(function(tpl){return <div key={tpl.id} onClick={function(){applyTpl(tpl);}} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:t.s1,borderRadius:10,cursor:"pointer",border:"1px solid "+t.br,marginBottom:8,transition:"border-color .15s"}} onMouseEnter={function(e){e.currentTarget.style.borderColor=t.ac;}} onMouseLeave={function(e){e.currentTarget.style.borderColor=t.br;}}><Ico name="tpl" size={14} color={t.ac}/><div><div style={{fontSize:13,fontWeight:600,color:t.tx}}>{tpl.name}</div><div style={{fontSize:11,color:t.tx3,marginTop:2}}>{tpl.states.map(function(s){return s.name;}).join(" → ")}</div></div></div>;})}
+        </div>}
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {states.map(function(s,i){return <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",background:t.s2,borderRadius:11,border:"1px solid "+t.br}}>
+            <Ico name="drag" size={14} color={t.tx3}/>
+            <input type="color" value={s.color} onChange={function(e){upd(s.id,"color",e.target.value);}} style={{width:30,height:30,borderRadius:"50%",border:"3px solid "+t.br,cursor:"pointer",background:"none",padding:0}}/>
+            <input value={s.name} onChange={function(e){upd(s.id,"name",e.target.value);}} style={{flex:1,background:t.s3,border:"1px solid "+t.br,borderRadius:8,color:t.tx,fontSize:13,padding:"7px 11px",fontFamily:t.F,outline:"none",fontWeight:600}}/>
+            <button onClick={function(){mv(i,-1);}} style={{background:"none",border:"none",cursor:"pointer",color:t.tx3,padding:"4px 6px",opacity:i===0?.3:1}}>↑</button>
+            <button onClick={function(){mv(i,1);}} style={{background:"none",border:"none",cursor:"pointer",color:t.tx3,padding:"4px 6px",opacity:i===states.length-1?.3:1}}>↓</button>
+            <button onClick={function(){rem(s.id);}} style={{background:"none",border:"none",cursor:"pointer",opacity:states.length<=1?.3:1,padding:4,borderRadius:6}} onMouseEnter={function(e){e.currentTarget.style.background=t.redS;}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}><Ico name="trash" size={14} color={t.red}/></button>
+          </div>;})}
+        </div>
+        <Btn v="outline" t={t} onClick={add} style={{marginTop:12,width:"100%",justifyContent:"center"}}><Ico name="plus" size={13}/>Aggiungi stato</Btn>
+        <div style={{marginTop:16,borderTop:"1px solid "+t.br,paddingTop:14}}>
+          {showSave?<div className="fu" style={{display:"flex",gap:8}}><input value={tplName} onChange={function(e){setTN(e.target.value);}} onKeyDown={function(e){if(e.key==="Enter")saveTpl();}} placeholder="Nome template..." style={{flex:1,background:t.s2,border:"1px solid "+t.br,borderRadius:8,color:t.tx,fontSize:13,padding:"8px 12px",fontFamily:t.F,outline:"none"}}/><Btn sm v="primary" t={t} onClick={saveTpl}>Salva</Btn><Btn sm t={t} onClick={function(){setShowSave(false);}}>Annulla</Btn></div>
+          :<Btn v="ghost" sm t={t} onClick={function(){setShowSave(true);}} style={{color:t.gold}}><Ico name="tpl" size={13} color={t.gold}/>Salva come template</Btn>}
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
+// ─── ADD TASK MODAL ───────────────────────────────────────────────────────────
+function AddModal(p){
+  var data=p.data,setData=p.setData,lid=p.listId,defSt=p.stateId,onClose=p.onClose,t=p.t;
+  var fr=getList(data,lid);if(!fr)return null;var li=fr.list;
+  var [title,setTitle]=useState(""),[desc,setDesc]=useState(""),[due,setDue]=useState("");
+  var [time,setTime]=useState(""),[stateId,setStateId]=useState(defSt||li.states[0].id),[assignees,setAssignees]=useState([]);
+  function save(){if(!title.trim())return;setData(function(prev){return setList(prev,lid,function(l){l.tasks.push({id:uid(),title:title.trim(),desc:desc,assignees:assignees,start:TODAY,due:due||null,stateId:stateId,time:Number(time)||0,subtasks:[]});});});onClose();}
+  function tog(u){setAssignees(function(p){return p.indexOf(u)>=0?p.filter(function(x){return x!==u;}):p.concat([u]);});}
+  return <div onClick={function(e){if(e.target===e.currentTarget)onClose();}} style={{position:"fixed",inset:0,background:"rgba(4,4,18,.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1100}}>
+    <div className="si" style={{background:t.s1,border:"1px solid "+t.br,borderRadius:18,width:480,padding:26,boxShadow:"0 24px 80px rgba(0,0,0,.6),0 0 0 1px "+t.ac+"30"}}>
+      <h2 style={{fontFamily:t.FS,fontSize:17,fontWeight:800,color:t.tx,marginBottom:22,letterSpacing:"-.3px"}}>Nuova Task <span style={{color:t.ac}}>·</span> {li.name}</h2>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <input autoFocus value={title} onChange={function(e){setTitle(e.target.value);}} onKeyDown={function(e){if(e.key==="Enter")save();}} placeholder="Titolo della task..." style={{background:t.s2,border:"1px solid "+t.br,borderRadius:10,color:t.tx,fontSize:15,padding:"12px 16px",fontFamily:t.F,outline:"none",fontWeight:700,transition:"border-color .15s"}} onFocus={function(e){e.target.style.borderColor=t.ac;}} onBlur={function(e){e.target.style.borderColor=t.br;}}/>
+        <textarea value={desc} onChange={function(e){setDesc(e.target.value);}} placeholder="Descrizione (opzionale)..." style={{background:t.s2,border:"1px solid "+t.br,borderRadius:10,color:t.tx,fontSize:13,padding:"11px 16px",fontFamily:t.F,outline:"none",resize:"none",height:70,lineHeight:1.6}}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <div><div style={{fontSize:11,color:t.tx3,marginBottom:7,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em"}}>Stato</div><select value={stateId} onChange={function(e){setStateId(e.target.value);}} style={{width:"100%",background:t.s2,border:"1px solid "+t.br,borderRadius:9,color:t.tx,fontSize:13,padding:"9px 12px",fontFamily:t.F,outline:"none"}}>{li.states.map(function(s){return <option key={s.id} value={s.id}>{s.name}</option>;})}</select></div>
+          <div><div style={{fontSize:11,color:t.tx3,marginBottom:7,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em"}}>Scadenza</div><input type="date" value={due} onChange={function(e){setDue(e.target.value);}} style={{width:"100%",background:t.s2,border:"1px solid "+t.br,borderRadius:9,color:t.tx,fontSize:13,padding:"9px 12px",fontFamily:t.F,outline:"none",colorScheme:t.mode}}/></div>
+          <div><div style={{fontSize:11,color:t.tx3,marginBottom:7,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em"}}>Assegnati</div><div style={{display:"flex",gap:5,flexWrap:"wrap",padding:"7px 10px",background:t.s2,border:"1px solid "+t.br,borderRadius:9,minHeight:40,alignItems:"center"}}>{data.team.map(function(u){var sel=assignees.indexOf(u.id)>=0;return <div key={u.id} onClick={function(){tog(u.id);}} style={{opacity:sel?1:.3,cursor:"pointer",transition:"all .15s",transform:sel?"scale(1.1)":"scale(1)"}}><Av uid={u.id} team={data.team} size={26} t={t}/></div>;})}</div></div>
+          <div><div style={{fontSize:11,color:t.tx3,marginBottom:7,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em"}}>Tempo Max (h)</div><input type="number" value={time} onChange={function(e){setTime(e.target.value);}} placeholder="0" min={0} style={{width:"100%",background:t.s2,border:"1px solid "+t.br,borderRadius:9,color:t.tx,fontSize:13,padding:"9px 12px",fontFamily:t.F,outline:"none"}}/></div>
+        </div>
+        <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:4}}>
+          <Btn t={t} onClick={onClose}>Annulla</Btn>
+          <Btn v="primary" t={t} onClick={save} style={{opacity:title.trim()?1:.5}}>Crea Task <Ico name="plus" size={14} color="#fff"/></Btn>
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
+// ─── APP ──────────────────────────────────────────────────────────────────────
+function App(){
+  // Theme as React state — single source of truth, no global mutation
+  var [isDark,setIsDark]=useState(true);
+  var t=isDark?DARK:LIGHT;
+
+  var [data,setData]=useState(function(){
+    var base = mkData();
+    // Sync with logged in user if possible
+    try {
+      var storedUser = JSON.parse(localStorage.getItem(USER_KEY) || '{}');
+      if (storedUser && storedUser.email) {
+        base.userId = "u_shared";
+        base.team.push({
+          id: "u_shared",
+          name: storedUser.nome + " " + (storedUser.cognome || ""),
+          ini: (storedUser.nome?.[0] || "") + (storedUser.cognome?.[0] || ""),
+          col: "#7c3aed"
+        });
+      }
+    } catch(e) {}
+    return base;
+  });
+  var [nav,setNav]=useState({view:"home",folderId:null,listId:null});
+  var [mTask,setMTask]=useState(null),[mStates,setMStates]=useState(null),[mAdd,setMAdd]=useState(null);
+  var [sbOpen,setSbOpen]=useState(true);
+
+  // Timer
+  var [elapsed,setElapsed]=useState({});
+  var [active,setActive]=useState(null);
+  var [startedAt,setStartedAt]=useState(null);
+  var [tick,setTick]=useState(0);
+  useEffect(function(){if(!active)return;var id=setInterval(function(){setTick(function(n){return n+1;});},1000);return function(){clearInterval(id);};},[active]);
+  var getElapsed=useCallback(function(tid){var b=elapsed[tid]||0;if(active===tid&&startedAt)return b+(Date.now()-startedAt);return b;},[elapsed,active,startedAt,tick]);
+  var startTimer=useCallback(function(tid){var now=Date.now();if(active&&active!==tid){var e=(elapsed[active]||0)+(now-startedAt);setElapsed(function(p){var n=Object.assign({},p);n[active]=e;return n;});}setActive(tid);setStartedAt(now);},[active,elapsed,startedAt]);
+  var pauseTimer=useCallback(function(tid){if(active!==tid)return;var e=(elapsed[tid]||0)+(Date.now()-startedAt);setElapsed(function(p){var n=Object.assign({},p);n[tid]=e;return n;});setActive(null);setStartedAt(null);},[active,elapsed,startedAt]);
+  var timer={active:active,elapsed:getElapsed,start:startTimer,pause:pauseTimer};
+
+  function renderMain(){
+    if(nav.view==="home"&&!nav.listId&&!nav.folderId)return <HomeView data={data} t={t} openTask={setMTask}/>;
+    if(nav.folderId&&!nav.listId)return <DashView data={data} nav={nav} t={t} openTask={setMTask}/>;
+    if(nav.listId){
+      if(nav.view==="kanban")return <KanbanView data={data} setData={setData} nav={nav} t={t} openTask={setMTask} addTask={setMAdd}/>;
+      if(nav.view==="cal")return <CalView data={data} nav={nav} t={t} openTask={setMTask}/>;
+      return <ListView data={data} setData={setData} nav={nav} t={t} openTask={setMTask} addTask={setMAdd} timer={timer}/>;
+    }
+    return <HomeView data={data} t={t} openTask={setMTask}/>;
+  }
+
+  return <div style={{display:"flex",height:"100vh",background:t.bg,fontFamily:t.F,color:t.tx,overflow:"hidden"}}>
+    <style>{CSS}</style>
+    {sbOpen&&<Sidebar data={data} nav={nav} setNav={setNav} setData={setData} t={t}/>}
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
+      <TopBar data={data} nav={nav} setNav={setNav} t={t} isDark={isDark} toggleTheme={function(){setIsDark(function(d){return !d;});}} timer={timer} sbOpen={sbOpen} setSbOpen={setSbOpen} openStates={function(){if(nav.listId)setMStates(nav.listId);}} addTask={function(sid){setMAdd({sid:sid});}}/>
+      <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>{renderMain()}</div>
+    </div>
+    {mTask&&<TaskModal taskId={mTask} data={data} setData={setData} onClose={function(){setMTask(null);}} t={t}/>}
+    {mStates&&<StModal listId={mStates} data={data} setData={setData} onClose={function(){setMStates(null);}} t={t}/>}
+    {mAdd&&nav.listId&&<AddModal listId={nav.listId} stateId={mAdd.sid} data={data} setData={setData} onClose={function(){setMAdd(null);}} t={t}/>}
+  </div>;
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>
