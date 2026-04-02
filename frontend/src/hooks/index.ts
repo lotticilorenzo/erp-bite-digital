@@ -1,17 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
-import type { Progetto, Commessa, Timesheet, FatturaAttiva } from "@/types";
-export * from "./useClienti";
+import type { Commessa, Timesheet, FatturaAttiva } from "@/types";
 
-export function useProgetti(clienteId?: string) {
-  return useQuery({
-    queryKey: ["progetti", { clienteId }],
-    queryFn: async () => {
-      const { data } = await api.get<Progetto[]>("/progetti", { params: { cliente_id: clienteId } });
-      return data;
-    },
-  });
-}
+export * from "./useClienti";
+export * from "./useProgetti";
 
 export function useCommesse(params?: { mese?: string; stato?: string; cliente_id?: string }) {
   return useQuery({

@@ -3,6 +3,8 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "@/pages/Login";
 import DashboardPage from "@/pages/Dashboard";
 import ClientiPage from "@/pages/Clienti";
+import ProgettiPage from "@/pages/Progetti";
+import ProgettoDetailPage from "@/pages/ProgettoDetail";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import GenericPlaceholder from "@/components/GenericPlaceholder";
 import { useAuth } from "@/hooks/useAuth";
@@ -55,7 +57,17 @@ function App() {
         element={
           <ProtectedRoute>
             <DashboardLayout>
-              <GenericPlaceholder title="Progetti" />
+              <ProgettiPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/progetti/:id"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <ProgettoDetailPage />
             </DashboardLayout>
           </ProtectedRoute>
         }
