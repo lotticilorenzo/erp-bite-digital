@@ -40,15 +40,15 @@ export default function Analytics() {
     return (
       <div className="p-8 space-y-8">
         <div className="flex items-center justify-between">
-          <Skeleton className="h-10 w-64 rounded-xl bg-[#1e293b]/20" />
-          <Skeleton className="h-10 w-32 rounded-xl bg-[#1e293b]/20" />
+          <Skeleton className="h-10 w-64 rounded-xl bg-muted/20" />
+          <Skeleton className="h-10 w-32 rounded-xl bg-muted/20" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32 rounded-3xl bg-[#1e293b]/10" />)}
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32 rounded-3xl bg-muted/10" />)}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Skeleton className="h-[400px] rounded-3xl bg-[#1e293b]/5" />
-          <Skeleton className="h-[400px] rounded-3xl bg-[#1e293b]/5" />
+          <Skeleton className="h-[400px] rounded-3xl bg-muted/5" />
+          <Skeleton className="h-[400px] rounded-3xl bg-muted/5" />
         </div>
       </div>
     );
@@ -66,11 +66,11 @@ export default function Analytics() {
           <p className="text-[#475569] text-xs font-bold uppercase tracking-[0.2em] mt-1">Analisi avanzata performance e marginalità</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="h-10 bg-[#0f172a]/50 border-[#1e293b] text-[#94a3b8] hover:text-white rounded-xl gap-2 font-bold uppercase text-[10px] tracking-widest transition-all">
+          <Button variant="outline" className="h-10 bg-card/50 border-border text-muted-foreground hover:text-white rounded-xl gap-2 font-bold uppercase text-[10px] tracking-widest transition-all">
             <Filter className="h-4 w-4" />
             Anno Corrente
           </Button>
-          <Button className="h-10 bg-primary hover:bg-primary/90 text-white rounded-xl gap-2 font-black uppercase text-[10px] tracking-widest shadow-[0_0_20px_rgba(124,58,237,0.3)] transition-all">
+          <Button className="h-10 bg-primary hover:bg-primary/90 text-white rounded-xl gap-2 font-black uppercase text-[10px] tracking-widest shadow-[0_0_20px_hsl(var(--primary)/0.2)] transition-all">
             <Download className="h-4 w-4" />
             Esporta PDF
           </Button>
@@ -113,11 +113,11 @@ export default function Analytics() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Revenue Trend Chart */}
-        <Card className="bg-[#0f172a] border-[#1e293b]/50 shadow-2xl rounded-3xl overflow-hidden hover:border-primary/20 transition-all group">
-          <CardHeader className="border-b border-[#1e293b]/30 pb-4">
+        <Card className="bg-card border-border/50 shadow-2xl rounded-3xl overflow-hidden hover:border-primary/20 transition-all group">
+          <CardHeader className="border-b border-border/30 pb-4">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-sm font-black uppercase tracking-widest text-[#94a3b8]">Andamento Fatturato</CardTitle>
+                <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground">Andamento Fatturato</CardTitle>
                 <CardDescription className="text-[10px] uppercase font-bold text-[#475569]">Ultimi 12 mesi di competenza</CardDescription>
               </div>
               <div className="p-2 rounded-xl bg-primary/10 border border-primary/20">
@@ -157,11 +157,11 @@ export default function Analytics() {
         </Card>
 
         {/* Margin Trend Chart */}
-        <Card className="bg-[#0f172a] border-[#1e293b]/50 shadow-2xl rounded-3xl overflow-hidden hover:border-primary/20 transition-all group">
-          <CardHeader className="border-b border-[#1e293b]/30 pb-4">
+        <Card className="bg-card border-border/50 shadow-2xl rounded-3xl overflow-hidden hover:border-primary/20 transition-all group">
+          <CardHeader className="border-b border-border/30 pb-4">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-sm font-black uppercase tracking-widest text-[#94a3b8]">Stabilità Margine</CardTitle>
+                <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground">Stabilità Margine</CardTitle>
                 <CardDescription className="text-[10px] uppercase font-bold text-[#475569]">Percentuale di profitto media</CardDescription>
               </div>
               <div className="p-2 rounded-xl bg-[#ec4899]/10 border border-[#ec4899]/20">
@@ -209,7 +209,7 @@ export default function Analytics() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Top Clients */}
-        <Card className="bg-[#0f172a] border-[#1e293b]/50 shadow-2xl rounded-3xl">
+        <Card className="bg-card border-border/50 shadow-2xl rounded-3xl">
           <CardHeader>
             <CardTitle className="text-sm font-black uppercase tracking-widest text-white">Top 5 Clienti</CardTitle>
             <CardDescription className="text-[10px] uppercase font-bold text-[#475569]">Per volume di fatturato totale</CardDescription>
@@ -234,7 +234,7 @@ export default function Analytics() {
         </Card>
 
         {/* Efficiency Chart */}
-        <Card className="lg:col-span-2 bg-[#0f172a] border-[#1e293b]/50 shadow-2xl rounded-3xl">
+        <Card className="lg:col-span-2 bg-card border-border/50 shadow-2xl rounded-3xl">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -294,7 +294,7 @@ export default function Analytics() {
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {alerts.map((alert) => (
-            <div key={alert.title} className="flex items-center gap-4 p-4 rounded-2xl bg-[#1e293b]/20 border border-[#1e293b] hover:border-primary/30 transition-all cursor-pointer group">
+            <div key={alert.title} className="flex items-center gap-4 p-4 rounded-2xl bg-muted/20 border border-border hover:border-primary/30 transition-all cursor-pointer group">
               <div className={`p-3 rounded-xl ${alert.severity === "high" ? "bg-rose-500/10 text-rose-500" : "bg-orange-500/10 text-orange-500"}`}>
                 {alert.type === "MARGIN" ? <ArrowDownRight className="h-5 w-5" /> : 
                  alert.type === "INVOICE" ? <AlertTriangle className="h-5 w-5" /> : 
@@ -308,7 +308,7 @@ export default function Analytics() {
             </div>
           ))}
           {alerts.length === 0 && (
-            <div className="col-span-full py-12 flex flex-col items-center gap-3 bg-[#0f172a]/40 rounded-3xl border-2 border-dashed border-[#1e293b]">
+            <div className="col-span-full py-12 flex flex-col items-center gap-3 bg-card/40 rounded-3xl border-2 border-dashed border-border">
               <div className="p-4 rounded-full bg-emerald-500/10">
                 <Users className="h-8 w-8 text-emerald-500" />
               </div>
@@ -323,7 +323,7 @@ export default function Analytics() {
 
 function KpiCard({ title, value, icon: Icon, trend, trendType, description }: any) {
   return (
-    <Card className="bg-[#0f172a] border-[#1e293b]/50 shadow-2xl rounded-3xl p-6 hover:border-primary/30 transition-all group overflow-hidden relative">
+    <Card className="bg-card border-border/50 shadow-2xl rounded-3xl p-6 hover:border-primary/30 transition-all group overflow-hidden relative">
       <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity pointer-events-none">
         <Icon size={120} />
       </div>
@@ -342,7 +342,7 @@ function KpiCard({ title, value, icon: Icon, trend, trendType, description }: an
         <div>
           <p className="text-[10px] uppercase font-black tracking-widest text-[#475569] mb-1">{title}</p>
           <p className="text-2xl font-black text-white tracking-tighter">{value}</p>
-          <p className="text-[10px] font-bold text-[#475569] mt-2 group-hover:text-[#94a3b8] transition-colors">{description}</p>
+          <p className="text-[10px] font-bold text-[#475569] mt-2 group-hover:text-muted-foreground transition-colors">{description}</p>
         </div>
       </div>
     </Card>

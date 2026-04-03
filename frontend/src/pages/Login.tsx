@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
-import { Rocket, Lock, Mail, Loader2, AlertCircle } from "lucide-react";
+import { Lock, Mail, Loader2, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export default function LoginPage() {
@@ -30,8 +30,13 @@ export default function LoginPage() {
 
       <Card className="w-full max-w-md bg-card/50 backdrop-blur-xl border-border/50 shadow-2xl relative animate-in fade-in zoom-in duration-500">
         <CardHeader className="space-y-2 text-center pb-8">
-          <div className="mx-auto p-3 rounded-2xl bg-primary/10 border border-primary/20 w-fit mb-4">
-            <Rocket className="w-8 h-8 text-primary" />
+          <div className="mx-auto mb-6 relative group">
+            <div className="absolute -inset-4 bg-primary/10 rounded-full blur-3xl opacity-50 group-hover:opacity-100 transition duration-1000" />
+            <img 
+              src="/logo_bite.jpg" 
+              alt="Bite Digital" 
+              className="relative max-w-[200px] h-auto mx-auto drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] group-hover:scale-105 transition-transform duration-700" 
+            />
           </div>
           <CardTitle className="text-3xl font-bold tracking-tight">Bite ERP v4</CardTitle>
           <CardDescription className="text-muted-foreground">
@@ -80,7 +85,7 @@ export default function LoginPage() {
           <CardFooter className="pt-4 flex flex-col space-y-4">
             <Button 
               type="submit" 
-              className="w-full shadow-lg shadow-primary/20" 
+              className="w-full shadow-lg shadow-[0_0_20px_hsl(var(--primary)/0.2)]" 
               disabled={isLoggingIn}
             >
               {isLoggingIn ? (

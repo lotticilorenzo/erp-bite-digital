@@ -45,16 +45,16 @@ export default function TimesheetPage() {
     <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black text-[#f1f5f9] tracking-tight">Timesheet</h1>
-          <p className="text-[#64748b] text-sm mt-1">Gestione ore, approvazioni e consuntivi.</p>
+          <h1 className="text-3xl font-black text-foreground tracking-tight">Timesheet</h1>
+          <p className="text-muted-foreground text-sm mt-1">Gestione ore, approvazioni e consuntivi.</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="bg-[#1e293b] border-[#334155] text-white">
+          <Button variant="outline" className="bg-muted border-border text-white">
             <FileDown className="w-4 h-4 mr-2" /> Esporta
           </Button>
           <Button 
             onClick={() => setIsDialogOpen(true)}
-            className="bg-purple-600 hover:bg-purple-700 text-white shadow-[0_0_20px_rgba(124,58,237,0.3)] font-black"
+            className="bg-primary hover:bg-primary/90 text-white shadow-[0_0_20px_hsl(var(--primary)/0.2)] font-black"
           >
             <Plus className="w-4 h-4 mr-2" /> Aggiungi Ore
           </Button>
@@ -66,7 +66,7 @@ export default function TimesheetPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#475569] group-focus-within:text-purple-400 transition-colors" />
           <Input 
             placeholder="Cerca attività..." 
-            className="pl-10 bg-[#0f172a] border-[#1e293b] text-white focus-visible:ring-purple-500/50"
+            className="pl-10 bg-card border-border text-white focus-visible:ring-purple-500/50"
           />
         </div>
         
@@ -74,11 +74,11 @@ export default function TimesheetPage() {
           value={filters.mese} 
           onValueChange={(v) => setFilters(prev => ({ ...prev, mese: v }))}
         >
-          <SelectTrigger className="bg-[#0f172a] border-[#1e293b] text-white capitalize">
+          <SelectTrigger className="bg-card border-border text-white capitalize">
             <Calendar className="w-4 h-4 mr-2 text-purple-400" />
             <SelectValue placeholder="Mese" />
           </SelectTrigger>
-          <SelectContent className="bg-[#0f172a] border-[#1e293b] text-white">
+          <SelectContent className="bg-card border-border text-white">
             {months.map(m => (
               <SelectItem key={m.toISOString()} value={format(m, "yyyy-MM-dd")}>
                 {format(m, "MMMM yyyy", { locale: it })}
@@ -91,11 +91,11 @@ export default function TimesheetPage() {
           value={filters.stato} 
           onValueChange={(v) => setFilters(prev => ({ ...prev, stato: v }))}
         >
-          <SelectTrigger className="bg-[#0f172a] border-[#1e293b] text-white">
+          <SelectTrigger className="bg-card border-border text-white">
             <Filter className="w-4 h-4 mr-2 text-blue-400" />
             <SelectValue placeholder="Stato" />
           </SelectTrigger>
-          <SelectContent className="bg-[#0f172a] border-[#1e293b] text-white">
+          <SelectContent className="bg-card border-border text-white">
             <SelectItem value="ALL">Tutti gli stati</SelectItem>
             <SelectItem value="PENDING">Da Approvare</SelectItem>
             <SelectItem value="APPROVATO">Approvati</SelectItem>
@@ -103,11 +103,11 @@ export default function TimesheetPage() {
           </SelectContent>
         </Select>
 
-        <div className="flex bg-[#0f172a] border border-[#1e293b] rounded-lg p-1">
-          <Button variant="ghost" size="sm" className="flex-1 bg-[#1e293b] text-white">
+        <div className="flex bg-card border border-border rounded-lg p-1">
+          <Button variant="ghost" size="sm" className="flex-1 bg-muted text-white">
             <List className="w-4 h-4 mr-2" /> Tabella
           </Button>
-          <Button variant="ghost" size="sm" className="flex-1 text-[#64748b] hover:text-white">
+          <Button variant="ghost" size="sm" className="flex-1 text-muted-foreground hover:text-white">
             <LayoutGrid className="w-4 h-4 mr-2" /> Calendar
           </Button>
         </div>

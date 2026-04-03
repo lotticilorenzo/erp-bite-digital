@@ -124,7 +124,7 @@ export default function Fornitori() {
             <Tag className="w-4 h-4 mr-2" />
             Gestione Categorie
           </Button>
-          <Button onClick={openCreate} className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
+          <Button onClick={openCreate} className="bg-primary hover:bg-primary/90 shadow-lg shadow-[0_0_20px_hsl(var(--primary)/0.2)]">
             <Plus className="w-4 h-4 mr-2" />
             Nuovo Fornitore
           </Button>
@@ -269,7 +269,7 @@ export default function Fornitori() {
 
       {/* Modal CRUD */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[500px] border-white/10 bg-[#0f172a] backdrop-blur-xl">
+        <DialogContent className="sm:max-w-[500px] border-white/10 bg-card backdrop-blur-xl">
           <DialogHeader>
             <DialogTitle>
               {selectedFornitore?.id ? "Modifica Fornitore" : "Nuovo Fornitore"}

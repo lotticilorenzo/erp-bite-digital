@@ -22,8 +22,8 @@ export default function ClientiPage() {
   return (
     <div className="space-y-8 max-w-7xl mx-auto pt-4 pb-12">
       <header className="flex flex-col gap-1">
-        <h1 className="text-4xl font-black tracking-tight text-white mb-1">Clienti</h1>
-        <p className="text-[#94a3b8] text-sm font-medium">
+        <h1 className="text-4xl font-black tracking-tight text-foreground mb-1">Clienti</h1>
+        <p className="text-muted-foreground text-sm font-medium">
           Gestisci il tuo portfolio clienti, i dettagli di fatturazione e i contatti.
         </p>
       </header>

@@ -54,7 +54,7 @@ export function CassaDashboard({ movimenti }: CassaDashboardProps) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="bg-[#0f172a]/40 border-[#1e293b]/50 rounded-3xl overflow-hidden">
+        <Card className="bg-card/40 border-border/50 rounded-3xl overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-[#475569] flex items-center gap-2">
               <Wallet className="h-3.5 w-3.5 text-primary" />
@@ -69,7 +69,7 @@ export function CassaDashboard({ movimenti }: CassaDashboardProps) {
           </CardContent>
         </Card>
 
-        <Card className="bg-[#0f172a]/40 border-[#1e293b]/50 rounded-3xl overflow-hidden">
+        <Card className="bg-card/40 border-border/50 rounded-3xl overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-[#475569] flex items-center gap-2">
               <ArrowUpRight className="h-3.5 w-3.5 text-emerald-500" />
@@ -83,7 +83,7 @@ export function CassaDashboard({ movimenti }: CassaDashboardProps) {
           </CardContent>
         </Card>
 
-        <Card className="bg-[#0f172a]/40 border-[#1e293b]/50 rounded-3xl overflow-hidden">
+        <Card className="bg-card/40 border-border/50 rounded-3xl overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-[#475569] flex items-center gap-2">
               <ArrowDownLeft className="h-3.5 w-3.5 text-red-500" />
@@ -99,7 +99,7 @@ export function CassaDashboard({ movimenti }: CassaDashboardProps) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 bg-[#020617]/50 border-[#1e293b]/50 rounded-3xl p-6">
+        <Card className="lg:col-span-2 bg-background/50 border-border/50 rounded-3xl p-6">
           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#475569] mb-6">Andamento Cashflow</h3>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -128,7 +128,7 @@ export function CassaDashboard({ movimenti }: CassaDashboardProps) {
           </div>
         </Card>
 
-        <Card className="bg-[#020617]/50 border-[#1e293b]/50 rounded-3xl p-6">
+        <Card className="bg-background/50 border-border/50 rounded-3xl p-6">
           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#475569] mb-6">Analisi Categorie</h3>
           <div className="h-[250px] w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -153,7 +153,7 @@ export function CassaDashboard({ movimenti }: CassaDashboardProps) {
                <div key={c.name} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                    <span className="text-[10px] font-bold text-[#94a3b8] uppercase">{c.name}</span>
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase">{c.name}</span>
                   </div>
                   <span className="text-[10px] font-black text-white tabular-nums">{new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(Number(c.value))}</span>
                </div>

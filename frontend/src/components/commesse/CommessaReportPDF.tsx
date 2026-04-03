@@ -28,19 +28,28 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   logoSection: {
-    flexDirection: "column",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 15,
   },
-  logoText: {
-    fontSize: 24,
-    fontWeight: "black",
-    color: "#7c3aed",
-    marginBottom: 4,
+  logoImage: {
+    height: 40,
+    width: "auto",
   },
-  logoSubtext: {
+  companyInfo: {
+    borderLeft: "1pt solid #e2e8f0",
+    paddingLeft: 15,
+    height: 30,
+    justifyContent: "center",
+  },
+  companyName: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#1e293b",
+  },
+  reportDate: {
     fontSize: 8,
     color: "#64748b",
-    textTransform: "uppercase",
-    letterSpacing: 1,
   },
   reportMeta: {
     textAlign: "right",
@@ -50,10 +59,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     textTransform: "uppercase",
     marginBottom: 4,
-  },
-  reportDate: {
-    fontSize: 8,
-    color: "#64748b",
   },
   section: {
     marginBottom: 20,
@@ -187,12 +192,18 @@ export const CommessaReportPDF: React.FC<Props> = ({ commessa, timesheets }) => 
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoSection}>
-            <Text style={styles.logoText}>Bite Digital</Text>
-            <Text style={styles.logoSubtext}>Business Intelligence & Strategy</Text>
+            <Image 
+              src={getFullUrl('/logo_bite.jpg')!} 
+              style={styles.logoImage} 
+            />
+            <View style={styles.companyInfo}>
+              <Text style={styles.companyName}>Bite Digital S.r.l.</Text>
+              <Text style={styles.reportDate}>Data Report: {format(new Date(), "dd/MM/yyyy")}</Text>
+            </View>
           </View>
           <View style={styles.reportMeta}>
             <Text style={styles.reportTitle}>Report Mensile Commessa</Text>
-            <Text style={styles.reportDate}>Generato il {format(new Date(), "dd/MM/yyyy")}</Text>
+            <Text style={styles.reportDate}>{monthName.toUpperCase()}</Text>
           </View>
         </View>
 

@@ -106,9 +106,9 @@ export function CommessaDialog({ commessa, open, onOpenChange }: CommessaDialogP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px] bg-[#0f172a] border-[#1e293b] text-white">
+      <DialogContent className="sm:max-w-[550px] bg-card border-border text-white">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-[#f1f5f9]">
+          <DialogTitle className="text-xl font-bold text-foreground">
             {isEditing ? "Modifica Commessa" : "Nuova Commessa"}
           </DialogTitle>
         </DialogHeader>
@@ -120,14 +120,14 @@ export function CommessaDialog({ commessa, open, onOpenChange }: CommessaDialogP
               name="cliente_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-[#94a3b8]">Cliente</FormLabel>
+                  <FormLabel className="text-muted-foreground">Cliente</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value} disabled={isEditing}>
                     <FormControl>
-                      <SelectTrigger className="bg-[#1e293b] border-[#334155] text-white">
+                      <SelectTrigger className="bg-muted border-border text-white">
                         <SelectValue placeholder="Seleziona un cliente" />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent className="bg-[#0f172a] border-[#1e293b] text-white">
+                    <SelectContent className="bg-card border-border text-white">
                       {clienti?.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
                           {c.ragione_sociale}
@@ -146,9 +146,9 @@ export function CommessaDialog({ commessa, open, onOpenChange }: CommessaDialogP
                 name="mese_competenza"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[#94a3b8]">Mese competenza</FormLabel>
+                    <FormLabel className="text-muted-foreground">Mese competenza</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} className="bg-[#1e293b] border-[#334155] text-white" disabled={isEditing} />
+                      <Input type="date" {...field} className="bg-muted border-border text-white" disabled={isEditing} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -160,14 +160,14 @@ export function CommessaDialog({ commessa, open, onOpenChange }: CommessaDialogP
                 name="stato"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[#94a3b8]">Stato</FormLabel>
+                    <FormLabel className="text-muted-foreground">Stato</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger className="bg-[#1e293b] border-[#334155] text-white">
+                        <SelectTrigger className="bg-muted border-border text-white">
                           <SelectValue placeholder="Stato commessa" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent className="bg-[#0f172a] border-[#1e293b] text-white">
+                      <SelectContent className="bg-card border-border text-white">
                         <SelectItem value="APERTA">IN CORSO</SelectItem>
                         <SelectItem value="PRONTA_CHIUSURA">DA FATTURARE</SelectItem>
                         <SelectItem value="CHIUSA">CHIUSA</SelectItem>
@@ -187,9 +187,9 @@ export function CommessaDialog({ commessa, open, onOpenChange }: CommessaDialogP
                 name="costo_manodopera"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[#94a3b8]">Costo Manodopera (€)</FormLabel>
+                    <FormLabel className="text-muted-foreground">Costo Manodopera (€)</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} className="bg-[#1e293b] border-[#334155] text-white" />
+                      <Input type="number" {...field} className="bg-muted border-border text-white" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -201,9 +201,9 @@ export function CommessaDialog({ commessa, open, onOpenChange }: CommessaDialogP
                 name="costi_diretti"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[#94a3b8]">Costi Diretti (€)</FormLabel>
+                    <FormLabel className="text-muted-foreground">Costi Diretti (€)</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} className="bg-[#1e293b] border-[#334155] text-white" />
+                      <Input type="number" {...field} className="bg-muted border-border text-white" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -216,9 +216,9 @@ export function CommessaDialog({ commessa, open, onOpenChange }: CommessaDialogP
               name="note"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-[#94a3b8]">Note</FormLabel>
+                  <FormLabel className="text-muted-foreground">Note</FormLabel>
                   <FormControl>
-                    <Input {...field} className="bg-[#1e293b] border-[#334155] text-white" placeholder="Eventuali annotazioni..." />
+                    <Input {...field} className="bg-muted border-border text-white" placeholder="Eventuali annotazioni..." />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -226,10 +226,10 @@ export function CommessaDialog({ commessa, open, onOpenChange }: CommessaDialogP
             />
 
             <DialogFooter className="pt-4">
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-[#94a3b8] hover:text-white">
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground hover:text-white">
                 Annulla
               </Button>
-              <Button type="submit" disabled={isPending} className="bg-purple-600 hover:bg-purple-700 text-white shadow-[0_0_10px_rgba(124,58,237,0.2)]">
+              <Button type="submit" disabled={isPending} className="bg-primary hover:bg-primary/90 text-white shadow-[0_0_10px_hsl(var(--primary)/0.2)]">
                 {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (isEditing ? "Salva Modifiche" : "Apri Commessa")}
               </Button>
             </DialogFooter>

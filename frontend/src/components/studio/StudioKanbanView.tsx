@@ -42,15 +42,15 @@ export function StudioKanbanView() {
   }));
 
   return (
-    <ScrollArea className="flex-1 w-full bg-[#020617]/50">
+    <ScrollArea className="flex-1 w-full bg-background/50">
       <div className="flex gap-6 p-6 h-[calc(100vh-140px)] min-w-max">
         {columns.map((column) => (
           <div key={column.id} className="w-80 flex flex-col gap-4">
             <div className="flex items-center justify-between px-2">
               <div className="flex items-center gap-3">
-                <div className="h-3 w-3 rounded-full shadow-[0_0_10px_rgba(124,58,237,0.3)]" style={{ backgroundColor: column.color }} />
+                <div className="h-3 w-3 rounded-full shadow-[0_0_10px_hsl(var(--primary)/0.2)]" style={{ backgroundColor: column.color }} />
                 <h3 className="text-xs font-black uppercase tracking-widest text-white">{column.name}</h3>
-                <Badge variant="outline" className="text-[10px] bg-white/5 border-[#1e293b] text-[#475569] px-1.5 h-4 min-w-4 justify-center">
+                <Badge variant="outline" className="text-[10px] bg-white/5 border-border text-[#475569] px-1.5 h-4 min-w-4 justify-center">
                   {column.tasks.length}
                 </Badge>
               </div>
@@ -65,7 +65,7 @@ export function StudioKanbanView() {
               ))}
               <Button 
                 variant="ghost" 
-                className="w-full justify-start h-10 px-4 text-[10px] font-black uppercase tracking-widest text-[#1e293b] hover:text-primary hover:bg-white/5 group border border-dashed border-[#1e293b]/50 rounded-xl"
+                className="w-full justify-start h-10 px-4 text-[10px] font-black uppercase tracking-widest text-[#1e293b] hover:text-primary hover:bg-white/5 group border border-dashed border-border/50 rounded-xl"
                 onClick={() => openNewTask(nav.selectedFolderId, nav.selectedListId)}
               >
                 <Plus className="h-3.5 w-3.5 mr-2 group-hover:scale-125 transition-transform" />
@@ -86,8 +86,8 @@ function KanbanCard({ task }: { task: TaskSO }) {
 
   return (
     <div 
-      className={`bg-[#0f172a]/60 border border-[#1e293b]/50 p-4 rounded-2xl shadow-xl hover:border-primary/50 transition-all cursor-pointer group relative overflow-hidden ${
-        isTimerActive ? 'border-primary shadow-[0_0_20px_rgba(124,58,237,0.1)]' : ''
+      className={`bg-card/60 border border-border/50 p-4 rounded-2xl shadow-xl hover:border-primary/50 transition-all cursor-pointer group relative overflow-hidden ${
+        isTimerActive ? 'border-primary shadow-[0_0_20px_hsl(var(--primary)/0.2)]' : ''
       }`}
       onClick={() => selectTask(task.id)}
     >
@@ -104,12 +104,12 @@ function KanbanCard({ task }: { task: TaskSO }) {
           </Button>
         </div>
         
-        <h4 className={`text-sm font-bold leading-tight line-clamp-2 ${isTimerActive ? 'text-white' : 'text-[#f1f5f9]'}`}>
+        <h4 className={`text-sm font-bold leading-tight line-clamp-2 ${isTimerActive ? 'text-white' : 'text-foreground'}`}>
           {task.title}
         </h4>
 
         <div className="flex items-center justify-between mt-1">
-          <div className="flex items-center gap-1.5 bg-[#1e293b]/30 px-2 py-0.5 rounded-lg border border-white/5">
+          <div className="flex items-center gap-1.5 bg-muted/30 px-2 py-0.5 rounded-lg border border-white/5">
             <Clock className={`h-3 w-3 ${isTimerActive ? 'text-primary animate-pulse' : 'text-[#334155]'}`} />
             <span className={`text-[10px] font-black tabular-nums ${isTimerActive ? 'text-primary' : 'text-[#475569]'}`}>
               {Math.floor(timer.getElapsed(task.id) / 1000 / 60)}m
@@ -117,7 +117,7 @@ function KanbanCard({ task }: { task: TaskSO }) {
           </div>
 
           <div className="flex -space-x-2">
-            <div className="h-6 w-6 rounded-full border border-[#0f172a] bg-[#1e293b] flex items-center justify-center text-[8px] font-bold text-white uppercase overflow-hidden ring-2 ring-[#0f172a]">
+            <div className="h-6 w-6 rounded-full border border-[#0f172a] bg-muted flex items-center justify-center text-[8px] font-bold text-white uppercase overflow-hidden ring-2 ring-[#0f172a]">
               <UserIcon className="h-3 w-3" />
             </div>
           </div>

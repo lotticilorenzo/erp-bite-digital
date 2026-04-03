@@ -175,7 +175,7 @@ const PlanningPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 space-y-6 bg-[#020617] min-h-screen text-slate-200">
+    <div className="p-6 space-y-6 bg-background min-h-screen text-slate-200">
       {/* Header & Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -188,7 +188,7 @@ const PlanningPage: React.FC = () => {
 
         <div className="flex items-center gap-4">
           {/* View Toggle */}
-          <div className="flex bg-[#0f172a] p-1 rounded-lg border border-[#1e293b]">
+          <div className="flex bg-card p-1 rounded-lg border border-border">
             <Button 
               variant={view === 'week' ? 'secondary' : 'ghost'} 
               size="sm" 
@@ -207,7 +207,7 @@ const PlanningPage: React.FC = () => {
             </Button>
           </div>
 
-          <div className="flex items-center gap-3 bg-[#0f172a] p-1 rounded-xl border border-[#1e293b]">
+          <div className="flex items-center gap-3 bg-card p-1 rounded-xl border border-border">
             <Button 
               variant="ghost" 
               size="icon" 
@@ -246,16 +246,16 @@ const PlanningPage: React.FC = () => {
           {/* Main Content Area */}
           <div className="lg:col-span-9 space-y-6">
             {view === 'week' ? (
-              <Card className="bg-[#0f172a]/50 border-[#1e293b] backdrop-blur-xl shadow-2xl overflow-hidden">
+              <Card className="bg-card/50 border-border backdrop-blur-xl shadow-2xl overflow-hidden">
                 <div className="overflow-x-auto">
                   <div className="min-w-[800px]">
                     {/* Calendar Header */}
-                    <div className="grid grid-cols-[200px_repeat(5,1fr)] border-b border-[#1e293b]">
-                      <div className="p-4 border-r border-[#1e293b] bg-[#020617]/50 flex items-center gap-2">
+                    <div className="grid grid-cols-[200px_repeat(5,1fr)] border-b border-border">
+                      <div className="p-4 border-r border-border bg-background/50 flex items-center gap-2">
                         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#475569]">Membro Team</span>
                       </div>
                       {weekDays.map(day => (
-                        <div key={day.toString()} className="p-4 text-center bg-[#020617]/30">
+                        <div key={day.toString()} className="p-4 text-center bg-background/30">
                           <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#475569] mb-1">
                             {format(day, 'EEEE', { locale: it })}
                           </div>
@@ -271,9 +271,9 @@ const PlanningPage: React.FC = () => {
                       {risorse.map(risorsa => (
                         <div key={risorsa.id} className="grid grid-cols-[200px_repeat(5,1fr)] group">
                           {/* User Info & Capacity */}
-                          <div className="p-4 border-r border-[#1e293b] bg-[#020617]/20 flex flex-col justify-between overflow-hidden">
+                          <div className="p-4 border-r border-border bg-background/20 flex flex-col justify-between overflow-hidden">
                             <div className="flex items-center gap-3">
-                              <Avatar className="h-8 w-8 border border-[#1e293b]">
+                              <Avatar className="h-8 w-8 border border-border">
                                 <AvatarFallback className="bg-primary/20 text-[10px] font-black uppercase text-primary">
                                   {risorsa.nome[0]}{risorsa.cognome[0]}
                                 </AvatarFallback>
@@ -294,7 +294,7 @@ const PlanningPage: React.FC = () => {
                               </div>
                               <Progress 
                                 value={Math.min((getUserWeeklyLoad(risorsa.id) / risorsa.ore_settimanali) * 100, 100)} 
-                                className={`h-1 bg-[#1e293b] ${getUserWeeklyLoad(risorsa.id) > risorsa.ore_settimanali ? '[&>div]:bg-destructive' : '[&>div]:bg-primary'}`}
+                                className={`h-1 bg-muted ${getUserWeeklyLoad(risorsa.id) > risorsa.ore_settimanali ? '[&>div]:bg-destructive' : '[&>div]:bg-primary'}`}
                               />
                             </div>
                           </div>
@@ -322,7 +322,7 @@ const PlanningPage: React.FC = () => {
               /* Month Forecast View */
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {risorse.map(risorsa => (
-                  <Card key={risorsa.id} className="bg-[#0f172a]/50 border-[#1e293b] p-6 space-y-6 backdrop-blur-xl">
+                  <Card key={risorsa.id} className="bg-card/50 border-border p-6 space-y-6 backdrop-blur-xl">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <Avatar className="h-12 w-12 border-2 border-primary/20 p-0.5">
@@ -335,7 +335,7 @@ const PlanningPage: React.FC = () => {
                           <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{risorsa.ruolo || 'Resource'}</p>
                         </div>
                       </div>
-                      <Badge className="bg-white/5 border-white/10 text-[#94a3b8] font-black uppercase text-[10px]">
+                      <Badge className="bg-white/5 border-white/10 text-muted-foreground font-black uppercase text-[10px]">
                         Capacità: {risorsa.ore_settimanali}h/sett
                       </Badge>
                     </div>
@@ -360,7 +360,7 @@ const PlanningPage: React.FC = () => {
                               </div>
                               <Progress 
                                 value={Math.min(percentage, 100)} 
-                                className={`h-2 bg-[#020617] ${percentage > 100 ? '[&>div]:bg-destructive' : percentage > 80 ? '[&>div]:bg-amber-400' : '[&>div]:bg-primary'}`}
+                                className={`h-2 bg-background ${percentage > 100 ? '[&>div]:bg-destructive' : percentage > 80 ? '[&>div]:bg-amber-400' : '[&>div]:bg-primary'}`}
                               />
                             </div>
                           );
@@ -384,8 +384,8 @@ const PlanningPage: React.FC = () => {
 
           {/* Sidebar: Unassigned Tasks */}
           <div className="lg:col-span-3">
-            <Card className="bg-[#0f172a]/50 border-[#1e293b] backdrop-blur-xl shadow-2xl h-[calc(100vh-160px)] flex flex-col sticky top-6">
-              <div className="p-4 border-b border-[#1e293b] flex items-center justify-between">
+            <Card className="bg-card/50 border-border backdrop-blur-xl shadow-2xl h-[calc(100vh-160px)] flex flex-col sticky top-6">
+              <div className="p-4 border-b border-border flex items-center justify-between">
                 <h3 className="text-sm font-black uppercase tracking-widest text-white flex items-center gap-2">
                   <div className="p-1 rounded bg-primary/20">
                     <Plus className="h-3.5 w-3.5 text-primary" />
@@ -402,7 +402,7 @@ const PlanningPage: React.FC = () => {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
                   <Input 
                     placeholder="Filtra per titolo o progetto..." 
-                    className="pl-9 h-9 bg-[#020617]/50 border-[#1e293b] text-xs focus-visible:ring-primary/30"
+                    className="pl-9 h-9 bg-background/50 border-border text-xs focus-visible:ring-primary/30"
                   />
                 </div>
               </div>
@@ -437,7 +437,7 @@ const PlanningPage: React.FC = () => {
           }),
         }}>
           {activeId ? (
-            <div className="w-[180px] p-2.5 bg-[#1e293b] border border-primary/50 shadow-2xl rounded-xl opacity-90 scale-110 cursor-grabbing ring-4 ring-primary/20 backdrop-blur-md">
+            <div className="w-[180px] p-2.5 bg-muted border border-primary/50 shadow-2xl rounded-xl opacity-90 scale-110 cursor-grabbing ring-4 ring-primary/20 backdrop-blur-md">
               <p className="text-[10px] font-black leading-tight text-white uppercase tracking-wide truncate">
                 {tasks.find(t => t.id === activeId)?.titolo}
               </p>
@@ -459,8 +459,8 @@ const CalendarCell: React.FC<{ id: string; tasks: Task[]; getProjectColor: (id?:
     <div 
       ref={setNodeRef}
       className={`
-        p-2 min-h-[140px] transition-all duration-300 border-r border-b border-[#1e293b]/20
-        ${isOver ? 'bg-primary/10 shadow-[inset_0_0_20px_rgba(124,58,237,0.1)]' : 'hover:bg-white/[0.01]'}
+        p-2 min-h-[140px] transition-all duration-300 border-r border-b border-border/20
+        ${isOver ? 'bg-primary/10 shadow-[inset_0_0_20px_hsl(var(--primary)/0.2)]' : 'hover:bg-white/[0.01]'}
       `}
     >
       <div className="space-y-2">
@@ -494,8 +494,8 @@ const DraggableTask: React.FC<{ task: Task; isMini?: boolean; getProjectColor?: 
         relative group cursor-grab active:cursor-grabbing rounded-xl border-l-[3px] transition-all duration-300
         ${isDragging ? 'opacity-20 grayscale' : 'opacity-100'}
         ${isMini 
-          ? `p-2 ${projectColor} border-y border-r border-[#1e293b]/50 hover:scale-[1.02] shadow-sm` 
-          : `p-4 bg-[#0f172a]/80 border-slate-700 hover:border-primary/50 shadow-lg border-y border-r`
+          ? `p-2 ${projectColor} border-y border-r border-border/50 hover:scale-[1.02] shadow-sm` 
+          : `p-4 bg-card/80 border-slate-700 hover:border-primary/50 shadow-lg border-y border-r`
         }
       `}
     >
@@ -522,7 +522,7 @@ const DraggableTask: React.FC<{ task: Task; isMini?: boolean; getProjectColor?: 
 
         {!isMini && (
           <div className="flex items-center gap-2 mt-1">
-            <div className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(124,58,237,0.5)]" />
+            <div className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.2)]" />
             <span className="text-[9px] font-black uppercase text-slate-500 tracking-[0.1em] truncate">
               {task.progetto_id ? 'Analisi Project X' : 'Backlog Generale'}
             </span>

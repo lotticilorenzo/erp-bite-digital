@@ -21,23 +21,26 @@ const PlanningPage = React.lazy(() => import("./pages/Planning"));
 import Fornitori from "./pages/Fornitori";
 import SupplierCategoryManager from "./pages/admin/SupplierCategoryManager";
 
+import { ThemeProvider } from "@/context/ThemeContext";
+
 function App() {
   const { user, isLoading } = useAuth();
-
+  
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#020617]">
+      <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
         <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
       </div>
     );
   }
 
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center min-h-screen bg-[#020617]">
-        <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-      </div>
-    }>
+    <ThemeProvider>
+      <Suspense fallback={
+        <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
+          <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+        </div>
+      }>
       <Routes>
         <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" />} />
         
@@ -77,6 +80,7 @@ function App() {
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Suspense>
+    </ThemeProvider>
   );
 }
 

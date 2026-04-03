@@ -28,13 +28,13 @@ export function StudioSidebar() {
   const [search, setSearch] = React.useState("");
 
   return (
-    <div className="flex flex-col h-full bg-transparent border-r border-[#1e293b]/30">
+    <div className="flex flex-col h-full bg-transparent border-r border-border/30">
       <div className="p-4 space-y-4">
         <div className="relative group">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#475569] group-focus-within:text-primary transition-colors" />
           <Input 
             placeholder="Search tasks..." 
-            className="pl-9 h-8 bg-[#0f172a]/50 border-[#1e293b]/50 text-xs focus-visible:ring-primary/30"
+            className="pl-9 h-8 bg-card/50 border-border/50 text-xs focus-visible:ring-primary/30"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -46,7 +46,7 @@ export function StudioSidebar() {
               isActive={nav.view === "home"}
               onClick={() => setView("home")}
               className={`h-9 px-3 rounded-lg transition-all ${
-                nav.view === "home" ? "bg-primary/10 text-primary border border-primary/20 shadow-[0_0_15px_rgba(124,58,237,0.15)]" : "text-[#94a3b8] hover:text-white"
+                nav.view === "home" ? "bg-primary/10 text-primary border border-primary/20 shadow-[0_0_15px_hsl(var(--primary)/0.2)]" : "text-muted-foreground hover:text-white"
               }`}
             >
               <Home className="h-4 w-4" />
@@ -80,14 +80,14 @@ export function StudioSidebar() {
                       <SidebarMenuItem>
                         <CollapsibleTrigger asChild>
                           <SidebarMenuButton 
-                            className={`h-9 px-3 rounded-lg group ${isFolderSelected ? "text-white font-bold" : "text-[#94a3b8] hover:text-white"}`}
+                            className={`h-9 px-3 rounded-lg group ${isFolderSelected ? "text-white font-bold" : "text-muted-foreground hover:text-white"}`}
                             onClick={() => selectFolder(folder.id)}
                           >
                             <ClientAvatar 
                               name={folder.ragione_sociale} 
                               logoUrl={folder.logo_url} 
                               size="xs" 
-                              className="rounded-md border-[#1e293b]"
+                              className="rounded-md border-border"
                             />
                             <span className="text-xs truncate">{folder.ragione_sociale}</span>
                             <ChevronRight className={`ml-auto h-3.5 w-3.5 text-[#475569] transition-transform duration-300 group-data-[state=open]/collapsible:rotate-90`} />
@@ -95,7 +95,7 @@ export function StudioSidebar() {
                         </CollapsibleTrigger>
                         
                         <CollapsibleContent>
-                          <SidebarMenuSub className="border-l border-[#1e293b] ml-4 mt-0.5 space-y-0.5">
+                          <SidebarMenuSub className="border-l border-border ml-4 mt-0.5 space-y-0.5">
                             <ProjectList folderId={folder.id} />
                           </SidebarMenuSub>
                         </CollapsibleContent>
@@ -135,7 +135,7 @@ function ProjectList({ folderId }: { folderId: string }) {
             className={`h-8 rounded-md text-[11px] transition-all ${
               nav.selectedListId === project.id 
                 ? "bg-white/5 text-primary font-bold" 
-                : "text-[#64748b] hover:text-[#94a3b8] hover:bg-white/5"
+                : "text-muted-foreground hover:text-muted-foreground hover:bg-white/5"
             }`}
           >
             <Hash className={`h-3 w-3 mr-2 ${nav.selectedListId === project.id ? "text-primary" : "text-[#334155]"}`} />

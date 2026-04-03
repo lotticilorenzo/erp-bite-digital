@@ -55,7 +55,7 @@ export function TimerBar() {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 h-[48px] bg-[#0f172a] border-t border-purple-500/30 flex items-center px-4 z-50 shadow-[0_-4px_12px_rgba(0,0,0,0.3)]">
+    <div className="fixed bottom-0 left-0 right-0 h-[48px] bg-card border-t border-purple-500/30 flex items-center px-4 z-50 shadow-[0_-4px_12px_rgba(0,0,0,0.3)]">
       <div className="container mx-auto flex items-center justify-between gap-4">
         {/* Left: Active Task Info */}
         <div className="flex items-center gap-3 overflow-hidden">
@@ -101,7 +101,7 @@ export function TimerBar() {
                   <ChevronUp className="w-3 h-3 opacity-50" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64 bg-[#1e293b] border-gray-700 text-gray-200">
+              <DropdownMenuContent align="end" className="w-64 bg-muted border-gray-700 text-gray-200">
                 <DropdownMenuLabel className="text-xs font-semibold text-gray-400">
                   I tuoi task attivi
                 </DropdownMenuLabel>

@@ -41,18 +41,18 @@ export default function ProgettiPage() {
   return (
     <div className="p-8 space-y-8 animate-in fade-in duration-500">
       <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold text-[#f1f5f9] tracking-tight">Progetti</h1>
-          <p className="text-[#94a3b8] mt-1">
-            Gestisci i progetti attivi, i retainer e le commesse one-off.
-          </p>
-        </div>
+        <header className="flex flex-col gap-1">
+        <h1 className="text-4xl font-black tracking-tight text-foreground mb-1">Progetti</h1>
+        <p className="text-muted-foreground text-sm font-medium">
+          Monitora lo stato, il budget e la marginalità di tutti i tuoi progetti creativi.
+        </p>
+      </header>
         <Button 
           onClick={() => {
             setSelectedProgetto(null);
             setIsDialogOpen(true);
           }}
-          className="bg-purple-600 hover:bg-purple-700 text-white shadow-[0_0_15px_rgba(124,58,237,0.3)] transition-all hover:scale-105"
+          className="bg-primary hover:bg-primary/90 text-white shadow-[0_0_15px_hsl(var(--primary)/0.2)] transition-all hover:scale-105"
         >
           <Plus className="w-4 h-4 mr-2" />
           Nuovo Progetto
@@ -73,15 +73,15 @@ export default function ProgettiPage() {
       />
 
       <Dialog open={!!progettoToDelete} onOpenChange={() => setProgettoToDelete(null)}>
-        <DialogContent className="bg-[#0f172a] border-[#1e293b] text-white">
+        <DialogContent className="bg-card border-border text-white">
           <DialogHeader>
             <DialogTitle>Sei sicuro?</DialogTitle>
-            <DialogDescription className="text-[#94a3b8]">
+            <DialogDescription className="text-muted-foreground">
               Questa azione eliminerà permanentemente il progetto <strong>{progettoToDelete?.nome}</strong> e tutti i dati associati.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setProgettoToDelete(null)} className="text-[#94a3b8] hover:text-white hover:bg-[#1e293b]">
+            <Button variant="ghost" onClick={() => setProgettoToDelete(null)} className="text-muted-foreground hover:text-white hover:bg-muted">
               Annulla
             </Button>
             <Button onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700 text-white">

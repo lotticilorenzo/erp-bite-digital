@@ -91,7 +91,7 @@ export function TimesheetDialog({ open, onOpenChange }: TimesheetDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#0f172a] border-[#1e293b] text-white sm:max-w-[425px]">
+      <DialogContent className="bg-card border-border text-white sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calendar className="w-5 h-5 text-purple-400" />
@@ -109,11 +109,11 @@ export function TimesheetDialog({ open, onOpenChange }: TimesheetDialogProps) {
                   <FormLabel>Cliente</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
-                      <SelectTrigger className="bg-[#1e293b] border-[#334155] text-white">
+                      <SelectTrigger className="bg-muted border-border text-white">
                         <SelectValue placeholder="Seleziona cliente" />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent className="bg-[#0f172a] border-[#1e293b] text-white">
+                    <SelectContent className="bg-card border-border text-white">
                       {loadingClienti ? (
                         <div className="p-2 flex justify-center"><Loader2 className="w-4 h-4 animate-spin text-purple-500" /></div>
                       ) : (
@@ -136,7 +136,7 @@ export function TimesheetDialog({ open, onOpenChange }: TimesheetDialogProps) {
                   <FormItem>
                     <FormLabel>Data</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} className="bg-[#1e293b] border-[#334155] text-white" />
+                      <Input type="date" {...field} className="bg-muted border-border text-white" />
                     </FormControl>
                     <FormMessage className="text-red-400" />
                   </FormItem>
@@ -150,11 +150,11 @@ export function TimesheetDialog({ open, onOpenChange }: TimesheetDialogProps) {
                     <FormLabel>Servizio</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
-                        <SelectTrigger className="bg-[#1e293b] border-[#334155] text-white">
+                        <SelectTrigger className="bg-muted border-border text-white">
                           <SelectValue placeholder="Tipo lavoro" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent className="bg-[#0f172a] border-[#1e293b] text-white">
+                      <SelectContent className="bg-card border-border text-white">
                         {servizi.map((s) => (
                           <SelectItem key={s} value={s}>{s}</SelectItem>
                         ))}
@@ -174,7 +174,7 @@ export function TimesheetDialog({ open, onOpenChange }: TimesheetDialogProps) {
                   <FormItem>
                     <FormLabel>Ore</FormLabel>
                     <FormControl>
-                      <Input type="number" min="0" {...field} className="bg-[#1e293b] border-[#334155] text-white" />
+                      <Input type="number" min="0" {...field} className="bg-muted border-border text-white" />
                     </FormControl>
                     <FormMessage className="text-red-400" />
                   </FormItem>
@@ -187,7 +187,7 @@ export function TimesheetDialog({ open, onOpenChange }: TimesheetDialogProps) {
                   <FormItem>
                     <FormLabel>Minuti</FormLabel>
                     <FormControl>
-                      <Input type="number" min="0" max="59" step="5" {...field} className="bg-[#1e293b] border-[#334155] text-white" />
+                      <Input type="number" min="0" max="59" step="5" {...field} className="bg-muted border-border text-white" />
                     </FormControl>
                     <FormMessage className="text-red-400" />
                   </FormItem>
@@ -202,7 +202,7 @@ export function TimesheetDialog({ open, onOpenChange }: TimesheetDialogProps) {
                 <FormItem>
                   <FormLabel>Note</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder="Descrizione attività" className="bg-[#1e293b] border-[#334155] text-white" />
+                    <Input {...field} placeholder="Descrizione attività" className="bg-muted border-border text-white" />
                   </FormControl>
                   <FormMessage className="text-red-400" />
                 </FormItem>
@@ -213,7 +213,7 @@ export function TimesheetDialog({ open, onOpenChange }: TimesheetDialogProps) {
               <Button 
                 type="submit" 
                 disabled={createMutation.isPending}
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-black"
+                className="w-full bg-primary hover:bg-primary/90 text-white font-black"
               >
                 {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "REGISTRA ORE"}
               </Button>

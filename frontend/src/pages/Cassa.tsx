@@ -15,13 +15,13 @@ export default function Cassa() {
   if (isLoading) {
     return (
       <div className="p-8 space-y-8 animate-in fade-in duration-500">
-        <Skeleton className="h-10 w-48 rounded-xl bg-[#1e293b]/20" />
+        <Skeleton className="h-10 w-48 rounded-xl bg-muted/20" />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[1, 2, 3].map(i => <Skeleton key={i} className="h-32 rounded-3xl bg-[#1e293b]/10" />)}
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-32 rounded-3xl bg-muted/10" />)}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Skeleton className="lg:col-span-2 h-[400px] rounded-3xl bg-[#1e293b]/5" />
-          <Skeleton className="h-[400px] rounded-3xl bg-[#1e293b]/5" />
+          <Skeleton className="lg:col-span-2 h-[400px] rounded-3xl bg-muted/5" />
+          <Skeleton className="h-[400px] rounded-3xl bg-muted/5" />
         </div>
       </div>
     );
@@ -37,11 +37,11 @@ export default function Cassa() {
           <p className="text-[#475569] text-xs font-bold uppercase tracking-[0.2em] mt-1">Gestione flussi bancari e riconciliazioni</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="h-10 bg-[#0f172a]/50 border-[#1e293b] text-[#94a3b8] hover:text-white rounded-xl gap-2 font-bold uppercase text-[10px] tracking-widest">
+          <Button variant="outline" className="h-10 bg-card/50 border-border text-muted-foreground hover:text-white rounded-xl gap-2 font-bold uppercase text-[10px] tracking-widest">
             <Calendar className="h-4 w-4" />
             Ultimi 30 Giorni
           </Button>
-          <Button className="h-10 bg-primary hover:bg-primary/90 text-white rounded-xl gap-2 font-black uppercase text-[10px] tracking-widest shadow-[0_0_20px_rgba(124,58,237,0.3)]">
+          <Button className="h-10 bg-primary hover:bg-primary/90 text-white rounded-xl gap-2 font-black uppercase text-[10px] tracking-widest shadow-[0_0_20px_hsl(var(--primary)/0.2)]">
             <Download className="h-4 w-4" />
             Importa Estratto
           </Button>

@@ -64,7 +64,7 @@ export function TimerWidget() {
 
   if (!active_session && !showSaveDialog) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[#64748b]">
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-muted-foreground">
         <Clock className="w-3.5 h-3.5" />
         <span className="text-[10px] font-medium uppercase tracking-wider">Nessun task attivo</span>
       </div>
@@ -78,7 +78,7 @@ export function TimerWidget() {
           <span className="text-[10px] font-black text-purple-400 uppercase tracking-tighter truncate max-w-[150px]">
             {activeTask?.title || "Caricamento task..."}
           </span>
-          <span className="text-[9px] text-[#64748b] leading-none">
+          <span className="text-[9px] text-muted-foreground leading-none">
             In corso
           </span>
         </div>
@@ -105,7 +105,7 @@ export function TimerWidget() {
       </div>
 
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
-        <DialogContent className="bg-[#0f172a] border-[#1e293b] text-white">
+        <DialogContent className="bg-card border-border text-white">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-400">
               <CheckCircle2 className="w-5 h-5" />
@@ -114,16 +114,16 @@ export function TimerWidget() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-center">
-              <p className="text-sm text-[#94a3b8] uppercase tracking-widest font-black">Tempo Totale</p>
+              <p className="text-sm text-muted-foreground uppercase tracking-widest font-black">Tempo Totale</p>
               <p className="text-4xl font-black text-white mt-1">{formatTime(seconds)}</p>
             </div>
             <div className="space-y-2">
-              <Label className="text-xs text-[#64748b]">Cosa hai fatto?</Label>
+              <Label className="text-xs text-muted-foreground">Cosa hai fatto?</Label>
               <Input 
                 value={note} 
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Note brevi sull'attività..."
-                className="bg-[#1e293b] border-[#334155] text-white"
+                className="bg-muted border-border text-white"
               />
             </div>
           </div>
@@ -131,14 +131,14 @@ export function TimerWidget() {
             <Button 
               variant="ghost" 
               onClick={() => { setShowSaveDialog(false); setLastStoppedSessionId(null); }}
-              className="text-[#64748b] hover:text-white"
+              className="text-muted-foreground hover:text-white"
             >
               Annulla
             </Button>
             <Button 
               onClick={handleSave}
               disabled={saveMutation.isPending}
-              className="bg-purple-600 hover:bg-purple-700 text-white font-black"
+              className="bg-primary hover:bg-primary/90 text-white font-black"
             >
               {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "SALVA NEL TIMESHEET"}
             </Button>

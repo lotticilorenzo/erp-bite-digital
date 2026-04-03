@@ -64,8 +64,8 @@ export function NotificationDropdown() {
         </Button>
       </DropdownMenuTrigger>
       
-      <DropdownMenuContent align="end" className="w-[380px] bg-[#0f172a] border-[#1e293b] p-0 shadow-2xl rounded-2xl overflow-hidden">
-        <div className="p-4 border-b border-[#1e293b] flex items-center justify-between bg-[#111827]/50">
+      <DropdownMenuContent align="end" className="w-[380px] bg-card border-border p-0 shadow-2xl rounded-2xl overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center justify-between bg-[#111827]/50">
           <h3 className="text-sm font-black text-white tracking-widest uppercase italic">Notifiche</h3>
           {unreadCount > 0 && (
             <Button 
@@ -80,7 +80,7 @@ export function NotificationDropdown() {
         </div>
 
         <Tabs defaultValue="all" className="w-full">
-          <TabsList className="w-full grid grid-cols-3 bg-transparent border-b border-[#1e293b] rounded-none h-10 p-0">
+          <TabsList className="w-full grid grid-cols-3 bg-transparent border-b border-border rounded-none h-10 p-0">
             <TabsTrigger value="all" className="data-[state=active]:bg-white/5 data-[state=active]:text-white text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-none">Tutte</TabsTrigger>
             <TabsTrigger value="unread" className="data-[state=active]:bg-white/5 data-[state=active]:text-white text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-none">Non Lette</TabsTrigger>
             <TabsTrigger value="important" className="data-[state=active]:bg-white/5 data-[state=active]:text-white text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-none">Importanti</TabsTrigger>
@@ -99,7 +99,7 @@ export function NotificationDropdown() {
           </div>
         </Tabs>
         
-        <DropdownMenuSeparator className="bg-[#1e293b] m-0" />
+        <DropdownMenuSeparator className="bg-muted m-0" />
         <div className="p-3 bg-[#111827]/30 text-center">
            <Button variant="link" className="text-[10px] h-auto p-0 font-black uppercase tracking-widest text-primary hover:text-primary/80">
              Vedi tutte le attività
@@ -127,13 +127,13 @@ function NotificationList({ nodes, onClick, getIcon }: { nodes: any[], onClick: 
           key={n.id}
           onClick={() => onClick(n)}
           className={cn(
-            "w-full text-left p-4 flex gap-4 transition-all hover:bg-white/5 border-b border-[#1e293b]/50 group",
+            "w-full text-left p-4 flex gap-4 transition-all hover:bg-white/5 border-b border-border/50 group",
             !n.isRead && "bg-primary/5"
           )}
         >
           <div className={cn(
             "mt-1 p-2 rounded-xl border",
-            n.type === "URGENTE" ? "bg-rose-500/10 border-rose-500/20" : "bg-[#1e293b]/50 border-[#334155]"
+            n.type === "URGENTE" ? "bg-rose-500/10 border-rose-500/20" : "bg-muted/50 border-border"
           )}>
             {getIcon(n.type)}
           </div>
@@ -143,7 +143,7 @@ function NotificationList({ nodes, onClick, getIcon }: { nodes: any[], onClick: 
                 "text-xs font-black uppercase tracking-tight",
                 n.isRead ? "text-slate-200" : "text-white"
               )}>{n.title}</p>
-              {!n.isRead && <div className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(124,58,237,0.5)]" />}
+              {!n.isRead && <div className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.2)]" />}
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed group-hover:text-slate-300 transition-colors">
               {n.description}

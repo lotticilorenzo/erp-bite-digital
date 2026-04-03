@@ -158,7 +158,7 @@ export default function SupplierCategoryManager() {
       </div>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[400px] bg-[#0f172a] border-white/10">
+        <DialogContent className="sm:max-w-[400px] bg-card border-white/10">
           <DialogHeader>
             <DialogTitle>{selectedCat?.id ? "Modifica Categoria" : "Nuova Categoria"}</DialogTitle>
             <DialogDescription>Definisci il nome e il colore identificativo.</DialogDescription>

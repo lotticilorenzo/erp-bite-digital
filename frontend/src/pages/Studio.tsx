@@ -29,7 +29,7 @@ export default function StudioPage() {
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-[#020617]">
+    <div className="flex flex-col h-full overflow-hidden bg-background">
       <StudioTopbar />
       <main className="flex-1 overflow-hidden relative">
         {renderView()}

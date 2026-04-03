@@ -125,8 +125,8 @@ export function StudioTaskModal() {
 
   return (
     <Dialog open={!!nav.selectedTaskId} onOpenChange={() => selectTask(null)}>
-      <DialogContent className="max-w-4xl h-[85vh] p-0 bg-[#020617] border-[#1e293b] shadow-2xl overflow-hidden flex flex-col">
-        <DialogHeader className="px-8 py-6 border-b border-[#1e293b]/50 bg-[#0f172a]/40 flex flex-row items-center justify-between shrink-0">
+      <DialogContent className="max-w-4xl h-[85vh] p-0 bg-background border-border shadow-2xl overflow-hidden flex flex-col">
+        <DialogHeader className="px-8 py-6 border-b border-border/50 bg-card/40 flex flex-row items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <Badge variant="outline" className="bg-primary/10 border-primary/20 text-primary text-[10px] font-black uppercase tracking-widest">
               {isNew ? 'NUOVA TASK' : 'DETTAGLIO TASK'}
@@ -157,7 +157,7 @@ export function StudioTaskModal() {
 
         <div className="flex-1 flex overflow-hidden">
           {/* Main Content */}
-          <div className="flex-1 border-r border-[#1e293b]/30 flex flex-col overflow-hidden">
+          <div className="flex-1 border-r border-border/30 flex flex-col overflow-hidden">
             <ScrollArea className="flex-1 px-8 py-8">
               <div className="space-y-8">
                 <div className="space-y-4">
@@ -170,7 +170,7 @@ export function StudioTaskModal() {
                   />
                   <textarea 
                     placeholder="Aggiungi una descrizione..."
-                    className="w-full bg-transparent border-none outline-none text-sm text-[#94a3b8] font-medium leading-relaxed resize-none min-h-[150px]"
+                    className="w-full bg-transparent border-none outline-none text-sm text-muted-foreground font-medium leading-relaxed resize-none min-h-[150px]"
                     value={formData.descrizione}
                     onChange={(e) => setFormData(prev => ({ ...prev, descrizione: e.target.value }))}
                   />
@@ -184,9 +184,9 @@ export function StudioTaskModal() {
                     </div>
                     <div className="space-y-2">
                       {task?.subtasks?.map((sub: any) => (
-                        <div key={sub.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors group cursor-pointer border border-transparent hover:border-[#1e293b]/50">
-                          <div className="h-5 w-5 rounded-md border-2 border-[#1e293b] group-hover:border-primary/50 transition-colors" />
-                          <span className="text-sm font-bold text-[#94a3b8] group-hover:text-white transition-colors">
+                        <div key={sub.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors group cursor-pointer border border-transparent hover:border-border/50">
+                          <div className="h-5 w-5 rounded-md border-2 border-border group-hover:border-primary/50 transition-colors" />
+                          <span className="text-sm font-bold text-muted-foreground group-hover:text-white transition-colors">
                             {sub.title}
                           </span>
                         </div>
@@ -212,7 +212,7 @@ export function StudioTaskModal() {
                                <span className="text-xs font-bold text-white">
                                  {format(new Date(session.started_at), "dd MMM yyyy HH:mm")}
                                </span>
-                               <span className="text-[10px] text-[#64748b] uppercase font-black">
+                               <span className="text-[10px] text-muted-foreground uppercase font-black">
                                  {session.note || "Nessuna nota"}
                                </span>
                             </div>
@@ -243,7 +243,7 @@ export function StudioTaskModal() {
           </div>
 
           {/* Sidebar */}
-          <div className="w-80 bg-[#0f172a]/20 shrink-0 p-6 space-y-8 overflow-y-auto">
+          <div className="w-80 bg-card/20 shrink-0 p-6 space-y-8 overflow-y-auto">
             <div className="space-y-6">
               <div className="space-y-2">
                  <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Stato</span>
@@ -251,10 +251,10 @@ export function StudioTaskModal() {
                    value={formData.stato} 
                    onValueChange={(val) => setFormData(prev => ({ ...prev, stato: val }))}
                  >
-                   <SelectTrigger className="w-full bg-[#1e293b]/30 border-[#1e293b] hover:bg-[#1e293b]/50 h-10 rounded-xl px-4 text-xs font-black uppercase tracking-widest">
+                   <SelectTrigger className="w-full bg-muted/30 border-border hover:bg-muted/50 h-10 rounded-xl px-4 text-xs font-black uppercase tracking-widest">
                      <SelectValue />
                    </SelectTrigger>
-                   <SelectContent className="bg-[#0f172a] border-[#1e293b] text-white">
+                   <SelectContent className="bg-card border-border text-white">
                       <SelectItem value="DA_FARE">DA FARE</SelectItem>
                       <SelectItem value="IN_CORSO">IN CORSO</SelectItem>
                       <SelectItem value="REVISIONE">REVISIONE</SelectItem>
@@ -269,11 +269,11 @@ export function StudioTaskModal() {
                    value={formData.commessa_id} 
                    onValueChange={(val) => setFormData(prev => ({ ...prev, commessa_id: val }))}
                  >
-                   <SelectTrigger className="w-full bg-[#1e293b]/30 border-[#1e293b] hover:bg-[#1e293b]/50 h-10 rounded-xl px-4 text-xs font-bold truncate">
+                   <SelectTrigger className="w-full bg-muted/30 border-border hover:bg-muted/50 h-10 rounded-xl px-4 text-xs font-bold truncate">
                      <Briefcase className="h-3.5 w-3.5 mr-2 text-primary" />
                      <SelectValue placeholder="Collega a Commessa" />
                    </SelectTrigger>
-                   <SelectContent className="bg-[#0f172a] border-[#1e293b] text-white">
+                   <SelectContent className="bg-card border-border text-white">
                       <SelectItem value="none">Nessuna Commessa</SelectItem>
                       {commesse?.map(c => (
                         <SelectItem key={c.id} value={c.id}>
@@ -287,7 +287,7 @@ export function StudioTaskModal() {
               {!isNew && (
                 <div className="space-y-4">
                   <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Live Timer</span>
-                  <div className="bg-[#1e293b]/20 border border-primary/20 p-4 rounded-2xl relative overflow-hidden group">
+                  <div className="bg-muted/20 border border-primary/20 p-4 rounded-2xl relative overflow-hidden group">
                       <div className="absolute top-0 left-0 w-[2px] h-full bg-primary opacity-50" />
                       <div className="flex flex-col gap-3">
                         <div className="text-2xl font-black text-white tabular-nums tracking-tighter">
@@ -296,7 +296,7 @@ export function StudioTaskModal() {
                         <div className="flex gap-2">
                             <Button 
                               className={`flex-1 rounded-xl font-black uppercase tracking-widest text-[10px] gap-2 h-9 shadow-lg transition-all ${
-                                isTimerActive ? "bg-red-500 hover:bg-red-600 shadow-red-500/20" : "bg-primary hover:bg-primary/90 shadow-primary/20"
+                                isTimerActive ? "bg-red-500 hover:bg-red-600 shadow-red-500/20" : "bg-primary hover:bg-primary/90 shadow-[0_0_20px_hsl(var(--primary)/0.2)]"
                               }`}
                               onClick={() => isTimerActive ? timer.stop(timer.active_session!.id) : timer.start(task!.id)}
                             >
@@ -311,7 +311,7 @@ export function StudioTaskModal() {
 
               <div className="space-y-4">
                  <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Eseguito da</span>
-                 <div className="flex items-center gap-3 bg-[#1e293b]/20 p-3 rounded-xl border border-[#1e293b]">
+                 <div className="flex items-center gap-3 bg-muted/20 p-3 rounded-xl border border-border">
                     <Avatar className="h-8 w-8 border border-primary/20">
                       <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-black">LL</AvatarFallback>
                     </Avatar>

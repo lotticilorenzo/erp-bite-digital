@@ -176,9 +176,9 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] bg-[#0f172a] border-[#1e293b] text-white">
+      <DialogContent className="sm:max-w-[600px] bg-card border-border text-white">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-[#f1f5f9]">
+          <DialogTitle className="text-xl font-bold text-foreground">
             {isEditing ? "Modifica Cliente" : "Nuovo Cliente"}
           </DialogTitle>
         </DialogHeader>
@@ -186,13 +186,13 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
             {/* Logo Section */}
-            <div className="flex items-center gap-6 pb-4 border-b border-[#1e293b]">
+            <div className="flex items-center gap-6 pb-4 border-b border-border">
               <div className="relative group">
                 <ClientAvatar 
                   name={form.watch("ragione_sociale") || "C"} 
                   logoUrl={previewUrl} 
                   size="xl" 
-                  className="rounded-xl border-2 border-[#334155]"
+                  className="rounded-xl border-2 border-border"
                 />
                 <button
                   type="button"
@@ -204,14 +204,14 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
               </div>
               
               <div className="flex flex-col gap-2">
-                <h4 className="text-sm font-medium text-[#f1f5f9]">Logo Aziendale</h4>
-                <p className="text-xs text-[#94a3b8]">PNG, JPG o SVG. Max 2MB.</p>
+                <h4 className="text-sm font-medium text-foreground">Logo Aziendale</h4>
+                <p className="text-xs text-muted-foreground">PNG, JPG o SVG. Max 2MB.</p>
                 <div className="flex gap-2 mt-1">
                   <Button 
                     type="button" 
                     variant="outline" 
                     size="sm" 
-                    className="h-8 text-xs border-[#334155] bg-transparent text-[#94a3b8] hover:text-white"
+                    className="h-8 text-xs border-border bg-transparent text-muted-foreground hover:text-white"
                     onClick={() => fileInputRef.current?.click()}
                   >
                     Carica nuovo
@@ -244,9 +244,9 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
                 name="ragione_sociale"
                 render={({ field }) => (
                   <FormItem className="col-span-2">
-                    <FormLabel className="text-[#94a3b8]">Ragione Sociale</FormLabel>
+                    <FormLabel className="text-muted-foreground">Ragione Sociale</FormLabel>
                     <FormControl>
-                      <Input {...field} className="bg-[#1e293b] border-[#334155] text-white focus:ring-primary" placeholder="Nome Azienda Srl" />
+                      <Input {...field} className="bg-muted border-border text-white focus:ring-primary" placeholder="Nome Azienda Srl" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -258,9 +258,9 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
                 name="piva"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[#94a3b8]">Partita IVA</FormLabel>
+                    <FormLabel className="text-muted-foreground">Partita IVA</FormLabel>
                     <FormControl>
-                      <Input {...field} className="bg-[#1e293b] border-[#334155] text-white" placeholder="IT01234567890" />
+                      <Input {...field} className="bg-muted border-border text-white" placeholder="IT01234567890" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -272,9 +272,9 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[#94a3b8]">Email</FormLabel>
+                    <FormLabel className="text-muted-foreground">Email</FormLabel>
                     <FormControl>
-                      <Input {...field} className="bg-[#1e293b] border-[#334155] text-white" placeholder="email@esempio.com" />
+                      <Input {...field} className="bg-muted border-border text-white" placeholder="email@esempio.com" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -286,9 +286,9 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
                 name="telefono"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[#94a3b8]">Telefono</FormLabel>
+                    <FormLabel className="text-muted-foreground">Telefono</FormLabel>
                     <FormControl>
-                      <Input {...field} className="bg-[#1e293b] border-[#334155] text-white" placeholder="+39 012 3456789" />
+                      <Input {...field} className="bg-muted border-border text-white" placeholder="+39 012 3456789" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -300,9 +300,9 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
                 name="referente"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[#94a3b8]">Referente</FormLabel>
+                    <FormLabel className="text-muted-foreground">Referente</FormLabel>
                     <FormControl>
-                      <Input {...field} className="bg-[#1e293b] border-[#334155] text-white" placeholder="Mario Rossi" />
+                      <Input {...field} className="bg-muted border-border text-white" placeholder="Mario Rossi" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -313,7 +313,7 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
                 control={form.control as any}
                 name="attivo"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border border-[#334155] bg-[#1e293b]/30 p-4 col-span-2">
+                  <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border border-border bg-muted/30 p-4 col-span-2">
                     <FormControl>
                       <Checkbox
                         checked={field.value}
@@ -322,8 +322,8 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
                       />
                     </FormControl>
                     <div className="space-y-1 leading-none">
-                      <FormLabel className="text-[#f1f5f9]">Cliente Attivo</FormLabel>
-                      <p className="text-[11px] text-[#64748b]">
+                      <FormLabel className="text-foreground">Cliente Attivo</FormLabel>
+                      <p className="text-[11px] text-muted-foreground">
                         I clienti inattivi non verranno mostrati nelle liste di selezione progetti.
                       </p>
                     </div>
@@ -333,7 +333,7 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
             </div>
 
             <DialogFooter className="pt-4">
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-[#94a3b8] hover:text-white hover:bg-[#1e293b]">
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground hover:text-white hover:bg-muted">
                 Annulla
               </Button>
               <Button type="submit" disabled={isPending} className="bg-primary hover:bg-primary/90 text-white min-w-[100px]">

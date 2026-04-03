@@ -27,13 +27,13 @@ export default function ProgettoDetailPage() {
   if (isLoading) {
     return (
       <div className="p-8 space-y-6">
-        <div className="h-8 w-48 bg-[#1e293b] animate-pulse rounded" />
+        <div className="h-8 w-48 bg-muted animate-pulse rounded" />
         <div className="grid grid-cols-3 gap-6">
           <div className="col-span-2 space-y-6">
-            <div className="h-64 bg-[#0f172a] animate-pulse rounded-xl border border-[#1e293b]" />
-            <div className="h-96 bg-[#0f172a] animate-pulse rounded-xl border border-[#1e293b]" />
+            <div className="h-64 bg-card animate-pulse rounded-xl border border-border" />
+            <div className="h-96 bg-card animate-pulse rounded-xl border border-border" />
           </div>
-          <div className="h-96 bg-[#0f172a] animate-pulse rounded-xl border border-[#1e293b]" />
+          <div className="h-96 bg-card animate-pulse rounded-xl border border-border" />
         </div>
       </div>
     );
@@ -56,14 +56,14 @@ export default function ProgettoDetailPage() {
         <Button 
           variant="ghost" 
           onClick={() => navigate("/progetti")} 
-          className="text-[#64748b] hover:text-white hover:bg-[#1e293b]"
+          className="text-muted-foreground hover:text-white hover:bg-muted"
         >
           <ChevronLeft className="w-4 h-4 mr-2" />
           Indietro
         </Button>
-        <div className="h-4 w-px bg-[#1e293b]" />
+        <div className="h-4 w-px bg-muted" />
         <div>
-          <h1 className="text-3xl font-bold text-[#f1f5f9]">{progetto.nome}</h1>
+          <h1 className="text-3xl font-bold text-foreground">{progetto.nome}</h1>
           <div className="flex items-center gap-3 mt-1">
             <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/20">
               {progetto.tipo}
@@ -101,8 +101,8 @@ export default function ProgettoDetailPage() {
             />
           </div>
 
-          <Card className="bg-[#0f172a] border-[#1e293b] text-white">
-            <CardHeader className="border-b border-[#1e293b] py-4">
+          <Card className="bg-card border-border text-white">
+            <CardHeader className="border-b border-border py-4">
               <CardTitle className="text-lg font-medium flex items-center gap-2">
                 <FileText className="w-4 h-4 text-purple-400" />
                 Dettagli Progetto
@@ -111,25 +111,25 @@ export default function ProgettoDetailPage() {
             <CardContent className="pt-6">
               <div className="space-y-6">
                 <div>
-                  <h4 className="text-sm font-medium text-[#94a3b8] mb-2 uppercase tracking-wider">Cliente Associato</h4>
-                  <div className="flex items-center gap-3 p-4 rounded-xl bg-[#1e293b]/30 border border-[#334155]">
+                  <h4 className="text-sm font-medium text-muted-foreground mb-2 uppercase tracking-wider">Cliente Associato</h4>
+                  <div className="flex items-center gap-3 p-4 rounded-xl bg-muted/30 border border-border">
                     <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
                       <Building2 className="w-5 h-5 text-purple-400" />
                     </div>
                     <div>
-                      <p className="font-semibold text-[#f1f5f9]">{progetto.cliente?.ragione_sociale}</p>
-                      <p className="text-xs text-[#64748b]">{progetto.cliente?.email || "Nessuna email"}</p>
+                      <p className="font-semibold text-foreground">{progetto.cliente?.ragione_sociale}</p>
+                      <p className="text-xs text-muted-foreground">{progetto.cliente?.email || "Nessuna email"}</p>
                     </div>
-                    <Button variant="ghost" size="icon" className="ml-auto text-[#64748b]" onClick={() => navigate(`/clienti`)}>
+                    <Button variant="ghost" size="icon" className="ml-auto text-muted-foreground" onClick={() => navigate(`/clienti`)}>
                       <ExternalLink className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-medium text-[#94a3b8] mb-2 uppercase tracking-wider">Note</h4>
-                  <div className="p-4 rounded-xl bg-[#1e293b]/30 border border-[#334155]">
-                    <p className="text-[#cbd5e1] whitespace-pre-wrap">
+                  <h4 className="text-sm font-medium text-muted-foreground mb-2 uppercase tracking-wider">Note</h4>
+                  <div className="p-4 rounded-xl bg-muted/30 border border-border">
+                    <p className="text-foreground whitespace-pre-wrap">
                       {progetto.note || "Nessuna nota aggiuntiva per questo progetto."}
                     </p>
                   </div>
@@ -138,19 +138,19 @@ export default function ProgettoDetailPage() {
             </CardContent>
           </Card>
 
-          <Card className="bg-[#0f172a] border-[#1e293b] text-white">
-            <CardHeader className="border-b border-[#1e293b] py-4 flex flex-row items-center justify-between">
+          <Card className="bg-card border-border text-white">
+            <CardHeader className="border-b border-border py-4 flex flex-row items-center justify-between">
               <CardTitle className="text-lg font-medium flex items-center gap-2">
                 <Layers className="w-4 h-4 text-purple-400" />
                 Commesse Correlate
               </CardTitle>
-              <Button size="sm" variant="outline" className="h-8 bg-purple-600/10 text-purple-400 border-purple-500/20 hover:bg-purple-600/20">
+              <Button size="sm" variant="outline" className="h-8 bg-primary/10 text-purple-400 border-purple-500/20 hover:bg-primary/20">
                 <Plus className="w-3 h-3 mr-1" /> Nuova Commessa
               </Button>
             </CardHeader>
             <CardContent className="pt-6">
-              <div className="text-center py-12 border-2 border-dashed border-[#1e293b] rounded-xl">
-                <p className="text-[#64748b]">Nessuna commessa ancora generata per questo progetto.</p>
+              <div className="text-center py-12 border-2 border-dashed border-border rounded-xl">
+                <p className="text-muted-foreground">Nessuna commessa ancora generata per questo progetto.</p>
                 <p className="text-xs text-[#475569] mt-1">Le commesse verranno visualizzate qui una volta create.</p>
               </div>
             </CardContent>
@@ -159,7 +159,7 @@ export default function ProgettoDetailPage() {
 
         {/* Sidebar Info */}
         <div className="space-y-6">
-          <Card className="bg-[#0f172a] border-[#1e293b] text-white overflow-hidden">
+          <Card className="bg-card border-border text-white overflow-hidden">
             <div className="h-1 bg-gradient-to-r from-purple-500 via-blue-500 to-purple-500" />
             <CardHeader>
               <CardTitle className="text-lg font-medium">Stato di Avanzamento</CardTitle>
@@ -167,28 +167,28 @@ export default function ProgettoDetailPage() {
             <CardContent className="space-y-6">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-[#94a3b8]">Ore Utilizzate</span>
+                  <span className="text-muted-foreground">Ore Utilizzate</span>
                   <span className="text-white">0 / {progetto.delivery_attesa}h</span>
                 </div>
-                <div className="w-full h-2 bg-[#1e293b] rounded-full overflow-hidden">
+                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                   <div className="w-0 h-full bg-purple-500" />
                 </div>
               </div>
 
-              <div className="space-y-4 pt-4 border-t border-[#1e293b]">
+              <div className="space-y-4 pt-4 border-t border-border">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-[#94a3b8]">ClickUp ID</span>
-                  <Badge variant="outline" className="bg-[#1e293b] text-[#cbd5e1] border-[#334155]">
+                  <span className="text-sm text-muted-foreground">ClickUp ID</span>
+                  <Badge variant="outline" className="bg-muted text-foreground border-border">
                      {progetto.clickup_list_id || "Non collegato"}
                   </Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-[#94a3b8]">Margine Previsto</span>
+                  <span className="text-sm text-muted-foreground">Margine Previsto</span>
                   <span className="text-sm font-medium text-emerald-400">-- %</span>
                 </div>
               </div>
               
-              <Button className="w-full bg-[#1e293b] hover:bg-[#334155] text-white border border-[#334155]">
+              <Button className="w-full bg-muted hover:bg-[#334155] text-white border border-border">
                 Apri su ClickUp
               </Button>
             </CardContent>
@@ -201,9 +201,9 @@ export default function ProgettoDetailPage() {
 
 function StatSmallCard({ label, value, icon }: { label: string, value: string, icon: React.ReactNode }) {
   return (
-    <div className="bg-[#0f172a] border border-[#1e293b] p-4 rounded-xl space-y-1 hover:border-purple-500/50 transition-all group">
+    <div className="bg-card border border-border p-4 rounded-xl space-y-1 hover:border-purple-500/50 transition-all group">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-wider text-[#64748b] font-medium">{label}</span>
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</span>
         {icon}
       </div>
       <p className="text-lg font-bold text-white group-hover:text-purple-400 transition-colors">{value}</p>

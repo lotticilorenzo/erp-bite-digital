@@ -41,13 +41,13 @@ export default function Fatture() {
     return (
       <div className="p-8 space-y-8 animate-in fade-in duration-500">
         <div className="flex items-center justify-between">
-          <Skeleton className="h-10 w-48 rounded-xl bg-[#1e293b]/20" />
-          <Skeleton className="h-10 w-32 rounded-xl bg-[#1e293b]/20" />
+          <Skeleton className="h-10 w-48 rounded-xl bg-muted/20" />
+          <Skeleton className="h-10 w-32 rounded-xl bg-muted/20" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[1, 2, 3].map(i => <Skeleton key={i} className="h-32 rounded-3xl bg-[#1e293b]/10" />)}
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-32 rounded-3xl bg-muted/10" />)}
         </div>
-        <Skeleton className="h-[400px] rounded-3xl bg-[#1e293b]/5" />
+        <Skeleton className="h-[400px] rounded-3xl bg-muted/5" />
       </div>
     );
   }
@@ -62,11 +62,11 @@ export default function Fatture() {
           <p className="text-[#475569] text-xs font-bold uppercase tracking-[0.2em] mt-1">Gestione flussi di cassa e fatturazione</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="h-10 bg-[#0f172a]/50 border-[#1e293b] text-[#94a3b8] hover:text-white rounded-xl gap-2 font-bold uppercase text-[10px] tracking-widest">
+          <Button variant="outline" className="h-10 bg-card/50 border-border text-muted-foreground hover:text-white rounded-xl gap-2 font-bold uppercase text-[10px] tracking-widest">
             <Download className="h-4 w-4" />
             Esporta
           </Button>
-          <Button className="h-10 bg-primary hover:bg-primary/90 text-white rounded-xl gap-2 font-black uppercase text-[10px] tracking-widest shadow-[0_0_20px_rgba(124,58,237,0.3)]">
+          <Button className="h-10 bg-primary hover:bg-primary/90 text-white rounded-xl gap-2 font-black uppercase text-[10px] tracking-widest shadow-[0_0_20px_hsl(var(--primary)/0.2)]">
             <Plus className="h-4 w-4" />
             Nuova Fattura
           </Button>
@@ -74,7 +74,7 @@ export default function Fatture() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="bg-[#0f172a]/40 border-[#1e293b]/50 rounded-3xl overflow-hidden relative group">
+        <Card className="bg-card/40 border-border/50 rounded-3xl overflow-hidden relative group">
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-emerald-500/50 to-transparent" />
           <CardHeader className="pb-2">
             <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-[#475569] flex items-center gap-2">
@@ -90,7 +90,7 @@ export default function Fatture() {
           </CardContent>
         </Card>
 
-        <Card className="bg-[#0f172a]/40 border-[#1e293b]/50 rounded-3xl overflow-hidden relative group">
+        <Card className="bg-card/40 border-border/50 rounded-3xl overflow-hidden relative group">
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-amber-500/50 to-transparent" />
           <CardHeader className="pb-2">
             <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-[#475569] flex items-center gap-2">
@@ -106,7 +106,7 @@ export default function Fatture() {
           </CardContent>
         </Card>
 
-        <Card className="bg-[#0f172a]/40 border-[#1e293b]/50 rounded-3xl overflow-hidden relative group">
+        <Card className="bg-card/40 border-border/50 rounded-3xl overflow-hidden relative group">
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-red-500/50 to-transparent" />
           <CardHeader className="pb-2">
             <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-[#475569] flex items-center gap-2">
@@ -123,10 +123,10 @@ export default function Fatture() {
         </Card>
       </div>
 
-      <Card className="bg-[#020617]/50 border-[#1e293b]/50 rounded-3xl overflow-hidden shadow-2xl">
+      <Card className="bg-background/50 border-border/50 rounded-3xl overflow-hidden shadow-2xl">
         <Tabs defaultValue="attive" className="w-full">
-          <div className="px-8 pt-6 pb-2 border-b border-[#1e293b]/50 bg-[#0f172a]/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <TabsList className="bg-[#020617]/80 border border-[#1e293b]/50 p-1 h-11 rounded-xl">
+          <div className="px-8 pt-6 pb-2 border-b border-border/50 bg-card/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <TabsList className="bg-background/80 border border-border/50 p-1 h-11 rounded-xl">
               <TabsTrigger 
                 value="attive" 
                 className="rounded-lg px-6 data-[state=active]:bg-primary data-[state=active]:text-white text-[10px] font-black uppercase tracking-widest transition-all duration-300"

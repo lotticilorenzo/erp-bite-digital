@@ -113,9 +113,9 @@ export function ProgettoDialog({ progetto, open, onOpenChange }: ProgettoDialogP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] bg-[#0f172a] border-[#1e293b] text-white">
+      <DialogContent className="sm:max-w-[600px] bg-card border-border text-white">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-[#f1f5f9]">
+          <DialogTitle className="text-xl font-bold text-foreground">
             {isEditing ? "Modifica Progetto" : "Nuovo Progetto"}
           </DialogTitle>
         </DialogHeader>
@@ -128,9 +128,9 @@ export function ProgettoDialog({ progetto, open, onOpenChange }: ProgettoDialogP
                 name="nome"
                 render={({ field }) => (
                   <FormItem className="col-span-2">
-                    <FormLabel className="text-[#94a3b8]">Nome Progetto</FormLabel>
+                    <FormLabel className="text-muted-foreground">Nome Progetto</FormLabel>
                     <FormControl>
-                      <Input {...field} className="bg-[#1e293b] border-[#334155] text-white" placeholder="Es. Digital Marketing 2024" />
+                      <Input {...field} className="bg-muted border-border text-white" placeholder="Es. Digital Marketing 2024" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -142,14 +142,14 @@ export function ProgettoDialog({ progetto, open, onOpenChange }: ProgettoDialogP
                 name="cliente_id"
                 render={({ field }) => (
                   <FormItem className="col-span-2">
-                    <FormLabel className="text-[#94a3b8]">Cliente</FormLabel>
+                    <FormLabel className="text-muted-foreground">Cliente</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger className="bg-[#1e293b] border-[#334155] text-white">
+                        <SelectTrigger className="bg-muted border-border text-white">
                           <SelectValue placeholder="Seleziona un cliente" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent className="bg-[#0f172a] border-[#1e293b] text-white">
+                      <SelectContent className="bg-card border-border text-white">
                         {clienti?.map((c) => (
                           <SelectItem key={c.id} value={c.id}>
                             {c.ragione_sociale}
@@ -167,14 +167,14 @@ export function ProgettoDialog({ progetto, open, onOpenChange }: ProgettoDialogP
                 name="tipo"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[#94a3b8]">Tipo</FormLabel>
+                    <FormLabel className="text-muted-foreground">Tipo</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger className="bg-[#1e293b] border-[#334155] text-white">
+                        <SelectTrigger className="bg-muted border-border text-white">
                           <SelectValue placeholder="Tipo progetto" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent className="bg-[#0f172a] border-[#1e293b] text-white">
+                      <SelectContent className="bg-card border-border text-white">
                         <SelectItem value="RETAINER">RETAINER</SelectItem>
                         <SelectItem value="ONE_OFF">ONE_OFF</SelectItem>
                       </SelectContent>
@@ -189,14 +189,14 @@ export function ProgettoDialog({ progetto, open, onOpenChange }: ProgettoDialogP
                 name="stato"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[#94a3b8]">Stato</FormLabel>
+                    <FormLabel className="text-muted-foreground">Stato</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger className="bg-[#1e293b] border-[#334155] text-white">
+                        <SelectTrigger className="bg-muted border-border text-white">
                           <SelectValue placeholder="Stato progetto" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent className="bg-[#0f172a] border-[#1e293b] text-white">
+                      <SelectContent className="bg-card border-border text-white">
                         <SelectItem value="ATTIVO">ATTIVO</SelectItem>
                         <SelectItem value="CHIUSO">CHIUSO</SelectItem>
                       </SelectContent>
@@ -211,9 +211,9 @@ export function ProgettoDialog({ progetto, open, onOpenChange }: ProgettoDialogP
                 name="importo_fisso"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[#94a3b8]">Importo Fisso (€)</FormLabel>
+                    <FormLabel className="text-muted-foreground">Importo Fisso (€)</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} className="bg-[#1e293b] border-[#334155] text-white" />
+                      <Input type="number" {...field} className="bg-muted border-border text-white" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -225,9 +225,9 @@ export function ProgettoDialog({ progetto, open, onOpenChange }: ProgettoDialogP
                 name="importo_variabile"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[#94a3b8]">Importo Variabile (€)</FormLabel>
+                    <FormLabel className="text-muted-foreground">Importo Variabile (€)</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} className="bg-[#1e293b] border-[#334155] text-white" />
+                      <Input type="number" {...field} className="bg-muted border-border text-white" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -236,10 +236,10 @@ export function ProgettoDialog({ progetto, open, onOpenChange }: ProgettoDialogP
             </div>
 
             <DialogFooter className="pt-4">
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-[#94a3b8] hover:text-white">
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground hover:text-white">
                 Annulla
               </Button>
-              <Button type="submit" disabled={isPending} className="bg-purple-600 hover:bg-purple-700 text-white">
+              <Button type="submit" disabled={isPending} className="bg-primary hover:bg-primary/90 text-white">
                 {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (isEditing ? "Salva Modifiche" : "Crea Progetto")}
               </Button>
             </DialogFooter>

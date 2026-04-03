@@ -26,17 +26,17 @@ export function MovimentiTable({ data, onRiconcilia }: MovimentiTableProps) {
 
   if (!data || data.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 bg-[#0f172a]/20 border border-dashed border-[#1e293b] rounded-3xl">
+      <div className="flex flex-col items-center justify-center py-20 bg-card/20 border border-dashed border-border rounded-3xl">
         <p className="text-[#475569] font-bold uppercase tracking-widest text-xs">Nessun movimento registrato</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-3xl border border-[#1e293b]/50 bg-[#0f172a]/30 overflow-hidden backdrop-blur-sm">
+    <div className="rounded-3xl border border-border/50 bg-card/30 overflow-hidden backdrop-blur-sm">
       <Table>
-        <TableHeader className="bg-[#0f172a]/50">
-          <TableRow className="hover:bg-transparent border-[#1e293b]/50">
+        <TableHeader className="bg-card/50">
+          <TableRow className="hover:bg-transparent border-border/50">
             <TableHead className="text-[10px] uppercase font-black tracking-widest text-[#475569] h-12 text-center">Data</TableHead>
             <TableHead className="text-[10px] uppercase font-black tracking-widest text-[#475569] h-12">Descrizione</TableHead>
             <TableHead className="text-[10px] uppercase font-black tracking-widest text-[#475569] h-12">Categoria</TableHead>
@@ -49,7 +49,7 @@ export function MovimentiTable({ data, onRiconcilia }: MovimentiTableProps) {
           {data.map((item) => {
             const isEntry = Number(item.importo) > 0;
             return (
-              <TableRow key={item.id} className="group border-[#1e293b]/30 hover:bg-white/5 transition-colors duration-300">
+              <TableRow key={item.id} className="group border-border/30 hover:bg-white/5 transition-colors duration-300">
                 <TableCell className="text-[10px] font-black text-white uppercase tabular-nums text-center">
                   {format(new Date(item.data_valuta), "dd MMM yyyy", { locale: it })}
                 </TableCell>
@@ -66,7 +66,7 @@ export function MovimentiTable({ data, onRiconcilia }: MovimentiTableProps) {
                   </div>
                 </TableCell>
                 <TableCell>
-                   <Badge variant="outline" className="bg-[#1e293b]/30 border-[#1e293b] text-[#94a3b8] text-[9px] font-bold uppercase tracking-wider gap-1 px-2">
+                   <Badge variant="outline" className="bg-muted/30 border-border text-muted-foreground text-[9px] font-bold uppercase tracking-wider gap-1 px-2">
                      <Tag className="h-2.5 w-2.5" />
                      {item.categoria || "Altro"}
                    </Badge>
@@ -91,7 +91,7 @@ export function MovimentiTable({ data, onRiconcilia }: MovimentiTableProps) {
                   {!item.riconciliato && (
                     <button 
                       onClick={() => onRiconcilia?.(item)}
-                      className="h-8 w-8 rounded-lg bg-[#1e293b]/50 flex items-center justify-center text-[#475569] hover:text-white hover:bg-primary transition-all duration-300 shadow-lg"
+                      className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center text-[#475569] hover:text-white hover:bg-primary transition-all duration-300 shadow-lg"
                       title="Riconcilia con fattura"
                     >
                       <Link2 className="h-3.5 w-3.5" />

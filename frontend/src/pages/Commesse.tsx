@@ -42,8 +42,8 @@ export default function CommessePage() {
     <div className="p-8 space-y-8 animate-in fade-in duration-500">
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold text-[#f1f5f9] tracking-tight">Commesse</h1>
-          <p className="text-[#94a3b8] mt-1">
+          <h1 className="text-3xl font-bold text-foreground tracking-tight">Commesse</h1>
+          <p className="text-muted-foreground mt-1">
             Gestisci l'avanzamento economico e la fatturazione mensile per cliente.
           </p>
         </div>
@@ -53,7 +53,7 @@ export default function CommessePage() {
               setSelectedCommessa(null);
               setIsDialogOpen(true);
             }}
-            className="bg-purple-600 hover:bg-purple-700 text-white shadow-[0_0_15px_rgba(124,58,237,0.3)] transition-all hover:scale-105"
+            className="bg-primary hover:bg-primary/90 text-white shadow-[0_0_15px_hsl(var(--primary)/0.2)] transition-all hover:scale-105"
           >
             <Plus className="w-4 h-4 mr-2" />
             Nuova Commessa
@@ -75,15 +75,15 @@ export default function CommessePage() {
       />
 
       <Dialog open={!!commessaToDelete} onOpenChange={() => setCommessaToDelete(null)}>
-        <DialogContent className="bg-[#0f172a] border-[#1e293b] text-white">
+        <DialogContent className="bg-card border-border text-white">
           <DialogHeader>
             <DialogTitle>Sei sicuro?</DialogTitle>
-            <DialogDescription className="text-[#94a3b8]">
+            <DialogDescription className="text-muted-foreground">
               Questa azione eliminerà permanentemente la commessa per <strong>{commessaToDelete?.cliente?.ragione_sociale}</strong> ({commessaToDelete?.mese_competenza}) e tutti i dati associati.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setCommessaToDelete(null)} className="text-[#94a3b8] hover:text-white hover:bg-[#1e293b]">
+            <Button variant="ghost" onClick={() => setCommessaToDelete(null)} className="text-muted-foreground hover:text-white hover:bg-muted">
               Annulla
             </Button>
             <Button onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700 text-white">

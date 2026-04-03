@@ -57,7 +57,7 @@ export function FattureTable({ data, type, onAction }: FattureTableProps) {
 
   if (data.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 bg-[#0f172a]/20 border border-dashed border-[#1e293b] rounded-3xl">
+      <div className="flex flex-col items-center justify-center py-24 bg-card/20 border border-dashed border-border rounded-3xl">
         <FileText className="h-12 w-12 text-[#1e293b] mb-4" />
         <p className="text-[#475569] font-bold uppercase tracking-widest text-xs">Nessuna fattura trovata</p>
       </div>
@@ -65,10 +65,10 @@ export function FattureTable({ data, type, onAction }: FattureTableProps) {
   }
 
   return (
-    <div className="rounded-3xl border border-[#1e293b]/50 bg-[#0f172a]/30 overflow-hidden backdrop-blur-sm">
+    <div className="rounded-3xl border border-border/50 bg-card/30 overflow-hidden backdrop-blur-sm">
       <Table>
-        <TableHeader className="bg-[#0f172a]/50">
-          <TableRow className="hover:bg-transparent border-[#1e293b]/50">
+        <TableHeader className="bg-card/50">
+          <TableRow className="hover:bg-transparent border-border/50">
             <TableHead className="text-[10px] uppercase font-black tracking-widest text-[#475569] h-12">Numero</TableHead>
             <TableHead className="text-[10px] uppercase font-black tracking-widest text-[#475569] h-12">
               {type === "attive" ? "Cliente" : "Fornitore"}
@@ -82,8 +82,8 @@ export function FattureTable({ data, type, onAction }: FattureTableProps) {
         </TableHeader>
         <TableBody>
           {data.map((item) => (
-            <TableRow key={item.id} className="group border-[#1e293b]/30 hover:bg-primary/5 transition-colors duration-300">
-              <TableCell className="font-mono text-xs font-bold text-[#f1f5f9]">
+            <TableRow key={item.id} className="group border-border/30 hover:bg-primary/5 transition-colors duration-300">
+              <TableCell className="font-mono text-xs font-bold text-foreground">
                 {item.numero || "N/D"}
               </TableCell>
               <TableCell>
@@ -110,7 +110,7 @@ export function FattureTable({ data, type, onAction }: FattureTableProps) {
                   )}
                 </div>
               </TableCell>
-              <TableCell className="text-right font-mono text-[11px] text-[#94a3b8]">
+              <TableCell className="text-right font-mono text-[11px] text-muted-foreground">
                 {formatCurrency(item.importo_netto || 0)}
               </TableCell>
               <TableCell className="text-right">
@@ -124,7 +124,7 @@ export function FattureTable({ data, type, onAction }: FattureTableProps) {
               <TableCell className="text-right">
                 <button 
                   onClick={() => onAction?.(item)}
-                  className="h-8 w-8 rounded-lg bg-[#1e293b]/50 flex items-center justify-center text-[#475569] hover:text-white hover:bg-primary transition-all duration-300 shadow-lg group-hover:scale-110"
+                  className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center text-[#475569] hover:text-white hover:bg-primary transition-all duration-300 shadow-lg group-hover:scale-110"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
                 </button>

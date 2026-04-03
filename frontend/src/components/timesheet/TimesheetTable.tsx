@@ -65,7 +65,7 @@ export function TimesheetTable({
     return (
       <div className="space-y-4">
         {[...Array(5)].map((_, i) => (
-          <Skeleton key={i} className="h-16 w-full bg-[#1e293b]/50 rounded-xl" />
+          <Skeleton key={i} className="h-16 w-full bg-muted/50 rounded-xl" />
         ))}
       </div>
     );
@@ -85,10 +85,10 @@ export function TimesheetTable({
   };
 
   return (
-    <div className="rounded-xl border border-[#1e293b] bg-[#0f172a] overflow-hidden shadow-2xl">
+    <div className="rounded-xl border border-border bg-card overflow-hidden shadow-2xl">
       <Table>
-        <TableHeader className="bg-[#1e293b]/30">
-          <TableRow className="hover:bg-transparent border-[#1e293b]">
+        <TableHeader className="bg-muted/30">
+          <TableRow className="hover:bg-transparent border-border">
             <TableHead className="w-[40px] pl-4">
               <Checkbox 
                 checked={selectedIds.length > 0 && selectedIds.length === timesheets.length}
@@ -96,20 +96,20 @@ export function TimesheetTable({
                 aria-label="Seleziona tutti"
               />
             </TableHead>
-            <TableHead className="text-[10px] uppercase tracking-wider font-bold text-[#64748b]">Data</TableHead>
-            <TableHead className="text-[10px] uppercase tracking-wider font-bold text-[#64748b]">Utente</TableHead>
-            <TableHead className="text-[10px] uppercase tracking-wider font-bold text-[#64748b]">Commessa / Task</TableHead>
-            <TableHead className="text-[10px] uppercase tracking-wider font-bold text-[#64748b]">Servizio</TableHead>
-            <TableHead className="text-[10px] uppercase tracking-wider font-bold text-[#64748b] text-right">Durata</TableHead>
-            <TableHead className="text-[10px] uppercase tracking-wider font-bold text-[#64748b] text-right">Costo Lavoro</TableHead>
-            <TableHead className="text-[10px] uppercase tracking-wider font-bold text-[#64748b] text-center">Stato</TableHead>
+            <TableHead className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Data</TableHead>
+            <TableHead className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Utente</TableHead>
+            <TableHead className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Commessa / Task</TableHead>
+            <TableHead className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Servizio</TableHead>
+            <TableHead className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground text-right">Durata</TableHead>
+            <TableHead className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground text-right">Costo Lavoro</TableHead>
+            <TableHead className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground text-center">Stato</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {timesheets.map((t) => (
             <TableRow 
               key={t.id} 
-              className={`border-[#1e293b] hover:bg-[#1e293b]/20 transition-colors ${selectedIds.includes(t.id) ? 'bg-[#7c3aed]/5' : ''}`}
+              className={`border-border hover:bg-muted/20 transition-colors ${selectedIds.includes(t.id) ? 'bg-primary/5' : ''}`}
             >
               <TableCell className="pl-4">
                 <Checkbox 
@@ -118,13 +118,13 @@ export function TimesheetTable({
                 />
               </TableCell>
               <TableCell>
-                <div className="flex items-center gap-2 text-sm text-[#f1f5f9]">
+                <div className="flex items-center gap-2 text-sm text-foreground">
                   <CalendarIcon className="w-3.5 h-3.5 text-purple-400" />
                   {format(parseISO(t.data_attivita), "dd MMM yyyy", { locale: it })}
                 </div>
               </TableCell>
               <TableCell>
-                <div className="flex items-center gap-2 text-sm text-[#cbd5e1]">
+                <div className="flex items-center gap-2 text-sm text-foreground">
                   <UserIcon className="w-3.5 h-3.5 text-blue-400" />
                   {t.user?.nome} {t.user?.cognome}
                 </div>
@@ -143,12 +143,12 @@ export function TimesheetTable({
                 </div>
               </TableCell>
               <TableCell className="max-w-[200px] truncate">
-                <span className="text-xs text-[#94a3b8] italic">
+                <span className="text-xs text-muted-foreground italic">
                   {t.servizio || t.note || "—"}
                 </span>
               </TableCell>
               <TableCell className="text-right">
-                <div className="flex items-center justify-end gap-1.5 text-sm font-bold text-[#f1f5f9]">
+                <div className="flex items-center justify-end gap-1.5 text-sm font-bold text-foreground">
                   <Clock className="w-3.5 h-3.5 text-purple-400" />
                   {formatDuration(t.durata_minuti)}
                 </div>
@@ -165,15 +165,15 @@ export function TimesheetTable({
           ))}
           {!timesheets.length && (
             <TableRow>
-              <TableCell colSpan={8} className="h-32 text-center text-[#64748b] italic">
+              <TableCell colSpan={8} className="h-32 text-center text-muted-foreground italic">
                 Nessun record trovato
               </TableCell>
             </TableRow>
           )}
         </TableBody>
-        <tfoot className="bg-[#1e293b]/50 border-t border-[#1e293b]">
+        <tfoot className="bg-muted/50 border-t border-border">
           <TableRow className="hover:bg-transparent">
-            <TableCell colSpan={5} className="text-right text-xs font-black uppercase text-[#64748b] tracking-widest pl-10">
+            <TableCell colSpan={5} className="text-right text-xs font-black uppercase text-muted-foreground tracking-widest pl-10">
               Totali (Periodo selezionato)
             </TableCell>
             <TableCell className="text-right">

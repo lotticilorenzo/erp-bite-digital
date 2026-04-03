@@ -13,8 +13,8 @@ export function AIAssistant() {
         <Button 
           onClick={() => setIsOpen(true)}
           className={`
-            h-14 w-14 rounded-2xl bg-[#7c3aed] text-white shadow-[0_0_30px_rgba(124,58,237,0.4)] 
-            hover:scale-110 hover:shadow-[0_0_40px_rgba(124,58,237,0.6)] active:scale-95 transition-all duration-500
+            h-14 w-14 rounded-2xl bg-primary text-white shadow-[0_0_30px_hsl(var(--primary)/0.2)] 
+            hover:scale-110 hover:shadow-[0_0_40px_hsl(var(--primary)/0.2)] active:scale-95 transition-all duration-500
             flex items-center justify-center group overflow-hidden
             ${isOpen ? 'opacity-0 pointer-events-none scale-0' : 'opacity-100 scale-100'}
           `}

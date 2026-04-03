@@ -73,24 +73,24 @@ export function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
 
   return (
     <div className={`
-      fixed top-0 right-0 h-full w-[400px] bg-[#0f172a] border-l border-[#1e293b] 
+      fixed top-0 right-0 h-full w-[400px] bg-card border-l border-border 
       shadow-2xl z-[100] flex flex-col animate-in slide-in-from-right duration-300
     `}>
       {/* Header */}
-      <div className="p-4 border-b border-[#1e293b] flex items-center justify-between bg-[#0f172a]/80 backdrop-blur-md sticky top-0 z-10">
+      <div className="p-4 border-b border-border flex items-center justify-between bg-card/80 backdrop-blur-md sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-[0_0_20px_rgba(124,58,237,0.3)]">
+          <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-[0_0_20px_hsl(var(--primary)/0.2)]">
             <Sparkles className="h-6 w-6 text-white" />
           </div>
           <div>
             <h3 className="text-sm font-black text-white uppercase tracking-tighter">Bite AI Assistant</h3>
             <div className="flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[10px] text-[#64748b] font-bold uppercase tracking-widest">Online</span>
+              <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Online</span>
             </div>
           </div>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-[#1e293b] text-[#475569] hover:text-white">
+        <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-muted text-[#475569] hover:text-white">
           <X className="h-5 w-5" />
         </Button>
       </div>
@@ -100,12 +100,12 @@ export function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
         <div className="space-y-6 pb-20">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
-              <div className="h-16 w-16 rounded-3xl bg-[#020617] border border-[#1e293b] flex items-center justify-center text-[#1e293b]">
+              <div className="h-16 w-16 rounded-3xl bg-background border border-border flex items-center justify-center text-[#1e293b]">
                 <Bot className="h-10 w-10" />
               </div>
               <div className="space-y-1">
                 <h4 className="text-sm font-bold text-white">Ciao! Sono Bite AI</h4>
-                <p className="text-xs text-[#64748b] max-w-[250px]"> Chiedimi pure riepiloghi, analisi sui dati dell'agenzia o alert critici.</p>
+                <p className="text-xs text-muted-foreground max-w-[250px]"> Chiedimi pure riepiloghi, analisi sui dati dell'agenzia o alert critici.</p>
               </div>
             </div>
           )}
@@ -116,7 +116,7 @@ export function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
                 max-w-[85%] p-4 rounded-2xl text-xs leading-relaxed shadow-lg
                 ${m.role === 'user' 
                   ? 'bg-primary text-white font-medium rounded-tr-none' 
-                  : 'bg-[#1e293b] text-[#f1f5f9] border border-[#334155]/30 rounded-tl-none font-medium'
+                  : 'bg-muted text-foreground border border-border/30 rounded-tl-none font-medium'
                 }
               `}>
                 {m.content}
@@ -129,7 +129,7 @@ export function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
 
           {aiMutation.isPending && (
             <div className="flex justify-start">
-              <div className="bg-[#1e293b] border border-[#334155]/30 p-4 rounded-2xl rounded-tl-none">
+              <div className="bg-muted border border-border/30 p-4 rounded-2xl rounded-tl-none">
                 <div className="flex gap-1">
                   <span className="h-1.5 w-1.5 bg-primary/40 rounded-full animate-bounce [animation-delay:-0.3s]" />
                   <span className="h-1.5 w-1.5 bg-primary/60 rounded-full animate-bounce [animation-delay:-0.15s]" />
@@ -142,7 +142,7 @@ export function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
       </ScrollArea>
 
       {/* Quick Commands & Input */}
-      <div className="p-4 border-t border-[#1e293b] bg-[#020617]/50 space-y-4">
+      <div className="p-4 border-t border-border bg-background/50 space-y-4">
         {/* Quick Commands */}
         <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar no-scrollbar">
           {QUICK_COMMANDS.map((cmd) => (
@@ -151,7 +151,7 @@ export function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
               variant="outline"
               size="sm"
               onClick={() => handleSend(cmd.query)}
-              className="h-8 shrink-0 rounded-lg border-[#1e293b] bg-[#0f172a] px-3 text-[10px] font-black uppercase tracking-widest text-[#94a3b8] hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all"
+              className="h-8 shrink-0 rounded-lg border-border bg-card px-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all"
             >
               <cmd.icon className="h-3 w-3 mr-2" />
               {cmd.label}
@@ -166,7 +166,7 @@ export function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
             onChange={(e) => setInput(e.target.value)}
             disabled={aiMutation.isPending}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            className="h-12 bg-[#020617] border-[#1e293b] rounded-xl pr-12 focus-visible:ring-primary/40 text-sm font-medium"
+            className="h-12 bg-background border-border rounded-xl pr-12 focus-visible:ring-primary/40 text-sm font-medium"
           />
           <Button 
             size="icon" 

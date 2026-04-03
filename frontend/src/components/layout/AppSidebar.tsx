@@ -43,6 +43,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
 import { Link, useLocation } from "react-router-dom";
 import { StudioSidebar } from "@/components/studio/StudioSidebar";
+import { useTheme } from "@/context/ThemeContext";
 
 const navItems = [
   {
@@ -80,29 +81,45 @@ const navItems = [
 
 export function AppSidebar() {
   const { user, logout } = useAuth();
+  const { setIsThemePanelOpen } = useTheme();
   const location = useLocation();
   const { state } = useSidebar();
 
   const isStudioOS = location.pathname.startsWith("/studio-os");
 
   return (
-    <Sidebar variant="sidebar" collapsible="icon" className="border-r border-[#1e293b]/50 bg-[#020617] h-full shadow-2xl">
+    <Sidebar variant="sidebar" collapsible="icon" className="border-r border-sidebar-border bg-sidebar h-full shadow-2xl">
       <SidebarHeader className="pt-6 px-4 pb-4">
-        <div className="flex items-center gap-3 group cursor-pointer lg:px-1">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-[0_0_20px_rgba(124,58,237,0.3)] border border-primary/20 group-hover:scale-110 transition-transform duration-500">
-            <Zap className="h-5 w-5 fill-current" />
-          </div>
-          {state !== "collapsed" && (
-            <div className="flex flex-col gap-1 leading-none animate-in fade-in slide-in-from-left-2 duration-500 overflow-hidden">
-              <span className="font-black text-base tracking-tight text-[#f1f5f9] uppercase">Bite Digital</span>
-              <div className="px-2 py-0.5 rounded-md bg-[#1e293b] w-fit">
-                <span className="text-[9px] text-[#7c3aed] font-black uppercase tracking-widest whitespace-nowrap">
+        <Link to="/" className="flex items-center gap-3 group cursor-pointer lg:px-1">
+          {state === "collapsed" ? (
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white p-1 shadow-lg border border-primary/20 group-hover:scale-110 transition-transform duration-500">
+              <img src="/logo_quadrato.png" className="h-full w-full object-contain" alt="B" />
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5 leading-none animate-in fade-in slide-in-from-left-2 duration-500 overflow-hidden">
+              <div className="h-9 flex items-center">
+                <img 
+                  src="/logo_bite.jpg" 
+                  alt="Bite Digital" 
+                  className="h-9 w-auto object-contain"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                    if (fallback) fallback.style.display = 'block';
+                  }}
+                />
+                <span style={{ display: 'none' }} className="font-black text-base tracking-tight text-foreground uppercase">
+                  Bite Digital
+                </span>
+              </div>
+              <div className="px-2 py-0.5 rounded-md bg-muted w-fit">
+                <span className="text-[9px] text-primary font-black uppercase tracking-widest whitespace-nowrap">
                   {isStudioOS ? "Project Management" : "Finance & Operations"}
                 </span>
               </div>
             </div>
           )}
-        </div>
+        </Link>
       </SidebarHeader>
 
       <SidebarContent className="px-3 mt-4 space-y-2">
@@ -127,8 +144,8 @@ export function AppSidebar() {
                         className={`
                           transition-all duration-300 h-10 rounded-xl px-3 mb-1.5 group/btn
                           ${location.pathname === item.url 
-                            ? "bg-[#1e293b] text-white border border-[#334155] shadow-lg" 
-                            : "text-[#94a3b8] hover:text-white hover:bg-[#1e293b]/40"
+                            ? "bg-muted text-white border border-border shadow-lg" 
+                            : "text-muted-foreground hover:text-white hover:bg-muted/40"
                           }
                         `}
                       >
@@ -154,18 +171,18 @@ export function AppSidebar() {
 
       <div className="mt-auto px-4 py-4 space-y-4">
         <div className="px-2">
-          <SidebarSeparator className="bg-[#1e293b]/50 h-[1px]" />
+          <SidebarSeparator className="bg-muted/50 h-[1px]" />
         </div>
         
         {state !== "collapsed" && (
-          <div className="p-1 gap-1 flex bg-[#0f172a] border border-[#1e293b] rounded-xl shadow-inner">
+          <div className="p-1 gap-1 flex bg-muted/50 border border-sidebar-border rounded-xl shadow-inner">
             <Link 
               to="/" 
               className={`
                 flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300
                 ${!isStudioOS 
-                  ? "bg-[#7c3aed] text-white shadow-lg" 
-                  : "text-[#475569] hover:text-[#94a3b8] hover:bg-white/5"
+                  ? "bg-primary text-primary-foreground shadow-lg" 
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
                 }
               `}
             >
@@ -177,8 +194,8 @@ export function AppSidebar() {
               className={`
                 flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300
                 ${isStudioOS 
-                  ? "bg-[#7c3aed] text-white shadow-lg" 
-                  : "text-[#475569] hover:text-[#94a3b8] hover:bg-white/5"
+                  ? "bg-primary text-primary-foreground shadow-lg" 
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
                 }
               `}
             >
@@ -190,23 +207,23 @@ export function AppSidebar() {
 
         {state === "collapsed" && (
           <div className="flex flex-col items-center gap-2">
-            <Link to="/" className={`p-2 rounded-lg transition-all ${!isStudioOS ? "bg-[#7c3aed] text-white shadow-lg" : "bg-[#0f172a] text-[#475569] border border-[#1e293b]"}`}>
+            <Link to="/" className={`p-2 rounded-lg transition-all ${!isStudioOS ? "bg-primary text-primary-foreground shadow-lg" : "bg-muted/50 text-muted-foreground border border-sidebar-border"}`}>
               <BarChart3 className="h-4 w-4" />
             </Link>
-            <Link to="/studio-os" className={`p-2 rounded-lg transition-all ${isStudioOS ? "bg-[#7c3aed] text-white shadow-lg" : "bg-[#0f172a] text-[#475569] border border-[#1e293b]"}`}>
+            <Link to="/studio-os" className={`p-2 rounded-lg transition-all ${isStudioOS ? "bg-primary text-primary-foreground shadow-lg" : "bg-muted/50 text-muted-foreground border border-sidebar-border"}`}>
               <Zap className="h-4 w-4" />
             </Link>
           </div>
         )}
       </div>
 
-      <SidebarFooter className="p-4 bg-[#020617] border-t border-[#1e293b]/50">
+      <SidebarFooter className="p-4 bg-sidebar border-t border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <SidebarMenuButton size="lg" className="hover:bg-[#1e293b] transition-colors px-1 h-12 rounded-xl border border-transparent hover:border-[#334155]">
-                  <Avatar className="h-9 w-9 rounded-lg border border-[#1e293b] shadow-xl">
+                <SidebarMenuButton size="lg" className="hover:bg-muted transition-colors px-1 h-12 rounded-xl border border-transparent hover:border-border">
+                  <Avatar className="h-9 w-9 rounded-lg border border-border shadow-xl">
                     <AvatarImage src={`https://avatar.vercel.sh/${user?.email}.png`} />
                     <AvatarFallback className="rounded-lg bg-primary/20 text-white uppercase text-xs font-black">
                       {user?.nome?.[0]}{user?.cognome?.[0]}
@@ -216,23 +233,26 @@ export function AppSidebar() {
                     <span className="text-sm font-bold truncate leading-none text-white">
                       {user?.nome} {user?.cognome}
                     </span>
-                    <span className="text-[10px] text-[#94a3b8] truncate uppercase tracking-[0.1em] font-black">
+                    <span className="text-[10px] text-muted-foreground truncate uppercase tracking-[0.1em] font-black">
                       {user?.ruolo}
                     </span>
                   </div>
                   <ChevronRight className="h-4 w-4 text-[#475569] ml-auto mr-1" />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
-              <DropdownMenuContent side="right" align="end" className="w-[220px] bg-[#0f172a] border-[#1e293b] p-2 shadow-2xl rounded-xl">
-                <DropdownMenuItem className="gap-2.5 cursor-pointer rounded-lg focus:bg-[#1e293b] focus:text-white transition-all text-xs font-bold text-[#94a3b8]">
+              <DropdownMenuContent side="right" align="end" className="w-[220px] bg-card border-border p-2 shadow-2xl rounded-xl">
+                <DropdownMenuItem className="gap-2.5 cursor-pointer rounded-lg focus:bg-muted focus:text-foreground transition-all text-xs font-bold text-muted-foreground">
                   <User className="h-4 w-4" />
                   Profilo
                 </DropdownMenuItem>
-                <DropdownMenuItem className="gap-2.5 cursor-pointer rounded-lg focus:bg-[#1e293b] focus:text-white transition-all text-xs font-bold text-[#94a3b8]">
+                <DropdownMenuItem 
+                  onClick={() => setIsThemePanelOpen(true)}
+                  className="gap-2.5 cursor-pointer rounded-lg focus:bg-muted focus:text-foreground transition-all text-xs font-bold text-muted-foreground"
+                >
                   <Settings className="h-4 w-4" />
                   Impostazioni
                 </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-[#1e293b]" />
+                <DropdownMenuSeparator className="bg-muted" />
                 <DropdownMenuItem 
                   onClick={logout} 
                   className="gap-2.5 cursor-pointer rounded-lg text-destructive focus:bg-destructive/10 focus:text-destructive transition-all text-xs font-bold"

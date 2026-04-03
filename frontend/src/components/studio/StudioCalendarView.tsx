@@ -47,8 +47,8 @@ export function StudioCalendarView() {
   }, [data]);
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-[#020617]/50">
-      <div className="flex items-center justify-between px-8 py-4 border-b border-[#1e293b]/50 bg-[#0f172a]/40 backdrop-blur-md">
+    <div className="flex-1 flex flex-col overflow-hidden bg-background/50">
+      <div className="flex items-center justify-between px-8 py-4 border-b border-border/50 bg-card/40 backdrop-blur-md">
         <div className="flex items-center gap-4">
           <CalendarIcon className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-black text-white uppercase tracking-tighter">
@@ -68,9 +68,9 @@ export function StudioCalendarView() {
         </div>
       </div>
 
-      <div className="flex-1 grid grid-cols-7 border-b border-[#1e293b]/30">
+      <div className="flex-1 grid grid-cols-7 border-b border-border/30">
         {['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'].map(day => (
-          <div key={day} className="py-2 text-center text-[10px] font-black uppercase tracking-[0.2em] text-[#475569] border-r border-[#1e293b]/30 last:border-r-0 bg-[#0f172a]/20">
+          <div key={day} className="py-2 text-center text-[10px] font-black uppercase tracking-[0.2em] text-[#475569] border-r border-border/30 last:border-r-0 bg-card/20">
             {day}
           </div>
         ))}
@@ -85,13 +85,13 @@ export function StudioCalendarView() {
           return (
             <div 
               key={i} 
-              className={`min-h-[120px] p-2 border-r border-b border-[#1e293b]/10 bg-transparent hover:bg-white/5 transition-colors group relative ${
+              className={`min-h-[120px] p-2 border-r border-b border-border/10 bg-transparent hover:bg-white/5 transition-colors group relative ${
                 !isCurrentMonth ? 'opacity-20' : ''
               }`}
             >
               <div className="flex justify-between items-center mb-2">
                 <span className={`text-xs font-black p-1 rounded-md min-w-[24px] text-center ${
-                  isToday ? 'bg-primary text-white shadow-[0_0_10px_rgba(124,58,237,0.5)]' : 'text-[#475569]'
+                  isToday ? 'bg-primary text-white shadow-[0_0_10px_hsl(var(--primary)/0.2)]' : 'text-[#475569]'
                 }`}>
                   {format(day, 'd')}
                 </span>
