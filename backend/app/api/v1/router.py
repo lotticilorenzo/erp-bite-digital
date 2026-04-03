@@ -15,7 +15,7 @@ from app.core.security import (
     verify_password, create_access_token,
     get_current_user, require_roles
 )
-from app.models.models import User, UserRole, CommessaStatus, TimesheetStatus, FatturaAttiva
+from app.models.models import User, UserRole, CommessaStatus, TaskStatus, TimesheetStatus, FatturaAttiva
 from app.schemas.schemas import (
     LoginRequest, TokenResponse, UserOut, UserCreate, UserUpdate,
     ClienteCreate, ClienteUpdate, ClienteOut,
@@ -37,7 +37,9 @@ from app.services.services import (
     get_dashboard_kpi, get_marginalita_clienti,
     sync_fic_data, get_last_fic_sync_status, list_fatture_attive, incassa_fattura,
     list_fornitori_full, update_fornitore, list_fatture_passive, update_fattura_passiva, list_fornitori,
-    list_movimenti_cassa, list_costi_fissi, create_costo_fisso, update_costo_fisso, delete_costo_fisso
+    list_movimenti_cassa, list_costi_fissi, create_costo_fisso, update_costo_fisso, delete_costo_fisso,
+    get_servizi_progetto, create_servizio_progetto, update_servizio_progetto, delete_servizio_progetto,
+    elimina_timesheet_bulk, aggiorna_mese_competenza_bulk
 )
 from app.api.v1 import timer
 from app.api.v1 import ai
@@ -54,7 +56,8 @@ router.include_router(planning.router)
 # ═══════════════════════════════════════════════════════
 @router.post("/auth/login", response_model=TokenResponse, tags=["Auth"])
 async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
-    user = await get_user_by_email(db, data.email)
+    from app.services.services import get_user_by_identifier
+    user = await get_user_by_identifier(db, data.email)
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenziali non valide")
     if not user.attivo:
@@ -114,6 +117,61 @@ async def patch_user(
     if not user:
         raise HTTPException(status_code=404, detail="Utente non trovato")
     return user
+
+
+# ═══════════════════════════════════════════════════════
+# CATEGORIE FORNITORI
+# ═══════════════════════════════════════════════════════
+@router.get("/categorie-fornitori", response_model=List[app.schemas.schemas.CategoriaFornitoreOut], tags=["Fornitori"])
+async def get_categorie_fornitori(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.services.services import list_categorie_fornitori
+    return await list_categorie_fornitori(db)
+
+@router.post("/categorie-fornitori", response_model=app.schemas.schemas.CategoriaFornitoreOut, status_code=201, tags=["Fornitori"])
+async def add_categoria_fornitore(
+    data: app.schemas.schemas.CategoriaFornitoreCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN))
+):
+    from app.services.services import create_categoria_fornitore
+    try:
+        cat = await create_categoria_fornitore(db, data)
+        await db.commit()
+        await db.refresh(cat)
+        return cat
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.patch("/categorie-fornitori/{cat_id}", response_model=app.schemas.schemas.CategoriaFornitoreOut, tags=["Fornitori"])
+async def patch_categoria_fornitore(
+    cat_id: uuid.UUID,
+    data: app.schemas.schemas.CategoriaFornitoreUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN))
+):
+    from app.services.services import update_categoria_fornitore
+    cat = await update_categoria_fornitore(db, cat_id, data)
+    if not cat:
+        raise HTTPException(status_code=404, detail="Categoria non trovata")
+    await db.commit()
+    await db.refresh(cat)
+    return cat
+
+@router.delete("/categorie-fornitori/{cat_id}", status_code=204, tags=["Fornitori"])
+async def remove_categoria_fornitore(
+    cat_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN))
+):
+    from app.services.services import delete_categoria_fornitore
+    ok = await delete_categoria_fornitore(db, cat_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Categoria non trovata")
+    await db.commit()
 
 
 # ═══════════════════════════════════════════════════════
@@ -494,6 +552,21 @@ async def get_fornitori_full(
 ):
     return await list_fornitori_full(db)
 
+@router.post("/fornitori", response_model=FornitoreOut, status_code=201, tags=["Fornitori"])
+async def add_fornitore(
+    data: app.schemas.schemas.FornitoreCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    from app.services.services import create_fornitore
+    try:
+        forn = await create_fornitore(db, data)
+        await db.commit()
+        return forn
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
 @router.patch("/fornitori/{fornitore_id}", response_model=FornitoreOut, tags=["Fornitori"])
 async def patch_fornitore(
     fornitore_id: uuid.UUID,
@@ -504,6 +577,7 @@ async def patch_fornitore(
     forn = await update_fornitore(db, fornitore_id, body.model_dump(exclude_none=True))
     if not forn:
         raise HTTPException(status_code=404, detail="Fornitore non trovato")
+    await db.commit()
     return forn
 
 @router.get("/fatture-passive", tags=["FIC"])

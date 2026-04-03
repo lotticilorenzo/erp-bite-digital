@@ -13,7 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useAI, ChatMessage } from "@/hooks/useAI";
+import { useAI } from "@/hooks/useAI";
+import type { ChatMessage } from "@/hooks/useAI";
 import { Badge } from "@/components/ui/badge";
 
 interface AIChatPanelProps {

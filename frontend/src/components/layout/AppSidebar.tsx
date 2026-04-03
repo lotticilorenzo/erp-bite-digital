@@ -13,7 +13,10 @@ import {
   FileText,
   Wallet,
   PieChart,
+  ShoppingCart,
 } from "lucide-react";
+
+// ... (other imports)
 
 import {
   Sidebar,
@@ -69,6 +72,7 @@ const navItems = [
     title: "Amministrazione",
     items: [
       { title: "Fatture", url: "/fatture", icon: FileText },
+      { title: "Fornitori", url: "/fornitori", icon: ShoppingCart },
       { title: "Cassa", url: "/cassa", icon: Wallet },
     ],
   },

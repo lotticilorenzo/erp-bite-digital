@@ -78,6 +78,7 @@ export type CustomField = {
 export interface TimerSessionSO {
   id: string;
   task_id: string;
+  task_title?: string;
   user_id: string;
   started_at: string;
   stopped_at: string | null;

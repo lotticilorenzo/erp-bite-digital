@@ -48,6 +48,27 @@ app.include_router(router, prefix="/api/v1")
 
 
 @app.on_event("startup")
+async def ensure_schema_tables_on_startup():
+    if not settings.AUTO_CREATE_MISSING_TABLES:
+        return
+    # Crea eventuali tabelle mancanti (utile in ambienti gia avviati senza migrazioni).
+    import asyncio
+    retries = 5
+    while retries > 0:
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("Schema database garantito.")
+            break
+        except Exception as e:
+            retries -= 1
+            logger.warning(f"Database non pronto, riprovo tra 2s... ({retries} tentativi rimasti). Errore: {e}")
+            await asyncio.sleep(2)
+    if retries == 0:
+        logger.error("Impossibile connettersi al database dopo diversi tentativi.")
+
+
+@app.on_event("startup")
 async def bootstrap_admin_on_startup():
     if not settings.BOOTSTRAP_ADMIN_ENABLED:
         return
@@ -57,35 +78,53 @@ async def bootstrap_admin_on_startup():
     if not email or not password:
         return
 
+    # Attendi un istante per assicurarsi che le tabelle siano state create dall'evento precedente
+    import asyncio
+    await asyncio.sleep(1)
+
     async with AsyncSessionLocal() as db:
-        users_table = (await db.execute(text("SELECT to_regclass('public.users')"))).scalar_one()
-        if not users_table:
-            # Schema non pronto: esce senza errori e riprovera al prossimo restart.
-            return
+        try:
+            # Verifica se la tabella users esiste davvero
+            res = await db.execute(text("SELECT to_regclass('public.users')"))
+            if not res.scalar_one():
+                logger.warning("Tabella 'users' non trovata. Salto bootstrap admin.")
+                return
 
-        users_count = (await db.execute(select(func.count(User.id)))).scalar_one()
-        if users_count and users_count > 0:
-            return
+            users_count_res = await db.execute(select(func.count(User.id)))
+            users_count = users_count_res.scalar_one()
+            if users_count and users_count > 0:
+                # Se l'admin esiste già, non fare nulla
+                existing_admin = await db.execute(select(User).where(User.email == email))
+                if not existing_admin.scalar_one_or_none():
+                    logger.info(f"Admin {email} mancante in un DB non vuoto? Controllo manuale richiesto.")
+                return
 
-        admin = User(
-            nome=settings.BOOTSTRAP_ADMIN_NOME.strip() or "Admin",
-            cognome=settings.BOOTSTRAP_ADMIN_COGNOME.strip() or "Bite",
-            email=email,
-            password_hash=hash_password(password),
-            ruolo=UserRole.ADMIN,
-            attivo=True,
-        )
-        db.add(admin)
-        await db.commit()
+            admin = User(
+                nome=settings.BOOTSTRAP_ADMIN_NOME.strip() or "Admin",
+                cognome=settings.BOOTSTRAP_ADMIN_COGNOME.strip() or "Bite",
+                email=email,
+                password_hash=hash_password(password),
+                ruolo=UserRole.ADMIN,
+                attivo=True,
+            )
+            db.add(admin)
+            await db.commit()
+            logger.info(f"Bootstrap Admin creato con successo: {email}")
+        except Exception as e:
+            logger.error(f"Errore durante il bootstrap dell'admin: {e}")
 
 
 @app.on_event("startup")
-async def ensure_schema_tables_on_startup():
-    if not settings.AUTO_CREATE_MISSING_TABLES:
-        return
-    # Crea eventuali tabelle mancanti (utile in ambienti gia avviati senza migrazioni).
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+async def seed_data_on_startup():
+    from app.services.services import seed_default_categories
+    import asyncio
+    await asyncio.sleep(2) # Attendi che il bootstrap admin finisca (opzionale)
+    async with AsyncSessionLocal() as db:
+        try:
+            await seed_default_categories(db)
+            logger.info("Seeding categorie completato.")
+        except Exception as e:
+            logger.error(f"Errore durante il seeding delle categorie: {e}")
 
 
 @app.on_event("startup")

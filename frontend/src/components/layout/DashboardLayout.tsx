@@ -3,6 +3,7 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { AppTopbar } from "./AppTopbar";
 import { AIAssistant } from "../ai/AIAssistant";
+import { TimerBar } from "./TimerBar";
 
 export function DashboardLayout() {
   return (
@@ -11,12 +12,13 @@ export function DashboardLayout() {
         <AppSidebar />
         <SidebarInset className="flex flex-col bg-transparent relative">
           <AppTopbar />
-          <main className="flex-1 p-6 md:p-8 overflow-y-auto">
+          <main className="flex-1 p-6 md:p-8 overflow-y-auto pb-20">
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out fill-mode-both">
               <Outlet />
             </div>
           </main>
           <AIAssistant />
+          <TimerBar />
         </SidebarInset>
       </div>
     </SidebarProvider>

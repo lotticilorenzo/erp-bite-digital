@@ -15,7 +15,7 @@ from app.models.models import (
     User, Cliente, Progetto, Commessa, CommessaProgetto, Timesheet, Task,
     Costo, AuditLog, CoefficienteAllocazione,
     Fornitore, FatturaAttiva, FatturaPassiva, FicSyncRun,
-    UserRole, CommessaStatus, TimesheetStatus, TimerSession
+    UserRole, CommessaStatus, TaskStatus, TimesheetStatus, TimerSession
 )
 from app.schemas.schemas import (
     UserCreate, UserUpdate, ClienteCreate, ClienteUpdate,
@@ -106,6 +106,22 @@ async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID | str) -> Optional
 async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
     result = await db.execute(select(User).where(User.email == email))
     return result.scalar_one_or_none()
+
+async def get_user_by_identifier(db: AsyncSession, identifier: str) -> Optional[User]:
+    """Cerca utente per email esatta o per 'handle' (parte prima della @)."""
+    # 1. Prova email esatta
+    user = await get_user_by_email(db, identifier)
+    if user:
+        return user
+    
+    # 2. Prova handle (se non contiene @)
+    if "@" not in identifier:
+        result = await db.execute(
+            select(User).where(User.email.like(f"{identifier}@%"))
+        )
+        return result.scalar_one_or_none()
+    
+    return None
 
 async def create_user(db: AsyncSession, data: UserCreate) -> User:
     user = User(
@@ -1075,6 +1091,12 @@ async def _upsert_fic_fornitori(
     errors: list[str],
 ) -> int:
     imported = 0
+    # Pre-carica categorie per mapping veloce se possibile
+    from sqlalchemy import select
+    res_cat = await db.execute(select(CategoriaFornitore))
+    all_cats = res_cat.scalars().all()
+    cat_map = {c.nome.lower(): c.id for c in all_cats}
+
     for raw in items:
         try:
             fic_id_raw = raw.get("id")
@@ -1099,6 +1121,14 @@ async def _upsert_fic_fornitori(
             fornitore.email = raw.get("email") or fornitore.email
             fornitore.telefono = raw.get("phone") or raw.get("phone_number") or fornitore.telefono
             fornitore.fic_raw_data = raw
+            
+            # Tenta di mappare la categoria se presente in FIC
+            raw_cat = raw.get("category") or raw.get("type")
+            if raw_cat and isinstance(raw_cat, str):
+                fornitore.categoria = raw_cat
+                if raw_cat.lower() in cat_map:
+                    fornitore.categoria_id = cat_map[raw_cat.lower()]
+
             imported += 1
         except Exception as exc:
             import logging
@@ -1391,77 +1421,15 @@ async def get_last_fic_sync_status(db: AsyncSession) -> Optional[FicSyncRun]:
 
 
 async def list_fornitori(db: AsyncSession) -> List[Fornitore]:
-    result = await db.execute(select(Fornitore).order_by(Fornitore.ragione_sociale))
-    return result.scalars().all()
-
-
-async def list_fatture_attive(db: AsyncSession) -> List[FatturaAttiva]:
     result = await db.execute(
-        select(FatturaAttiva).order_by(
-            FatturaAttiva.data_emissione.desc().nullslast(),
-            FatturaAttiva.created_at.desc(),
-        )
+        select(Fornitore)
+        .options(selectinload(Fornitore.categoria_rel))
+        .order_by(Fornitore.ragione_sociale)
     )
     return result.scalars().all()
-
-
-async def list_fatture_passive(db: AsyncSession):
-    from app.models.models import Fornitore
-    result = await db.execute(
-        select(FatturaPassiva, Fornitore.ragione_sociale)
-        .outerjoin(Fornitore, FatturaPassiva.fornitore_id == Fornitore.id)
-        .order_by(
-            FatturaPassiva.data_emissione.desc().nullslast(),
-            FatturaPassiva.created_at.desc(),
-        )
-    )
-    rows = result.all()
-    fatture = []
-    for fp, ragione_sociale in rows:
-        d = {c.name: getattr(fp, c.name) for c in fp.__table__.columns}
-        d['fornitore_nome'] = ragione_sociale
-        fatture.append(d)
-    return fatture
-
-async def incassa_fattura(db: AsyncSession, fattura_id: uuid.UUID, data_incasso) -> Optional[FatturaAttiva]:
-    result = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == fattura_id))
-    fattura = result.scalar_one_or_none()
-    if not fattura:
-        return None
-    fattura.stato_pagamento = 'paid'
-    fattura.data_ultimo_incasso = data_incasso
-    fattura.importo_pagato = fattura.importo_totale
-    fattura.importo_residuo = 0
-    await db.commit()
-    await db.refresh(fattura)
-
-    # Sincronizza stato commessa collegata
-    from app.models.models import Commessa, CommessaStatus
-    cm_result = await db.execute(select(Commessa).where(Commessa.fattura_id == fattura_id))
-    commessa = cm_result.scalar_one_or_none()
-    if commessa and commessa.stato not in (CommessaStatus.INCASSATA,):
-        commessa.stato = CommessaStatus.INCASSATA
-        await db.commit()
-
-    # Push a FIC
-    import httpx, os
-    fic_key = os.getenv('FIC_API_KEY','')
-    company_id = os.getenv('FIC_COMPANY_ID','')
-    if fic_key and company_id and fattura.fic_id:
-        try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                await client.put(
-                    f"https://api-v2.fattureincloud.it/c/{company_id}/issued_documents/{fattura.fic_id}",
-                    headers={"Authorization": f"Bearer {fic_key}"},
-                    json={"data": {"payment_method": {"id": 0}, "payments": [{"amount": float(fattura.importo_totale), "date": str(data_incasso), "paid": True}]}}
-                )
-        except Exception as e:
-            print(f"FIC push error: {e}")
-
-    return fattura
 
 async def list_fornitori_full(db: AsyncSession):
-    from app.models.models import Fornitore, FatturaPassiva
+    from app.models.models import Fornitore, FatturaPassiva, CategoriaFornitore
     from sqlalchemy import func
     result = await db.execute(
         select(
@@ -1471,30 +1439,92 @@ async def list_fornitori_full(db: AsyncSession):
             func.max(FatturaPassiva.data_emissione).label('ultima_fattura'),
         )
         .outerjoin(FatturaPassiva, FatturaPassiva.fornitore_id == Fornitore.id)
+        .options(selectinload(Fornitore.categoria_rel))
         .group_by(Fornitore.id)
         .order_by(Fornitore.ragione_sociale)
     )
     rows = result.all()
     out = []
     for forn, num_fatture, spesa_totale, ultima_fattura in rows:
-        d = {c.name: getattr(forn, c.name) for c in forn.__table__.columns}
+        d = FornitoreOut.model_validate(forn).model_dump()
         d['num_fatture'] = num_fatture
         d['spesa_totale'] = float(spesa_totale or 0)
         d['ultima_fattura'] = str(ultima_fattura) if ultima_fattura else None
         out.append(d)
     return out
 
+async def create_fornitore(db: AsyncSession, data: any) -> Fornitore: # data: FornitoreCreate
+    f = Fornitore(**data.model_dump())
+    db.add(f)
+    await db.flush()
+    # Ricarica per avere la relazione categoria
+    res = await db.execute(
+        select(Fornitore).options(selectinload(Fornitore.categoria_rel)).where(Fornitore.id == f.id)
+    )
+    return res.scalar_one()
+
 async def update_fornitore(db: AsyncSession, fornitore_id: uuid.UUID, data: dict):
     from app.models.models import Fornitore
-    result = await db.execute(select(Fornitore).where(Fornitore.id == fornitore_id))
+    result = await db.execute(
+        select(Fornitore)
+        .options(selectinload(Fornitore.categoria_rel))
+        .where(Fornitore.id == fornitore_id)
+    )
     forn = result.scalar_one_or_none()
     if not forn:
         return None
     for k, v in data.items():
-        setattr(forn, k, v)
-    await db.commit()
-    await db.refresh(forn)
+        if hasattr(forn, k):
+            setattr(forn, k, v)
+    await db.flush()
     return forn
+
+
+# ── CATEGORIE FORNITORI SERVICE ──────────────────────────
+async def list_categorie_fornitori(db: AsyncSession) -> List[CategoriaFornitore]:
+    result = await db.execute(select(CategoriaFornitore).order_by(CategoriaFornitore.nome))
+    return result.scalars().all()
+
+async def create_categoria_fornitore(db: AsyncSession, data: any) -> CategoriaFornitore: # data: CategoriaFornitoreCreate
+    cat = CategoriaFornitore(**data.model_dump())
+    db.add(cat)
+    await db.flush()
+    return cat
+
+async def update_categoria_fornitore(db: AsyncSession, cat_id: uuid.UUID, data: any) -> Optional[CategoriaFornitore]:
+    result = await db.execute(select(CategoriaFornitore).where(CategoriaFornitore.id == cat_id))
+    cat = result.scalar_one_or_none()
+    if not cat:
+        return None
+    for k, v in data.model_dump(exclude_none=True).items():
+        setattr(cat, k, v)
+    await db.flush()
+    return cat
+
+async def delete_categoria_fornitore(db: AsyncSession, cat_id: uuid.UUID) -> bool:
+    result = await db.execute(select(CategoriaFornitore).where(CategoriaFornitore.id == cat_id))
+    cat = result.scalar_one_or_none()
+    if not cat:
+        return False
+    await db.delete(cat)
+    await db.flush()
+    return True
+
+async def seed_default_categories(db: AsyncSession):
+    defaults = [
+        {"nome": "Marketing", "colore": "#ec4899"},
+        {"nome": "Software & Tools", "colore": "#3b82f6"},
+        {"nome": "Struttura & Ufficio", "colore": "#64748b"},
+        {"nome": "Consulenza", "colore": "#8b5cf6"},
+        {"nome": "Freelancer", "colore": "#10b981"},
+        {"nome": "Utilities", "colore": "#f59e0b"},
+        {"nome": "Altro", "colore": "#94a3b8"},
+    ]
+    for d in defaults:
+        res = await db.execute(select(CategoriaFornitore).where(CategoriaFornitore.nome == d["nome"]))
+        if not res.scalar_one_or_none():
+            db.add(CategoriaFornitore(**d))
+    await db.commit()
 
 async def update_fattura_passiva(db: AsyncSession, fattura_id: uuid.UUID, data: dict):
     from app.models.models import FatturaPassiva
@@ -2107,14 +2137,23 @@ async def stop_timer(db: AsyncSession, session_id: uuid.UUID, note: Optional[str
     await db.refresh(session)
     return session
 
-async def get_active_timer(db: AsyncSession, user_id: uuid.UUID) -> Optional[TimerSession]:
+async def get_active_timer(db: AsyncSession, user_id: uuid.UUID) -> Optional[dict]:
     result = await db.execute(
-        select(TimerSession)
+        select(TimerSession, Task.titolo)
+        .outerjoin(Task, TimerSession.task_id == Task.id)
         .where(TimerSession.user_id == user_id)
         .where(TimerSession.stopped_at == None)
         .order_by(TimerSession.started_at.desc())
     )
-    return result.scalar_one_or_none()
+    row = result.fetchone()
+    if not row:
+        return None
+    
+    session, task_title = row
+    # Create a dict that matches TimerSessionOut + task_title
+    d = {c.name: getattr(session, c.name) for c in session.__table__.columns}
+    d['task_title'] = task_title
+    return d
 
 async def list_timer_sessions(db: AsyncSession, task_id: uuid.UUID) -> List[TimerSession]:
     result = await db.execute(

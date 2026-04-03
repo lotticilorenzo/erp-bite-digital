@@ -41,9 +41,13 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             {error && (
-              <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 flex items-center space-x-3 text-destructive animate-in slide-in-from-top-2">
+              <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 flex items-center space-x-3 text-destructive animate-in slide-in-from-bottom-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <p className="text-xs font-medium">Credenziali non valide o errore di sistema.</p>
+                <p className="text-xs font-medium">
+                  {error instanceof Error && error.message.includes("401") 
+                    ? "Email o password non corretti." 
+                    : "Errore di connessione al server. Verifica che il backend sia attivo."}
+                </p>
               </div>
             )}
             <div className="space-y-2">

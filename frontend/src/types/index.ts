@@ -141,16 +141,37 @@ export interface FatturaAttiva {
   created_at: string;
 }
 
+export interface CategoriaFornitore {
+  id: string;
+  nome: string;
+  colore?: string;
+  created_at: string;
+}
+
 export interface Fornitore {
   id: string;
-  fic_id: string;
+  fic_id?: string;
   ragione_sociale: string;
   piva?: string;
+  codice_fiscale?: string;
+  pec?: string;
+  indirizzo?: string;
   email?: string;
   telefono?: string;
   attivo: boolean;
+  categoria_id?: string;
   categoria?: string;
+  competenze?: string[];
+  tariffa?: number;
+  tariffa_tipo?: string;
   note?: string;
+  created_at: string;
+  updated_at: string;
+  categoria_rel?: CategoriaFornitore;
+  // Stats fields (from list_fornitori_full)
+  num_fatture?: number;
+  spesa_totale?: number;
+  ultima_fattura?: string | null;
 }
 
 export interface MovimentoFinanziario {

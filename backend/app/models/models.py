@@ -419,12 +419,24 @@ class FatturaRiga(Base):
     fattura: Mapped["Fattura"] = relationship(back_populates="righe")
 
 
+# ── CATEGORIA FORNITORE ──────────────────────────────────
+class CategoriaFornitore(Base):
+    __tablename__ = "categorie_fornitori"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    nome: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    colore: Mapped[Optional[str]] = mapped_column(String(20)) # Es: hex code
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    fornitori: Mapped[List["Fornitore"]] = relationship(back_populates="categoria_rel")
+
+
 # ── FORNITORE (SYNC FIC) ──────────────────────────────────
 class Fornitore(Base):
     __tablename__ = "fornitori"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    fic_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    fic_id: Mapped[Optional[str]] = mapped_column(String(100), unique=True, nullable=True) # Reso opzionale per inserimento manuale
     ragione_sociale: Mapped[str] = mapped_column(String(255))
     codice_cliente: Mapped[Optional[str]] = mapped_column(String(10))
     piva: Mapped[Optional[str]] = mapped_column(String(20))
@@ -434,7 +446,8 @@ class Fornitore(Base):
     email: Mapped[Optional[str]] = mapped_column(String(255))
     telefono: Mapped[Optional[str]] = mapped_column(String(50))
     attivo: Mapped[bool] = mapped_column(Boolean, default=True)
-    categoria: Mapped[Optional[str]] = mapped_column(String(50))
+    categoria_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("categorie_fornitori.id"), nullable=True)
+    categoria: Mapped[Optional[str]] = mapped_column(String(50)) # Campo legacy/denormalizzato per compatibilità FIC
     competenze: Mapped[Optional[list]] = mapped_column(JSON)
     tariffa: Mapped[Optional[Decimal]] = mapped_column(Numeric(12,2))
     tariffa_tipo: Mapped[Optional[str]] = mapped_column(String(20))
@@ -443,6 +456,7 @@ class Fornitore(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    categoria_rel: Mapped[Optional["CategoriaFornitore"]] = relationship(back_populates="fornitori")
     fatture_passive: Mapped[List["FatturaPassiva"]] = relationship(back_populates="fornitore")
 
 

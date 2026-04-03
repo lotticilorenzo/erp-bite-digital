@@ -62,7 +62,7 @@ class RisorsaOut(OrmBase):
 
 # ── AUTH ──────────────────────────────────────────────────
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str # Can be email or username
     password: str
 
 class TokenResponse(BaseModel):
@@ -469,6 +469,7 @@ class TimerSessionUpdate(BaseModel):
 class TimerSessionOut(OrmBase):
     id: uuid.UUID
     task_id: uuid.UUID
+    task_title: Optional[str] = None
     user_id: uuid.UUID
     started_at: datetime
     stopped_at: Optional[datetime] = None
@@ -505,20 +506,76 @@ class CostoOut(OrmBase):
     created_at: datetime
 
 
+# ── CATEGORIA FORNITORE ──────────────────────────────────
+class CategoriaFornitoreBase(BaseModel):
+    nome: str
+    colore: Optional[str] = None
+
+class CategoriaFornitoreCreate(CategoriaFornitoreBase):
+    pass
+
+class CategoriaFornitoreUpdate(BaseModel):
+    nome: Optional[str] = None
+    colore: Optional[str] = None
+
+class CategoriaFornitoreOut(OrmBase, CategoriaFornitoreBase):
+    id: uuid.UUID
+    created_at: datetime
+
+
 # ── FIC SYNC / FINANZA ────────────────────────────────────
+class FornitoreCreate(BaseModel):
+    ragione_sociale: str
+    piva: Optional[str] = None
+    codice_fiscale: Optional[str] = None
+    pec: Optional[str] = None
+    indirizzo: Optional[str] = None
+    email: Optional[str] = None
+    telefono: Optional[str] = None
+    categoria_id: Optional[uuid.UUID] = None
+    note: Optional[str] = None
+
+class FornitoreUpdate(BaseModel):
+    ragione_sociale: Optional[str] = None
+    piva: Optional[str] = None
+    codice_fiscale: Optional[str] = None
+    pec: Optional[str] = None
+    indirizzo: Optional[str] = None
+    email: Optional[str] = None
+    telefono: Optional[str] = None
+    attivo: Optional[bool] = None
+    categoria_id: Optional[uuid.UUID] = None
+    categoria: Optional[str] = None # Legacy/Sync
+    competenze: Optional[list] = None
+    tariffa: Optional[Decimal] = None
+    tariffa_tipo: Optional[str] = None
+    note: Optional[str] = None
+
 class FornitoreOut(OrmBase):
     id: uuid.UUID
-    fic_id: str
+    fic_id: Optional[str] = None
     ragione_sociale: str
-    piva: Optional[str]
-    codice_fiscale: Optional[str]
-    pec: Optional[str]
-    indirizzo: Optional[str]
-    email: Optional[str]
-    telefono: Optional[str]
+    piva: Optional[str] = None
+    codice_fiscale: Optional[str] = None
+    pec: Optional[str] = None
+    indirizzo: Optional[str] = None
+    email: Optional[str] = None
+    telefono: Optional[str] = None
     attivo: bool
+    categoria_id: Optional[uuid.UUID] = None
+    categoria: Optional[str] = None
+    competenze: Optional[list] = None
+    tariffa: Optional[Decimal] = None
+    tariffa_tipo: Optional[str] = None
+    note: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    categoria_rel: Optional[CategoriaFornitoreOut] = None
+
+class FornitoreWithStats(FornitoreOut):
+    num_fatture: int = 0
+    spesa_totale: float = 0
+    ultima_fattura: Optional[str] = None
 
 class FatturaAttivaOut(OrmBase):
     id: uuid.UUID
@@ -539,52 +596,6 @@ class FatturaAttivaOut(OrmBase):
     created_at: datetime
     updated_at: datetime
 
-class FornitoreUpdate(BaseModel):
-    categoria: Optional[str] = None
-    competenze: Optional[list] = None
-    tariffa: Optional[Decimal] = None
-    tariffa_tipo: Optional[str] = None
-    note: Optional[str] = None
-
-class FornitoreOut(OrmBase):
-    id: uuid.UUID
-    fic_id: str
-    ragione_sociale: str
-    piva: Optional[str] = None
-    codice_fiscale: Optional[str] = None
-    pec: Optional[str] = None
-    indirizzo: Optional[str] = None
-    email: Optional[str] = None
-    telefono: Optional[str] = None
-    attivo: bool
-    categoria: Optional[str] = None
-    competenze: Optional[list] = None
-    tariffa: Optional[Decimal] = None
-    tariffa_tipo: Optional[str] = None
-    note: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-
-class FatturaPassivaUpdate(BaseModel):
-    ricorrente: Optional[bool] = None
-    periodicita: Optional[str] = None
-    commessa_id: Optional[uuid.UUID] = None
-    categoria: Optional[str] = None
-    note: Optional[str] = None
-
-class FatturaPassivaOut(OrmBase):
-    id: uuid.UUID
-    fic_id: str
-    fornitore_id: Optional[uuid.UUID]
-    fornitore_nome: Optional[str] = None
-    fic_fornitore_id: Optional[str]
-    numero: Optional[str]
-    data_emissione: Optional[date]
-    data_scadenza: Optional[date]
-    importo_totale: Decimal
-    importo_pagato: Decimal
-    importo_residuo: Decimal
-    stato_pagamento: str
     data_ultimo_pagamento: Optional[date]
     valuta: Optional[str]
     categoria: Optional[str] = None
