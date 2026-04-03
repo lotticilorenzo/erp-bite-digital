@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { 
   X, 
   Send, 
   Sparkles, 
   Bot, 
-  MessageSquare, 
   TrendingUp, 
   AlertCircle, 
   Users,
@@ -15,7 +14,6 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAI } from "@/hooks/useAI";
 import type { ChatMessage } from "@/hooks/useAI";
-import { Badge } from "@/components/ui/badge";
 
 interface AIChatPanelProps {
   isOpen: boolean;

@@ -1,0 +1,5 @@
+src/components/studio/StudioTaskModal.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/studio/StudioTaskModal.tsx(16,3): error TS6133: 'DialogTitle' is declared but its value is never read.
+src/context/StudioContext.tsx(55,43): error TS6133: 'isLoadingTimer' is declared but its value is never read.
+src/hooks/useFatture.ts(3,30): error TS6196: 'FatturaPassiva' is declared but never used.
+src/pages/Fatture.tsx(15,3): error TS6133: 'Euro' is declared but its value is never read.

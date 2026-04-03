@@ -1,0 +1,16 @@
+src/components/ai/AIAssistant.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/layout/TimerWidget.tsx(5,1): error TS6133: 'TimerSessionSO' is declared but its value is never read.
+src/components/layout/TimerWidget.tsx(6,1): error TS6133: 'format' is declared but its value is never read.
+src/components/studio/StudioKanbanView.tsx(3,3): error TS6133: 'Zap' is declared but its value is never read.
+src/components/studio/StudioKanbanView.tsx(8,3): error TS6133: 'ChevronRight' is declared but its value is never read.
+src/components/studio/StudioTaskModal.tsx(3,15): error TS6133: 'CalendarIcon' is declared but its value is never read.
+src/components/studio/StudioTaskModal.tsx(4,11): error TS6133: 'UserIcon' is declared but its value is never read.
+src/components/studio/StudioTaskModal.tsx(6,3): error TS6133: 'Pause' is declared but its value is never read.
+src/components/studio/StudioTaskModal.tsx(9,11): error TS6133: 'LinkIcon' is declared but its value is never read.
+src/components/studio/StudioTaskModal.tsx(19,3): error TS6133: 'DialogTitle' is declared but its value is never read.
+src/components/studio/StudioTaskModal.tsx(45,16): error TS2686: 'React' refers to a UMD global, but the current file is a module. Consider adding an import instead.
+src/components/studio/StudioTaskModal.tsx(53,35): error TS2686: 'React' refers to a UMD global, but the current file is a module. Consider adding an import instead.
+src/components/studio/StudioTaskModal.tsx(61,3): error TS2686: 'React' refers to a UMD global, but the current file is a module. Consider adding an import instead.
+src/context/StudioContext.tsx(55,43): error TS6133: 'isLoadingTimer' is declared but its value is never read.
+src/hooks/useFatture.ts(3,30): error TS6196: 'FatturaPassiva' is declared but never used.
+src/pages/Fatture.tsx(15,3): error TS6133: 'Euro' is declared but its value is never read.

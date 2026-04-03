@@ -52,7 +52,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   }, [nav]);
 
   // Timer State (Backend Synced)
-  const { data: activeSession, isLoading: isLoadingTimer } = useActiveTimer();
+  const { data: activeSession } = useActiveTimer();
   const startTimerMutation = useStartTimer();
   const stopTimerMutation = useStopTimer();
 

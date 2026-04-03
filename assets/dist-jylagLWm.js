@@ -1,0 +1,1 @@
+import{L as e,V as t}from"./createLucideIcon-nEGCAtGz.js";var n=t(e(),1),r=globalThis?.document?n.useLayoutEffect:()=>{};function i(e){let t=n.useRef(e);return n.useEffect(()=>{t.current=e}),n.useMemo(()=>(...e)=>t.current?.(...e),[])}export{r as n,i as t};

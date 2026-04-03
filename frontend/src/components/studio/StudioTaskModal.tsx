@@ -1,18 +1,9 @@
-import React from "react";
+import { useMemo, useState, useEffect } from "react";
 import { 
   Plus, 
-  Clock, 
-  Calendar as CalendarIcon, 
-  User as UserIcon, 
   Play, 
-  Pause, 
   CheckCircle2, 
   Trash2, 
-  MoreHorizontal,
-  ChevronRight,
-  MessageSquare,
-  Link as LinkIcon,
-  Paperclip,
   Save,
   Briefcase,
   History,
@@ -22,7 +13,6 @@ import {
   Dialog, 
   DialogContent, 
   DialogHeader, 
-  DialogTitle 
 } from "@/components/ui/dialog";
 import { useStudio } from "@/hooks/useStudio";
 import { useTasks, useTaskMutations } from "@/hooks/useTasks";
@@ -39,6 +29,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
+import { format } from "date-fns";
 import { toast } from "sonner";
 
 export function StudioTaskModal() {
@@ -47,7 +38,7 @@ export function StudioTaskModal() {
   const { data: commesse } = useCommesse();
   const { createTask, updateTask, deleteTask } = useTaskMutations();
 
-  const task = React.useMemo(() => {
+  const task = useMemo(() => {
     if (nav.selectedTaskId === "new") return null;
     return tasks?.find(t => t.id === nav.selectedTaskId) || null;
   }, [tasks, nav.selectedTaskId]);
@@ -55,7 +46,7 @@ export function StudioTaskModal() {
   const { data: sessions = [] } = useTimerSessions(task?.id || null);
   const saveToTimesheetMutation = useSaveTimerToTimesheet();
 
-  const [formData, setFormData] = React.useState({
+  const [formData, setFormData] = useState({
     titolo: "",
     descrizione: "",
     commessa_id: "none",
@@ -63,7 +54,7 @@ export function StudioTaskModal() {
     data_scadenza: "",
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (task) {
       setFormData({
         titolo: task.title,

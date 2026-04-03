@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
-import type { FatturaAttiva, FatturaPassiva } from "@/types";
+import type { FatturaAttiva } from "@/types";
 
 export function useFattureAttive() {
   return useQuery({

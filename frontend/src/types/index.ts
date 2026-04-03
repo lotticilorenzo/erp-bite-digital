@@ -141,6 +141,24 @@ export interface FatturaAttiva {
   created_at: string;
 }
 
+export interface FatturaPassiva {
+  id: string;
+  fic_id: string;
+  fornitore_id?: string;
+  numero?: string;
+  data_emissione?: string;
+  data_scadenza?: string;
+  importo_totale: number;
+  importo_netto?: number;
+  importo_iva?: number;
+  importo_pagato: number;
+  importo_residuo: number;
+  stato_pagamento: string;
+  valuta?: string;
+  created_at: string;
+  fornitore_nome?: string;
+}
+
 export interface CategoriaFornitore {
   id: string;
   nome: string;

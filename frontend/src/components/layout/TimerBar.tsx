@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Play, Square, Timer, ChevronUp, RefreshCw, CheckCircle2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Square, Timer, ChevronUp, RefreshCw, CheckCircle2 } from "lucide-react";
 import { useActiveTimer, useStopTimer, useStartTimer } from "@/hooks/useTimer";
 import { useTasks } from "@/hooks/useTasks";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,12 +12,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 
 export function TimerBar() {
   const { user } = useAuth();
-  const { data: activeTimer, isLoading: loadingActive } = useActiveTimer();
+  const { data: activeTimer } = useActiveTimer();
   const { mutate: stopTimer } = useStopTimer();
   const { mutate: startTimer } = useStartTimer();
   

@@ -1,0 +1,58 @@
+
+> frontend@0.0.0 build
+> tsc -b && vite build
+
+[36mvite v8.0.3 [32mbuilding client environment for production...[36m[39m
+[2K
+transforming...??? 3654 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                1.77 kB ??? gzip:   0.53 kB
+dist/assets/index-DwXLlprM.css                82.91 kB ??? gzip:  13.80 kB
+dist/assets/coerce-CqlP-kL0.js                 0.08 kB ??? gzip:   0.10 kB
+dist/assets/chevron-right-DZJGkI4L.js          0.13 kB ??? gzip:   0.14 kB
+dist/assets/trending-down-rBN-phaD.js          0.17 kB ??? gzip:   0.17 kB
+dist/assets/dist-w6N9didh.js                   0.18 kB ??? gzip:   0.16 kB
+dist/assets/target-CvCXyCRm.js                 0.22 kB ??? gzip:   0.16 kB
+dist/assets/download-BgzoIzTF.js               0.23 kB ??? gzip:   0.19 kB
+dist/assets/external-link-BEBOse89.js          0.25 kB ??? gzip:   0.19 kB
+dist/assets/calendar-KciNtO_X.js               0.25 kB ??? gzip:   0.20 kB
+dist/assets/dist-jylagLWm.js                   0.25 kB ??? gzip:   0.21 kB
+dist/assets/euro-Cjyegdef.js                   0.26 kB ??? gzip:   0.21 kB
+dist/assets/pencil-z8iSGRsp.js                 0.27 kB ??? gzip:   0.22 kB
+dist/assets/building-2-B29JzgsS.js             0.38 kB ??? gzip:   0.24 kB
+dist/assets/layers-CIH-Tk3k.js                 0.42 kB ??? gzip:   0.24 kB
+dist/assets/dist-BLBKswvU.js                   0.50 kB ??? gzip:   0.36 kB
+dist/assets/shim-BGGqTl5h.js                   0.83 kB ??? gzip:   0.44 kB
+dist/assets/dist-BAjHmao7.js                   1.05 kB ??? gzip:   0.55 kB
+dist/assets/dist-8XCi5zlu.js                   1.11 kB ??? gzip:   0.61 kB
+dist/assets/dist-9_rhVHkB.js                   1.83 kB ??? gzip:   0.89 kB
+dist/assets/progress-C9u1kRPO.js               1.99 kB ??? gzip:   0.99 kB
+dist/assets/dist-BFj6bI-p.js                   2.26 kB ??? gzip:   1.00 kB
+dist/assets/dist-BCoAcNz7.js                   3.45 kB ??? gzip:   1.47 kB
+dist/assets/useMutation-oLPvNnXZ.js            5.52 kB ??? gzip:   1.77 kB
+dist/assets/dist-BKf7Pfq6.js                   6.28 kB ??? gzip:   2.62 kB
+dist/assets/checkbox-B-v7IQiy.js               6.64 kB ??? gzip:   2.74 kB
+dist/assets/Reports-Cp2JaeMI.js                7.66 kB ??? gzip:   2.45 kB
+dist/assets/ProgettoDetail-CIP3JtKA.js         7.67 kB ??? gzip:   2.06 kB
+dist/assets/Fatture-DgMH5vEv.js               10.74 kB ??? gzip:   2.62 kB
+dist/assets/CommessaDetail-CjD2teTG.js        10.99 kB ??? gzip:   2.99 kB
+dist/assets/Progetti-BxbMATyo.js              12.03 kB ??? gzip:   3.37 kB
+dist/assets/Commesse-ROxlL4No.js              12.46 kB ??? gzip:   3.63 kB
+dist/assets/Clienti-QDd-SsBf.js               13.55 kB ??? gzip:   4.17 kB
+dist/assets/Timesheet-D7O9yWe7.js             16.34 kB ??? gzip:   4.46 kB
+dist/assets/dist-BMSNmxFu.js                  18.94 kB ??? gzip:   4.37 kB
+dist/assets/it-Dt8wVuPo.js                    25.43 kB ??? gzip:   6.86 kB
+dist/assets/dist-C1qRcT4R.js                  31.49 kB ??? gzip:  11.56 kB
+dist/assets/Studio-mHxEMAFj.js                35.08 kB ??? gzip:   8.52 kB
+dist/assets/Cassa-BTbCt0LL.js                 39.81 kB ??? gzip:  11.36 kB
+dist/assets/Analytics-DVtP8Bz1.js             49.08 kB ??? gzip:  13.44 kB
+dist/assets/Planning-BBu2nLLL.js              56.14 kB ??? gzip:  17.67 kB
+dist/assets/form-DmlLDlpS.js                  94.66 kB ??? gzip:  28.09 kB
+dist/assets/createLucideIcon-nEGCAtGz.js      98.68 kB ??? gzip:  34.44 kB
+dist/assets/react-dom-UO5OLWT7.js            132.70 kB ??? gzip:  43.07 kB
+dist/assets/index-BHWE3x_A.js                285.10 kB ??? gzip:  79.15 kB
+dist/assets/CartesianChart-BIitIdaX.js       336.00 kB ??? gzip:  99.01 kB
+dist/assets/CommessaReportPDF-BS1VeeXF.js  1,549.56 kB ??? gzip: 516.26 kB
+
+[32m??? built in 3.78s[39m

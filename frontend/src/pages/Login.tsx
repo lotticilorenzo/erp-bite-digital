@@ -54,8 +54,8 @@ export default function LoginPage() {
               <div className="relative">
                 <Mail className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
                 <Input
-                  type="email"
-                  placeholder="Email"
+                  type="text"
+                  placeholder="Email o Username"
                   className="pl-10 bg-background/50"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}

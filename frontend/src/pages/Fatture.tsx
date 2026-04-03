@@ -12,7 +12,6 @@ import {
   CardTitle 
 } from "@/components/ui/card";
 import { 
-  Euro, 
   TrendingUp, 
   TrendingDown, 
   Clock, 

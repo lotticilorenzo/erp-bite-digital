@@ -1,7 +1,6 @@
 import React from "react";
 import { 
   ChevronRight, 
-  Folder, 
   Hash, 
   Plus,
   Search,

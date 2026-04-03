@@ -1,11 +1,9 @@
 import React from "react";
 import { 
-  Zap, 
   Plus, 
   MoreVertical, 
   Clock, 
-  User as UserIcon,
-  ChevronRight
+  User as UserIcon
 } from "lucide-react";
 import { useStudio } from "@/hooks/useStudio";
 import { useTasks } from "@/hooks/useTasks";

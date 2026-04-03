@@ -2,8 +2,6 @@ import { useState } from "react";
 import { useStudio } from "@/context/StudioContext";
 import { useTask } from "@/hooks/useTasks";
 import { useSaveTimerToTimesheet } from "@/hooks/useTimer";
-import type { TimerSessionSO } from "@/types/studio";
-import { format } from "date-fns";
 
 import { 
   Timer, 

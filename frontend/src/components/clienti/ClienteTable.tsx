@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { 
   MoreHorizontal, 
   Pencil, 
@@ -41,10 +40,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
-// We need to create the Badge component if it doesn't exist
-// Or I'll just use a div with classes for now if I forget to add it via shadcn.
-// Let's assume I'll add it.
 
 interface ClienteTableProps {
   clienti: Cliente[];

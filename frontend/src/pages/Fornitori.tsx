@@ -1,11 +1,10 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
-import { Fornitore, CategoriaFornitore } from "@/types";
+import type { Fornitore, CategoriaFornitore } from "@/types";
 import { 
-  Plus, Search, Edit2, Trash2, ExternalLink, 
-  Phone, Mail, Globe, Tag, Filter, MoreHorizontal,
-  ChevronRight, Building2, Receipt
+  Phone, Mail, Tag, Filter, MoreHorizontal,
+  Building, FileText, Plus, Search, Edit2, Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,12 +21,12 @@ import {
   DropdownMenuItem, DropdownMenuTrigger,
   DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { 
   Select, SelectContent, SelectItem, 
   SelectTrigger, SelectValue 
 } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
@@ -245,7 +244,7 @@ export default function Fornitori() {
                           <Edit2 className="w-4 h-4 mr-2" /> Modifica
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => navigate(`/finanza/fatture?fornitore=${f.id}`)}>
-                          <Receipt className="w-4 h-4 mr-2" /> Vedi Fatture
+                          <FileText className="w-4 h-4 mr-2" /> Vedi Fatture
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 
@@ -284,7 +283,7 @@ export default function Fornitori() {
               <div className="space-y-2">
                 <Label>Ragione Sociale <span className="text-destructive">*</span></Label>
                 <div className="relative">
-                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input 
                     value={selectedFornitore?.ragione_sociale || ""}
                     onChange={(e) => setSelectedFornitore(prev => ({ ...prev!, ragione_sociale: e.target.value }))}

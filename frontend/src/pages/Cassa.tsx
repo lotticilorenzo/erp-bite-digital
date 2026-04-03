@@ -1,10 +1,4 @@
 import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
-  CardTitle 
-} from "@/components/ui/card";
-import { 
   Download,
   ArrowRightLeft,
   Calendar
