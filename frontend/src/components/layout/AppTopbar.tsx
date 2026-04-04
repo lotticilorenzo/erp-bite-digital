@@ -32,6 +32,12 @@ export function AppTopbar() {
       case "commesse": return "Commesse";
       case "timesheet": return "Timesheet";
       case "studio-os": return "Studio OS";
+      case "settings": return "Impostazioni";
+      case "profile": return "Profilo";
+      case "account": return "Account";
+      case "appearance": return "Aspetto";
+      case "notifications": return "Notifiche";
+      case "privacy": return "Privacy";
       default: return path.charAt(0) ? path.charAt(0).toUpperCase() + path.slice(1) : "Home";
     }
   };

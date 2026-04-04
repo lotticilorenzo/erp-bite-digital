@@ -34,6 +34,8 @@ class UserUpdate(BaseModel):
     ruolo: Optional[UserRole] = None
     costo_orario: Optional[Decimal] = None
     ore_settimanali: Optional[int] = None
+    bio: Optional[str] = None
+    preferences: Optional[dict] = None
     attivo: Optional[bool] = None
     data_fine: Optional[date] = None
 
@@ -45,6 +47,8 @@ class UserOut(OrmBase):
     ruolo: UserRole
     costo_orario: Optional[Decimal]
     ore_settimanali: int
+    bio: Optional[str] = None
+    preferences: Optional[dict] = None
     attivo: bool
     data_inizio: Optional[date]
     created_at: datetime

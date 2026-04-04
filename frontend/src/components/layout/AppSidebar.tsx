@@ -241,17 +241,20 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="right" align="end" className="w-[220px] bg-card border-border p-2 shadow-2xl rounded-xl">
-                <DropdownMenuItem className="gap-2.5 cursor-pointer rounded-lg focus:bg-muted focus:text-foreground transition-all text-xs font-bold text-muted-foreground">
-                  <User className="h-4 w-4" />
-                  Profilo
-                </DropdownMenuItem>
-                <DropdownMenuItem 
-                  onClick={() => setIsThemePanelOpen(true)}
-                  className="gap-2.5 cursor-pointer rounded-lg focus:bg-muted focus:text-foreground transition-all text-xs font-bold text-muted-foreground"
-                >
-                  <Settings className="h-4 w-4" />
-                  Impostazioni
-                </DropdownMenuItem>
+                <Link to="/settings/profile">
+                  <DropdownMenuItem className="gap-2.5 cursor-pointer rounded-lg focus:bg-muted focus:text-foreground transition-all text-xs font-bold text-muted-foreground">
+                    <User className="h-4 w-4" />
+                    Profilo
+                  </DropdownMenuItem>
+                </Link>
+                <Link to="/settings">
+                  <DropdownMenuItem 
+                    className="gap-2.5 cursor-pointer rounded-lg focus:bg-muted focus:text-foreground transition-all text-xs font-bold text-muted-foreground"
+                  >
+                    <Settings className="h-4 w-4" />
+                    Impostazioni
+                  </DropdownMenuItem>
+                </Link>
                 <DropdownMenuSeparator className="bg-muted" />
                 <DropdownMenuItem 
                   onClick={logout} 

@@ -21,6 +21,13 @@ const PlanningPage = React.lazy(() => import("./pages/Planning"));
 import Fornitori from "./pages/Fornitori";
 import SupplierCategoryManager from "./pages/admin/SupplierCategoryManager";
 
+const SettingsLayout = React.lazy(() => import("./pages/Settings"));
+const ProfileSettings = React.lazy(() => import("./pages/settings/ProfileSettings"));
+const AccountSettings = React.lazy(() => import("./pages/settings/AccountSettings"));
+const AppearanceSettings = React.lazy(() => import("./pages/settings/AppearanceSettings"));
+const NotificationSettings = React.lazy(() => import("./pages/settings/NotificationSettings"));
+const PrivacySettings = React.lazy(() => import("./pages/settings/PrivacySettings"));
+
 import { ThemeProvider } from "@/context/ThemeContext";
 
 function App() {
@@ -75,6 +82,14 @@ function App() {
             path="/studio-os/*" 
             element={<StudioPage />} 
           />
+
+          <Route path="/settings" element={<SettingsLayout />}>
+            <Route path="profile" element={<ProfileSettings />} />
+            <Route path="account" element={<AccountSettings />} />
+            <Route path="appearance" element={<AppearanceSettings />} />
+            <Route path="notifications" element={<NotificationSettings />} />
+            <Route path="privacy" element={<PrivacySettings />} />
+          </Route>
         </Route>
 
         <Route path="*" element={<Navigate to="/" />} />

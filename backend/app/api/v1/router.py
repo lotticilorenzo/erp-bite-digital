@@ -69,6 +69,11 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
 async def me(current_user: User = Depends(get_current_user)):
     return current_user
 
+@router.delete("/auth/sessions", tags=["Auth"])
+async def logout_all_sessions(current_user: User = Depends(get_current_user)):
+    """Mock endpoint to simulate disconnecting all sessions."""
+    return {"message": "Disconnesso da tutti i dispositivi", "success": True}
+
 
 # ═══════════════════════════════════════════════════════
 # USERS
@@ -117,6 +122,33 @@ async def patch_user(
     if not user:
         raise HTTPException(status_code=404, detail="Utente non trovato")
     return user
+
+@router.patch("/users/me", response_model=UserOut, tags=["Users"])
+async def patch_current_user(
+    data: UserUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Shortcut per modificare se stessi senza passare l'ID
+    allowed_fields = {"nome", "cognome", "password", "bio", "preferences"}
+    payload = data.model_dump(exclude_none=True)
+    
+    if current_user.ruolo != UserRole.ADMIN:
+        blocked = [k for k in payload.keys() if k not in allowed_fields]
+        if blocked:
+            raise HTTPException(status_code=403, detail="Non autorizzato a modificare campi amministrativi")
+
+    return await update_user(db, current_user.id, data, current_user.id)
+
+@router.get("/users/me/export", tags=["Users"])
+async def export_user_data(current_user: User = Depends(get_current_user)):
+    """Mock endpoint to export user data as JSON."""
+    return {
+        "user": UserOut.model_validate(current_user).model_dump(),
+        "exported_at": datetime.utcnow().isoformat(),
+        "format": "JSON",
+        "message": "Export dei dati completato con successo"
+    }
 
 
 # ═══════════════════════════════════════════════════════

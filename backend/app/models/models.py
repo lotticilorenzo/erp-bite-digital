@@ -85,6 +85,8 @@ class User(Base):
     costo_orario: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
     ore_settimanali: Mapped[int] = mapped_column(Integer, default=40)
     clickup_user_id: Mapped[Optional[str]] = mapped_column(String(50))
+    bio: Mapped[Optional[str]] = mapped_column(String(200))
+    preferences: Mapped[Optional[dict]] = mapped_column(JSON, default=dict)
     attivo: Mapped[bool] = mapped_column(Boolean, default=True)
     data_inizio: Mapped[Optional[date]] = mapped_column(Date)
     data_fine: Mapped[Optional[date]] = mapped_column(Date)

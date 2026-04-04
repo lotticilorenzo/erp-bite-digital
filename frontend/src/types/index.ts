@@ -14,6 +14,8 @@ export interface User {
   email: string;
   ruolo: UserRole;
   costo_orario: number | null;
+  bio: string | null;
+  preferences: Record<string, any> | null;
   attivo: boolean;
   data_inizio: string | null;
   created_at: string;
