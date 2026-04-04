@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Lock, Mail, Loader2, AlertCircle } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -98,7 +98,9 @@ export default function LoginPage() {
               )}
             </Button>
             <p className="text-center text-xs text-muted-foreground">
-              Hai dimenticato la password? Contatta l'amministratore.
+              <Link to="/forgot-password" title="Reimposta la tua password" id="login-forgot-password-link" className="text-primary hover:underline font-medium">
+                Password dimenticata?
+              </Link>
             </p>
           </CardFooter>
         </form>

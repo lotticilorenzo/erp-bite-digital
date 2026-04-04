@@ -22,12 +22,15 @@ import {
   ArrowUpRight, 
   ArrowDownRight,
   Filter,
-  Download
+  Download,
+  Loader2
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PDFDownloadLink } from "@react-pdf/renderer";
+import { AnalyticsReportPDF } from "@/components/analytics/AnalyticsReportPDF";
 import { Progress } from "@/components/ui/progress";
 
 const formatEuro = (val: number) => 
@@ -70,10 +73,20 @@ export default function Analytics() {
             <Filter className="h-4 w-4" />
             Anno Corrente
           </Button>
-          <Button className="h-10 bg-primary hover:bg-primary/90 text-white rounded-xl gap-2 font-black uppercase text-[10px] tracking-widest shadow-[0_0_20px_hsl(var(--primary)/0.2)] transition-all">
-            <Download className="h-4 w-4" />
-            Esporta PDF
-          </Button>
+          <PDFDownloadLink 
+            document={<AnalyticsReportPDF data={analytics} />} 
+            fileName={`Bite_BI_Report_${new Date().toISOString().split('T')[0]}.pdf`}
+          >
+            {({ loading }) => (
+              <Button 
+                disabled={loading}
+                className="h-10 bg-primary hover:bg-primary/90 text-white rounded-xl gap-2 font-black uppercase text-[10px] tracking-widest shadow-[0_0_20px_hsl(var(--primary)/0.2)] transition-all"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                {loading ? "Generazione..." : "Esporta PDF"}
+              </Button>
+            )}
+          </PDFDownloadLink>
         </div>
       </div>
 

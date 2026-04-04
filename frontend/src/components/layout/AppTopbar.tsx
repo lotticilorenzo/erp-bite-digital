@@ -16,8 +16,8 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
+import { UserAvatar } from "@/components/common/UserAvatar";
 import { useLocation, Link } from "react-router-dom";
 
 export function AppTopbar() {
@@ -95,12 +95,13 @@ export function AppTopbar() {
 
           <div className="h-6 w-[1px] bg-muted mx-2 hidden md:block" />
 
-          <Avatar className="h-7 w-7 rounded-lg border border-border shadow-lg hidden md:block cursor-pointer hover:border-primary/50 transition-colors">
-            <AvatarImage src={`https://avatar.vercel.sh/${user?.email}.png`} />
-            <AvatarFallback className="rounded-lg bg-primary/20 text-white text-[10px] font-black">
-              {user?.nome?.[0]}
-            </AvatarFallback>
-          </Avatar>
+          <Link to="/settings/profile">
+            <UserAvatar 
+              user={user} 
+              size="sm" 
+              className="h-7 w-7 rounded-lg border border-border shadow-lg hidden md:block cursor-pointer hover:border-primary/50 transition-colors" 
+            />
+          </Link>
 
           <Button 
             className="h-8 px-4 text-xs font-black bg-primary text-white shadow-[0_0_20px_hsl(var(--primary)/0.2)] hover:bg-primary/90 hover:shadow-primary/30 rounded-lg active:scale-95 transition-all ml-2 uppercase tracking-wide"

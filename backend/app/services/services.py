@@ -14,13 +14,14 @@ from sqlalchemy.orm import selectinload
 from app.models.models import (
     User, Cliente, Progetto, Commessa, CommessaProgetto, Timesheet, Task,
     Costo, AuditLog, CoefficienteAllocazione,
-    Fornitore, FatturaAttiva, FatturaPassiva, FicSyncRun,
+    Fornitore, FatturaAttiva, FatturaPassiva, FicSyncRun, CategoriaFornitore,
     UserRole, CommessaStatus, TaskStatus, TimesheetStatus, TimerSession
 )
 from app.schemas.schemas import (
     UserCreate, UserUpdate, ClienteCreate, ClienteUpdate,
     ProgettoCreate, ProgettoUpdate, CommessaCreate, CommessaUpdate,
-    TimesheetCreate, CostoCreate, CoefficienteCreate, TimesheetApprova
+    TimesheetCreate, CostoCreate, CoefficienteCreate, TimesheetApprova,
+    FornitoreOut, FatturaAttivaOut, FatturaPassivaOut, FicSyncStatusOut
 )
 from app.core.config import settings
 from app.core.security import hash_password
@@ -103,9 +104,17 @@ async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID | str) -> Optional
     result = await db.execute(select(User).where(User.id == user_uuid))
     return result.scalar_one_or_none()
 
+async def get_user_by_id(db: AsyncSession, user_id: any) -> Optional[User]:
+    from sqlalchemy import select
+    if isinstance(user_id, str):
+        user_id = uuid.UUID(user_id)
+    result = await db.execute(select(User).where(User.id == user_id))
+    return result.scalar_one_or_none()
+
 async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
     result = await db.execute(select(User).where(User.email == email))
     return result.scalar_one_or_none()
+
 
 async def get_user_by_identifier(db: AsyncSession, identifier: str) -> Optional[User]:
     """Cerca utente per email esatta o per 'handle' (parte prima della @)."""
@@ -1452,6 +1461,40 @@ async def list_fornitori_full(db: AsyncSession):
         d['ultima_fattura'] = str(ultima_fattura) if ultima_fattura else None
         out.append(d)
     return out
+
+async def list_fatture_attive(db: AsyncSession) -> List[FatturaAttiva]:
+    result = await db.execute(
+        select(FatturaAttiva)
+        .options(selectinload(FatturaAttiva.cliente))
+        .order_by(FatturaAttiva.data_emissione.desc(), FatturaAttiva.numero.desc())
+    )
+    return result.scalars().all()
+
+async def incassa_fattura(db: AsyncSession, fattura_id: uuid.UUID, data_incasso: date) -> Optional[FatturaAttiva]:
+    result = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == fattura_id))
+    fattura = result.scalar_one_or_none()
+    if not fattura:
+        return None
+    fattura.stato_pagamento = "INCASSATA"
+    fattura.data_ultimo_incasso = data_incasso
+    
+    # Sincronizza stato commessa
+    from app.models.models import Commessa, CommessaStatus
+    res_com = await db.execute(select(Commessa).where(Commessa.fattura_id == fattura.id))
+    cm = res_com.scalar_one_or_none()
+    if cm:
+        cm.stato = CommessaStatus.INCASSATA
+        
+    await db.flush()
+    return fattura
+
+async def list_fatture_passive(db: AsyncSession) -> List[FatturaPassiva]:
+    result = await db.execute(
+        select(FatturaPassiva)
+        .options(selectinload(FatturaPassiva.fornitore))
+        .order_by(FatturaPassiva.data_emissione.desc(), FatturaPassiva.numero.desc())
+    )
+    return result.scalars().all()
 
 async def create_fornitore(db: AsyncSession, data: any) -> Fornitore: # data: FornitoreCreate
     f = Fornitore(**data.model_dump())

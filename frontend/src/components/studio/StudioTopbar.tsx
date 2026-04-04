@@ -9,6 +9,7 @@ import {
   ArrowUpDown,
   Layers
 } from "lucide-react";
+import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 import { useStudio } from "@/hooks/useStudio";
 import { Button } from "@/components/ui/button";
 import { 
@@ -117,6 +118,8 @@ export function StudioTopbar() {
       <div className="flex items-center gap-3">
         <div className="h-6 w-[1px] bg-muted mx-2" />
 
+        <NotificationCenter />
+        
         <Button variant="ghost" size="icon" className="h-8 w-8 text-[#475569] hover:text-white hover:bg-white/5">
           <Filter className="h-4 w-4" />
         </Button>

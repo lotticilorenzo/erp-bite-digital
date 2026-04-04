@@ -36,6 +36,7 @@ class UserUpdate(BaseModel):
     ore_settimanali: Optional[int] = None
     bio: Optional[str] = None
     preferences: Optional[dict] = None
+    avatar_url: Optional[str] = None
     attivo: Optional[bool] = None
     data_fine: Optional[date] = None
 
@@ -49,6 +50,7 @@ class UserOut(OrmBase):
     ore_settimanali: int
     bio: Optional[str] = None
     preferences: Optional[dict] = None
+    avatar_url: Optional[str] = None
     attivo: bool
     data_inizio: Optional[date]
     created_at: datetime
@@ -73,6 +75,8 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserOut
+
+
 
 
 # ── CLIENTE ───────────────────────────────────────────────
@@ -291,12 +295,6 @@ class CommessaUpdate(BaseModel):
     data_inizio: Optional[date] = None
     data_fine: Optional[date] = None
 
-    @model_validator(mode="after")
-    def derive_mese_from_data_fine(self):
-        """Se data_fine presente, mese_competenza = primo del mese di data_fine."""
-        if self.data_fine:
-            self.mese_competenza = self.data_fine.replace(day=1)
-        return self
 
     @model_validator(mode="after")
     def derive_mese_from_data_fine(self):
@@ -600,13 +598,23 @@ class FatturaAttivaOut(OrmBase):
     created_at: datetime
     updated_at: datetime
 
+class FatturaPassivaOut(OrmBase):
+    id: uuid.UUID
+    fic_id: str
+    fornitore_id: Optional[uuid.UUID]
+    fic_fornitore_id: Optional[str]
+    numero: Optional[str]
+    data_emissione: Optional[date]
+    data_scadenza: Optional[date]
+    importo_totale: Decimal
+    importo_netto: Decimal = Decimal("0")
+    importo_iva: Decimal = Decimal("0")
+    importo_pagato: Decimal
+    importo_residuo: Decimal
+    stato_pagamento: str
     data_ultimo_pagamento: Optional[date]
     valuta: Optional[str]
     categoria: Optional[str] = None
-    ricorrente: Optional[bool] = None
-    periodicita: Optional[str] = None
-    commessa_id: Optional[uuid.UUID] = None
-    note: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

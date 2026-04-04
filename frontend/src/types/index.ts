@@ -16,6 +16,7 @@ export interface User {
   costo_orario: number | null;
   bio: string | null;
   preferences: Record<string, any> | null;
+  avatar_url?: string | null;
   attivo: boolean;
   data_inizio: string | null;
   created_at: string;

@@ -87,6 +87,7 @@ class User(Base):
     clickup_user_id: Mapped[Optional[str]] = mapped_column(String(50))
     bio: Mapped[Optional[str]] = mapped_column(String(200))
     preferences: Mapped[Optional[dict]] = mapped_column(JSON, default=dict)
+    avatar_url: Mapped[Optional[str]] = mapped_column(String(500))
     attivo: Mapped[bool] = mapped_column(Boolean, default=True)
     data_inizio: Mapped[Optional[date]] = mapped_column(Date)
     data_fine: Mapped[Optional[date]] = mapped_column(Date)
@@ -684,4 +685,35 @@ class TimerSession(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     task: Mapped["Task"] = relationship()
+    user: Mapped["User"] = relationship()
+
+
+# ── NOTIFICATION ──────────────────────────────────────────
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    type: Mapped[str] = mapped_column(String(50), default="INFO") # INFO, SUCCESS, WARNING, ERROR
+    link: Mapped[Optional[str]] = mapped_column(String(255))
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped["User"] = relationship()
+
+
+# ── ASSENZA ───────────────────────────────────────────────
+class Assenza(Base):
+    __tablename__ = "assenze"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    data_inizio: Mapped[date] = mapped_column(Date, nullable=False)
+    data_fine: Mapped[date] = mapped_column(Date, nullable=False)
+    tipo: Mapped[str] = mapped_column(String(50), default="FERIE") # FERIE, MALATTIA, PERMESSO
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
     user: Mapped["User"] = relationship()

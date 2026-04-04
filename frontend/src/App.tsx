@@ -27,6 +27,8 @@ const AccountSettings = React.lazy(() => import("./pages/settings/AccountSetting
 const AppearanceSettings = React.lazy(() => import("./pages/settings/AppearanceSettings"));
 const NotificationSettings = React.lazy(() => import("./pages/settings/NotificationSettings"));
 const PrivacySettings = React.lazy(() => import("./pages/settings/PrivacySettings"));
+const ForgotPasswordPage = React.lazy(() => import("./pages/ForgotPassword"));
+const ResetPasswordPage = React.lazy(() => import("./pages/ResetPassword"));
 
 import { ThemeProvider } from "@/context/ThemeContext";
 
@@ -50,6 +52,8 @@ function App() {
       }>
       <Routes>
         <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         
         <Route
           path="/"

@@ -39,11 +39,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
+import { UserAvatar } from "@/components/common/UserAvatar";
 import { Link, useLocation } from "react-router-dom";
 import { StudioSidebar } from "@/components/studio/StudioSidebar";
-import { useTheme } from "@/context/ThemeContext";
 
 const navItems = [
   {
@@ -81,7 +80,6 @@ const navItems = [
 
 export function AppSidebar() {
   const { user, logout } = useAuth();
-  const { setIsThemePanelOpen } = useTheme();
   const location = useLocation();
   const { state } = useSidebar();
 
@@ -223,12 +221,11 @@ export function AppSidebar() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton size="lg" className="hover:bg-muted transition-colors px-1 h-12 rounded-xl border border-transparent hover:border-border">
-                  <Avatar className="h-9 w-9 rounded-lg border border-border shadow-xl">
-                    <AvatarImage src={`https://avatar.vercel.sh/${user?.email}.png`} />
-                    <AvatarFallback className="rounded-lg bg-primary/20 text-white uppercase text-xs font-black">
-                      {user?.nome?.[0]}{user?.cognome?.[0]}
-                    </AvatarFallback>
-                  </Avatar>
+                  <UserAvatar 
+                    user={user} 
+                    size="md" 
+                    className="h-9 w-9 rounded-lg border border-border shadow-xl" 
+                  />
                   <div className="flex flex-col items-start gap-0.5 truncate flex-1 min-w-0 ml-2">
                     <span className="text-sm font-bold truncate leading-none text-white">
                       {user?.nome} {user?.cognome}

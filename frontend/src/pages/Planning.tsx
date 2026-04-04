@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { useAssenze } from '@/hooks/useAssenze';
 
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -100,6 +101,8 @@ const PlanningPage: React.FC = () => {
     }
   });
 
+  const { assenze = [] } = useAssenze();
+
   // Start of current week (Monday)
   const monday = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 5 }).map((_, i) => addDays(monday, i));
@@ -149,6 +152,21 @@ const PlanningPage: React.FC = () => {
   // Calculate weekly load for a user
   const getUserWeeklyLoad = (userId: string, startDate: Date = monday) => {
     const endDate = addDays(startDate, 4);
+    
+    // Get working days in the week (Mon-Fri)
+    const workingDays = Array.from({ length: 5 }).map((_, i) => addDays(startDate, i));
+    
+    // Total hours available = daily capacity * (5 - days absent)
+    const dailyHours = risorsaMap[userId]?.ore_settimanali / 5 || 8;
+    const absentDaysCount = workingDays.filter(day => 
+      assenze.some((a: any) => 
+        a.user_id === userId && 
+        isSameDay(new Date(a.data_inizio), day)
+      )
+    ).length;
+    
+    const availableHours = risorsaMap[userId]?.ore_settimanali - (absentDaysCount * dailyHours);
+
     const weeklyTasks = tasks.filter(t => 
       t.assegnatario_id === userId && 
       t.data_scadenza && 
@@ -156,8 +174,13 @@ const PlanningPage: React.FC = () => {
       new Date(t.data_scadenza) <= endDate
     );
     const totalMinutes = weeklyTasks.reduce((sum, t) => sum + (t.stima_minuti || 0), 0);
-    return Math.round(totalMinutes / 60);
+    return { 
+      load: Math.round(totalMinutes / 60), 
+      capacity: Math.max(0, Math.round(availableHours))
+    };
   };
+
+  const risorsaMap = Object.fromEntries(risorse.map(r => [r.id, r]));
 
   // Project color helper
   const getProjectColor = (projectId?: string) => {
@@ -288,13 +311,13 @@ const PlanningPage: React.FC = () => {
                             <div className="space-y-1.5 mt-4">
                               <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest">
                                 <span className="text-[#475569]">Carico sett.</span>
-                                <span className={getUserWeeklyLoad(risorsa.id) > risorsa.ore_settimanali ? 'text-destructive' : 'text-primary'}>
-                                  {getUserWeeklyLoad(risorsa.id)}h / {risorsa.ore_settimanali}h
+                                <span className={getUserWeeklyLoad(risorsa.id).load > getUserWeeklyLoad(risorsa.id).capacity ? 'text-destructive' : 'text-primary'}>
+                                  {getUserWeeklyLoad(risorsa.id).load}h / {getUserWeeklyLoad(risorsa.id).capacity}h
                                 </span>
                               </div>
                               <Progress 
-                                value={Math.min((getUserWeeklyLoad(risorsa.id) / risorsa.ore_settimanali) * 100, 100)} 
-                                className={`h-1 bg-muted ${getUserWeeklyLoad(risorsa.id) > risorsa.ore_settimanali ? '[&>div]:bg-destructive' : '[&>div]:bg-primary'}`}
+                                value={getUserWeeklyLoad(risorsa.id).capacity > 0 ? Math.min((getUserWeeklyLoad(risorsa.id).load / getUserWeeklyLoad(risorsa.id).capacity) * 100, 100) : 100} 
+                                className={`h-1 bg-muted ${getUserWeeklyLoad(risorsa.id).load > getUserWeeklyLoad(risorsa.id).capacity ? '[&>div]:bg-destructive' : '[&>div]:bg-primary'}`}
                               />
                             </div>
                           </div>
@@ -303,11 +326,22 @@ const PlanningPage: React.FC = () => {
                           {weekDays.map(day => {
                             const cellId = `cell|${format(day, 'yyyy-MM-dd')}|${risorsa.id}`;
                             const cellTasks = getTasksForCell(risorsa.id, day);
+                            const isAbsent = assenze.some((a: any) => 
+                              a.user_id === risorsa.id && 
+                              isSameDay(new Date(a.data_inizio), day)
+                            );
+                            const absenceInfo = assenze.find((a: any) => 
+                              a.user_id === risorsa.id && 
+                              isSameDay(new Date(a.data_inizio), day)
+                            );
+
                             return (
                               <CalendarCell 
                                 key={cellId} 
                                 id={cellId} 
                                 tasks={cellTasks} 
+                                isAbsent={isAbsent}
+                                absenceType={absenceInfo?.tipo}
                                 getProjectColor={getProjectColor}
                               />
                             );
@@ -345,17 +379,17 @@ const PlanningPage: React.FC = () => {
                       <div className="space-y-4">
                         {[0, 1, 2, 3].map(weekOffset => {
                           const weekStart = addWeeks(monday, weekOffset);
-                          const load = getUserWeeklyLoad(risorsa.id, weekStart);
-                          const percentage = Math.round((load / risorsa.ore_settimanali) * 100);
+                          const weekData = getUserWeeklyLoad(risorsa.id, weekStart);
+                          const percentage = Math.round((weekData.load / risorsa.ore_settimanali) * 100);
                           
                           return (
                             <div key={weekOffset} className="space-y-2">
                               <div className="flex justify-between text-xs items-center">
                                 <span className="font-bold text-slate-400 capitalize">
-                                  Settimana {format(weekStart, 'dd MMM', { locale: it })}
+                                  Settimana {format(weekStart, 'dd MMM', { locale: it })}: {weekData.load}h
                                 </span>
                                 <span className={`font-black ${percentage > 100 ? 'text-destructive animate-pulse' : percentage > 80 ? 'text-amber-400' : 'text-primary'}`}>
-                                  {load}h ({percentage}%)
+                                  {weekData.load}h ({percentage}%)
                                 </span>
                               </div>
                               <Progress 
@@ -368,11 +402,11 @@ const PlanningPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {getUserWeeklyLoad(risorsa.id, monday) > risorsa.ore_settimanali && (
+                    {getUserWeeklyLoad(risorsa.id, monday).load / risorsa.ore_settimanali > 1.1 && (
                       <div className="bg-destructive/10 border border-destructive/20 p-3 rounded-lg flex items-center gap-3">
                         <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
                         <p className="text-[10px] font-bold text-destructive uppercase tracking-wide">
-                          Attenzione: Sovraccarico rilevato nella settimana corrente.
+                          Attenzione: Elevato sovraccarico rilevato.
                         </p>
                       </div>
                     )}
@@ -452,8 +486,14 @@ const PlanningPage: React.FC = () => {
 
 // --- Sub-components ---
 
-const CalendarCell: React.FC<{ id: string; tasks: Task[]; getProjectColor: (id?: string) => string }> = ({ id, tasks, getProjectColor }) => {
-  const { isOver, setNodeRef } = useDroppable({ id });
+const CalendarCell: React.FC<{ 
+  id: string; 
+  tasks: Task[]; 
+  isAbsent?: boolean;
+  absenceType?: string;
+  getProjectColor: (id?: string) => string 
+}> = ({ id, tasks, isAbsent, absenceType, getProjectColor }) => {
+  const { isOver, setNodeRef } = useDroppable({ id, disabled: isAbsent });
 
   return (
     <div 
@@ -461,13 +501,23 @@ const CalendarCell: React.FC<{ id: string; tasks: Task[]; getProjectColor: (id?:
       className={`
         p-2 min-h-[140px] transition-all duration-300 border-r border-b border-border/20
         ${isOver ? 'bg-primary/10 shadow-[inset_0_0_20px_hsl(var(--primary)/0.2)]' : 'hover:bg-white/[0.01]'}
+        ${isAbsent ? 'bg-[#ef4444]/5 border-dashed border-[#ef4444]/20' : ''}
       `}
     >
-      <div className="space-y-2">
-        {tasks.map(task => (
-          <DraggableTask key={task.id} task={task} isMini getProjectColor={getProjectColor} />
-        ))}
-      </div>
+      {isAbsent ? (
+        <div className="flex flex-col items-center justify-center h-full gap-2 opacity-60">
+           <div className="px-2 py-1 bg-rose-500/10 border border-rose-500/20 rounded text-[9px] font-black text-rose-500 uppercase tracking-widest">
+             {absenceType || 'ASSENTE'}
+           </div>
+           <p className="text-[8px] text-rose-500/50 font-bold uppercase tracking-tighter text-center">Nessuna capacità disponibile</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {tasks.map(task => (
+            <DraggableTask key={task.id} task={task} isMini getProjectColor={getProjectColor} />
+          ))}
+        </div>
+      )}
     </div>
   );
 };

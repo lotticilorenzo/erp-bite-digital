@@ -127,7 +127,11 @@ export function useAnalytics() {
         activeClients: clienti.filter(c => c.attivo).length,
         monthlyHours: commesse
           .filter(c => isWithinInterval(parseISO(c.mese_competenza), { start: startOfMonth(now), end: now }))
-          .reduce((acc, c) => acc + (c.costo_manodopera || 0) / 40, 0)
+          .reduce((acc, c) => acc + (c.costo_manodopera || 0) / 40, 0),
+        monthlyRevenue: commesse
+          .filter(c => isWithinInterval(parseISO(c.mese_competenza), { start: startOfMonth(now), end: now }))
+          .reduce((acc, c) => acc + (c.valore_fatturabile || 0), 0),
+        ongoingProjects: commesse.filter(c => c.stato === "APERTA").length
       },
       alerts
     };

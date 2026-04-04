@@ -1,14 +1,16 @@
-"""
-router.py — Tutti gli endpoint API v1.
-"""
 import uuid
-from datetime import date
+from datetime import datetime, date, timedelta
 from decimal import Decimal
 from typing import Optional, List
+import secrets
 from fastapi import APIRouter, Depends, HTTPException, Request, status, Query, Body, File, UploadFile
+from fastapi_mail import FastMail, ConnectionConfig, MessageSchema, MessageType
 import os
 import shutil
+import io
+from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 
 from app.db.session import get_db
 from app.core.security import (
@@ -22,10 +24,12 @@ from app.schemas.schemas import (
     ProgettoCreate, ProgettoUpdate, ProgettoOut, ProgettoWithCliente,
     CommessaCreate, CommessaUpdate, CommessaOut,
     TimesheetCreate, TimesheetOut, TimesheetApprova,
-    FornitoreOut, FatturaAttivaOut, FatturaPassivaOut, FicSyncStatusOut,
-    TaskCreate, TaskUpdate, TaskOut
+    FornitoreOut, FornitoreCreate, FornitoreUpdate,
+    FatturaAttivaOut, FatturaPassivaOut, FatturaPassivaUpdate, FatturaIncassaRequest,
+    FicSyncStatusOut, TaskCreate, TaskUpdate, TaskOut,
+    CategoriaFornitoreCreate, CategoriaFornitoreOut, CategoriaFornitoreUpdate
 )
-from app.schemas.schemas import FatturaIncassaRequest, FatturaPassivaUpdate, FornitoreUpdate, FornitoreOut
+from app.schemas.auth import ForgotPasswordRequest, ResetPasswordRequest
 import httpx
 from app.services.services import (
     list_tasks, get_task, create_task, update_task, delete_task,
@@ -44,11 +48,15 @@ from app.services.services import (
 from app.api.v1 import timer
 from app.api.v1 import ai
 from app.api.v1 import planning
+from app.api.v1 import notifications
+from app.api.v1 import assenze
 
 router = APIRouter()
 router.include_router(timer.router)
 router.include_router(ai.router)
 router.include_router(planning.router)
+router.include_router(notifications.router, prefix="/notifications", tags=["Notifiche"])
+router.include_router(assenze.router, prefix="/assenze", tags=["Assenze"])
 
 
 # ═══════════════════════════════════════════════════════
@@ -73,6 +81,143 @@ async def me(current_user: User = Depends(get_current_user)):
 async def logout_all_sessions(current_user: User = Depends(get_current_user)):
     """Mock endpoint to simulate disconnecting all sessions."""
     return {"message": "Disconnesso da tutti i dispositivi", "success": True}
+
+# Rate limiting in-memory (semplice)
+password_reset_history = {} # {email: [timestamp1, timestamp2, ...]}
+
+@router.post("/auth/forgot-password", tags=["Auth"])
+async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+    from app.services.services import get_user_by_email
+    
+    # 1. Rate limiting
+    now = datetime.utcnow()
+    history = password_reset_history.get(data.email, [])
+    history = [t for t in history if now - t < timedelta(hours=1)]
+    if len(history) >= 3:
+        # In produzione eviteremmo di dire ESATTAMENTE che è rate limited per sicurezza, 
+        # ma qui seguiamo la logica richiesta.
+        raise HTTPException(status_code=429, detail="Troppe richieste. Riprova tra un'ora.")
+    
+    password_reset_history[data.email] = history + [now]
+    
+    # 2. Cerca utente
+    user = await get_user_by_email(db, data.email)
+    if not user:
+        # Per sicurezza non diciamo se l'email esiste
+        return {"message": "Se l'email esiste, riceverai un link di reset."}
+    
+    # 3. Genera token
+    token = secrets.token_urlsafe(32)
+    expires_at = now + timedelta(hours=1)
+    
+    # 4. Salva token (SQL diretto per velocità)
+    await db.execute(
+        text("INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (:u, :t, :e)"),
+        {"u": user.id, "t": token, "e": expires_at}
+    )
+    await db.commit()
+    
+    # 5. Invia email
+    conf = ConnectionConfig(
+        MAIL_USERNAME=settings.MAIL_USERNAME,
+        MAIL_PASSWORD=settings.MAIL_PASSWORD,
+        MAIL_FROM=settings.MAIL_FROM,
+        MAIL_PORT=settings.MAIL_PORT,
+        MAIL_SERVER=settings.MAIL_SERVER,
+        MAIL_STARTTLS=settings.MAIL_TLS,
+        MAIL_SSL_TLS=settings.MAIL_SSL,
+        USE_CREDENTIALS=True,
+        VALIDATE_CERTS=True
+    )
+    
+    reset_link = f"http://localhost/reset-password?token={token}"
+    
+    html = f"""
+    <html>
+    <body style="font-family: sans-serif; background-color: #f8f9fa; padding: 40px;">
+        <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+            <div style="background: #1e293b; padding: 30px; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -0.02em;">BITE DIGITAL</h1>
+            </div>
+            <div style="padding: 40px; text-align: center;">
+                <h2 style="color: #1e293b; margin-top: 0;">Hai richiesto il reset della password</h2>
+                <p style="color: #64748b; line-height: 1.6; font-size: 16px;">
+                    Clicca il pulsante qui sotto per impostare una nuova password per il tuo account Bite ERP.
+                </p>
+                <div style="margin: 40px 0;">
+                    <a href="{reset_link}" style="background: #8b5cf6; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);">
+                        Reimposta Password
+                    </a>
+                </div>
+                <p style="color: #94a3b8; font-size: 13px; margin-bottom: 0;">
+                    Il link scade tra 1 ora.
+                </p>
+            </div>
+            <div style="background: #f1f5f9; padding: 20px; text-align: center;">
+                <p style="color: #94a3b8; font-size: 12px; margin: 0;">
+                    Se non hai richiesto questo reset, ignora pure questa email.
+                </p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    message = MessageSchema(
+        subject="Reset Password - Bite ERP",
+        recipients=[data.email],
+        body=html,
+        subtype=MessageType.html
+    )
+    
+    fm = FastMail(conf)
+    try:
+        await fm.send_message(message)
+    except Exception as e:
+        print(f"ERRORE INVIO EMAIL: {e}")
+        # In produzione loggheresti l'errore ma all'utente diciamo comunque successo per non dare info
+    
+    return {"message": "Se l'email esiste, riceverai un link di reset."}
+
+@router.post("/auth/reset-password", tags=["Auth"])
+async def reset_password(data: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    from app.core.security import hash_password
+    
+    # 1. Verifica token
+    now = datetime.utcnow()
+    result = await db.execute(
+        text("SELECT user_id, expires_at, used FROM password_reset_tokens WHERE token = :t"),
+        {"t": data.token}
+    )
+    row = result.fetchone()
+    
+    if not row:
+        raise HTTPException(status_code=400, detail="Token non valido")
+    
+    user_id, expires_at, used = row
+    
+    if used:
+        raise HTTPException(status_code=400, detail="Token già utilizzato")
+    
+    if now > expires_at:
+        raise HTTPException(status_code=400, detail="Token scaduto")
+    
+    # 2. Aggiorna password
+    hashed_pwd = hash_password(data.new_password)
+    await db.execute(
+        text("UPDATE users SET password_hash = :h WHERE id = :u"),
+        {"h": hashed_pwd, "u": user_id}
+    )
+    
+    # 3. Marca token come usato
+    await db.execute(
+        text("UPDATE password_reset_tokens SET used = true WHERE token = :t"),
+        {"t": data.token}
+    )
+    
+    await db.commit()
+    
+    return {"message": "Password aggiornata con successo", "success": True}
 
 
 # ═══════════════════════════════════════════════════════
@@ -150,11 +295,85 @@ async def export_user_data(current_user: User = Depends(get_current_user)):
         "message": "Export dei dati completato con successo"
     }
 
+@router.post("/users/me/avatar", tags=["Users"])
+async def upload_user_avatar(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Validazione estensione
+    allowed_exts = {".png", ".jpg", ".jpeg", ".webp"}
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in allowed_exts:
+        raise HTTPException(status_code=400, detail="Formato file non supportato (PNG, JPG, WebP)")
+
+    # Validazione dimensione (5MB)
+    MAX_SIZE = 5 * 1024 * 1024
+    content = await file.read()
+    if len(content) > MAX_SIZE:
+        raise HTTPException(status_code=400, detail="File troppo grande (max 5MB)")
+    
+    try:
+        # Elaborazione immagine con Pillow
+        image = Image.open(io.BytesIO(content))
+        
+        # Conversione in RGB se necessario (es. PNG con trasparenza in JPG)
+        if image.mode in ("RGBA", "P"):
+            image = image.convert("RGB")
+            
+        # Ridimensionamento proporzionale (cover style 200x200)
+        # Cerchiamo di riempire il quadrato 200x200
+        width, height = image.size
+        aspect = width / height
+        if aspect > 1: # Landscape
+            new_width = int(aspect * 200)
+            image = image.resize((new_width, 200), Image.LANCZOS)
+            left = (new_width - 200) / 2
+            image = image.crop((left, 0, left + 200, 200))
+        else: # Portrait
+            new_height = int(200 / aspect)
+            image = image.resize((200, new_height), Image.LANCZOS)
+            top = (new_height - 200) / 2
+            image = image.crop((0, top, 200, top + 200))
+
+        # Assicurati che la directory esista
+        os.makedirs(os.path.join("static", "avatars"), exist_ok=True)
+        
+        # Salvataggio fisico come JPG per ottimizzazione
+        filename = f"{current_user.id}.jpg"
+        filepath = os.path.join("static", "avatars", filename)
+        image.save(filepath, "JPEG", quality=85)
+        
+        # Aggiornamento DB
+        current_user.avatar_url = f"/static/avatars/{filename}"
+        await db.commit()
+        await db.refresh(current_user)
+        
+        return {"avatar_url": current_user.avatar_url}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore durante l'elaborazione dell'immagine: {str(e)}")
+
+@router.delete("/users/me/avatar", tags=["Users"])
+async def delete_user_avatar(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.avatar_url and current_user.avatar_url.startswith("/static/avatars/"):
+        path = current_user.avatar_url.lstrip("/")
+        if os.path.exists(path):
+            try: os.remove(path)
+            except: pass
+    
+    current_user.avatar_url = None
+    await db.commit()
+    return {"success": True}
+
 
 # ═══════════════════════════════════════════════════════
 # CATEGORIE FORNITORI
 # ═══════════════════════════════════════════════════════
-@router.get("/categorie-fornitori", response_model=List[app.schemas.schemas.CategoriaFornitoreOut], tags=["Fornitori"])
+@router.get("/categorie-fornitori", response_model=List[CategoriaFornitoreOut], tags=["Fornitori"])
 async def get_categorie_fornitori(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -162,9 +381,9 @@ async def get_categorie_fornitori(
     from app.services.services import list_categorie_fornitori
     return await list_categorie_fornitori(db)
 
-@router.post("/categorie-fornitori", response_model=app.schemas.schemas.CategoriaFornitoreOut, status_code=201, tags=["Fornitori"])
+@router.post("/categorie-fornitori", response_model=CategoriaFornitoreOut, status_code=201, tags=["Fornitori"])
 async def add_categoria_fornitore(
-    data: app.schemas.schemas.CategoriaFornitoreCreate,
+    data: CategoriaFornitoreCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN))
 ):
@@ -178,10 +397,10 @@ async def add_categoria_fornitore(
         await db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.patch("/categorie-fornitori/{cat_id}", response_model=app.schemas.schemas.CategoriaFornitoreOut, tags=["Fornitori"])
+@router.patch("/categorie-fornitori/{cat_id}", response_model=CategoriaFornitoreOut, tags=["Fornitori"])
 async def patch_categoria_fornitore(
     cat_id: uuid.UUID,
-    data: app.schemas.schemas.CategoriaFornitoreUpdate,
+    data: CategoriaFornitoreUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN))
 ):
@@ -586,7 +805,7 @@ async def get_fornitori_full(
 
 @router.post("/fornitori", response_model=FornitoreOut, status_code=201, tags=["Fornitori"])
 async def add_fornitore(
-    data: app.schemas.schemas.FornitoreCreate,
+    data: FornitoreCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
 ):

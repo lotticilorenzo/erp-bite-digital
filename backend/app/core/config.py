@@ -45,6 +45,15 @@ class Settings(BaseSettings):
     CLICKUP_BASE_URL: str = "https://api.clickup.com/api/v2"
     CLICKUP_TEAM_ID: str = ""
 
+    # Mail
+    MAIL_USERNAME: str = ""
+    MAIL_PASSWORD: str = ""
+    MAIL_FROM: str = ""
+    MAIL_PORT: int = 587
+    MAIL_SERVER: str = ""
+    MAIL_TLS: bool = True
+    MAIL_SSL: bool = False
+
     class Config:
         env_file = ".env"
         case_sensitive = True

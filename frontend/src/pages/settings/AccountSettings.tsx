@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
 import { useMutation } from "@tanstack/react-query";
 import axios from "axios";
 import { toast } from "sonner";
@@ -27,7 +26,6 @@ const passwordRequirements = [
 ];
 
 export default function AccountSettings() {
-  const { user } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [passwords, setPasswords] = useState({
     current: "",

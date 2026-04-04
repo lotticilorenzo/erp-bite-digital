@@ -1,14 +1,36 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Zap, Users, Briefcase, Timer } from "lucide-react";
+import { useAnalytics } from "@/hooks/useAnalytics";
 
 export default function DashboardPage() {
+  const { data: analytics, isLoading } = useAnalytics();
 
   const stats = [
-    { label: "Clienti Attivi", value: "12", icon: Users, color: "text-blue-500" },
-    { label: "Progetti in Corso", value: "8", icon: Briefcase, color: "text-purple-500" },
-    { label: "Ore Mese", value: "124h", icon: Timer, color: "text-green-500" },
-    { label: "Fatturato Mese", value: "€ 12.400", icon: Zap, color: "text-yellow-500" },
+    { 
+      label: "Clienti Attivi", 
+      value: isLoading ? "..." : analytics?.kpis.activeClients.toString(), 
+      icon: Users, 
+      color: "text-blue-500" 
+    },
+    { 
+      label: "Progetti in Corso", 
+      value: isLoading ? "..." : analytics?.kpis.ongoingProjects.toString(), 
+      icon: Briefcase, 
+      color: "text-purple-500" 
+    },
+    { 
+      label: "Ore Mese", 
+      value: isLoading ? "..." : `${Math.round(analytics?.kpis.monthlyHours || 0)}h`, 
+      icon: Timer, 
+      color: "text-green-500" 
+    },
+    { 
+      label: "Fatturato Mese", 
+      value: isLoading ? "..." : new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(analytics?.kpis.monthlyRevenue || 0), 
+      icon: Zap, 
+      color: "text-yellow-500" 
+    },
   ];
 
   const currentDate = new Date().toLocaleDateString('it-IT', { 
