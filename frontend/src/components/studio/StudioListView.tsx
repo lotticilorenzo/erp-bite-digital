@@ -132,9 +132,25 @@ function TaskRow({ task, depth = 0 }: { task: TaskSO | SubtaskSO; depth: number 
         <TableCell>
           <div className="flex items-center gap-2 tabular-nums">
             <Clock className={`h-3 w-3 ${isTimerActive ? 'text-primary' : 'text-[#334155]'}`} />
-            <span className={`text-xs font-black ${isTimerActive ? 'text-primary' : 'text-[#475569]'}`}>
-              {formatTime(timer.getElapsed(task.id))}
-            </span>
+            <div className="flex flex-col">
+              <span className={`text-xs font-black ${isTimerActive ? 'text-primary' : 'text-[#475569]'}`}>
+                {formatTime(timer.getElapsed(task.id))}
+              </span>
+              {('stima_minuti' in task && task.stima_minuti && task.stima_minuti > 0) && (
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <Badge 
+                    variant="outline" 
+                    className={`text-[8px] h-3.5 px-1 font-black border-none ${
+                        (timer.getElapsed(task.id) / 60000) > (task.stima_minuti * 1.2) ? "bg-red-500/10 text-red-500" :
+                        (timer.getElapsed(task.id) / 60000) > (task.stima_minuti) ? "bg-orange-500/10 text-orange-500" :
+                        "bg-emerald-500/10 text-emerald-500"
+                    }`}
+                  >
+                    EST: {task.stima_minuti}m
+                  </Badge>
+                </div>
+              )}
+            </div>
           </div>
         </TableCell>
         <TableCell>

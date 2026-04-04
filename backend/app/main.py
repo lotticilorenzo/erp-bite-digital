@@ -13,6 +13,7 @@ from app.db.session import AsyncSessionLocal, engine, Base
 from app.models.models import User, UserRole
 from app.api.v1.router import router
 from app.services.services import sync_fic_data
+from app.services.notification_service import check_and_create_notifications, check_hourly_notifications
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -128,32 +129,72 @@ async def seed_data_on_startup():
 
 
 @app.on_event("startup")
-async def setup_fic_scheduler():
+async def setup_schedulers():
     global scheduler
-    if not settings.FIC_SYNC_SCHEDULE_ENABLED:
-        return
     if scheduler and scheduler.running:
         return
 
+    # Inizializza lo scheduler
     scheduler = AsyncIOScheduler(timezone=settings.FIC_SYNC_TIMEZONE)
 
-    async def scheduled_fic_sync() -> None:
+    # 1. JOB SYNC FIC (se abilitato)
+    if settings.FIC_SYNC_SCHEDULE_ENABLED:
+        async def scheduled_fic_sync() -> None:
+            async with AsyncSessionLocal() as db:
+                try:
+                    await sync_fic_data(db, triggered_by=None)
+                except Exception:
+                    logger.exception("Errore sync FIC schedulata")
+
+        scheduler.add_job(
+            scheduled_fic_sync,
+            trigger=IntervalTrigger(minutes=5),
+            id="fic_sync_interval",
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+        )
+
+    # 2. JOB NOTIFICHE GIORNALIERE (09:00)
+    async def scheduled_daily_notifications() -> None:
         async with AsyncSessionLocal() as db:
-            try:
-                await sync_fic_data(db, triggered_by=None)
-            except Exception:
-                logger.exception("Errore sync FIC schedulata")
+            await check_and_create_notifications(db)
 
     scheduler.add_job(
-        scheduled_fic_sync,
-        trigger=IntervalTrigger(minutes=5),
-        id="fic_sync_interval",
+        scheduled_daily_notifications,
+        trigger=CronTrigger(hour=9, minute=0),
+        id="daily_notifications",
         max_instances=1,
         coalesce=True,
         replace_existing=True,
     )
-    scheduler.start()
 
+    # 3. JOB NOTIFICHE ORARIE (es. timer)
+    async def scheduled_hourly_notifications() -> None:
+        async with AsyncSessionLocal() as db:
+            await check_hourly_notifications(db)
+
+    scheduler.add_job(
+        scheduled_hourly_notifications,
+        trigger=IntervalTrigger(hours=1),
+        id="hourly_notifications",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+
+    scheduler.start()
+    logger.info("Scheduler avviato con successo (FIC, Daily & Hourly Notifications)")
+
+@app.on_event("startup")
+async def run_notifications_on_startup():
+    """Esegue un controllo immediato delle notifiche all'avvio."""
+    import asyncio
+    await asyncio.sleep(5) # Attendi che il sistema sia pienamente pronto
+    async with AsyncSessionLocal() as db:
+        logger.info("Esecuzione controllo notifiche immediato allo startup...")
+        await check_and_create_notifications(db)
+        await check_hourly_notifications(db)
 
 @app.on_event("shutdown")
 async def shutdown_fic_scheduler():

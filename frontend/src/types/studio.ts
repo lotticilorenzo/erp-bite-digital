@@ -42,6 +42,8 @@ export type TaskSO = {
   progetto_id?: string;
   commessa_id?: string;
   parent_id?: string;
+  assegnatario_id?: string;
+  stima_minuti?: number;
   // Deprecated ClickUp fields
   clickup_id?: string;
   folder_id?: string;

@@ -4,7 +4,6 @@ import StudioHome from "@/pages/studio/StudioHome";
 import { StudioListView } from "@/components/studio/StudioListView";
 import { StudioKanbanView } from "@/components/studio/StudioKanbanView";
 import { StudioCalendarView } from "@/components/studio/StudioCalendarView";
-import { StudioTaskModal } from "@/components/studio/StudioTaskModal";
 
 export default function StudioPage() {
   const { nav } = useStudio();
@@ -34,7 +33,6 @@ export default function StudioPage() {
       <main className="flex-1 overflow-hidden relative">
         {renderView()}
       </main>
-      <StudioTaskModal />
     </div>
   );
 }

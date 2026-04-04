@@ -285,6 +285,45 @@ async def patch_current_user(
 
     return await update_user(db, current_user.id, data, current_user.id)
 
+@router.get("/users/{user_id}/capacity-today", tags=["Users"])
+async def get_user_capacity_today(
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Calcola la capacità rimanente di un utente per la giornata odierna."""
+    from sqlalchemy import select, func
+    from app.models.models import Risorsa, Task, TaskStatus
+
+    # 1. Recupera ore giornaliere (ore_settimanali / 5)
+    res_stmt = select(Risorsa).where(Risorsa.user_id == user_id)
+    res_result = await db.execute(res_stmt)
+    risorsa = res_result.scalar_one_or_none()
+    
+    ore_giornaliere = float(risorsa.ore_settimanali / 5) if risorsa else 8.0
+
+    # 2. Somma stima_minuti dei task assegnati oggi non completati
+    today = date.today()
+    task_stmt = select(func.sum(Task.stima_minuti)).where(
+        Task.assegnatario_id == user_id,
+        Task.data_scadenza == today,
+        Task.stato != TaskStatus.COMPLETATO
+    )
+    task_result = await db.execute(task_stmt)
+    minuti_assegnati = task_result.scalar_one() or 0
+    ore_assegnate = minuti_assegnati / 60
+
+    ore_rimanenti = ore_giornaliere - ore_assegnate
+    percentuale_carico = (ore_assegnate / ore_giornaliere) * 100 if ore_giornaliere > 0 else 0
+
+    return {
+        "ore_disponibili_oggi": round(ore_giornaliere, 2),
+        "ore_gia_assegnate": round(ore_assegnate, 2),
+        "ore_rimanenti": round(ore_rimanenti, 2),
+        "percentuale_carico": round(percentuale_carico, 1),
+        "puo_accettare_task": percentuale_carico < 100
+    }
+
 @router.get("/users/me/export", tags=["Users"])
 async def export_user_data(current_user: User = Depends(get_current_user)):
     """Mock endpoint to export user data as JSON."""
@@ -1542,6 +1581,123 @@ async def add_timesheet_manuale(
 
 # ═══════════════════════════════════════════════════════
 # TASKS (NATIVI)
+@router.get("/tasks/time-estimate", tags=["Tasks"])
+async def get_task_time_estimate(
+    user_id: uuid.UUID,
+    task_type: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Stima il tempo richiesto per un task basandosi sullo storico dell'utente."""
+    from sqlalchemy import select, and_, func
+    from app.models.models import TimerSession, Task
+    from datetime import datetime, timedelta, timezone
+
+    # 1. Recupera sessioni dell'utente per task simili (ILIKE sul titolo)
+    # Escludiamo sessioni < 1 minuto come concordato
+    stmt = select(TimerSession.durata_minuti, TimerSession.started_at).join(Task).where(
+        TimerSession.user_id == user_id,
+        TimerSession.durata_minuti >= 1,
+        Task.titolo.ilike(f"%{task_type}%")
+    )
+    result = await db.execute(stmt)
+    sessions = result.all()
+
+    if not sessions:
+        return {
+            "stima_minuti": 0,
+            "confidenza": "NESSUNA",
+            "sessioni_analizzate": 0,
+            "media_minuti": 0,
+            "min_minuti": 0,
+            "max_minuti": 0
+        }
+
+    # 2. Calcolo media pesata
+    now = datetime.now(timezone.utc)
+    total_weighted_minutes = 0.0
+    total_weight = 0.0
+    durations = []
+
+    for durata, started_at in sessions:
+        durata = durata or 0
+        durations.append(durata)
+        
+        # Pesi: <30gg = 3x, <90gg = 2x, oltre = 1x
+        days_ago = (now - started_at).days
+        weight = 1.0
+        if days_ago <= 30:
+            weight = 3.0
+        elif days_ago <= 90:
+            weight = 2.0
+            
+        total_weighted_minutes += (durata * weight)
+        total_weight += weight
+
+    weighted_avg = total_weighted_minutes / total_weight
+    count = len(sessions)
+    
+    confidenza = "NESSUNA"
+    if count >= 10:
+        confidenza = "ALTA"
+    elif count >= 3:
+        confidenza = "MEDIA"
+    elif count >= 1:
+        confidenza = "BASSA"
+
+    return {
+        "stima_minuti": round(weighted_avg),
+        "confidenza": confidenza,
+        "sessioni_analizzate": count,
+        "media_minuti": round(sum(durations) / count),
+        "min_minuti": min(durations),
+        "max_minuti": max(durations)
+    }
+
+@router.get("/users/{user_id}/capacity-today", tags=["Users", "Planning"])
+async def get_user_capacity_today(
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Calcola la capacità oraria residua per l'utente loggato."""
+    from sqlalchemy import select, func
+    from app.models.models import Risorsa, Task
+    from datetime import date
+
+    # 1. Recupera risorsa per ore_settimanali
+    stmt = select(Risorsa).where(Risorsa.user_id == user_id)
+    result = await db.execute(stmt)
+    resource = result.scalar_one_or_none()
+    
+    # Default 8 ore/giorno se non specificato (collaboratori piva)
+    ore_giornaliere = 8.0
+    if resource and resource.ore_settimanali:
+        ore_giornaliere = float(resource.ore_settimanali) / 5.0
+
+    # 2. Somma stime task assegnati oggi non completati
+    # Consideriamo task con data_scadenza == oggi e stato != 'PUBBLICATO'
+    today = date.today()
+    stmt_tasks = select(func.sum(Task.stima_minuti)).where(
+        Task.assegnatario_id == user_id,
+        Task.data_scadenza == today,
+        Task.stato != 'PUBBLICATO'
+    )
+    result_tasks = await db.execute(stmt_tasks)
+    total_minutes = result_tasks.scalar() or 0
+    total_hours_assigned = float(total_minutes) / 60.0
+
+    rem_hours = max(0, ore_giornaliere - total_hours_assigned)
+    perc = (total_hours_assigned / ore_giornaliere) * 100 if ore_giornaliere > 0 else 100
+
+    return {
+        "ore_disponibili_oggi": round(ore_giornaliere, 1),
+        "ore_gia_assegnate": round(total_hours_assigned, 1),
+        "ore_rimanenti": round(rem_hours, 1),
+        "percentuale_carico": round(perc, 1),
+        "puo_accettare_task": rem_hours > 0
+    }
+
 # ═══════════════════════════════════════════════════════
 
 @router.get("/tasks", response_model=List[TaskOut], tags=["Tasks"])

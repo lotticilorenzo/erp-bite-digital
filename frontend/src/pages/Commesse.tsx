@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CommessaTable } from "@/components/commesse/CommessaTable";
 import { CommessaDialog } from "@/components/commesse/CommessaDialog";
 import { useCommesse, useDeleteCommessa } from "@/hooks/useCommesse";
 import type { Commessa } from "@/types";
+import { useSearchParams } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,7 @@ import {
 export default function CommessePage() {
   const { data: commesse = [], isLoading } = useCommesse();
   const deleteCommessa = useDeleteCommessa();
+  const [searchParams, setSearchParams] = useSearchParams();
   
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
   const [selectedCommessa, setSelectedCommessa] = React.useState<Commessa | null>(null);
@@ -26,6 +28,20 @@ export default function CommessePage() {
     setSelectedCommessa(commessa);
     setIsDialogOpen(true);
   };
+
+  const handleNew = () => {
+    setSelectedCommessa(null);
+    setIsDialogOpen(true);
+  };
+
+  useEffect(() => {
+    if (searchParams.get("action") === "new") {
+      handleNew();
+      // Remove param after triggering
+      searchParams.delete("action");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams]);
 
   const handleDeleteConfirm = async () => {
     if (commessaToDelete) {
@@ -49,10 +65,7 @@ export default function CommessePage() {
         </div>
         <div className="flex items-center gap-3">
           <Button 
-            onClick={() => {
-              setSelectedCommessa(null);
-              setIsDialogOpen(true);
-            }}
+            onClick={handleNew}
             className="bg-primary hover:bg-primary/90 text-white shadow-[0_0_15px_hsl(var(--primary)/0.2)] transition-all hover:scale-105"
           >
             <Plus className="w-4 h-4 mr-2" />

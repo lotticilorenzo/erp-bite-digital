@@ -1,7 +1,10 @@
 import { Fragment } from "react";
 import { 
   Search, 
-  Plus
+  Plus,
+  UserPlus,
+  Briefcase,
+  ListTodo
 } from "lucide-react";
 import { ThemePanel } from "../ThemePanel";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -18,12 +21,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
 import { UserAvatar } from "@/components/common/UserAvatar";
-import { useLocation, Link } from "react-router-dom";
+import { useLocation, Link, useNavigate } from "react-router-dom";
+import { useStudio } from "@/hooks/useStudio";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export function AppTopbar() {
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { openNewTask } = useStudio();
   const pathnames = location.pathname.split("/").filter((x) => x);
+  const isStudioOS = location.pathname.startsWith("/studio-os");
 
   const getBreadcrumbLabel = (path: string) => {
     switch (path) {
@@ -39,6 +54,13 @@ export function AppTopbar() {
       case "notifications": return "Notifiche";
       case "privacy": return "Privacy";
       default: return path.charAt(0) ? path.charAt(0).toUpperCase() + path.slice(1) : "Home";
+    }
+  };
+
+  const handleNewTask = () => {
+    openNewTask();
+    if (!isStudioOS) {
+      navigate("/studio-os/list");
     }
   };
 
@@ -103,12 +125,42 @@ export function AppTopbar() {
             />
           </Link>
 
-          <Button 
-            className="h-8 px-4 text-xs font-black bg-primary text-white shadow-[0_0_20px_hsl(var(--primary)/0.2)] hover:bg-primary/90 hover:shadow-primary/30 rounded-lg active:scale-95 transition-all ml-2 uppercase tracking-wide"
-          >
-            <Plus className="h-3.5 w-3.5 mr-1.5 stroke-[3]" />
-            Nuovo
-          </Button>
+          {isStudioOS ? (
+            <Button 
+              onClick={handleNewTask}
+              className="h-8 px-4 text-xs font-black bg-primary text-white shadow-[0_0_20px_hsl(var(--primary)/0.2)] hover:bg-primary/90 hover:shadow-primary/30 rounded-lg active:scale-95 transition-all ml-2 uppercase tracking-wide"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1.5 stroke-[3]" />
+              Nuovo
+            </Button>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  className="h-8 px-4 text-xs font-black bg-primary text-white shadow-[0_0_20px_hsl(var(--primary)/0.2)] hover:bg-primary/90 hover:shadow-primary/30 rounded-lg active:scale-95 transition-all ml-2 uppercase tracking-wide"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1.5 stroke-[3]" />
+                  Nuovo
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-card border-border text-foreground">
+                <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-2 py-1.5">Azioni Rapide</DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-border" />
+                <DropdownMenuItem onClick={handleNewTask} className="text-xs font-bold py-2 focus:bg-primary/10 cursor-pointer">
+                  <ListTodo className="h-4 w-4 mr-2 text-primary" />
+                  Nuovo Task
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/clienti?action=new")} className="text-xs font-bold py-2 focus:bg-primary/10 cursor-pointer">
+                  <UserPlus className="h-4 w-4 mr-2 text-emerald-500" />
+                  Nuovo Cliente
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/commesse?action=new")} className="text-xs font-bold py-2 focus:bg-primary/10 cursor-pointer">
+                  <Briefcase className="h-4 w-4 mr-2 text-blue-500" />
+                  Nuova Commessa
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
     </header>

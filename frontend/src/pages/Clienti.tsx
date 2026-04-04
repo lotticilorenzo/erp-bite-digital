@@ -1,13 +1,15 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { ClienteTable } from "@/components/clienti/ClienteTable";
 import { ClienteDialog } from "@/components/clienti/ClienteDialog";
 import { useClienti } from "@/hooks/useClienti";
 import type { Cliente } from "@/types";
+import { useSearchParams } from "react-router-dom";
 
 export default function ClientiPage() {
   const { data: clienti = [], isLoading } = useClienti();
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
   const [selectedCliente, setSelectedCliente] = React.useState<Cliente | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const handleEdit = (cliente: Cliente) => {
     setSelectedCliente(cliente);
@@ -18,6 +20,15 @@ export default function ClientiPage() {
     setSelectedCliente(null);
     setIsDialogOpen(true);
   };
+
+  useEffect(() => {
+    if (searchParams.get("action") === "new") {
+      handleNew();
+      // Remove param after triggering
+      searchParams.delete("action");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams]);
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pt-4 pb-12">

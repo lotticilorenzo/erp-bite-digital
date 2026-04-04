@@ -4,6 +4,7 @@ import { AppSidebar } from "./AppSidebar";
 import { AppTopbar } from "./AppTopbar";
 import { AIAssistant } from "../ai/AIAssistant";
 import { TimerBar } from "./TimerBar";
+import { StudioTaskModal } from "../studio/StudioTaskModal";
 
 export function DashboardLayout() {
   return (
@@ -19,6 +20,7 @@ export function DashboardLayout() {
           </main>
           <AIAssistant />
           <TimerBar />
+          <StudioTaskModal />
         </SidebarInset>
       </div>
     </SidebarProvider>

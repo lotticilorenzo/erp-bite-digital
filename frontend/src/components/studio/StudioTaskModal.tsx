@@ -7,21 +7,26 @@ import {
   Save,
   Briefcase,
   History,
-  StopCircle
+  StopCircle,
+  AlertCircle,
+  Clock3
 } from "lucide-react";
 import { 
   Dialog, 
   DialogContent, 
-  DialogHeader, 
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { useStudio } from "@/hooks/useStudio";
 import { useTasks, useTaskMutations } from "@/hooks/useTasks";
 import { useCommesse } from "@/hooks/useCommesse";
 import { useTimerSessions, useSaveTimerToTimesheet } from "@/hooks/useTimer";
+import { useUsers } from "@/hooks/useUsers";
+import { useTimeEstimate, useUserCapacity, type TimeEstimate, type UserCapacity } from "@/hooks/useML";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import type { User, TaskSO } from "@/types";
 import { 
   Select, 
   SelectContent, 
@@ -36,12 +41,15 @@ export function StudioTaskModal() {
   const { nav, selectTask, timer } = useStudio();
   const { data: tasks } = useTasks();
   const { data: commesse } = useCommesse();
+  const { data: utenti } = useUsers();
   const { createTask, updateTask, deleteTask } = useTaskMutations();
 
+  const isNew = nav.selectedTaskId === "new";
+
   const task = useMemo(() => {
-    if (nav.selectedTaskId === "new") return null;
+    if (isNew || !nav.selectedTaskId) return null;
     return tasks?.find(t => t.id === nav.selectedTaskId) || null;
-  }, [tasks, nav.selectedTaskId]);
+  }, [tasks, nav.selectedTaskId, isNew]);
 
   const { data: sessions = [] } = useTimerSessions(task?.id || null);
   const saveToTimesheetMutation = useSaveTimerToTimesheet();
@@ -52,7 +60,35 @@ export function StudioTaskModal() {
     commessa_id: "none",
     stato: "DA_FARE",
     data_scadenza: "",
+    assegnatario_id: "none",
+    stima_minuti: 0,
   });
+
+  const [debouncedTitolo, setDebouncedTitolo] = useState("");
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedTitolo(formData.titolo);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [formData.titolo]);
+
+  const { data: estimate } = useTimeEstimate(
+    formData.assegnatario_id !== "none" ? formData.assegnatario_id : null,
+    debouncedTitolo
+  ) as { data: TimeEstimate | undefined };
+
+  const { data: capacity } = useUserCapacity(
+    formData.assegnatario_id !== "none" ? formData.assegnatario_id : null
+  ) as { data: UserCapacity | undefined };
+
+  useEffect(() => {
+    // @ts-ignore - estimate logic
+    if (estimate?.stima_minuti && isNew && formData.stima_minuti === 0) {
+      // @ts-ignore
+      setFormData(prev => ({ ...prev, stima_minuti: estimate.stima_minuti }));
+    }
+  }, [estimate, isNew]);
 
   useEffect(() => {
     if (task) {
@@ -62,6 +98,8 @@ export function StudioTaskModal() {
         commessa_id: task.commessa_id || "none",
         stato: task.state_id,
         data_scadenza: task.due_date || "",
+        assegnatario_id: task.assegnatario_id || "none",
+        stima_minuti: task.stima_minuti || 0,
       });
     } else {
       setFormData({
@@ -70,13 +108,14 @@ export function StudioTaskModal() {
         commessa_id: "none",
         stato: "DA_FARE",
         data_scadenza: "",
+        assegnatario_id: "none",
+        stima_minuti: 0,
       });
     }
   }, [task, nav.selectedTaskId]);
 
   if (!nav.selectedTaskId) return null;
 
-  const isNew = nav.selectedTaskId === "new";
   const isTimerActive = !isNew && task && timer.active_session?.task_id === task.id;
 
   const handleSave = async () => {
@@ -85,8 +124,8 @@ export function StudioTaskModal() {
     const payload = {
       ...formData,
       commessa_id: formData.commessa_id === "none" ? null : formData.commessa_id,
+      assegnatario_id: formData.assegnatario_id === "none" ? null : formData.assegnatario_id,
       progetto_id: nav.selectedListId,
-      stima_minuti: 0,
     };
 
     try {
@@ -127,11 +166,14 @@ export function StudioTaskModal() {
     <Dialog open={!!nav.selectedTaskId} onOpenChange={() => selectTask(null)}>
       <DialogContent className="max-w-4xl h-[85vh] p-0 bg-background border-border shadow-2xl overflow-hidden flex flex-col">
         <DialogHeader className="px-8 py-6 border-b border-border/50 bg-card/40 flex flex-row items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <Badge variant="outline" className="bg-primary/10 border-primary/20 text-primary text-[10px] font-black uppercase tracking-widest">
-              {isNew ? 'NUOVA TASK' : 'DETTAGLIO TASK'}
-            </Badge>
-            {!isNew && <span className="text-[10px] font-black text-[#475569] uppercase tracking-widest">ID: {task?.id.split('-')[0]}</span>}
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-3">
+              <Badge variant="outline" className="bg-primary/10 border-primary/20 text-primary text-[10px] font-black uppercase tracking-widest">
+                {isNew ? 'NUOVA TASK' : 'DETTAGLIO TASK'}
+              </Badge>
+              {!isNew && <span className="text-[10px] font-black text-[#475569] uppercase tracking-widest">ID: {task?.id.split('-')[0]}</span>}
+            </div>
+            <DialogTitle className="sr-only">{isNew ? 'Nuova Task' : `Dettaglio Task ${task?.title}`}</DialogTitle>
           </div>
           <div className="flex items-center gap-2">
             <Button 
@@ -168,6 +210,23 @@ export function StudioTaskModal() {
                     value={formData.titolo}
                     onChange={(e) => setFormData(prev => ({ ...prev, titolo: e.target.value }))}
                   />
+                  {estimate && (estimate as any).confidenza !== "NESSUNA" && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                        Stima basata sullo storico: ~{(estimate as any).stima_minuti} min
+                      </span>
+                      <Badge 
+                        variant="outline" 
+                        className={`text-[8px] font-black h-4 px-1.5 border-none ${
+                          (estimate as any).confidenza === "ALTA" ? "bg-emerald-500/10 text-emerald-500" :
+                          (estimate as any).confidenza === "MEDIA" ? "bg-yellow-500/10 text-yellow-500" :
+                          "bg-orange-500/10 text-orange-500"
+                        }`}
+                      >
+                        {(estimate as any).confidenza} CONFIDENZA
+                      </Badge>
+                    </div>
+                  )}
                   <textarea 
                     placeholder="Aggiungi una descrizione..."
                     className="w-full bg-transparent border-none outline-none text-sm text-muted-foreground font-medium leading-relaxed resize-none min-h-[150px]"
@@ -311,14 +370,53 @@ export function StudioTaskModal() {
 
               <div className="space-y-4">
                  <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Eseguito da</span>
-                 <div className="flex items-center gap-3 bg-muted/20 p-3 rounded-xl border border-border">
-                    <Avatar className="h-8 w-8 border border-primary/20">
-                      <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-black">LL</AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-black text-white uppercase tracking-widest">Lorenzo Lotti</span>
-                      <span className="text-[9px] font-bold text-[#475569] uppercase">Product Manager</span>
-                    </div>
+                 <Select 
+                   value={formData.assegnatario_id} 
+                   onValueChange={(val) => setFormData(prev => ({ ...prev, assegnatario_id: val }))}
+                 >
+                   <SelectTrigger className="w-full bg-muted/30 border-border hover:bg-muted/50 h-12 rounded-xl px-4 lowercase first-letter:uppercase">
+                     <SelectValue placeholder="Seleziona assegnatario" />
+                   </SelectTrigger>
+                   <SelectContent className="bg-card border-border text-white">
+                      <SelectItem value="none">Nessun assegnatario</SelectItem>
+                      {utenti?.map((u: User) => (
+                        <SelectItem key={u.id} value={u.id}>{u.nome} {u.cognome}</SelectItem>
+                      ))}
+                   </SelectContent>
+                 </Select>
+
+                 {capacity && (
+                   <div className={`p-3 rounded-xl border ${
+                     (capacity as any).percentuale_carico >= 100 ? "bg-red-500/10 border-red-500/30" :
+                     (capacity as any).percentuale_carico > 90 ? "bg-yellow-500/10 border-yellow-500/30" :
+                     "bg-emerald-500/10 border-emerald-500/30"
+                   }`}>
+                     <div className="flex items-center gap-2 mb-1">
+                       {(capacity as any).percentuale_carico >= 100 ? <AlertCircle className="h-3 w-3 text-red-500" /> : <Clock3 className="h-3 w-3 text-emerald-500" />}
+                       <span className={`text-[10px] font-black uppercase ${
+                         (capacity as any).percentuale_carico >= 100 ? "text-red-500" : "text-emerald-500"
+                       }`}>
+                         {(capacity as any).percentuale_carico >= 100 ? "Capacità Massima" : "Disponibilità Team"}
+                       </span>
+                     </div>
+                     <p className="text-[10px] font-bold text-muted-foreground leading-tight">
+                       {(capacity as any).ore_gia_assegnate}h assegnate oggi su {(capacity as any).ore_disponibili_oggi}h totali.
+                       {(capacity as any).percentuale_carico >= 100 ? " Carico massimo raggiunto." : ` Rimangono ${(capacity as any).ore_rimanenti}h.`}
+                     </p>
+                   </div>
+                 )}
+              </div>
+
+              <div className="space-y-4">
+                 <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Stima Ore</span>
+                 <div className="flex items-center gap-3">
+                    <input 
+                      type="number"
+                      className="w-24 bg-muted/30 border border-border h-10 rounded-xl px-4 text-xs font-black text-white"
+                      value={formData.stima_minuti}
+                      onChange={(e) => setFormData(prev => ({ ...prev, stima_minuti: parseInt(e.target.value) || 0 }))}
+                    />
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase">minuti</span>
                  </div>
               </div>
             </div>
