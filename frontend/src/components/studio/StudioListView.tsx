@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { 
   ChevronRight, 
   ChevronDown, 
@@ -7,7 +7,9 @@ import {
   Clock, 
   User as UserIcon,
   Play,
-  StopCircle
+  StopCircle,
+  CheckCircle2,
+  ListTodo
 } from "lucide-react";
 import { 
   Table, 
@@ -18,16 +20,23 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { useStudio } from "@/hooks/useStudio";
-import { useTasks } from "@/hooks/useTasks";
+import { useTasks, useTaskMutations } from "@/hooks/useTasks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { TaskSO, SubtaskSO } from "@/types/studio";
+import { DEFAULT_STATES } from "@/types/studio";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 
 export function StudioListView() {
   const { nav, openNewTask } = useStudio();
   const { data } = useTasks();
 
-  // Filter tasks by folder/list if selected
   const tasks = React.useMemo(() => {
     if (!data) return [];
     let filtered = data;
@@ -75,10 +84,16 @@ export function StudioListView() {
 }
 
 function TaskRow({ task, depth = 0 }: { task: TaskSO | SubtaskSO; depth: number }) {
-  const [expanded, setExpanded] = React.useState(false);
+  const [expanded, setExpanded] = useState(false);
   const { timer, selectTask } = useStudio();
-  const hasSubtasks = 'subtasks' in task && task.subtasks && task.subtasks.length > 0;
+  const { updateTask } = useTaskMutations();
+  
+  const subtasks = 'subtasks' in task ? task.subtasks : [];
+  const hasSubtasks = subtasks && subtasks.length > 0;
   const isTimerActive = timer.active_session?.task_id === task.id;
+
+  const completedSubtasks = subtasks.filter(st => st.stateId === 'done' || st.stateId === 'COMPLETATO').length;
+  const totalSubtasks = subtasks.length;
 
   const formatTime = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -87,6 +102,17 @@ function TaskRow({ task, depth = 0 }: { task: TaskSO | SubtaskSO; depth: number 
     const s = totalSeconds % 60;
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
+
+  const handleStatusChange = async (newStatus: string) => {
+    try {
+      await updateTask.mutateAsync({ id: task.id, data: { stato: newStatus } });
+      toast.success("Stato aggiornato");
+    } catch (err) {
+      toast.error("Errore durante l'aggiornamento dello stato");
+    }
+  };
+
+  const currentStatus = DEFAULT_STATES.find(s => s.id === (task as any).state_id || (task as any).stateId) || DEFAULT_STATES[0];
 
   return (
     <>
@@ -108,8 +134,14 @@ function TaskRow({ task, depth = 0 }: { task: TaskSO | SubtaskSO; depth: number 
             )}
             <div className={`h-2.5 w-2.5 rounded-full shrink-0 shadow-[0_0_8px_hsl(var(--primary)/0.2)] transition-colors ${isTimerActive ? 'bg-primary animate-pulse' : 'bg-muted'}`} />
             <span className={`text-[13px] font-bold truncate ${isTimerActive ? 'text-white' : 'text-muted-foreground'}`}>
-              {'title' in task ? task.title : (task as any).name}
+              {task.title}
             </span>
+            {totalSubtasks > 0 && (
+              <Badge variant="outline" className="ml-2 bg-white/5 border-border text-[9px] font-black tracking-tighter h-4 gap-1">
+                <CheckCircle2 className="h-2.5 w-2.5 text-emerald-500" />
+                {completedSubtasks}/{totalSubtasks}
+              </Badge>
+            )}
             {isTimerActive && (
               <Badge className="ml-2 bg-primary/20 text-primary border-primary/20 text-[9px] font-black tracking-tighter h-4">LIVE</Badge>
             )}
@@ -125,9 +157,29 @@ function TaskRow({ task, depth = 0 }: { task: TaskSO | SubtaskSO; depth: number 
           </div>
         </TableCell>
         <TableCell>
-          <Badge variant="outline" className="text-[10px] font-black uppercase bg-transparent border-border text-[#475569]">
-            {'state_id' in task ? task.state_id : (task as any).stateId}
-          </Badge>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <Badge 
+                variant="outline" 
+                className="text-[10px] font-black uppercase bg-transparent border-border text-[#475569] hover:border-primary/50 hover:text-primary cursor-pointer transition-all"
+                style={{ borderColor: currentStatus.color + '40', color: currentStatus.color }}
+              >
+                {currentStatus.name}
+              </Badge>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="bg-card border-border text-foreground w-40">
+              {DEFAULT_STATES.map((state) => (
+                <DropdownMenuItem 
+                  key={state.id} 
+                  onClick={(e) => { e.stopPropagation(); handleStatusChange(state.id); }}
+                  className="text-[10px] font-black uppercase tracking-widest py-2 focus:bg-primary/10 cursor-pointer"
+                >
+                  <div className="h-2 w-2 rounded-full mr-2" style={{ backgroundColor: state.color }} />
+                  {state.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </TableCell>
         <TableCell>
           <div className="flex items-center gap-2 tabular-nums">
@@ -183,7 +235,7 @@ function TaskRow({ task, depth = 0 }: { task: TaskSO | SubtaskSO; depth: number 
           </div>
         </TableCell>
       </TableRow>
-      {expanded && hasSubtasks && (task as TaskSO).subtasks.map((sub) => (
+      {expanded && hasSubtasks && subtasks.map((sub) => (
         <TaskRow key={sub.id} task={sub} depth={depth + 1} />
       ))}
     </>

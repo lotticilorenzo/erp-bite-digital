@@ -11,7 +11,13 @@ export function useTasks(filters?: {
   return useQuery({
     queryKey: ["studio-tasks", filters],
     queryFn: async () => {
-      const { data } = await api.get<any[]>("/tasks", { params: filters });
+      // Add parent_only=true by default if not specified to clean up the main list
+      const actualFilters = { 
+        parent_only: true, // Default to true unless explicitly false
+        ...filters 
+      };
+      
+      const { data } = await api.get<any[]>("/tasks", { params: actualFilters });
       
       const mapTask = (t: any): TaskSO => ({
         id: t.id,
@@ -26,11 +32,13 @@ export function useTasks(filters?: {
           id: st.id,
           title: st.titolo,
           stateId: st.stato,
-          subtasks: [] // Recursive subtasks flattened or limited for now
+          subtasks: [] 
         })),
         progetto_id: t.progetto_id,
         commessa_id: t.commessa_id,
-        parent_id: t.parent_id
+        parent_id: t.parent_id,
+        stima_minuti: t.stima_minuti,
+        assegnatario_id: t.assegnatario_id
       });
 
       return data.map(mapTask);

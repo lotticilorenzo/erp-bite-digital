@@ -26,7 +26,8 @@ import { useTimeEstimate, useUserCapacity, type TimeEstimate, type UserCapacity 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { User, TaskSO } from "@/types";
+import type { User } from "@/types";
+import type { TaskSO, SubtaskSO } from "@/types/studio";
 import { 
   Select, 
   SelectContent, 
@@ -39,7 +40,7 @@ import { toast } from "sonner";
 
 export function StudioTaskModal() {
   const { nav, selectTask, timer } = useStudio();
-  const { data: tasks } = useTasks();
+  const { data: tasks } = useTasks({ parent_only: false });
   const { data: commesse } = useCommesse();
   const { data: utenti } = useUsers();
   const { createTask, updateTask, deleteTask } = useTaskMutations();
@@ -63,6 +64,9 @@ export function StudioTaskModal() {
     assegnatario_id: "none",
     stima_minuti: 0,
   });
+
+  const [isAddingSubtask, setIsAddingSubtask] = useState(false);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
 
   const [debouncedTitolo, setDebouncedTitolo] = useState("");
 
@@ -139,6 +143,45 @@ export function StudioTaskModal() {
       selectTask(null);
     } catch (err) {
       toast.error("Errore durante il salvataggio");
+    }
+  };
+
+  const handleCreateSubtask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSubtaskTitle.trim() || !task) return;
+
+    try {
+      await createTask.mutateAsync({
+        titolo: newSubtaskTitle.trim(),
+        parent_id: task.id,
+        progetto_id: task.progetto_id,
+        commessa_id: task.commessa_id,
+        stato: "DA_FARE"
+      });
+      setNewSubtaskTitle("");
+      setIsAddingSubtask(false);
+      toast.success("Subtask creata");
+    } catch (err) {
+      toast.error("Errore nella creazione della subtask");
+    }
+  };
+
+  const handleToggleSubtask = async (sub: any) => {
+    const newStatus = (sub.stateId === "COMPLETATO" || sub.stateId === "done") ? "DA_FARE" : "COMPLETATO";
+    try {
+      await updateTask.mutateAsync({ id: sub.id, data: { stato: newStatus } });
+    } catch (err) {
+      toast.error("Errore nell'aggiornamento della subtask");
+    }
+  };
+
+  const handleDeleteSubtask = async (id: string) => {
+    if (!window.confirm("Sei sicuro di voler eliminare questa subtask?")) return;
+    try {
+      await deleteTask.mutateAsync(id);
+      toast.success("Subtask eliminata");
+    } catch (err) {
+      toast.error("Errore nell'eliminazione della subtask");
     }
   };
 
@@ -243,17 +286,53 @@ export function StudioTaskModal() {
                     </div>
                     <div className="space-y-2">
                       {task?.subtasks?.map((sub: any) => (
-                        <div key={sub.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors group cursor-pointer border border-transparent hover:border-border/50">
-                          <div className="h-5 w-5 rounded-md border-2 border-border group-hover:border-primary/50 transition-colors" />
-                          <span className="text-sm font-bold text-muted-foreground group-hover:text-white transition-colors">
+                        <div key={sub.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors group border border-transparent hover:border-border/50">
+                          <button 
+                            onClick={() => handleToggleSubtask(sub)}
+                            className={`h-5 w-5 rounded-md border-2 border-border transition-colors flex items-center justify-center ${
+                              (sub.stateId === "COMPLETATO" || sub.stateId === "done") ? "bg-emerald-500 border-emerald-500" : "group-hover:border-primary/50"
+                            }`}
+                          >
+                            {(sub.stateId === "COMPLETATO" || sub.stateId === "done") && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
+                          </button>
+                          <span className={`text-sm font-bold transition-colors flex-1 ${
+                            (sub.stateId === "COMPLETATO" || sub.stateId === "done") ? "text-muted-foreground line-through decoration-emerald-500/50" : "text-muted-foreground group-hover:text-white"
+                          }`}>
                             {sub.title}
                           </span>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => handleDeleteSubtask(sub.id)}
+                            className="h-7 w-7 opacity-0 group-hover:opacity-100 text-red-500/50 hover:text-red-500 hover:bg-red-500/10 transition-all"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
                       ))}
-                      <Button variant="ghost" className="w-full justify-start h-10 px-3 text-[10px] font-black uppercase tracking-widest text-[#475569] hover:text-primary hover:bg-transparent group">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Aggiungi Subtask
-                      </Button>
+                      
+                      {isAddingSubtask ? (
+                        <form onSubmit={handleCreateSubtask} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-primary/20">
+                           <div className="h-5 w-5 rounded-md border-2 border-primary/50 shrink-0" />
+                           <input 
+                             autoFocus
+                             className="flex-1 bg-transparent border-none outline-none text-sm text-white placeholder:text-slate-600"
+                             placeholder="Titolo subtask... (Invio per salvare)"
+                             value={newSubtaskTitle}
+                             onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                             onBlur={() => !newSubtaskTitle && setIsAddingSubtask(false)}
+                           />
+                        </form>
+                      ) : (
+                        <Button 
+                          variant="ghost" 
+                          className="w-full justify-start h-10 px-3 text-[10px] font-black uppercase tracking-widest text-[#475569] hover:text-primary hover:bg-transparent group"
+                          onClick={() => setIsAddingSubtask(true)}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Aggiungi Subtask
+                        </Button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -301,7 +380,6 @@ export function StudioTaskModal() {
             </ScrollArea>
           </div>
 
-          {/* Sidebar */}
           <div className="w-80 bg-card/20 shrink-0 p-6 space-y-8 overflow-y-auto">
             <div className="space-y-6">
               <div className="space-y-2">
@@ -350,14 +428,14 @@ export function StudioTaskModal() {
                       <div className="absolute top-0 left-0 w-[2px] h-full bg-primary opacity-50" />
                       <div className="flex flex-col gap-3">
                         <div className="text-2xl font-black text-white tabular-nums tracking-tighter">
-                            {formatTime(timer.getElapsed(task?.id || ''))}
+                            {task ? formatTime(timer.getElapsed(task.id)) : "00:00:00"}
                         </div>
                         <div className="flex gap-2">
                             <Button 
                               className={`flex-1 rounded-xl font-black uppercase tracking-widest text-[10px] gap-2 h-9 shadow-lg transition-all ${
                                 isTimerActive ? "bg-red-500 hover:bg-red-600 shadow-red-500/20" : "bg-primary hover:bg-primary/90 shadow-[0_0_20px_hsl(var(--primary)/0.2)]"
                               }`}
-                              onClick={() => isTimerActive ? timer.stop(timer.active_session!.id) : timer.start(task!.id)}
+                              onClick={() => (isTimerActive && timer.active_session) ? timer.stop(timer.active_session.id) : (task && timer.start(task.id))}
                             >
                               {isTimerActive ? <StopCircle className="h-3.5 w-3.5 fill-current" /> : <Play className="h-3.5 w-3.5 fill-current" />}
                               {isTimerActive ? "Ferma" : "Avvia"}
@@ -408,7 +486,7 @@ export function StudioTaskModal() {
               </div>
 
               <div className="space-y-4">
-                 <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Stima Ore</span>
+                 <span className="text-[10px) font-black text-[#475569] uppercase tracking-[0.2em]">Stima Ore</span>
                  <div className="flex items-center gap-3">
                     <input 
                       type="number"
