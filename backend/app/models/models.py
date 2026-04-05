@@ -853,3 +853,55 @@ class ChatReaction(Base):
 
     messaggio: Mapped["ChatMessage"] = relationship(back_populates="reazioni")
     user: Mapped["User"] = relationship()
+
+
+# ── CRM ───────────────────────────────────────────────────
+
+class CRMStage(Base):
+    __tablename__ = "crm_stadi"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    nome: Mapped[str] = mapped_column(String(100))
+    colore: Mapped[Optional[str]] = mapped_column(String(20), default="#7c3aed")
+    ordine: Mapped[int] = mapped_column(Integer, default=0)
+    probabilita: Mapped[int] = mapped_column(Integer, default=0) # 0-100
+
+    leads: Mapped[List["CRMLead"]] = relationship(back_populates="stadio")
+
+
+class CRMLead(Base):
+    __tablename__ = "crm_lead"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    nome_azienda: Mapped[str] = mapped_column(String(255))
+    nome_contatto: Mapped[Optional[str]] = mapped_column(String(255))
+    email: Mapped[Optional[str]] = mapped_column(String(255))
+    telefono: Mapped[Optional[str]] = mapped_column(String(50))
+    stadio_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("crm_stadi.id"))
+    valore_stimato: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    probabilita_chiusura: Mapped[int] = mapped_column(Integer, default=0)
+    data_prossimo_followup: Mapped[Optional[date]] = mapped_column(Date)
+    assegnato_a_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    fonte: Mapped[Optional[str]] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    stadio: Mapped[Optional["CRMStage"]] = relationship(back_populates="leads")
+    assegnato_a: Mapped[Optional["User"]] = relationship()
+    attivita: Mapped[List["CRMActivity"]] = relationship(back_populates="lead", cascade="all, delete-orphan")
+
+
+class CRMActivity(Base):
+    __tablename__ = "crm_attivita"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    lead_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("crm_lead.id", ondelete="CASCADE"))
+    tipo: Mapped[str] = mapped_column(String(50)) # Nota, Chiamata, Email, Meeting
+    descrizione: Mapped[Optional[str]] = mapped_column(Text)
+    data_attivita: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    autore_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    lead: Mapped["CRMLead"] = relationship(back_populates="attivita")
+    autore: Mapped["User"] = relationship()

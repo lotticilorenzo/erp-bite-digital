@@ -23,6 +23,7 @@ const PlanningPage = React.lazy(() => import("./pages/Planning"));
 const GanttPage = React.lazy(() => import("./pages/GanttPage"));
 const BudgetPage = React.lazy(() => import("./components/budget/BudgetPage"));
 const WikiPage = React.lazy(() => import("./components/wiki/WikiPage"));
+const CRMPage = React.lazy(() => import("./pages/CRM"));
 import Fornitori from "./pages/Fornitori";
 import SupplierCategoryManager from "./pages/admin/SupplierCategoryManager";
 
@@ -90,6 +91,7 @@ function App() {
           <Route path="/gantt" element={<GanttPage />} />
           <Route path="/budget" element={<BudgetPage />} />
           <Route path="/wiki" element={<WikiPage />} />
+          <Route path="/crm" element={<CRMPage />} />
           <Route path="/admin/categorie-fornitori" element={<SupplierCategoryManager />} />
           
           <Route 

@@ -1,0 +1,114 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import api from "@/lib/api";
+import type { CRMLead, CRMStage, CRMStats, CRMActivity } from "@/types/crm";
+import { toast } from "sonner";
+
+export function useCRM() {
+  const queryClient = useQueryClient();
+
+  const stagesQuery = useQuery<CRMStage[]>({
+    queryKey: ["crm", "stages"],
+    queryFn: async () => {
+      const res = await api.get("/api/v1/crm/stadi");
+      return res.data;
+    },
+  });
+
+  const leadsQuery = useQuery<CRMLead[]>({
+    queryKey: ["crm", "leads"],
+    queryFn: async () => {
+      const res = await api.get("/api/v1/crm/lead");
+      return res.data;
+    },
+  });
+
+  const statsQuery = useQuery<CRMStats>({
+    queryKey: ["crm", "stats"],
+    queryFn: async () => {
+      const res = await api.get("/api/v1/crm/statistiche");
+      return res.data;
+    },
+  });
+
+  const createLead = useMutation({
+    mutationFn: async (data: Partial<CRMLead>) => {
+      const res = await api.post("/api/v1/crm/lead", data);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["crm"] });
+      toast.success("Lead creato con successo");
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.detail || "Errore durante la creazione del lead");
+    },
+  });
+
+  const updateLead = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<CRMLead> }) => {
+      const res = await api.patch(`/api/v1/crm/lead/${id}`, data);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["crm"] });
+    },
+  });
+
+  const updateLeadStage = useMutation({
+    mutationFn: async ({ id, stadio_id }: { id: string; stadio_id: string }) => {
+      const res = await api.patch(`/api/v1/crm/lead/${id}/stadio`, { stadio_id });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["crm"] });
+      toast.success("Stadio aggiornato");
+    },
+  });
+
+  const addActivity = useMutation({
+    mutationFn: async ({ lead_id, data }: { lead_id: string; data: Partial<CRMActivity> }) => {
+      const res = await api.post(`/api/v1/crm/lead/${lead_id}/attivita`, data);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["crm"] });
+      toast.success("Attività salvata");
+    },
+  });
+
+  const deleteLead = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/api/v1/crm/lead/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["crm"] });
+      toast.success("Lead eliminato");
+    },
+  });
+
+  const convertLeadToClient = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.post(`/api/v1/crm/lead/${id}/converti`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["crm"] });
+      queryClient.invalidateQueries({ queryKey: ["clienti"] });
+      toast.success("Lead convertito in cliente!");
+    },
+  });
+
+  return {
+    stages: stagesQuery.data || [],
+    leads: leadsQuery.data || [],
+    stats: statsQuery.data,
+    isLoading: stagesQuery.isLoading || leadsQuery.isLoading || statsQuery.isLoading,
+    createLead,
+    updateLead,
+    updateLeadStage,
+    addActivity,
+    deleteLead,
+    convertLeadToClient,
+    refresh: () => queryClient.invalidateQueries({ queryKey: ["crm"] })
+  };
+}

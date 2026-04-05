@@ -877,3 +877,80 @@ class ChatMessageRead(ChatMessageBase):
 
     class Config:
         from_attributes = True
+
+
+# ── CRM SCHEMAS ──────────────────────────────────────────
+
+class CRMStageOut(BaseModel):
+    id: uuid.UUID
+    nome: str
+    colore: str
+    ordine: int
+    probabilita: int
+
+    class Config:
+        from_attributes = True
+
+class CRMActivityBase(BaseModel):
+    tipo: str # Nota, Chiamata, Email, Meeting
+    descrizione: Optional[str] = None
+    data_attivita: datetime = Field(default_factory=datetime.now)
+
+class CRMActivityCreate(CRMActivityBase):
+    pass
+
+class CRMActivityOut(CRMActivityBase):
+    id: uuid.UUID
+    lead_id: uuid.UUID
+    autore_id: uuid.UUID
+    autore_nome: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class CRMLeadBase(BaseModel):
+    nome_azienda: str
+    nome_contatto: Optional[str] = None
+    email: Optional[str] = None
+    telefono: Optional[str] = None
+    valore_stimato: Decimal = Decimal("0")
+    probabilita_chiusura: int = 0
+    data_prossimo_followup: Optional[date] = None
+    assegnato_a_id: Optional[uuid.UUID] = None
+    note: Optional[str] = None
+    fonte: Optional[str] = None
+
+class CRMLeadCreate(CRMLeadBase):
+    stadio_id: uuid.UUID
+
+class CRMLeadUpdate(BaseModel):
+    nome_azienda: Optional[str] = None
+    nome_contatto: Optional[str] = None
+    email: Optional[str] = None
+    telefono: Optional[str] = None
+    stadio_id: Optional[uuid.UUID] = None
+    valore_stimato: Optional[Decimal] = None
+    probabilita_chiusura: Optional[int] = None
+    data_prossimo_followup: Optional[date] = None
+    assegnato_a_id: Optional[uuid.UUID] = None
+    note: Optional[str] = None
+    fonte: Optional[str] = None
+
+class CRMLeadOut(CRMLeadBase):
+    id: uuid.UUID
+    stadio_id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+    assegnato_a_nome: Optional[str] = None
+    stadio: Optional[CRMStageOut] = None
+    attivita: List[CRMActivityOut] = []
+
+    class Config:
+        from_attributes = True
+
+class CRMStatsOut(BaseModel):
+    valore_totale_pipeline: Decimal
+    numero_lead_attivi: int
+    tasso_conversione: float
+    previsione_ricavi: Decimal

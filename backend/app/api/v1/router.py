@@ -21,7 +21,8 @@ from app.models.models import (
     User, UserRole, ProjectStatus, ProjectType, 
     CommessaStatus, TaskStatus, PreventivoStatus,
     TimesheetStatus, ServiceType, ServiceCadenza,
-    CostoTipo, MovimentoStatus
+    CostoTipo, MovimentoStatus,
+    CRMStage, CRMLead, CRMActivity, Cliente
 )
 from app.schemas.schemas import (
     LoginRequest, TokenResponse, UserOut, UserCreate, UserUpdate,
@@ -36,7 +37,8 @@ from app.schemas.schemas import (
     PreventivoCreate, PreventivoUpdate, PreventivoOut,
     BudgetCategoryCreate, BudgetCategoryOut, BudgetMensileCreate, BudgetMensileUpdate, BudgetMensileOut, BudgetConsuntivoOut,
     WikiCategoryCreate, WikiCategoryOut, WikiArticleCreate, WikiArticleUpdate, WikiArticleOut,
-    ChatReactionBase, ChatReactionRead, ChatMessageCreate, ChatMessageUpdate, ChatMessageRead
+    ChatReactionBase, ChatReactionRead, ChatMessageCreate, ChatMessageUpdate, ChatMessageRead,
+    CRMStageOut, CRMLeadCreate, CRMLeadUpdate, CRMLeadOut, CRMActivityCreate, CRMActivityOut, CRMStatsOut
 )
 from app.schemas.auth import ForgotPasswordRequest, ResetPasswordRequest
 import httpx
@@ -2412,3 +2414,168 @@ async def remove_chat_reazione(
         await db.commit()
         
     return {"status": "ok"}
+
+
+# ── CRM ───────────────────────────────────────────────────
+
+@router.get("/crm/stadi", response_model=List[CRMStageOut], tags=["CRM"])
+async def get_crm_stages(db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+    res = await db.execute(select(CRMStage).order_by(CRMStage.ordine))
+    return res.scalars().all()
+
+@router.get("/crm/lead", response_model=List[CRMLeadOut], tags=["CRM"])
+async def get_crm_leads(db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+    from sqlalchemy.orm import joinedload
+    stmt = select(CRMLead).options(
+        joinedload(CRMLead.stadio),
+        joinedload(CRMLead.assegnato_a)
+    ).order_by(CRMLead.created_at.desc())
+    res = await db.execute(stmt)
+    leads = res.scalars().all()
+    
+    # Map virtual fields
+    for l in leads:
+        if l.assegnato_a:
+            l.assegnato_a_nome = f"{l.assegnato_a.nome} {l.assegnato_a.cognome}"
+            
+    return leads
+
+@router.post("/crm/lead", response_model=CRMLeadOut, status_code=201, tags=["CRM"])
+async def add_crm_lead(data: CRMLeadCreate, db: AsyncSession = Depends(get_db)):
+    lead = CRMLead(**data.model_dump())
+    db.add(lead)
+    await db.commit()
+    await db.refresh(lead)
+    return lead
+
+@router.get("/crm/lead/{lead_id}", response_model=CRMLeadOut, tags=["CRM"])
+async def get_single_crm_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+    from sqlalchemy.orm import joinedload
+    stmt = select(CRMLead).where(CRMLead.id == lead_id).options(
+        joinedload(CRMLead.stadio),
+        joinedload(CRMLead.assegnato_a),
+        joinedload(CRMLead.attivita)
+    )
+    res = await db.execute(stmt)
+    lead = res.scalar_one_or_none()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead non trovato")
+        
+    if lead.assegnato_a:
+        lead.assegnato_a_nome = f"{lead.assegnato_a.nome} {lead.assegnatario.cognome}"
+        
+    # Add author names to activities
+    for act in lead.attivita:
+        author = await db.get(User, act.autore_id)
+        if author:
+            act.autore_nome = f"{author.nome} {author.cognome}"
+            
+    return lead
+
+@router.patch("/crm/lead/{lead_id}", response_model=CRMLeadOut, tags=["CRM"])
+async def patch_crm_lead(lead_id: uuid.UUID, data: CRMLeadUpdate, db: AsyncSession = Depends(get_db)):
+    lead = await db.get(CRMLead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead non trovato")
+        
+    update_data = data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(lead, key, value)
+        
+    await db.commit()
+    await db.refresh(lead)
+    return lead
+
+@router.delete("/crm/lead/{lead_id}", status_code=204, tags=["CRM"])
+async def remove_crm_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    lead = await db.get(CRMLead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead non trovato")
+    await db.delete(lead)
+    await db.commit()
+
+@router.patch("/crm/lead/{lead_id}/stadio", tags=["CRM"])
+async def update_lead_stage(lead_id: uuid.UUID, stadio_id: uuid.UUID = Body(..., embed=True), db: AsyncSession = Depends(get_db)):
+    lead = await db.get(CRMLead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead non trovato")
+    
+    stage = await db.get(CRMStage, stadio_id)
+    if not stage:
+        raise HTTPException(status_code=404, detail="Stadio non trovato")
+        
+    lead.stadio_id = stadio_id
+    lead.probabilita_chiusura = stage.probabilita
+    await db.commit()
+    return {"message": "Stadio aggiornato con successo"}
+
+@router.post("/crm/lead/{lead_id}/attivita", response_model=CRMActivityOut, tags=["CRM"])
+async def add_crm_activity(lead_id: uuid.UUID, data: CRMActivityCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    lead = await db.get(CRMLead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead non trovato")
+        
+    act = CRMActivity(**data.model_dump(), lead_id=lead_id, autore_id=current_user.id)
+    db.add(act)
+    await db.commit()
+    await db.refresh(act)
+    
+    act.autore_nome = f"{current_user.nome} {current_user.cognome}"
+    return act
+
+@router.post("/crm/lead/{lead_id}/converti", tags=["CRM"])
+async def convert_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+    lead = await db.get(CRMLead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead non trovato")
+        
+    # 1. Crea Cliente
+    new_client = Cliente(
+        ragione_sociale=lead.nome_azienda,
+        referente=lead.nome_contatto,
+        email=lead.email,
+        telefono=lead.telefono,
+        note=f"Convertito da CRM lead il {date.today()}\n{lead.note or ''}"
+    )
+    db.add(new_client)
+    
+    # 2. Aggiorna Lead Stadio (Vinto)
+    res_stadi = await db.execute(select(CRMStage).where(CRMStage.nome == 'Chiuso Vinto'))
+    stadio_vinto = res_stadi.scalar_one_or_none()
+    if stadio_vinto:
+        lead.stadio_id = stadio_vinto.id
+        lead.probabilita_chiusura = 100
+        
+    await db.commit()
+    return {"message": "Lead convertito in cliente con successo", "cliente_id": new_client.id}
+
+@router.get("/crm/statistiche", response_model=CRMStatsOut, tags=["CRM"])
+async def get_crm_stats(db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select, func
+    
+    # Valore totale e numero lead
+    res_leads = await db.execute(select(CRMLead))
+    all_leads = res_leads.scalars().all()
+    
+    valore_totale = sum(l.valore_stimato for l in all_leads)
+    numero_attivi = len([l for l in all_leads if l.probabilita_chiusura < 100 and l.probabilita_chiusura > 0])
+    
+    # Tasso conversione
+    res_vinti = await db.execute(select(func.count(CRMLead.id)).where(CRMLead.probabilita_chiusura == 100))
+    vinti = res_vinti.scalar()
+    totali = len(all_leads)
+    tasso = (vinti / totali * 100) if totali > 0 else 0
+    
+    # Previsione ricavi
+    previsione = sum((l.valore_stimato * Decimal(l.probabilita_chiusura / 100)) for l in all_leads)
+    
+    return {
+        "valore_totale_pipeline": valore_totale,
+        "numero_lead_attivi": numero_attivi,
+        "tasso_conversione": tasso,
+        "previsione_ricavi": previsione
+    }

@@ -63,6 +63,7 @@ const navItems = [
       { title: "Preventivi", url: "/preventivi", icon: FileText },
       { title: "Commesse", url: "/commesse", icon: Briefcase },
       { title: "Planning", url: "/planning", icon: ClipboardList },
+      { title: "CRM", url: "/crm", icon: Target },
     ],
   },
   {
