@@ -820,7 +820,8 @@ async def list_tasks(
 ) -> List[Task]:
     q = select(Task).options(
         selectinload(Task.subtasks),
-        selectinload(Task.assegnatario)
+        selectinload(Task.assegnatario),
+        selectinload(Task.timer_sessions)
     )
     if progetto_id:
         q = q.where(Task.progetto_id == progetto_id)
@@ -840,7 +841,8 @@ async def get_task(db: AsyncSession, task_id: uuid.UUID) -> Optional[Task]:
     result = await db.execute(
         select(Task).options(
             selectinload(Task.subtasks),
-            selectinload(Task.assegnatario)
+            selectinload(Task.assegnatario),
+            selectinload(Task.timer_sessions)
         ).where(Task.id == task_id)
     )
     return result.scalar_one_or_none()

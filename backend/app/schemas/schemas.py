@@ -462,6 +462,7 @@ class TaskOut(OrmBase):
     data_inizio: Optional[date] = None
     data_scadenza: Optional[date] = None
     stima_minuti: Optional[int] = None
+    tempo_trascorso_minuti: int = 0
     clickup_synced_at: Optional[datetime] = None
     created_at: datetime
     subtasks: List[TaskOut] = []

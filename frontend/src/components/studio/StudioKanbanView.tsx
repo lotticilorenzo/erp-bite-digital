@@ -223,7 +223,10 @@ function KanbanCard({ task, isOverlay = false }: { task: TaskSO; isOverlay?: boo
           <div className="flex items-center gap-1.5 bg-muted/30 px-2 py-0.5 rounded-lg border border-white/5">
             <Clock className={`h-3 w-3 ${isTimerActive ? 'text-primary animate-pulse' : 'text-[#334155]'}`} />
             <span className={`text-[10px] font-black tabular-nums ${isTimerActive ? 'text-primary' : 'text-[#475569]'}`}>
-              {Math.floor(timer.getElapsed(task.id) / 1000 / 60)}m
+              {((task.tempo_trascorso_minuti || 0) + Math.floor(timer.getElapsed(task.id) / 60000)) >= 60 
+                ? `${Math.floor(((task.tempo_trascorso_minuti || 0) + Math.floor(timer.getElapsed(task.id) / 60000)) / 60)}h ${((task.tempo_trascorso_minuti || 0) + Math.floor(timer.getElapsed(task.id) / 60000)) % 60}m`
+                : `${(task.tempo_trascorso_minuti || 0) + Math.floor(timer.getElapsed(task.id) / 60000)}m`
+              }
             </span>
           </div>
 

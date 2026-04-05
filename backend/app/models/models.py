@@ -342,6 +342,11 @@ class Task(Base):
         back_populates="subtasks",
         remote_side=[id],
     )
+    timer_sessions: Mapped[List["TimerSession"]] = relationship(back_populates="task")
+
+    @property
+    def tempo_trascorso_minuti(self) -> int:
+        return sum(s.durata_minuti for s in self.timer_sessions if s.durata_minuti)
 
 
 # ── TIMESHEET ─────────────────────────────────────────────
@@ -693,7 +698,7 @@ class TimerSession(Base):
     note: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    task: Mapped["Task"] = relationship()
+    task: Mapped["Task"] = relationship(back_populates="timer_sessions")
     user: Mapped["User"] = relationship()
 
 

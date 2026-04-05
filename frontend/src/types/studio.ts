@@ -25,6 +25,7 @@ export type SubtaskSO = {
   id: string;
   title: string;
   stateId: string;
+  tempo_trascorso_minuti?: number;
   subtasks: SubtaskSO[];
 }
 
@@ -44,6 +45,7 @@ export type TaskSO = {
   parent_id?: string;
   assegnatario_id?: string;
   stima_minuti?: number;
+  tempo_trascorso_minuti?: number;
   // Deprecated ClickUp fields
   clickup_id?: string;
   folder_id?: string;

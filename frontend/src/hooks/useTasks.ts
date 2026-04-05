@@ -38,6 +38,7 @@ export function useTasks(filters?: {
         commessa_id: t.commessa_id,
         parent_id: t.parent_id,
         stima_minuti: t.stima_minuti,
+        tempo_trascorso_minuti: t.tempo_trascorso_minuti || 0,
         assegnatario_id: t.assegnatario_id
       });
 
@@ -64,7 +65,9 @@ export function useTask(id: string | null) {
         subtasks: (data.subtasks || []),
         progetto_id: data.progetto_id,
         commessa_id: data.commessa_id,
-        parent_id: data.parent_id
+        parent_id: data.parent_id,
+        stima_minuti: data.stima_minuti,
+        tempo_trascorso_minuti: data.tempo_trascorso_minuti || 0
       } as TaskSO;
     },
     enabled: !!id && id !== "new",

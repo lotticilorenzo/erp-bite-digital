@@ -95,6 +95,30 @@ export function StudioTaskModal() {
     }
   }, [estimate, isNew]);
 
+  const [lastActiveSessionId, setLastActiveSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (timer.active_session && timer.active_session.task_id === task?.id) {
+      setLastActiveSessionId(timer.active_session.id);
+    } else if (!timer.active_session && lastActiveSessionId && task) {
+             // Timer appena stoppato!
+      toast("Sessione terminata", {
+        description: "Vuoi salvare il tempo nel timesheet?",
+        action: {
+          label: "SÌ, SALVA",
+          onClick: () => {
+                   saveToTimesheetMutation.mutate({ 
+              session_ids: [lastActiveSessionId], 
+              commessa_id: task.commessa_id === "none" ? undefined : task.commessa_id 
+            });
+          }
+        },
+        duration: 10000,
+      });
+      setLastActiveSessionId(null);
+    }
+  }, [timer.active_session, task?.id]);
+
   useEffect(() => {
     if (task) {
       setFormData({
@@ -427,21 +451,52 @@ export function StudioTaskModal() {
               {!isNew && (
                 <div className="space-y-4">
                   <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Live Timer</span>
-                  <div className="bg-muted/20 border border-primary/20 p-4 rounded-2xl relative overflow-hidden group">
+                  <div className="bg-muted/20 border border-primary/20 p-5 rounded-2xl relative overflow-hidden group">
                       <div className="absolute top-0 left-0 w-[2px] h-full bg-primary opacity-50" />
-                      <div className="flex flex-col gap-3">
-                        <div className="text-2xl font-black text-white tabular-nums tracking-tighter">
-                            {task ? formatTime(timer.getElapsed(task.id)) : "00:00:00"}
+                      <div className="flex flex-col gap-4">
+                        <div>
+                          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 block">Tempo Totale (Acc.)</span>
+                          <div className="text-3xl font-black text-white tabular-nums tracking-tighter">
+                              {task ? formatTime((task.tempo_trascorso_minuti || 0) * 60 * 1000 + timer.getElapsed(task.id)) : "00:00:00"}
+                          </div>
                         </div>
-                        <div className="flex gap-2">
+
+                        {task?.stima_minuti && task.stima_minuti > 0 && (
+                          <div className="space-y-2">
+                             <div className="flex justify-between items-end">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase">Progresso Stima</span>
+                                <span className="text-[9px] font-black text-white italic">
+                                  {Math.round(((task.tempo_trascorso_minuti || 0) + (timer.getElapsed(task.id) / 60000)))} / {task.stima_minuti} min
+                                </span>
+                             </div>
+                             <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full transition-all duration-500 ${
+                                    ((task.tempo_trascorso_minuti || 0) + (timer.getElapsed(task.id) / 60000)) > task.stima_minuti 
+                                    ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]" 
+                                    : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]"
+                                  }`}
+                                  style={{ width: `${Math.min(100, (((task.tempo_trascorso_minuti || 0) + (timer.getElapsed(task.id) / 60000)) / task.stima_minuti) * 100)}%` }}
+                                />
+                             </div>
+                             <p className="text-[9px] font-medium text-slate-500 italic">
+                               {((task.tempo_trascorso_minuti || 0) + (timer.getElapsed(task.id) / 60000)) > task.stima_minuti 
+                                 ? `Sopra stima di ${Math.round(((task.tempo_trascorso_minuti || 0) + (timer.getElapsed(task.id) / 60000)) - task.stima_minuti)} min`
+                                 : `Rimanenti ~${Math.round(task.stima_minuti - ((task.tempo_trascorso_minuti || 0) + (timer.getElapsed(task.id) / 60000)))} min`
+                               }
+                             </p>
+                          </div>
+                        )}
+
+                        <div className="flex gap-2 pt-2">
                             <Button 
-                              className={`flex-1 rounded-xl font-black uppercase tracking-widest text-[10px] gap-2 h-9 shadow-lg transition-all ${
+                              className={`flex-1 rounded-xl font-black uppercase tracking-widest text-[10px] gap-2 h-10 shadow-lg transition-all ${
                                 isTimerActive ? "bg-red-500 hover:bg-red-600 shadow-red-500/20" : "bg-primary hover:bg-primary/90 shadow-[0_0_20px_hsl(var(--primary)/0.2)]"
                               }`}
                               onClick={() => (isTimerActive && timer.active_session) ? timer.stop(timer.active_session.id) : (task && timer.start(task.id))}
                             >
-                              {isTimerActive ? <StopCircle className="h-3.5 w-3.5 fill-current" /> : <Play className="h-3.5 w-3.5 fill-current" />}
-                              {isTimerActive ? "Ferma" : "Avvia"}
+                              {isTimerActive ? <StopCircle className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />}
+                              {isTimerActive ? "Ferma" : "Avvia Timer"}
                             </Button>
                         </div>
                       </div>

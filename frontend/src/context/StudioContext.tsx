@@ -106,7 +106,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   const getElapsedTime = useCallback((taskId: string) => {
     if (activeSession?.task_id === taskId && activeSession.started_at) {
       const start = new Date(activeSession.started_at).getTime();
-      return Date.now() - start;
+      return Math.max(0, Date.now() - start);
     }
     return 0;
   }, [activeSession, tick]);

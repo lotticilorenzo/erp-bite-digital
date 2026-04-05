@@ -8,7 +8,8 @@ import {
   User as UserIcon,
   Play,
   StopCircle,
-  CheckCircle2
+  CheckCircle2,
+  Clock3
 } from "lucide-react";
 import { 
   Table, 
@@ -142,7 +143,13 @@ function TaskRow({ task, depth = 0 }: { task: TaskSO | SubtaskSO; depth: number 
               </Badge>
             )}
             {isTimerActive && (
-              <Badge className="ml-2 bg-primary/20 text-primary border-primary/20 text-[9px] font-black tracking-tighter h-4">LIVE</Badge>
+              <Badge className="ml-2 bg-primary/20 text-primary border-primary/20 text-[9px] font-black tracking-tighter h-4 uppercase">LIVE</Badge>
+            )}
+            {(task.tempo_trascorso_minuti || 0) > 0 && (
+              <Badge variant="outline" className="ml-2 bg-white/5 border-border/50 text-slate-400 text-[9px] font-black h-4 gap-1">
+                <Clock3 className="h-2.5 w-2.5 text-primary" />
+                {task.tempo_trascorso_minuti! >= 60 ? `${Math.floor(task.tempo_trascorso_minuti! / 60)}h ${task.tempo_trascorso_minuti! % 60}m` : `${task.tempo_trascorso_minuti}m`}
+              </Badge>
             )}
           </div>
         </TableCell>
