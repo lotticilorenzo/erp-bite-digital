@@ -9,14 +9,19 @@ import {
   Save,
   Loader2,
   Camera,
-  Trash2
+  Trash2,
+  Download
 } from "lucide-react";
+import { PDFDownloadLink } from "@react-pdf/renderer";
+import { UserPerformancePDF } from "@/components/reports/UserPerformancePDF";
+import { useTimesheets } from "@/hooks/useTimesheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/common/UserAvatar";
+import { startOfYear } from "date-fns";
 import api from "@/lib/api";
 
 const roleColors: Record<string, string> = {
@@ -30,6 +35,8 @@ export default function ProfileSettings() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: userTimesheets = [] } = useTimesheets({ user_id: user?.id });
   
   const [formData, setFormData] = useState({
     nome: user?.nome || "",
@@ -240,11 +247,51 @@ export default function ProfileSettings() {
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 pt-4">
+        <div className="pt-8 border-t border-border/50">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 p-6 rounded-2xl bg-primary/5 border border-primary/20 shadow-inner">
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <FileText className="w-5 h-5 text-primary" />
+                Performance & Analisi
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Scarica il tuo report personalizzato con KPI, ore lavorate e allocazione sui clienti.
+              </p>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+              <PDFDownloadLink
+                document={
+                  <UserPerformancePDF 
+                    user={user!} 
+                    timesheets={userTimesheets} 
+                    periodo={`Anno Corrente (${new Date().getFullYear()})`}
+                    startDate={startOfYear(new Date())}
+                    endDate={new Date()}
+                  />
+                }
+                fileName={`Report_Performance_${user?.nome}_${user?.cognome}_${new Date().getFullYear()}.pdf`}
+              >
+                {({ loading }) => (
+                  <Button 
+                    type="button"
+                    disabled={loading}
+                    className="w-full md:w-auto h-11 bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 gap-2 font-black uppercase text-[10px] tracking-widest"
+                  >
+                    <Download className="w-4 h-4" />
+                    {loading ? "Generazione..." : "Scarica Report Personale"}
+                  </Button>
+                )}
+              </PDFDownloadLink>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 pt-8">
           <Button type="button" variant="ghost" onClick={resetForm} className="text-muted-foreground">
             Annulla
           </Button>
-          <Button type="submit" disabled={updateProfileMutation.isPending} className="gap-2 px-8 shadow-lg shadow-primary/20">
+          <Button type="submit" disabled={updateProfileMutation.isPending} className="gap-2 px-8 shadow-lg shadow-primary/20 h-11 font-bold">
             {updateProfileMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (

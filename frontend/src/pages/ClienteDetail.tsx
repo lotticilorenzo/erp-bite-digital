@@ -7,7 +7,10 @@ import {
   History,
   AlertTriangle,
   CheckCircle2,
-  Calendar
+  Calendar,
+  Download,
+  FileText,
+  Eye
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,9 +18,26 @@ import { Progress } from "@/components/ui/progress";
 import { useCliente, useClientHealthScore } from "@/hooks/useClienti";
 import { useCommesse } from "@/hooks/useCommesse";
 import { ClientAvatar } from "@/components/common/ClientAvatar";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, startOfYear, endOfYear, subMonths, subYears } from "date-fns";
 import { it } from "date-fns/locale";
 import { motion } from "framer-motion";
+import { PDFDownloadLink, PDFViewer } from "@react-pdf/renderer";
+import { ClienteReportPDF } from "@/components/reports/ClienteReportPDF";
+import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "@/components/ui/dialog";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useState, useMemo } from "react";
 
 export default function ClienteDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +45,34 @@ export default function ClienteDetailPage() {
   const { data: cliente, isLoading: loadingC } = useCliente(id);
   const { data: health, isLoading: loadingH } = useClientHealthScore(id);
   const { data: commesse = [] } = useCommesse({ cliente_id: id });
+
+  const [periodo, setPeriodo] = useState<"YTD" | "PREV_YEAR" | "6M" | "ALL">("YTD");
+
+  const filteredCommesse = useMemo(() => {
+    const now = new Date();
+    let start: Date;
+    let end: Date = now;
+
+    switch (periodo) {
+      case "YTD":
+        start = startOfYear(now);
+        break;
+      case "PREV_YEAR":
+        start = startOfYear(subYears(now, 1));
+        end = endOfYear(subYears(now, 1));
+        break;
+      case "6M":
+        start = subMonths(now, 6);
+        break;
+      default:
+        start = new Date(0);
+    }
+
+    return commesse.filter(c => {
+      const d = parseISO(c.mese_competenza);
+      return d >= start && d <= end;
+    });
+  }, [commesse, periodo]);
 
   if (loadingC || loadingH) {
     return (
@@ -40,6 +88,13 @@ export default function ClienteDetailPage() {
   const status = score >= 70 ? "ECCELLENTE" : score >= 40 ? "ATTENZIONE" : "CRITICO";
   const statusColor = score >= 70 ? "text-emerald-400" : score >= 40 ? "text-amber-400" : "text-red-400";
   const statusBg = score >= 70 ? "bg-emerald-500/10 border-emerald-500/20" : score >= 40 ? "bg-amber-500/10 border-amber-500/20" : "bg-red-500/10 border-red-500/20";
+
+  const periodoLabel = {
+    YTD: `Anno Corrente (${format(new Date(), "yyyy")})`,
+    PREV_YEAR: `Anno Precedente (${format(subYears(new Date(), 1), "yyyy")})`,
+    "6M": "Ultimi 6 Mesi",
+    ALL: "Tutto lo Storico"
+  }[periodo];
 
   return (
     <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -144,11 +199,25 @@ export default function ClienteDetailPage() {
         {/* Project History */}
         <div className="lg:col-span-2">
           <Card className="bg-card border-border">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-lg font-medium flex items-center gap-2 text-white">
                 <History className="w-4 h-4 text-purple-400" />
                 Storico Commesse
               </CardTitle>
+              <div className="flex items-center gap-2">
+                <Select value={periodo} onValueChange={(v: any) => setPeriodo(v)}>
+                  <SelectTrigger className="w-[180px] h-8 text-xs bg-muted/50 border-border">
+                    <Calendar className="w-3 h-3 mr-2" />
+                    <SelectValue placeholder="Periodo" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card border-border text-white">
+                    <SelectItem value="YTD">Anno Corrente</SelectItem>
+                    <SelectItem value="PREV_YEAR">Anno Precedente</SelectItem>
+                    <SelectItem value="6M">Ultimi 6 Mesi</SelectItem>
+                    <SelectItem value="ALL">Tutto lo Storico</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
                <div className="overflow-x-auto">
@@ -205,26 +274,91 @@ export default function ClienteDetailPage() {
           </Card>
         </div>
 
-        {/* Client Info Card */}
-        <div>
-          <Card className="bg-card border-border">
+        {/* Reporting & Info Column */}
+        <div className="space-y-8">
+          <Card className="bg-card border-border shadow-2xl relative overflow-hidden group">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-blue-500" />
             <CardHeader>
-              <CardTitle className="text-lg font-medium text-white">Info Cliente</CardTitle>
+              <CardTitle className="text-lg font-medium flex items-center gap-2 text-white">
+                <FileText className="w-4 h-4 text-purple-400" />
+                Reporting & Consolidati
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-               <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">Email Referente</label>
-                  <p className="text-sm text-foreground">{cliente.email || "---"}</p>
-               </div>
-               <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">Note Pagamento</label>
-                  <p className="text-sm text-foreground">{cliente.condizioni_pagamento || "Standard (30 gg)"}</p>
-               </div>
-               <div className="pt-4 border-t border-border">
-                  <Button variant="outline" className="w-full border-border hover:bg-muted" onClick={() => navigate(`/clienti`)}>
-                    Gestisci in CRM
-                  </Button>
-               </div>
+            <CardContent className="space-y-6">
+              <div className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-4">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Report Selezionato</p>
+                  <p className="text-sm font-bold text-white">Consolidato Cliente</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Range Temporale</p>
+                  <p className="text-sm text-foreground">{periodoLabel}</p>
+                </div>
+                
+                <div className="pt-2 flex flex-col gap-2">
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" className="w-full h-11 border-border hover:bg-muted gap-2">
+                        <Eye className="w-4 h-4" /> Anteprima Report
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-5xl h-[90vh] bg-card border-border p-0 overflow-hidden">
+                      <DialogHeader className="p-6 border-b border-border bg-muted/20">
+                        <DialogTitle className="text-xl font-bold flex items-center gap-3">
+                          <FileText className="w-6 h-6 text-purple-400" />
+                          Consolidato: {cliente.ragione_sociale} ({periodoLabel})
+                        </DialogTitle>
+                      </DialogHeader>
+                      <div className="flex-1 w-full h-full bg-slate-100">
+                        <PDFViewer width="100%" height="100%" className="border-none">
+                          <ClienteReportPDF 
+                            cliente={cliente} 
+                            commesse={filteredCommesse} 
+                            periodo={periodoLabel} 
+                          />
+                        </PDFViewer>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+
+                  <PDFDownloadLink
+                    document={
+                      <ClienteReportPDF 
+                        cliente={cliente} 
+                        commesse={filteredCommesse} 
+                        periodo={periodoLabel} 
+                      />
+                    }
+                    fileName={`Report_${cliente.ragione_sociale.replace(/\s+/g, '_')}_${periodo}.pdf`}
+                  >
+                    {({ loading }) => (
+                      <Button 
+                        disabled={loading || filteredCommesse.length === 0}
+                        className="w-full h-11 bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 gap-2 font-bold"
+                      >
+                        <Download className="w-4 h-4" />
+                        {loading ? "Generazione..." : "Scarica Report Consolidato"}
+                      </Button>
+                    )}
+                  </PDFDownloadLink>
+                </div>
+                
+                {filteredCommesse.length === 0 && (
+                  <p className="text-[10px] text-amber-400 text-center italic">
+                    Nessuna commessa trovata per il periodo selezionato.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-4 pt-4 border-t border-border">
+                 <div className="flex justify-between items-center bg-muted/20 p-3 rounded-lg border border-border/50">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground font-black uppercase">Email Referente</p>
+                      <p className="text-xs font-bold text-white">{cliente.email || "---"}</p>
+                    </div>
+                    <Button variant="ghost" size="sm" className="h-8 text-xs underline" onClick={() => navigate(`/clienti`)}>CRM</Button>
+                 </div>
+              </div>
             </CardContent>
           </Card>
         </div>

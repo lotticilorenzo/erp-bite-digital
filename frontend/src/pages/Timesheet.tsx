@@ -18,21 +18,25 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { useTimesheets } from "@/hooks/useTimesheet";
+import { useAuth } from "@/hooks/useAuth";
 import { TimesheetTable } from "@/components/timesheet/TimesheetTable";
 import { TimesheetDialog } from "@/components/timesheet/TimesheetDialog";
 import { BulkActionsHeader } from "@/components/timesheet/BulkActionsHeader";
-import { format, startOfMonth, subMonths } from "date-fns";
+import { TimesheetExportPDF } from "@/components/reports/TimesheetExportPDF";
+import { PDFDownloadLink } from "@react-pdf/renderer";
+import { format, startOfMonth, subMonths, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 
 export default function TimesheetPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const { user } = useAuth();
   const [filters, setFilters] = useState({
     mese: format(startOfMonth(new Date()), "yyyy-MM-dd"),
     stato: "",
   });
 
-  const { data: timesheets, isLoading } = useTimesheets(filters);
+  const { data: timesheets = [], isLoading } = useTimesheets(filters);
 
   const months = [
     startOfMonth(new Date()),
@@ -40,6 +44,8 @@ export default function TimesheetPage() {
     startOfMonth(subMonths(new Date(), 2)),
     startOfMonth(subMonths(new Date(), 3)),
   ];
+
+  const exportPeriodLabel = format(parseISO(filters.mese), "MMMM yyyy", { locale: it });
 
   return (
     <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -49,9 +55,23 @@ export default function TimesheetPage() {
           <p className="text-muted-foreground text-sm mt-1">Gestione ore, approvazioni e consuntivi.</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="bg-muted border-border text-white">
-            <FileDown className="w-4 h-4 mr-2" /> Esporta
-          </Button>
+          <PDFDownloadLink
+            document={
+              <TimesheetExportPDF 
+                timesheets={timesheets} 
+                filters={filters} 
+                userName={user ? `${user.nome} ${user.cognome}` : "Team Bite"} 
+              />
+            }
+            fileName={`Timesheet_${exportPeriodLabel.replace(/\s+/g, '_')}.pdf`}
+          >
+            {({ loading }) => (
+              <Button disabled={loading || timesheets.length === 0} variant="outline" className="bg-muted border-border text-white gap-2 font-bold">
+                <FileDown className="w-4 h-4" /> 
+                {loading ? "Esportazione..." : "Esporta PDF"}
+              </Button>
+            )}
+          </PDFDownloadLink>
           <Button 
             onClick={() => setIsDialogOpen(true)}
             className="bg-primary hover:bg-primary/90 text-white shadow-[0_0_20px_hsl(var(--primary)/0.2)] font-black"

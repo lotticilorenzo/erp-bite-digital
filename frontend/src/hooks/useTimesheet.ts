@@ -7,6 +7,7 @@ export interface TimesheetFilters {
   mese?: string;
   stato?: string;
   commessa_id?: string;
+  user_id?: string;
 }
 
 export function useTimesheets(filters: TimesheetFilters = {}) {

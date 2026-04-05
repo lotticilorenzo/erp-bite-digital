@@ -14,6 +14,7 @@ export interface User {
   email: string;
   ruolo: UserRole;
   costo_orario: number | null;
+  ore_settimanali?: number;
   bio: string | null;
   preferences: Record<string, any> | null;
   avatar_url?: string | null;
@@ -124,6 +125,7 @@ export interface Timesheet {
   note?: string;
   created_at: string;
   user?: User;
+  commessa?: Commessa;
   // ClickUp integration fields
   clickup_task_id?: string;
   clickup_parent_task_id?: string;
