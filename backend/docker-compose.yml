@@ -18,6 +18,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - bite_network
 
   backend:
     build:
@@ -35,6 +37,8 @@ services:
     volumes:
       - ./app:/app/app
       - ./static:/app/static
+    networks:
+      - bite_network
 
   nginx:
     image: nginx:alpine
@@ -49,6 +53,12 @@ services:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf
       - ../frontend/dist:/usr/share/nginx/html
       - /etc/letsencrypt:/etc/letsencrypt:ro
+    networks:
+      - bite_network
+
+networks:
+  bite_network:
+    driver: bridge
 
 volumes:
   postgres_data:

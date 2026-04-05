@@ -234,7 +234,7 @@ class Commessa(Base):
         back_populates="commessa",
         cascade="all, delete-orphan",
     )
-    timesheet: Mapped[List["Timesheet"]] = relationship(back_populates="commessa")
+    timesheet: Mapped[List["Timesheet"]] = relationship("Timesheet", back_populates="commessa")
     fattura: Mapped[Optional["FatturaAttiva"]] = relationship(foreign_keys="[Commessa.fattura_id]", back_populates="commesse")
 
     @property
@@ -333,7 +333,7 @@ class Task(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     assegnatario: Mapped[Optional["User"]] = relationship(foreign_keys=[assegnatario_id], back_populates="tasks_assegnati")
-    timesheet: Mapped[List["Timesheet"]] = relationship(back_populates="task")
+    timesheet: Mapped[List["Timesheet"]] = relationship("Timesheet", back_populates="task")
     subtasks: Mapped[List["Task"]] = relationship(
         back_populates="parent",
         cascade="all, delete-orphan",
@@ -392,7 +392,7 @@ class Timesheet(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    user: Mapped["User"] = relationship(foreign_keys=[user_id], back_populates="timesheet")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], back_populates="timesheet")
     approvatore: Mapped[Optional["User"]] = relationship(
         foreign_keys=[approvato_da],
         back_populates="timesheet_approvati",
