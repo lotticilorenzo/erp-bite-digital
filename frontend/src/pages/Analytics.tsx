@@ -23,7 +23,9 @@ import {
   ArrowDownRight,
   Filter,
   Download,
-  Loader2
+  Loader2,
+  ArrowLeft,
+  ExternalLink
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,12 +34,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import { AnalyticsReportPDF } from "@/components/analytics/AnalyticsReportPDF";
 import { Progress } from "@/components/ui/progress";
+import { useState, useMemo } from "react";
+import { parseISO, format as formatDate, isSameMonth } from "date-fns";
+import { it } from "date-fns/locale";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ClientAvatar } from "@/components/common/ClientAvatar";
+import type { Commessa, Cliente } from "@/types";
 
 const formatEuro = (val: number) => 
   new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(val);
 
 export default function Analytics() {
   const { data: analytics, isLoading } = useAnalytics();
+  const [selectedMonthLabel, setSelectedMonthLabel] = useState<string | null>(null);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
   if (isLoading || !analytics) {
     return (
@@ -57,7 +68,235 @@ export default function Analytics() {
     );
   }
 
-  const { kpis, revenueTrend, marginTrend, clientStats, scatterData, alerts } = analytics;
+  const { kpis, revenueTrend, marginTrend, clientStats, scatterData, alerts, commesse, clienti, last12Months } = analytics;
+
+  const currentDetailMonth = useMemo(() => {
+    if (!selectedMonthLabel) return null;
+    const index = revenueTrend.findIndex(r => r.month === selectedMonthLabel);
+    if (index === -1) return null;
+    return parseISO(last12Months[index]);
+  }, [selectedMonthLabel, revenueTrend, last12Months]);
+
+  const monthCommesse = useMemo(() => {
+    if (!currentDetailMonth) return [];
+    return (commesse as Commessa[]).filter((c: Commessa) => 
+      isSameMonth(parseISO(c.mese_competenza), currentDetailMonth)
+    );
+  }, [currentDetailMonth, commesse]);
+
+  const selectedClient = useMemo(() => {
+    if (!selectedClientId) return null;
+    return (clienti as Cliente[]).find((cl: Cliente) => cl.id === selectedClientId) || null;
+  }, [selectedClientId, clienti]);
+
+  const clientCommesse = useMemo(() => {
+    if (!selectedClientId) return [];
+    return (commesse as Commessa[]).filter((c: Commessa) => c.cliente_id === selectedClientId);
+  }, [selectedClientId, commesse]);
+
+  if (selectedMonthLabel) {
+    return (
+      <div className="p-8 space-y-8 animate-in fade-in slide-in-from-left-4 duration-500">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setSelectedMonthLabel(null)}
+                className="h-10 w-10 bg-card/50 border border-border/50 text-white rounded-xl hover:bg-primary/10 transition-all"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <h1 className="text-3xl font-black text-white tracking-tighter uppercase italic">
+                Dettaglio <span className="text-primary not-italic">{selectedMonthLabel}</span>
+              </h1>
+              <p className="text-[#475569] text-xs font-bold uppercase tracking-[0.2em] mt-1">Analisi commesse e performance mensili</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+           <KpiCard 
+              title="Fatturato Mese" 
+              value={formatEuro(monthCommesse.reduce((acc, c) => acc + (c.valore_fatturabile || 0), 0))} 
+              icon={TrendingUp} 
+              description="Totale fatturabile del periodo"
+           />
+           <KpiCard 
+              title="Margine Lordo" 
+              value={`${(monthCommesse.reduce((acc, c) => acc + (c.margine_percentuale || 0), 0) / (monthCommesse.length || 1)).toFixed(1)}%`} 
+              icon={Target} 
+              description="Media marginalità del periodo"
+           />
+           <KpiCard 
+              title="Numero Commesse" 
+              value={monthCommesse.length.toString()} 
+              icon={Users} 
+              description="Gestite in questo mese"
+           />
+        </div>
+
+        <Card className="bg-card border-border/50 shadow-2xl rounded-3xl overflow-hidden">
+          <CardHeader className="border-b border-border/30">
+            <CardTitle className="text-sm font-black uppercase tracking-widest text-white">Elenco Commesse</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader className="bg-muted/30">
+                <TableRow className="border-border/50 hover:bg-transparent">
+                  <TableHead className="text-[10px] font-black uppercase text-[#475569]">Cliente</TableHead>
+                  <TableHead className="text-[10px] font-black uppercase text-[#475569]">Stato</TableHead>
+                  <TableHead className="text-[10px] font-black uppercase text-[#475569] text-right">Valore</TableHead>
+                  <TableHead className="text-[10px] font-black uppercase text-[#475569] text-right">Margine</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {monthCommesse.map((c) => (
+                  <TableRow key={c.id} className="border-border/30 hover:bg-white/5 transition-colors">
+                    <TableCell className="font-bold">
+                      <div className="flex items-center gap-3">
+                        <ClientAvatar name={c.cliente?.ragione_sociale || "N/D"} logoUrl={c.cliente?.logo_url} size="xs" />
+                        <span className="text-white">{c.cliente?.ragione_sociale}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-[9px] font-black uppercase tracking-tighter bg-white/5">
+                        {c.stato}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-black text-white">{formatEuro(c.valore_fatturabile || 0)}</TableCell>
+                    <TableCell className={`text-right font-black ${(c.margine_percentuale || 0) < 15 ? "text-rose-500" : "text-emerald-500"}`}>
+                      {c.margine_percentuale}%
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (selectedClientId && selectedClient) {
+    return (
+      <div className="p-8 space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+        <div className="flex items-center justify-between">
+           <div className="flex items-center gap-4">
+            <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setSelectedClientId(null)}
+                className="h-10 w-10 bg-card/50 border border-border/50 text-white rounded-xl hover:bg-primary/10 transition-all"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div className="flex items-center gap-4">
+              <ClientAvatar name={selectedClient.ragione_sociale} logoUrl={selectedClient.logo_url} size="lg" className="rounded-2xl border-primary/20 p-1" />
+              <div>
+                <h1 className="text-3xl font-black text-white tracking-tighter uppercase italic">
+                  Profilo <span className="text-primary not-italic">{selectedClient.ragione_sociale}</span>
+                </h1>
+                <p className="text-[#475569] text-xs font-bold uppercase tracking-[0.2em] mt-1">Analisi storica e performance del partner</p>
+              </div>
+            </div>
+          </div>
+          <Button 
+            className="rounded-xl font-black uppercase text-[10px] tracking-widest gap-2 bg-card/50 border-border border hover:bg-white/5"
+            onClick={() => window.open(`/clienti/${selectedClient.id}`, '_blank')}
+          >
+            <ExternalLink className="h-4 w-4" />
+            Vai ad Anagrafica
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+           <KpiCard 
+              title="Fatturato Storico" 
+              value={formatEuro(clientCommesse.reduce((acc, c) => acc + (c.valore_fatturabile || 0), 0))} 
+              icon={TrendingUp} 
+              description="Totale investito dal partner"
+           />
+           <KpiCard 
+              title="Margine Medio" 
+              value={`${(clientCommesse.reduce((acc, c) => acc + (c.margine_percentuale || 0), 0) / (clientCommesse.length || 1)).toFixed(1)}%`} 
+              icon={Target} 
+              description="Efficienza operativa media"
+           />
+           <KpiCard 
+              title="Ore Totali" 
+              value={`${Math.round(clientCommesse.reduce((acc, c) => acc + (c.costo_manodopera || 0) / 40, 0))}h`} 
+              icon={Clock} 
+              description="Tempo investito (stima)"
+           />
+           <KpiCard 
+              title="N. Commesse" 
+              value={clientCommesse.length.toString()} 
+              icon={Users} 
+              description="Volume di collaborazioni"
+           />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <Card className="lg:col-span-2 bg-card border-border/50 shadow-2xl rounded-3xl overflow-hidden">
+            <CardHeader className="border-b border-border/30">
+              <CardTitle className="text-sm font-black uppercase tracking-widest text-white">Storico Commesse</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+               <Table>
+                <TableHeader className="bg-muted/30">
+                  <TableRow className="border-border/50 hover:bg-transparent">
+                    <TableHead className="text-[10px] font-black uppercase text-[#475569]">Mese Competenza</TableHead>
+                    <TableHead className="text-[10px] font-black uppercase text-[#475569]">Stato</TableHead>
+                    <TableHead className="text-[10px] font-black uppercase text-[#475569] text-right">Valore</TableHead>
+                    <TableHead className="text-[10px] font-black uppercase text-[#475569] text-right">Margine %</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {clientCommesse.sort((a, b) => b.mese_competenza.localeCompare(a.mese_competenza)).map((c) => (
+                    <TableRow key={c.id} className="border-border/30 hover:bg-white/5 transition-colors">
+                      <TableCell className="font-bold text-white uppercase tracking-tight">
+                        {formatDate(parseISO(c.mese_competenza), "MMMM yyyy", { locale: it })}
+                      </TableCell>
+                      <TableCell>
+                         <Badge variant="outline" className="text-[9px] font-black uppercase tracking-tighter">
+                          {c.stato}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-black text-white">{formatEuro(c.valore_fatturabile || 0)}</TableCell>
+                      <TableCell className={`text-right font-black ${(c.margine_percentuale || 0) < 15 ? "text-rose-500" : "text-emerald-500"}`}>
+                        {c.margine_percentuale}%
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card border-border/50 shadow-2xl rounded-3xl overflow-hidden">
+            <CardHeader className="border-b border-border/30">
+              <CardTitle className="text-sm font-black uppercase tracking-widest text-white">Trend Margine</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[300px] pt-8">
+              <ResponsiveContainer width="100%" height="100%">
+                 <LineChart data={clientCommesse.slice(-6).sort((a, b) => a.mese_competenza.localeCompare(b.mese_competenza)).map((c) => ({
+                   month: formatDate(parseISO(c.mese_competenza), "MMM", { locale: it }).toUpperCase(),
+                   margin: c.margine_percentuale
+                 }))}>
+                    <XAxis dataKey="month" stroke="#475569" fontSize={10} fontWeight="black" />
+                    <YAxis stroke="#475569" fontSize={10} fontWeight="black" unit="%" />
+                    <Tooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #1e293b", borderRadius: "12px", fontSize: "12px" }} />
+                    <Line type="monotone" dataKey="margin" stroke="#7c3aed" strokeWidth={3} dot={{ r: 4, fill: "#7c3aed" }} />
+                 </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -140,7 +379,7 @@ export default function Analytics() {
           </CardHeader>
           <CardContent className="pt-8 h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={revenueTrend}>
+              <BarChart data={revenueTrend} onClick={(data) => data && setSelectedMonthLabel(data.activeLabel)}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                 <XAxis 
                   dataKey="month" 
@@ -163,7 +402,7 @@ export default function Analytics() {
                   itemStyle={{ fontWeight: "bold" }}
                   cursor={{ fill: "rgba(124, 58, 237, 0.05)" }}
                 />
-                <Bar dataKey="revenue" fill="#7c3aed" radius={[6, 6, 0, 0]} barSize={24} />
+                <Bar dataKey="revenue" fill="#7c3aed" radius={[6, 6, 0, 0]} barSize={24} cursor="pointer" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -184,7 +423,7 @@ export default function Analytics() {
           </CardHeader>
           <CardContent className="pt-8 h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={marginTrend}>
+              <LineChart data={marginTrend} onClick={(data) => data && setSelectedMonthLabel(data.activeLabel)}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                 <XAxis 
                   dataKey="month" 
@@ -213,6 +452,7 @@ export default function Analytics() {
                   strokeWidth={4} 
                   dot={{ r: 4, fill: "#7c3aed", strokeWidth: 2, stroke: "#0f172a" }}
                   activeDot={{ r: 6, strokeWidth: 0 }}
+                  cursor="pointer"
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -228,21 +468,31 @@ export default function Analytics() {
             <CardDescription className="text-[10px] uppercase font-bold text-[#475569]">Per volume di fatturato totale</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {clientStats.map((cl) => (
-              <div key={cl.name} className="space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-tight">
-                  <span className="text-white truncate max-w-[150px]">{cl.name}</span>
-                  <span className="text-primary">{formatEuro(cl.revenue)}</span>
+            {clientStats.map((cl) => {
+              const fullClient = (clienti as Cliente[]).find(c => c.ragione_sociale === cl.name);
+              return (
+                <div 
+                  key={cl.name} 
+                  className="space-y-2 cursor-pointer group/item" 
+                  onClick={() => fullClient && setSelectedClientId(fullClient.id)}
+                >
+                  <div className="flex items-center justify-between text-xs font-bold uppercase tracking-tight">
+                    <div className="flex items-center gap-2">
+                       <ClientAvatar name={cl.name} logoUrl={fullClient?.logo_url} size="xs" />
+                       <span className="text-white truncate max-w-[150px] group-hover/item:text-primary transition-colors">{cl.name}</span>
+                    </div>
+                    <span className="text-primary">{formatEuro(cl.revenue)}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Progress value={(cl.revenue / clientStats[0].revenue) * 100} className="h-1.5 flex-1" />
+                    <span className={`text-[10px] font-black flex items-center gap-0.5 ${cl.delta > 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                      {cl.delta > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                      {Math.abs(cl.delta).toFixed(1)}%
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Progress value={(cl.revenue / clientStats[0].revenue) * 100} className="h-1.5 flex-1" />
-                  <span className={`text-[10px] font-black flex items-center gap-0.5 ${cl.delta > 0 ? "text-emerald-500" : "text-rose-500"}`}>
-                    {cl.delta > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                    {Math.abs(cl.delta).toFixed(1)}%
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
 
@@ -266,7 +516,16 @@ export default function Analytics() {
           </CardHeader>
           <CardContent className="h-[350px] pt-4">
             <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+              <ScatterChart 
+                margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+                onClick={(data) => {
+                  if (data && data.activePayload && data.activePayload[0]) {
+                    const clientName = data.activePayload[0].payload.name;
+                    const fullClient = (clienti as Cliente[]).find(c => c.ragione_sociale === clientName);
+                    if (fullClient) setSelectedClientId(fullClient.id);
+                  }
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                 <XAxis 
                   type="number" 
@@ -288,7 +547,7 @@ export default function Analytics() {
                 />
                 <ZAxis type="number" range={[100, 1000]} />
                 <Tooltip cursor={{ strokeDasharray: "3 3" }} contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #1e293b", borderRadius: "12px", fontSize: "12px" }} />
-                <Scatter name="Clienti" data={scatterData}>
+                <Scatter name="Clienti" data={scatterData} cursor="pointer">
                   {scatterData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.profitability > 50 ? "#10b981" : "#ef4444"} />
                   ))}

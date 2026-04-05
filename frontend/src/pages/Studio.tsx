@@ -4,6 +4,7 @@ import StudioHome from "@/pages/studio/StudioHome";
 import { StudioListView } from "@/components/studio/StudioListView";
 import { StudioKanbanView } from "@/components/studio/StudioKanbanView";
 import { StudioCalendarView } from "@/components/studio/StudioCalendarView";
+import { StudioTeamView } from "@/components/studio/StudioTeamView";
 
 export default function StudioPage() {
   const { nav } = useStudio();
@@ -18,6 +19,8 @@ export default function StudioPage() {
         return <StudioKanbanView />;
       case "cal":
         return <StudioCalendarView />;
+      case "team":
+        return <StudioTeamView />;
       case "dash":
         // For now "dash" (folder selected) also shows list or a custom dashboard
         // Let's default to list for now if a folder/list is selected

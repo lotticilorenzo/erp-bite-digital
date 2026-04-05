@@ -9,14 +9,18 @@ import {
   TrendingUp,
   Link as LinkIcon,
   Users,
-  Briefcase
+  Briefcase,
+  Target
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useCommessa } from "@/hooks/useCommesse";
+import { useCommessa, useUpdateCommessa } from "@/hooks/useCommesse";
 import { format, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
+import { useState, useEffect, useMemo } from "react";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Table,
   TableBody,
@@ -30,12 +34,50 @@ import { CommessaReportPDF } from "@/components/commesse/CommessaReportPDF";
 import { useTimesheets } from "@/hooks/useTimesheet";
 import { Download } from "lucide-react";
 import { ClientAvatar } from "@/components/common/ClientAvatar";
+import { toast } from "sonner";
 
 export default function CommessaDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: commessa, isLoading, error } = useCommessa(id);
   const { data: timesheets = [] } = useTimesheets({ commessa_id: id });
+  const { mutate: updateCommessa, isPending: isUpdating } = useUpdateCommessa();
+  const { user } = useAuth();
+  
+  const [editOreContratto, setEditOreContratto] = useState<string>("0");
+
+  useEffect(() => {
+    if (commessa) {
+      setEditOreContratto(commessa.ore_contratto.toString());
+    }
+  }, [commessa]);
+
+  const oreReali = useMemo(() => {
+    const totalMinutes = timesheets.reduce((acc, ts) => acc + ts.durata_minuti, 0);
+    return totalMinutes / 60;
+  }, [timesheets]);
+
+  const percentualeScope = useMemo(() => {
+    if (!commessa || !commessa.ore_contratto || commessa.ore_contratto <= 0) return 0;
+    return (oreReali / commessa.ore_contratto) * 100;
+  }, [oreReali, commessa]);
+
+  const canEdit = user?.ruolo === "ADMIN" || user?.ruolo === "PM";
+
+  const handleUpdateScope = () => {
+    if (!id) return;
+    updateCommessa({ 
+      id, 
+      data: { ore_contratto: Number(editOreContratto) } 
+    }, {
+      onSuccess: () => {
+        toast.success("Ore contratto aggiornate con successo");
+      },
+      onError: () => {
+        toast.error("Errore durante l'aggiornamento");
+      }
+    });
+  };
 
   if (isLoading) {
     return (
@@ -272,6 +314,70 @@ export default function CommessaDetailPage() {
           </Card>
 
           <Card className="bg-card border-border text-white">
+            <CardHeader>
+              <CardTitle className="text-lg font-medium flex items-center gap-2">
+                <Target className="w-4 h-4 text-purple-400" />
+                Monitoraggio Scope
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-muted-foreground uppercase tracking-wider font-bold">Consumo Ore</span>
+                  <span className={`font-black ${percentualeScope >= 100 ? 'text-red-400' : 'text-purple-400'}`}>
+                    {oreReali.toFixed(1)} / {commessa.ore_contratto}h
+                  </span>
+                </div>
+                <div className="h-3 w-full bg-muted rounded-full overflow-hidden border border-white/5 p-[1px]">
+                  <div 
+                    className={`h-full rounded-full transition-all duration-1000 ${
+                      percentualeScope >= 100 ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 
+                      percentualeScope >= 80 ? 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 
+                      'bg-gradient-to-r from-purple-500 to-blue-500'
+                    }`}
+                    style={{ width: `${Math.min(100, percentualeScope)}%` }}
+                  />
+                </div>
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-widest">
+                    {percentualeScope.toFixed(1)}% dello scope utilizzato
+                  </span>
+                  {percentualeScope >= 100 && (
+                    <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/20 animate-pulse">
+                      SCOPE SUPERATO
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-border">
+                <label className="text-[10px] text-muted-foreground uppercase tracking-widest block mb-2">
+                  Ore Incluse nel Contratto
+                </label>
+                <div className="flex gap-2">
+                  <Input 
+                     type="number" 
+                     disabled={!canEdit}
+                     value={editOreContratto}
+                     onChange={(e) => setEditOreContratto(e.target.value)}
+                     className="bg-muted border-border text-white text-sm h-9 focus-visible:ring-purple-500/50"
+                  />
+                  {canEdit && commessa.ore_contratto !== Number(editOreContratto) && (
+                    <Button 
+                      size="sm" 
+                      onClick={handleUpdateScope}
+                      disabled={isUpdating}
+                      className="bg-purple-600 hover:bg-purple-700 text-white font-bold h-9 px-4 rounded-lg"
+                    >
+                      {isUpdating ? "..." : "Salva"}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card border-border text-white overflow-hidden">
             <CardHeader>
               <CardTitle className="text-lg font-medium">Note Interne</CardTitle>
             </CardHeader>

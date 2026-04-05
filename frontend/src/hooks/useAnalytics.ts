@@ -119,7 +119,15 @@ export function useAnalytics() {
         .map((f: FatturaAttiva) => ({ type: "INVOICE", title: `Scaduta: ${f.numero}`, value: f.data_scadenza || "", severity: "high" })),
       ...tasks
         .filter((t: TaskSO) => !t.state_id.includes("PRO") && !t.state_id.includes("PUB") && t.due_date && isBefore(parseISO(t.due_date), now))
-        .map((t: TaskSO) => ({ type: "TASK", title: `Overdue: ${t.title}`, value: t.due_date || "", severity: "medium" }))
+        .map((t: TaskSO) => ({ type: "TASK", title: `Overdue: ${t.title}`, value: t.due_date || "", severity: "medium" })),
+      ...commesse
+        .filter((c: Commessa) => c.ore_contratto > 0 && (c.ore_reali / c.ore_contratto) >= 0.8)
+        .map((c: Commessa) => ({ 
+          type: "SCOPE", 
+          title: `Scope Check: ${c.cliente?.ragione_sociale}`, 
+          value: `${((c.ore_reali / c.ore_contratto)*100).toFixed(0)}%`, 
+          severity: (c.ore_reali / c.ore_contratto) >= 1 ? "high" : "medium" 
+        }))
     ];
 
     return {
@@ -137,7 +145,10 @@ export function useAnalytics() {
           .reduce((acc: number, c: Commessa) => acc + (c.valore_fatturabile || 0), 0),
         ongoingProjects: commesse.filter((c: Commessa) => c.stato === "APERTA").length
       },
-      alerts
+      alerts,
+      commesse, // Expose raw commesse for drill-down
+      clienti,  // Expose raw clienti for drill-down
+      last12Months // Expose months list for reference
     };
   }, [commesse, clienti, tasks, fatture, timesheetsCurrentMonth, now]);
 

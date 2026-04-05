@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Table,
   TableBody,
@@ -30,7 +31,34 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Cliente } from "@/types";
-import { useDeleteCliente } from "@/hooks/useClienti";
+import { useDeleteCliente, useClientHealthScore } from "@/hooks/useClienti";
+// ... existing imports
+
+function HealthIndicator({ id }: { id: string }) {
+  const { data: health, isLoading } = useClientHealthScore(id);
+
+  if (isLoading) return <div className="h-4 w-12 bg-muted animate-pulse rounded mx-auto" />;
+  if (!health) return <span className="text-muted-foreground text-xs">--</span>;
+
+  const score = health.score;
+  let color = "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]";
+  if (score < 40) color = "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.4)]";
+  else if (score < 70) color = "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]";
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div className="text-xs font-black text-foreground">{score}%</div>
+      <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden p-[1px] border border-white/5">
+        <div 
+          className={`h-full rounded-full transition-all duration-1000 ${color}`}
+          style={{ width: `${score}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ... existing ClienteTable component
 import { ClientAvatar } from "../common/ClientAvatar";
 import {
   Dialog,
@@ -49,6 +77,7 @@ interface ClienteTableProps {
 }
 
 export function ClienteTable({ clienti, isLoading, onEdit, onNew }: ClienteTableProps) {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = React.useState("");
   const [deleteId, setDeleteId] = React.useState<string | null>(null);
   const deleteCliente = useDeleteCliente();
@@ -103,10 +132,11 @@ export function ClienteTable({ clienti, isLoading, onEdit, onNew }: ClienteTable
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow className="hover:bg-transparent border-border">
-              <TableHead className="text-muted-foreground font-bold py-4">Ragione Sociale</TableHead>
-              <TableHead className="text-muted-foreground font-bold">Email / Tel</TableHead>
-              <TableHead className="text-muted-foreground font-bold text-center">Stato</TableHead>
-              <TableHead className="text-right text-muted-foreground font-bold pr-6">Azioni</TableHead>
+              <TableHead className="text-muted-foreground font-bold py-4 pl-6 font-black uppercase text-[10px] tracking-widest">Ragione Sociale</TableHead>
+              <TableHead className="text-muted-foreground font-bold font-black uppercase text-[10px] tracking-widest">Email / Tel</TableHead>
+              <TableHead className="text-muted-foreground font-bold text-center font-black uppercase text-[10px] tracking-widest">Health</TableHead>
+              <TableHead className="text-muted-foreground font-bold text-center font-black uppercase text-[10px] tracking-widest">Stato</TableHead>
+              <TableHead className="text-right text-muted-foreground font-bold pr-6 font-black uppercase text-[10px] tracking-widest">Azioni</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -157,6 +187,9 @@ export function ClienteTable({ clienti, isLoading, onEdit, onNew }: ClienteTable
                     </div>
                   </TableCell>
                   <TableCell className="text-center">
+                    <HealthIndicator id={cliente.id} />
+                  </TableCell>
+                  <TableCell className="text-center">
                     <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                       cliente.attivo 
                         ? "bg-green-500/10 text-green-500 border border-green-500/20" 
@@ -178,7 +211,7 @@ export function ClienteTable({ clienti, isLoading, onEdit, onNew }: ClienteTable
                         <DropdownMenuItem onClick={() => onEdit(cliente)} className="focus:bg-primary/10 focus:text-primary">
                           <Pencil className="mr-2 h-4 w-4" /> Modifica
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="focus:bg-primary/10 focus:text-primary">
+                        <DropdownMenuItem onClick={() => navigate(`/clienti/${cliente.id}`)} className="focus:bg-primary/10 focus:text-primary">
                           <ExternalLink className="mr-2 h-4 w-4" /> Vedi Dettagli
                         </DropdownMenuItem>
                         <DropdownMenuSeparator className="bg-muted" />

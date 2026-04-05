@@ -1,6 +1,6 @@
 import type { Cliente } from "./index";
 
-export type StudioView = "home" | "dash" | "list" | "kanban" | "cal";
+export type StudioView = "home" | "dash" | "list" | "kanban" | "cal" | "team";
 
 export interface StudioState {
   view: StudioView;

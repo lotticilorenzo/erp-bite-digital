@@ -1,7 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
-import type { Cliente } from "@/types";
+import type { Cliente, HealthScore } from "@/types";
 import { toast } from "sonner";
+
+// ... existing hooks
+
+export function useClientHealthScore(id: string | undefined) {
+  return useQuery({
+    queryKey: ["clienti", id, "health"],
+    queryFn: async () => {
+      if (!id) return null;
+      const { data } = await api.get<HealthScore>(`/clienti/${id}/health-score`);
+      return data;
+    },
+    enabled: !!id,
+    staleTime: 1000 * 60 * 5, // 5 minuti
+  });
+}
 
 export function useClienti(attivo?: boolean) {
   return useQuery({

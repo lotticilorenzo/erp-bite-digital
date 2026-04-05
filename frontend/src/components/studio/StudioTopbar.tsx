@@ -7,7 +7,8 @@ import {
   MoreVertical,
   Filter,
   ArrowUpDown,
-  Layers
+  Layers,
+  Users
 } from "lucide-react";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 import { useStudio } from "@/hooks/useStudio";
@@ -111,6 +112,17 @@ export function StudioTopbar() {
           >
             <CalendarIcon className="h-3.5 w-3.5 mr-1.5" />
             Calendario
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setView("team")}
+            className={`h-7 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-300 ${
+              nav.view === "team" ? "bg-primary text-white shadow-lg" : "text-[#475569] hover:text-muted-foreground"
+            }`}
+          >
+            <Users className="h-3.5 w-3.5 mr-1.5" />
+            Team
           </Button>
         </div>
       </div>

@@ -7,7 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import (
     Notification, User, UserRole, Task, TaskStatus,
-    FatturaAttiva, Timesheet, TimesheetStatus, TimerSession
+    FatturaAttiva, Timesheet, TimesheetStatus, TimerSession,
+    Commessa, Cliente
 )
 
 logger = logging.getLogger(__name__)
@@ -170,6 +171,69 @@ async def notify_long_timers(db: AsyncSession):
             link="/studio-os"
         )
 
+async def check_commessa_scope_creep(db: AsyncSession, commessa_id: uuid.UUID):
+    """Controlla se la commessa ha superato l'80% o il 100% delle ore contratto."""
+    from sqlalchemy.orm import selectinload
+    stmt = select(Commessa).options(selectinload(Commessa.cliente)).where(Commessa.id == commessa_id)
+    res = await db.execute(stmt)
+    c = res.scalar_one_or_none()
+    if not c or not c.ore_contratto or c.ore_contratto <= 0:
+        return
+
+    # Calcola ore reali
+    ts_stmt = select(func.sum(Timesheet.durata_minuti)).where(Timesheet.commessa_id == commessa_id)
+    ts_res = await db.execute(ts_stmt)
+    minuti_totali = ts_res.scalar_one() or 0
+    ore_reali = minuti_totali / 60
+
+    percentuale = (ore_reali / float(c.ore_contratto)) * 100
+    
+    # Trova admin e PM per le notifiche
+    staff_stmt = select(User).where(User.ruolo.in_([UserRole.ADMIN, UserRole.PM]), User.attivo == True)
+    staff_res = await db.execute(staff_stmt)
+    staff_members = staff_res.scalars().all()
+
+    cliente_nome = c.cliente.ragione_sociale if c.cliente else "N/A"
+    link = f"/commesse/{c.id}"
+
+    if percentuale >= 100:
+        for s in staff_members:
+            await create_notification(
+                db, user_id=s.id,
+                title="SFORAMENTO SCOPE",
+                message=f"La commessa {cliente_nome} ha superato lo scope di {ore_reali - float(c.ore_contratto):.1f} ore",
+                type="URGENTE", link=link
+            )
+    elif percentuale >= 80:
+        for s in staff_members:
+            await create_notification(
+                db, user_id=s.id,
+                title="Avviso Scope 80%",
+                message=f"La commessa {cliente_nome} ha consumato l'80% delle ore incluse ({ore_reali:.1f}/{c.ore_contratto:.1f})",
+                type="AVVISO", link=link
+            )
+
+async def notify_critical_health_clienti(db: AsyncSession):
+    """Notifica clienti con Health Score critico (< 40)."""
+    from app.services.services import list_clienti, get_client_health_score
+    clienti = await list_clienti(db, attivo=True)
+    
+    # Trova admin
+    admin_stmt = select(User).where(User.ruolo == UserRole.ADMIN, User.attivo == True)
+    admin_res = await db.execute(admin_stmt)
+    admins = admin_res.scalars().all()
+
+    for c in clienti:
+        health = await get_client_health_score(db, c.id)
+        if health["score"] < 40:
+            for admin in admins:
+                await create_notification(
+                    db, user_id=admin.id,
+                    title="Salute Cliente Critica",
+                    message=f"Il cliente {c.ragione_sociale} ha un health score di {health['score']}/100",
+                    type="URGENTE", link=f"/clienti/{c.id}"
+                )
+
 async def check_and_create_notifications(db: AsyncSession):
     """Controlla tutti gli eventi giornalieri e genera notifiche."""
     try:
@@ -177,6 +241,7 @@ async def check_and_create_notifications(db: AsyncSession):
         await notify_tasks_overdue(db)
         await notify_unpaid_invoices(db)
         await notify_pending_timesheets(db)
+        await notify_critical_health_clienti(db)
         logger.info("Controllo notifiche giornaliere completato.")
     except Exception as e:
         logger.error(f"Errore durante il controllo notifiche giornaliere: {e}")

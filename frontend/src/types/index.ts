@@ -48,6 +48,7 @@ export interface Cliente {
   logo_url?: string | null;
   drive_files?: any[];
   created_at?: string;
+  health_score?: number; // Computed score
 }
 
 export interface Progetto {
@@ -87,6 +88,8 @@ export interface Commessa {
   data_inizio?: string;
   data_fine?: string;
   data_chiusura?: string;
+  ore_contratto: number;
+  ore_reali: number;
   note?: string;
   created_at: string;
   // Computed fields
@@ -223,4 +226,20 @@ export interface Notification {
   link: string;
   isRead: boolean;
   priority: 'HIGH' | 'MEDIUM' | 'LOW';
+}
+
+export interface HealthScore {
+  score: number;
+  factors: {
+    margine: number;
+    pagamenti: number;
+    revisioni: number;
+    longevita: number;
+  };
+  details: {
+    avg_margin_pct: number;
+    invoices_paid: string;
+    avg_scope_creep: string;
+    days_with_us: number;
+  };
 }

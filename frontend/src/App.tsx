@@ -7,6 +7,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
 
 const ClientiPage = React.lazy(() => import("./pages/Clienti"));
+const ClienteDetailPage = React.lazy(() => import("./pages/ClienteDetail"));
 const ProgettiPage = React.lazy(() => import("./pages/Progetti"));
 const ProgettoDetailPage = React.lazy(() => import("./pages/ProgettoDetail"));
 const CommessePage = React.lazy(() => import("./pages/Commesse"));
@@ -69,6 +70,7 @@ function App() {
         >
           <Route index element={<DashboardPage />} />
           <Route path="/clienti" element={<ClientiPage />} />
+          <Route path="/clienti/:id" element={<ClienteDetailPage />} />
           <Route path="/progetti" element={<ProgettiPage />} />
           <Route path="/progetti/:id" element={<ProgettoDetailPage />} />
           <Route path="/commesse" element={<CommessePage />} />

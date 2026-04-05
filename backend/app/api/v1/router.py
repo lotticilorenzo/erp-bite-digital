@@ -486,6 +486,15 @@ async def get_single_cliente(
         raise HTTPException(status_code=404, detail="Cliente non trovato")
     return c
 
+@router.get("/clienti/{cliente_id}/health-score", tags=["Clienti"])
+async def get_cliente_health(
+    cliente_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    from app.services.services import get_client_health_score
+    return await get_client_health_score(db, cliente_id)
+
 @router.post("/clienti", response_model=ClienteOut, status_code=201, tags=["Clienti"])
 async def add_cliente(
     data: ClienteCreate,
@@ -644,6 +653,7 @@ async def _enrich_commessa(db: AsyncSession, c, coeff_cache: Optional[dict[date,
     from sqlalchemy import select as _sel2
     from app.models.models import Commessa as _Commessa, CommessaProgetto as _CP
     # Ricarica con relazioni esplicite per evitare MissingGreenlet
+    # Ricarica con relazioni esplicite per evitare MissingGreenlet
     res = await db.execute(
         _sel2(_Commessa).options(
             _sil(_Commessa.righe_progetto).selectinload(_CP.progetto),
@@ -661,8 +671,16 @@ async def _enrich_commessa(db: AsyncSession, c, coeff_cache: Optional[dict[date,
         {"cid": str(c.id)}
     )
     fa = row.fetchone()
+
+    # Calcolo ore reali
+    from app.models.models import Timesheet as _TS
+    ts_res = await db.execute(_sel2(func.sum(_TS.durata_minuti)).where(_TS.commessa_id == c.id))
+    minuti_totali = ts_res.scalar_one() or 0
+    ore_reali = minuti_totali / 60
+
     # Escludi campi computed che richiedono lazy load
     d = CommessaOut.model_validate(c, from_attributes=True, strict=False).model_dump(warnings=False)
+    d["ore_reali"] = float(ore_reali)
     # Calcola margine manualmente dalle righe già caricate
     try:
         fattCalc = sum(r.valore_fatturabile_calc for r in c.righe_progetto)

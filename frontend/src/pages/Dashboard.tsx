@@ -1,9 +1,11 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Zap, Users, Briefcase, Timer, Calendar, CheckCircle2, Clock } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Zap, Users, Briefcase, Timer, Calendar, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useTimesheets } from "@/hooks/useTimesheet";
+import { motion } from "framer-motion";
 import { 
   formatDistanceToNow, 
   parseISO, 
@@ -212,6 +214,55 @@ export default function DashboardPage() {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 grid-cols-1">
+        <Card className="bg-card border-border shadow-2xl overflow-hidden relative">
+          <div className="absolute top-0 left-0 bottom-0 w-1 bg-red-500" />
+          <CardHeader className="px-6 py-4 flex flex-row items-center justify-between border-b border-border/50">
+            <CardTitle className="text-lg font-bold text-foreground flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              Clienti & Progetti a Rischio
+            </CardTitle>
+            <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20 px-3 py-1 font-black text-[10px] tracking-widest">
+              MONITORAGGIO ATTIVO
+            </Badge>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+               {(analytics?.alerts || []).filter(a => a.type === "SCOPE" || a.type === "MARGIN").map((alert, i) => (
+                 <motion.div 
+                   key={i}
+                   initial={{ opacity: 0, y: 10 }}
+                   animate={{ opacity: 1, y: 0 }}
+                   transition={{ delay: i * 0.1 }}
+                   className="p-4 rounded-xl bg-muted/30 border border-border/50 hover:border-red-500/30 transition-all cursor-pointer group"
+                   onClick={() => navigate(alert.type === "SCOPE" ? "/commesse" : "/analytics")}
+                 >
+                   <div className="flex justify-between items-start mb-2">
+                      <div className={`p-1.5 rounded-lg ${alert.severity === 'high' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                        {alert.type === "SCOPE" ? <Briefcase className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
+                      </div>
+                      <span className={`text-[10px] font-black tracking-widest ${alert.severity === 'high' ? 'text-red-400' : 'text-amber-400'}`}>
+                        {alert.value}
+                      </span>
+                   </div>
+                   <h4 className="text-sm font-bold text-foreground mb-1 group-hover:text-red-400 transition-colors">
+                     {alert.title.replace("Scope Check: ", "").replace("Margine basso: ", "")}
+                   </h4>
+                   <p className="text-[10px] text-muted-foreground uppercase opacity-70">
+                     {alert.type === "SCOPE" ? "Sforamento Scope" : "Criticità Margine"}
+                   </p>
+                 </motion.div>
+               ))}
+               {(analytics?.alerts || []).filter(a => a.type === "SCOPE" || a.type === "MARGIN").length === 0 && (
+                 <div className="col-span-full py-8 text-center text-muted-foreground/40 italic text-sm">
+                   Nessun rischio critico rilevato oggi.
+                 </div>
+               )}
+            </div>
           </CardContent>
         </Card>
       </div>

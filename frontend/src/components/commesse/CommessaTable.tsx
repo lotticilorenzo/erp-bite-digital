@@ -85,6 +85,7 @@ export function CommessaTable({ commesse, onEdit, onDelete, isLoading }: Commess
             <TableRow className="border-border hover:bg-transparent">
               <TableHead className="text-muted-foreground font-medium py-4 pl-6">CLIENTE / MESE</TableHead>
               <TableHead className="text-muted-foreground font-medium">STATO</TableHead>
+              <TableHead className="text-muted-foreground font-medium">SCOPE</TableHead>
               <TableHead className="text-muted-foreground font-medium text-right">MANODOPERA</TableHead>
               <TableHead className="text-muted-foreground font-medium text-right">FATTURABILE</TableHead>
               <TableHead className="text-muted-foreground font-medium text-center">MARGINE %</TableHead>
@@ -119,6 +120,9 @@ export function CommessaTable({ commesse, onEdit, onDelete, isLoading }: Commess
                   </TableCell>
                   <TableCell>
                     <CommessaStatusBadge status={commessa.stato} />
+                  </TableCell>
+                  <TableCell>
+                    <CommessaScopeBadge oreReali={commessa.ore_reali} oreContratto={commessa.ore_contratto} />
                   </TableCell>
                   <TableCell className="text-right text-foreground">
                     €{commessa.costo_manodopera?.toLocaleString() || "0"}
@@ -206,5 +210,36 @@ function CommessaMarginBadge({ percentage }: { percentage: number | undefined | 
       {icon}
       {percentage}%
     </Badge>
+  );
+}
+
+function CommessaScopeBadge({ oreReali, oreContratto }: { oreReali: number; oreContratto: number }) {
+  if (!oreContratto || oreContratto <= 0) return <span className="text-[10px] text-muted-foreground uppercase opacity-50 italic">No scope set</span>;
+
+  const percentage = (oreReali / oreContratto) * 100;
+  
+  let color = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+  let label = "IN SCOPE";
+
+  if (percentage >= 100) {
+    color = "bg-red-500/10 text-red-100 border-red-500/20";
+    label = `EXTRA ${(oreReali - oreContratto).toFixed(1)}h`;
+  } else if (percentage >= 80) {
+    color = "bg-amber-500/10 text-amber-100 border-amber-500/20";
+    label = "WARNING";
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <Badge variant="outline" className={`${color} font-black text-[9px] px-1.5 py-0 justify-center tracking-tighter`}>
+        {label}
+      </Badge>
+      <div className="w-16 h-1bg-muted rounded-full overflow-hidden">
+        <div 
+          className={`h-full ${percentage >= 100 ? 'bg-red-500' : percentage >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`} 
+          style={{ width: `${Math.min(100, percentage)}%` }} 
+        />
+      </div>
+    </div>
   );
 }

@@ -269,6 +269,7 @@ class CommessaCreate(BaseModel):
     data_inizio: Optional[date] = None
     data_fine: Optional[date] = None
     costi_diretti: Decimal = Decimal("0")
+    ore_contratto: Decimal = Decimal("0")
     note: Optional[str] = None
 
     @field_validator("mese_competenza")
@@ -288,6 +289,7 @@ class CommessaUpdate(BaseModel):
     stato: Optional[CommessaStatus] = None
     mese_competenza: Optional[date] = None
     costi_diretti: Optional[Decimal] = None
+    ore_contratto: Optional[Decimal] = None
     righe_progetto: Optional[List[CommessaRigaUpdate]] = None
     aggiustamenti: Optional[List[dict]] = None
     note: Optional[str] = None
@@ -316,6 +318,8 @@ class CommessaOut(OrmBase):
     data_inizio: Optional[date] = None
     data_fine: Optional[date] = None
     data_chiusura: Optional[date]
+    ore_contratto: Decimal
+    ore_reali: Decimal = Decimal("0")
     note: Optional[str]
     created_at: datetime
     # Calcolati lato applicazione

@@ -206,6 +206,98 @@ async def delete_cliente(db: AsyncSession, cliente_id: uuid.UUID, by_user_id: uu
     await db.flush()
     return True
 
+async def get_client_health_score(db: AsyncSession, cliente_id: uuid.UUID) -> dict:
+    """
+    Calcola un punteggio di salute (0-100) basato su 4 fattori:
+    1. Margine (40%): Media ultimi 3 mesi. Target 50% = 100pt.
+    2. Pagamenti (30%): Puntualità ultimi 12 mesi.
+    3. Revisioni (20%): Scope creep ultimi 12 mesi.
+    4. Longevità (10%): Anzianità rapporto (>1 anno = 100pt).
+    """
+    cliente = await get_cliente(db, cliente_id)
+    if not cliente:
+        return {"score": 0, "factors": {}}
+
+    one_year_ago = date.today() - timedelta(days=365)
+    three_months_ago = date.today() - timedelta(days=90)
+
+    # --- 1. MARGINE (40%) ---
+    # Media marginalità sulle commesse ultimi 3 mesi
+    m_stmt = select(Commessa).where(Commessa.cliente_id == cliente_id, Commessa.mese_competenza >= three_months_ago)
+    m_res = await db.execute(m_stmt)
+    commesse_recenti = m_res.scalars().all()
+    
+    margin_sum = 0
+    margin_count = 0
+    for c in commesse_recenti:
+        metriche = await calcola_metriche_commessa(db, c)
+        if metriche["margine_percentuale"] is not None:
+            margin_sum += metriche["margine_percentuale"]
+            margin_count += 1
+    
+    avg_margin = margin_sum / margin_count if margin_count > 0 else 0
+    # Score: 50% margine = 100pt
+    margin_score = min(100, avg_margin * 2) if avg_margin > 0 else 0
+
+    # --- 2. PAGAMENTI (30%) ---
+    # Rapporto fatture pagate vs totali ultimi 12 mesi
+    f_stmt = select(FatturaAttiva).where(FatturaAttiva.cliente_id == cliente_id, FatturaAttiva.data_emissione >= one_year_ago)
+    f_res = await db.execute(f_stmt)
+    fatture = f_res.scalars().all()
+    
+    total_f = len(fatture)
+    paid_f = len([f for f in fatture if f.stato_pagamento == "PAGATA"])
+    payment_score = (paid_f / total_f * 100) if total_f > 0 else 100 # Se no fatture, assumiamo buono
+
+    # --- 3. REVISIONI / SCOPE CREEP (20%) ---
+    # Ore reali vs ore contratto ultimi 12 mesi
+    r_stmt = select(Commessa).where(Commessa.cliente_id == cliente_id, Commessa.mese_competenza >= one_year_ago)
+    r_res = await db.execute(r_stmt)
+    commesse_anno = r_res.scalars().all()
+    
+    creep_sum = 0
+    creep_count = 0
+    for c in commesse_anno:
+        if c.ore_contratto and c.ore_contratto > 0:
+            # Calcola ore reali per questa commessa
+            ts_res = await db.execute(select(func.sum(Timesheet.durata_minuti)).where(Timesheet.commessa_id == c.id))
+            ore_reali = (ts_res.scalar_one() or 0) / 60
+            ratio = ore_reali / float(c.ore_contratto)
+            creep_sum += ratio
+            creep_count += 1
+    
+    avg_creep_ratio = creep_sum / creep_count if creep_count > 0 else 1.0
+    # Se ratio = 1.0 -> 100pt. Se ratio = 1.5 -> 0pt.
+    revisions_score = max(0, 100 - (max(0, avg_creep_ratio - 1.0) * 200))
+
+    # --- 4. LONGEVITA (10%) ---
+    # Anno di creazione
+    days_old = (date.today() - cliente.created_at.date()).days if cliente.created_at else 0
+    longevity_score = min(100, (days_old / 365 * 100))
+
+    total_score = round(
+        (margin_score * 0.4) + 
+        (payment_score * 0.3) + 
+        (revisions_score * 0.2) + 
+        (longevity_score * 0.1)
+    )
+
+    return {
+        "score": total_score,
+        "factors": {
+            "margine": round(margin_score),
+            "pagamenti": round(payment_score),
+            "revisioni": round(revisions_score),
+            "longevita": round(longevity_score)
+        },
+        "details": {
+            "avg_margin_pct": round(avg_margin, 1),
+            "invoices_paid": f"{paid_f}/{total_f}",
+            "avg_scope_creep": f"{avg_creep_ratio:.2f}x",
+            "days_with_us": days_old
+        }
+    }
+
 # ── PROGETTO SERVICE ──────────────────────────────────────
 async def list_progetti(
     db: AsyncSession,
@@ -480,6 +572,11 @@ async def update_commessa(
 
     await write_audit(db, current_user.id, "commesse", commessa_id, "UPDATE", prima)
     await db.flush()
+
+    # Trigger scope creep check
+    from app.services.notification_service import check_commessa_scope_creep
+    await check_commessa_scope_creep(db, commessa_id)
+
     return await get_commessa(db, commessa_id)
 
 
@@ -501,6 +598,12 @@ async def create_timesheet(
     )
     db.add(t)
     await db.flush()
+
+    # Trigger scope creep check se assegnato a una commessa
+    if t.commessa_id:
+        from app.services.notification_service import check_commessa_scope_creep
+        await check_commessa_scope_creep(db, t.commessa_id)
+
     return t
 
 async def list_timesheet(
