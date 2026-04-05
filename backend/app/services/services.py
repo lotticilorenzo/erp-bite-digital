@@ -1658,6 +1658,40 @@ async def delete_categoria_fornitore(db: AsyncSession, cat_id: uuid.UUID) -> boo
     await db.flush()
     return True
 
+async def seed_budget_categories(db: AsyncSession):
+    from app.models.models import BudgetCategory
+    defaults = [
+        {"nome": "Marketing", "colore": "#ec4899"},
+        {"nome": "Software", "colore": "#3b82f6"},
+        {"nome": "Struttura", "colore": "#64748b"},
+        {"nome": "Consulenza", "colore": "#8b5cf6"},
+        {"nome": "Freelancer", "colore": "#10b981"},
+        {"nome": "Altro", "colore": "#94a3b8"},
+    ]
+    for d in defaults:
+        res = await db.execute(select(BudgetCategory).where(BudgetCategory.nome == d["nome"]))
+        if not res.scalar_one_or_none():
+            db.add(BudgetCategory(**d))
+    await db.commit()
+
+
+async def seed_wiki_categories(db: AsyncSession):
+    from app.models.models import WikiCategory
+    defaults = [
+        {"nome": "Procedure operative", "icona": "ClipboardList", "ordine": 1},
+        {"nome": "Onboarding", "icona": "UserPlus", "ordine": 2},
+        {"nome": "Guide clienti", "icona": "BookOpen", "ordine": 3},
+        {"nome": "Tool e software", "icona": "Cpu", "ordine": 4},
+        {"nome": "Policy aziendali", "icona": "ShieldCheck", "ordine": 5},
+        {"nome": "FAQ", "icona": "HelpCircle", "ordine": 6},
+    ]
+    for d in defaults:
+        res = await db.execute(select(WikiCategory).where(WikiCategory.nome == d["nome"]))
+        if not res.scalar_one_or_none():
+            db.add(WikiCategory(**d))
+    await db.commit()
+
+
 async def seed_default_categories(db: AsyncSession):
     defaults = [
         {"nome": "Marketing", "colore": "#ec4899"},
@@ -1673,6 +1707,8 @@ async def seed_default_categories(db: AsyncSession):
         if not res.scalar_one_or_none():
             db.add(CategoriaFornitore(**d))
     await db.commit()
+    await seed_budget_categories(db)
+    await seed_wiki_categories(db)
 
 async def update_fattura_passiva(db: AsyncSession, fattura_id: uuid.UUID, data: dict):
     from app.models.models import FatturaPassiva

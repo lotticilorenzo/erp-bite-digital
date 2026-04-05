@@ -21,6 +21,8 @@ const AnalyticsPage = React.lazy(() => import("./pages/Analytics"));
 const ReportsPage = React.lazy(() => import("./pages/Reports"));
 const PlanningPage = React.lazy(() => import("./pages/Planning"));
 const GanttPage = React.lazy(() => import("./pages/GanttPage"));
+const BudgetPage = React.lazy(() => import("./components/budget/BudgetPage"));
+const WikiPage = React.lazy(() => import("./components/wiki/WikiPage"));
 import Fornitori from "./pages/Fornitori";
 import SupplierCategoryManager from "./pages/admin/SupplierCategoryManager";
 
@@ -86,6 +88,8 @@ function App() {
           <Route path="/planning" element={<PlanningPage />} />
           <Route path="/fornitori" element={<Fornitori />} />
           <Route path="/gantt" element={<GanttPage />} />
+          <Route path="/budget" element={<BudgetPage />} />
+          <Route path="/wiki" element={<WikiPage />} />
           <Route path="/admin/categorie-fornitori" element={<SupplierCategoryManager />} />
           
           <Route 

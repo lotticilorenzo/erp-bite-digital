@@ -762,3 +762,60 @@ class PreventivoRiga(Base):
     ordine: Mapped[int] = mapped_column(Integer, default=0)
 
     preventivo: Mapped["Preventivo"] = relationship(back_populates="voci")
+
+
+# ── BUDGET ────────────────────────────────────────────────
+class BudgetCategory(Base):
+    __tablename__ = "budget_categorie"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    nome: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    colore: Mapped[Optional[str]] = mapped_column(String(20), default='#7c3aed')
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    budgets: Mapped[List["BudgetMensile"]] = relationship(back_populates="categoria")
+
+
+class BudgetMensile(Base):
+    __tablename__ = "budget_mensile"
+    __table_args__ = (UniqueConstraint("categoria_id", "mese_competenza"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    categoria_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("budget_categorie.id", ondelete="CASCADE"))
+    mese_competenza: Mapped[date] = mapped_column(Date, nullable=False)
+    importo_budget: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    categoria: Mapped["BudgetCategory"] = relationship(back_populates="budgets")
+
+
+# ── WIKI ──────────────────────────────────────────────────
+class WikiCategory(Base):
+    __tablename__ = "wiki_categorie"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    nome: Mapped[str] = mapped_column(String(100), nullable=False)
+    icona: Mapped[Optional[str]] = mapped_column(String(50))
+    ordine: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    articoli: Mapped[List["WikiArticle"]] = relationship(back_populates="categoria", cascade="all, delete-orphan")
+
+
+class WikiArticle(Base):
+    __tablename__ = "wiki_articoli"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    categoria_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("wiki_categorie.id", ondelete="CASCADE"))
+    titolo: Mapped[str] = mapped_column(String(255), nullable=False)
+    contenuto: Mapped[Optional[str]] = mapped_column(Text)
+    autore_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    ultimo_aggiornamento: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    pubblicato: Mapped[bool] = mapped_column(Boolean, default=True)
+    visualizzazioni: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    categoria: Mapped["WikiCategory"] = relationship(back_populates="articoli")
+    autore: Mapped["User"] = relationship()

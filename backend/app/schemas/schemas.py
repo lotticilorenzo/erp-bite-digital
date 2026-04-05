@@ -736,3 +736,95 @@ class PreventivoOut(OrmBase):
     updated_at: datetime
     voci: List[PreventivoRigaOut]
     cliente: Optional[ClienteOut] = None
+
+
+# ── BUDGET SCHEMAS ────────────────────────────────────────
+class BudgetCategoryBase(BaseModel):
+    nome: str
+    colore: Optional[str] = "#7c3aed"
+
+class BudgetCategoryCreate(BudgetCategoryBase):
+    pass
+
+class BudgetCategoryOut(BudgetCategoryBase):
+    id: uuid.UUID
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class BudgetMensileBase(BaseModel):
+    categoria_id: uuid.UUID
+    mese_competenza: date
+    importo_budget: Decimal
+    note: Optional[str] = None
+
+class BudgetMensileCreate(BudgetMensileBase):
+    pass
+
+class BudgetMensileUpdate(BaseModel):
+    importo_budget: Optional[Decimal] = None
+    note: Optional[str] = None
+
+class BudgetMensileOut(BudgetMensileBase):
+    id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+    categoria: Optional[BudgetCategoryOut] = None
+
+    class Config:
+        from_attributes = True
+
+class BudgetConsuntivoOut(BaseModel):
+    categoria_id: uuid.UUID
+    categoria_nome: str
+    categoria_colore: str
+    importo_budget: Decimal
+    importo_speso: Decimal
+    rimanente: Decimal
+    percentuale: float
+    note: Optional[str] = None
+
+
+# ── WIKI SCHEMAS ──────────────────────────────────────────
+class WikiCategoryBase(BaseModel):
+    nome: str
+    icona: Optional[str] = None
+    ordine: Optional[int] = 0
+
+class WikiCategoryCreate(WikiCategoryBase):
+    pass
+
+class WikiCategoryOut(WikiCategoryBase):
+    id: uuid.UUID
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class WikiArticleBase(BaseModel):
+    categoria_id: uuid.UUID
+    titolo: str
+    contenuto: Optional[str] = None
+    pubblicato: Optional[bool] = True
+
+class WikiArticleCreate(WikiArticleBase):
+    pass
+
+class WikiArticleUpdate(BaseModel):
+    categoria_id: Optional[uuid.UUID] = None
+    titolo: Optional[str] = None
+    contenuto: Optional[str] = None
+    pubblicato: Optional[bool] = None
+
+class WikiArticleOut(WikiArticleBase):
+    id: uuid.UUID
+    autore_id: uuid.UUID
+    ultimo_aggiornamento: datetime
+    visualizzazioni: int
+    created_at: datetime
+    categoria: Optional[WikiCategoryOut] = None
+    autore_nome: Optional[str] = None
+
+    class Config:
+        from_attributes = True

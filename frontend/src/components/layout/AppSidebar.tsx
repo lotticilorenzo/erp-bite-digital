@@ -14,6 +14,8 @@ import {
   Wallet,
   PieChart,
   ShoppingCart,
+  Target,
+  BookOpen,
 } from "lucide-react";
 
 // ... (other imports)
@@ -67,6 +69,7 @@ const navItems = [
     title: "Documenti",
     items: [
       { title: "Report Mensili", url: "/report", icon: FileText },
+      { title: "Wiki", url: "/wiki", icon: BookOpen },
     ],
   },
   {
@@ -75,6 +78,7 @@ const navItems = [
       { title: "Fatture", url: "/fatture", icon: FileText },
       { title: "Fornitori", url: "/fornitori", icon: ShoppingCart },
       { title: "Cassa", url: "/cassa", icon: Wallet },
+      { title: "Budget", url: "/budget", icon: Target },
     ],
   },
 ];

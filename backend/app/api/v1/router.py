@@ -1853,3 +1853,367 @@ async def remove_task(
     if not ok:
         raise HTTPException(status_code=404, detail="Task non trovata")
     await db.commit()
+
+
+# ── BUDGET ────────────────────────────────────────────────
+
+@router.get("/budget/categorie", response_model=List[BudgetCategoryOut], tags=["Budget"])
+async def list_budget_categories_endpoint(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import BudgetCategory
+    result = await db.execute(select(BudgetCategory).order_by(BudgetCategory.nome))
+    return result.scalars().all()
+
+@router.post("/budget/categorie", response_model=BudgetCategoryOut, status_code=201, tags=["Budget"])
+async def create_budget_category_endpoint(
+    data: BudgetCategoryCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import BudgetCategory
+    cat = BudgetCategory(**data.model_dump())
+    db.add(cat)
+    await db.commit()
+    await db.refresh(cat)
+    return cat
+
+@router.get("/budget", response_model=List[BudgetMensileOut], tags=["Budget"])
+async def get_budgets_endpoint(
+    mese: date = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import BudgetMensile
+    from sqlalchemy.orm import selectinload
+    mese_start = mese.replace(day=1)
+    result = await db.execute(
+        select(BudgetMensile).options(selectinload(BudgetMensile.categoria))
+        .where(BudgetMensile.mese_competenza == mese_start)
+    )
+    return result.scalars().all()
+
+@router.post("/budget", response_model=BudgetMensileOut, status_code=201, tags=["Budget"])
+async def upsert_budget_endpoint(
+    data: BudgetMensileCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import BudgetMensile
+    mese_start = data.mese_competenza.replace(day=1)
+    
+    # Upsert logic
+    stmt = select(BudgetMensile).where(
+        BudgetMensile.categoria_id == data.categoria_id,
+        BudgetMensile.mese_competenza == mese_start
+    )
+    res = await db.execute(stmt)
+    existing = res.scalar_one_or_none()
+    
+    if existing:
+        existing.importo_budget = data.importo_budget
+        existing.note = data.note
+        b = existing
+    else:
+        b = BudgetMensile(
+            categoria_id=data.categoria_id,
+            mese_competenza=mese_start,
+            importo_budget=data.importo_budget,
+            note=data.note
+        )
+        db.add(b)
+    
+    await db.commit()
+    await db.refresh(b)
+    return b
+
+@router.post("/budget/copia", tags=["Budget"])
+async def copy_prev_month_budget(
+    mese_corrente: date = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import BudgetMensile
+    from dateutil.relativedelta import relativedelta
+    
+    current_start = mese_corrente.replace(day=1)
+    prev_start = current_start - relativedelta(months=1)
+    
+    # Get prev budgets
+    res_prev = await db.execute(select(BudgetMensile).where(BudgetMensile.mese_competenza == prev_start))
+    prev_budgets = res_prev.scalars().all()
+    
+    count = 0
+    for pb in prev_budgets:
+        # Check if already exists for current
+        res_curr = await db.execute(select(BudgetMensile).where(
+            BudgetMensile.categoria_id == pb.categoria_id,
+            BudgetMensile.mese_competenza == current_start
+        ))
+        if not res_curr.scalar_one_or_none():
+            new_b = BudgetMensile(
+                categoria_id=pb.categoria_id,
+                mese_competenza=current_start,
+                importo_budget=pb.importo_budget,
+                note=pb.note
+            )
+            db.add(new_b)
+            count += 1
+            
+    await db.commit()
+    return {"status": "ok", "clonati": count}
+
+@router.get("/budget/consuntivo", response_model=List[BudgetConsuntivoOut], tags=["Budget"])
+async def get_budget_consuntivo(
+    mese: date = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import BudgetCategory, BudgetMensile, MovimentoCassa, FatturaPassiva, Notification, NotificationType
+    from sqlalchemy import and_, or_
+    
+    mese_start = mese.replace(day=1)
+    from dateutil.relativedelta import relativedelta
+    next_month = mese_start + relativedelta(months=1)
+    
+    # 1. Get Categories and Budgets
+    res_cats = await db.execute(select(BudgetCategory))
+    categories = res_cats.scalars().all()
+    
+    res_budgets = await db.execute(select(BudgetMensile).where(BudgetMensile.mese_competenza == mese_start))
+    budgets_map = {b.categoria_id: b for b in res_budgets.scalars().all()}
+    
+    # 2. Get Expenses (Cassa + Fatture)
+    # Movimenti Cassa (Negative only, to avoid doubling if pay is revenue)
+    # Filter out if already linked to fattura_passiva
+    res_m = await db.execute(
+        select(MovimentoCassa).where(
+            and_(
+                MovimentoCassa.data_valuta >= mese_start,
+                MovimentoCassa.data_valuta < next_month,
+                MovimentoCassa.importo < 0,
+                MovimentoCassa.fattura_passiva_id == None
+            )
+        )
+    )
+    movements = res_m.scalars().all()
+    
+    # Fatture Passive
+    res_f = await db.execute(
+        select(FatturaPassiva).where(
+            and_(
+                FatturaPassiva.data_emissione >= mese_start,
+                FatturaPassiva.data_emissione < next_month
+            )
+        )
+    )
+    invoices = res_f.scalars().all()
+    
+    # 3. Aggregate by category name matching
+    results = []
+    for cat in categories:
+        b = budgets_map.get(cat.id)
+        budget_amt = b.importo_budget if b else Decimal("0")
+        
+        # Spent from cassa
+        spent_cassa = sum(abs(m.importo) for m in movements if m.categoria == cat.nome)
+        # Spent from fatture
+        spent_fatture = sum(f.importo_totale for f in invoices if f.categoria == cat.nome)
+        
+        total_spent = Decimal(str(spent_cassa)) + Decimal(str(spent_fatture))
+        
+        rimanente = budget_amt - total_spent
+        perc = (float(total_spent) / float(budget_amt) * 100) if budget_amt > 0 else (100.0 if total_spent > 0 else 0.0)
+        
+        # 4. Handle Alerts (Notifications)
+        if budget_amt > 0:
+            threshold_80 = budget_amt * Decimal("0.8")
+            threshold_100 = budget_amt
+            
+            alert_type = None
+            msg = ""
+            
+            if total_spent >= threshold_100:
+                alert_type = NotificationType.URGENT
+                msg = f"Budget SUPERATO per {cat.nome}: {total_spent}€ / {budget_amt}€"
+            elif total_spent >= threshold_80:
+                alert_type = NotificationType.WARNING
+                msg = f"Budget quasi esaurito (80%) per {cat.nome}: {total_spent}€ / {budget_amt}€"
+            
+            if alert_type:
+                # Check if notification already exists for this month/category/type
+                check_stmt = select(Notification).where(
+                    and_(
+                        Notification.tipo == alert_type,
+                        Notification.titolo.like(f"%{cat.nome}%"),
+                        Notification.created_at >= datetime.combine(mese_start, datetime.min.time())
+                    )
+                )
+                res_check = await db.execute(check_stmt)
+                if not res_check.scalar_one_or_none():
+                    new_notif = Notification(
+                        tipo=alert_type,
+                        titolo=f"Alert Budget: {cat.nome}",
+                        messaggio=msg,
+                        link=f"/budget?mese={mese_start.isoformat()}"
+                    )
+                    db.add(new_notif)
+        
+        results.append(BudgetConsuntivoOut(
+            categoria_id=cat.id,
+            categoria_nome=cat.nome,
+            categoria_colore=cat.colore or "#7c3aed",
+            importo_budget=budget_amt,
+            importo_speso=total_spent,
+            rimanente=rimanente,
+            percentuale=round(perc, 1),
+            note=b.note if b else None
+        ))
+    
+    await db.commit()
+    return results
+
+
+# ── WIKI ──────────────────────────────────────────────────
+
+@router.get("/wiki/categorie", response_model=List[WikiCategoryOut], tags=["Wiki"])
+async def list_wiki_categories_endpoint(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import WikiCategory
+    result = await db.execute(select(WikiCategory).order_by(WikiCategory.ordine, WikiCategory.nome))
+    return result.scalars().all()
+
+@router.post("/wiki/categorie", response_model=WikiCategoryOut, status_code=201, tags=["Wiki"])
+async def create_wiki_category_endpoint(
+    data: WikiCategoryCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import WikiCategory
+    cat = WikiCategory(**data.model_dump())
+    db.add(cat)
+    await db.commit()
+    await db.refresh(cat)
+    return cat
+
+@router.get("/wiki/articoli", response_model=List[WikiArticleOut], tags=["Wiki"])
+async def list_wiki_articles_endpoint(
+    categoria_id: Optional[uuid.UUID] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import WikiArticle
+    from sqlalchemy.orm import joinedload
+    stmt = select(WikiArticle).options(joinedload(WikiArticle.autore), joinedload(WikiArticle.categoria))
+    if categoria_id:
+        stmt = stmt.where(WikiArticle.categoria_id == categoria_id)
+    result = await db.execute(stmt.order_by(WikiArticle.ultimo_aggiornamento.desc()))
+    articles = result.scalars().all()
+    
+    # Map autore_nome
+    for a in articles:
+        a.autore_nome = f"{a.autore.nome} {a.autore.cognome}" if a.autore else "Anonimo"
+    
+    return articles
+
+@router.get("/wiki/articoli/{articolo_id}", response_model=WikiArticleOut, tags=["Wiki"])
+async def get_wiki_article_endpoint(
+    articolo_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import WikiArticle
+    from sqlalchemy.orm import joinedload
+    stmt = select(WikiArticle).options(joinedload(WikiArticle.autore), joinedload(WikiArticle.categoria)).where(WikiArticle.id == articolo_id)
+    result = await db.execute(stmt)
+    article = result.scalar_one_or_none()
+    if not article:
+        raise HTTPException(status_code=404, detail="Articolo non trovato")
+    
+    # Increment views
+    article.visualizzazioni += 1
+    await db.commit()
+    await db.refresh(article)
+    
+    article.autore_nome = f"{article.autore.nome} {article.autore.cognome}" if article.autore else "Anonimo"
+    return article
+
+@router.post("/wiki/articoli", response_model=WikiArticleOut, status_code=201, tags=["Wiki"])
+async def create_wiki_article_endpoint(
+    data: WikiArticleCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import WikiArticle
+    art = WikiArticle(**data.model_dump(), autore_id=current_user.id)
+    db.add(art)
+    await db.commit()
+    await db.refresh(art)
+    return art
+
+@router.patch("/wiki/articoli/{articolo_id}", response_model=WikiArticleOut, tags=["Wiki"])
+async def update_wiki_article_endpoint(
+    articolo_id: uuid.UUID,
+    data: WikiArticleUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import WikiArticle
+    stmt = select(WikiArticle).where(WikiArticle.id == articolo_id)
+    res = await db.execute(stmt)
+    article = res.scalar_one_or_none()
+    if not article:
+        raise HTTPException(status_code=404, detail="Articolo non trovato")
+    
+    update_data = data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(article, key, value)
+    
+    await db.commit()
+    await db.refresh(article)
+    return article
+
+@router.delete("/wiki/articoli/{articolo_id}", tags=["Wiki"])
+async def delete_wiki_article_endpoint(
+    articolo_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import WikiArticle
+    stmt = select(WikiArticle).where(WikiArticle.id == articolo_id)
+    res = await db.execute(stmt)
+    article = res.scalar_one_or_none()
+    if not article:
+        raise HTTPException(status_code=404, detail="Articolo non trovato")
+    
+    await db.delete(article)
+    await db.commit()
+    return {"status": "ok"}
+
+@router.get("/wiki/cerca", response_model=List[WikiArticleOut], tags=["Wiki"])
+async def search_wiki_articles_endpoint(
+    q: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import WikiArticle
+    from sqlalchemy.orm import joinedload
+    from sqlalchemy import or_
+    
+    stmt = select(WikiArticle).options(joinedload(WikiArticle.autore), joinedload(WikiArticle.categoria)).where(
+        or_(
+            WikiArticle.titolo.ilike(f"%{q}%"),
+            WikiArticle.contenuto.ilike(f"%{q}%")
+        )
+    ).order_by(WikiArticle.ultimo_aggiornamento.desc())
+    
+    result = await db.execute(stmt)
+    articles = result.scalars().all()
+    
+    for a in articles:
+        a.autore_nome = f"{a.autore.nome} {a.autore.cognome}" if a.autore else "Anonimo"
+    
+    return articles
