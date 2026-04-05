@@ -9,7 +9,7 @@ export function useCRM() {
   const stagesQuery = useQuery<CRMStage[]>({
     queryKey: ["crm", "stages"],
     queryFn: async () => {
-      const res = await api.get("/api/v1/crm/stadi");
+      const res = await api.get("/crm/stadi");
       return res.data;
     },
   });
@@ -17,7 +17,7 @@ export function useCRM() {
   const leadsQuery = useQuery<CRMLead[]>({
     queryKey: ["crm", "leads"],
     queryFn: async () => {
-      const res = await api.get("/api/v1/crm/lead");
+      const res = await api.get("/crm/lead");
       return res.data;
     },
   });
@@ -25,14 +25,14 @@ export function useCRM() {
   const statsQuery = useQuery<CRMStats>({
     queryKey: ["crm", "stats"],
     queryFn: async () => {
-      const res = await api.get("/api/v1/crm/statistiche");
+      const res = await api.get("/crm/statistiche");
       return res.data;
     },
   });
 
   const createLead = useMutation({
     mutationFn: async (data: Partial<CRMLead>) => {
-      const res = await api.post("/api/v1/crm/lead", data);
+      const res = await api.post("/crm/lead", data);
       return res.data;
     },
     onSuccess: () => {
@@ -46,7 +46,7 @@ export function useCRM() {
 
   const updateLead = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<CRMLead> }) => {
-      const res = await api.patch(`/api/v1/crm/lead/${id}`, data);
+      const res = await api.patch(`/crm/lead/${id}`, data);
       return res.data;
     },
     onSuccess: () => {
@@ -56,7 +56,7 @@ export function useCRM() {
 
   const updateLeadStage = useMutation({
     mutationFn: async ({ id, stadio_id }: { id: string; stadio_id: string }) => {
-      const res = await api.patch(`/api/v1/crm/lead/${id}/stadio`, { stadio_id });
+      const res = await api.patch(`/crm/lead/${id}/stadio`, { stadio_id });
       return res.data;
     },
     onSuccess: () => {
@@ -67,7 +67,7 @@ export function useCRM() {
 
   const addActivity = useMutation({
     mutationFn: async ({ lead_id, data }: { lead_id: string; data: Partial<CRMActivity> }) => {
-      const res = await api.post(`/api/v1/crm/lead/${lead_id}/attivita`, data);
+      const res = await api.post(`/crm/lead/${lead_id}/attivita`, data);
       return res.data;
     },
     onSuccess: () => {
@@ -78,7 +78,7 @@ export function useCRM() {
 
   const deleteLead = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/api/v1/crm/lead/${id}`);
+      await api.delete(`/crm/lead/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["crm"] });
@@ -88,7 +88,7 @@ export function useCRM() {
 
   const convertLeadToClient = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.post(`/api/v1/crm/lead/${id}/converti`);
+      const res = await api.post(`/crm/lead/${id}/converti`);
       return res.data;
     },
     onSuccess: () => {

@@ -9,7 +9,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
-from app.db.session import Base
+from app.models.base import Base
 import enum
 
 
@@ -342,11 +342,29 @@ class Task(Base):
         back_populates="subtasks",
         remote_side=[id],
     )
-    timer_sessions: Mapped[List["TimerSession"]] = relationship(back_populates="task")
+    timer_sessions: Mapped[List["TimerSession"]] = relationship("TimerSession", back_populates="task", cascade="all, delete-orphan")
 
     @property
     def tempo_trascorso_minuti(self) -> int:
         return sum(s.durata_minuti for s in self.timer_sessions if s.durata_minuti)
+
+
+# ── TIMER SESSION ─────────────────────────────────────────
+class TimerSession(Base):
+    __tablename__ = "timer_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"))
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    stopped_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    durata_minuti: Mapped[Optional[int]] = mapped_column(Integer)
+    salvato_timesheet: Mapped[bool] = mapped_column(Boolean, default=False)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    task: Mapped["Task"] = relationship("Task", back_populates="timer_sessions")
+    user: Mapped["User"] = relationship()
 
 
 # ── TIMESHEET ─────────────────────────────────────────────
@@ -684,22 +702,6 @@ class Risorsa(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
-# ── TIMER SESSION ─────────────────────────────────────────
-class TimerSession(Base):
-    __tablename__ = "timer_sessions"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    task_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"))
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    stopped_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    durata_minuti: Mapped[Optional[int]] = mapped_column(Integer)
-    salvato_timesheet: Mapped[bool] = mapped_column(Boolean, default=False)
-    note: Mapped[Optional[str]] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    task: Mapped["Task"] = relationship(back_populates="timer_sessions")
-    user: Mapped["User"] = relationship()
 
 
 # ── NOTIFICATION ──────────────────────────────────────────

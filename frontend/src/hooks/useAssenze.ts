@@ -17,14 +17,14 @@ export function useAssenze(params?: { user_id?: string; start_date?: string; end
   const { data: assenze = [], isLoading } = useQuery<Assenza[]>({
     queryKey: ["assenze", params],
     queryFn: async () => {
-      const { data } = await api.get("/api/v1/assenze/", { params });
+      const { data } = await api.get("/assenze/", { params });
       return data;
     },
   });
 
   const createAssenza = useMutation({
     mutationFn: async (newAssenza: Omit<Assenza, 'id' | 'created_at'>) => {
-      const { data } = await api.post("/api/v1/assenze/", newAssenza);
+      const { data } = await api.post("/assenze/", newAssenza);
       return data;
     },
     onSuccess: () => {
@@ -34,7 +34,7 @@ export function useAssenze(params?: { user_id?: string; start_date?: string; end
 
   const deleteAssenza = useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/api/v1/assenze/${id}`);
+      await api.delete(`/assenze/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["assenze"] });

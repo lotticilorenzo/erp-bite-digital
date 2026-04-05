@@ -159,12 +159,21 @@ export function StudioTaskModal() {
       progetto_id: nav.selectedListId,
     };
 
+    const cleanPayload = {
+      ...payload,
+      data_inizio: payload.data_inizio || null,
+      data_scadenza: payload.data_scadenza || null,
+      stima_minuti: payload.stima_minuti || null,
+      assegnatario_id: payload.assegnatario_id || null,
+      commessa_id: payload.commessa_id || null,
+    };
+
     try {
       if (isNew) {
-        await createTask.mutateAsync(payload);
+        await createTask.mutateAsync(cleanPayload);
         toast.success("Task creata con successo");
       } else {
-        await updateTask.mutateAsync({ id: task!.id, data: payload });
+        await updateTask.mutateAsync({ id: task!.id, data: cleanPayload });
         toast.success("Task aggiornata");
       }
       selectTask(null);
