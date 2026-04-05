@@ -27,7 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { User } from "@/types";
-import type { TaskSO, SubtaskSO } from "@/types/studio";
+
 import { 
   Select, 
   SelectContent, 

@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { BudgetCategory, BudgetMensile, BudgetConsuntivo } from "@/types/budget";
+import type { BudgetCategory, BudgetMensile, BudgetConsuntivo } from "@/types/budget";
 import { format } from "date-fns";
 
 export function useBudget(mese?: Date) {

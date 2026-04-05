@@ -79,7 +79,7 @@ export default function CRM() {
       </div>
 
       {/* KPI Stats */}
-      <CRMStats stats={stats} />
+      <CRMStats stats={stats || { valore_totale_pipeline: 0, numero_lead_attivi: 0, tasso_conversione: 0, previsione_ricavi: 0 }} />
 
       {/* Filters & Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">

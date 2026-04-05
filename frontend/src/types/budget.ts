@@ -1,5 +1,3 @@
-import { BudgetCategory, BudgetMensile, BudgetConsuntivo } from "./budget";
-
 export interface BudgetCategory {
   id: string;
   nome: string;

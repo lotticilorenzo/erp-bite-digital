@@ -399,7 +399,8 @@ async def get_user_capacity_today(
     task_stmt = select(func.sum(Task.stima_minuti)).where(
         Task.assegnatario_id == user_id,
         Task.data_scadenza == today,
-        Task.stato != TaskStatus.COMPLETATO
+        Task.stato != TaskStatus.PRONTO,
+        Task.stato != TaskStatus.PUBBLICATO
     )
     task_result = await db.execute(task_stmt)
     minuti_assegnati = task_result.scalar_one() or 0

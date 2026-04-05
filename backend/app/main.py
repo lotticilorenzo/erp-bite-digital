@@ -157,8 +157,11 @@ async def setup_schedulers():
 
     # 2. JOB NOTIFICHE GIORNALIERE (09:00)
     async def scheduled_daily_notifications() -> None:
-        async with AsyncSessionLocal() as db:
-            await check_and_create_notifications(db)
+        try:
+            async with AsyncSessionLocal() as db:
+                await check_and_create_notifications(db)
+        except Exception as e:
+            logger.error(f"Errore notifiche: {e}")
 
     scheduler.add_job(
         scheduled_daily_notifications,

@@ -379,7 +379,7 @@ export default function Analytics() {
           </CardHeader>
           <CardContent className="pt-8 h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={revenueTrend} onClick={(data) => data && setSelectedMonthLabel(data.activeLabel)}>
+              <BarChart data={revenueTrend} onClick={(data) => data && data.activeLabel && setSelectedMonthLabel(data.activeLabel as string)}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                 <XAxis 
                   dataKey="month" 
@@ -423,7 +423,7 @@ export default function Analytics() {
           </CardHeader>
           <CardContent className="pt-8 h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={marginTrend} onClick={(data) => data && setSelectedMonthLabel(data.activeLabel)}>
+              <LineChart data={marginTrend} onClick={(data) => data && data.activeLabel && setSelectedMonthLabel(data.activeLabel as string)}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                 <XAxis 
                   dataKey="month" 
@@ -518,7 +518,7 @@ export default function Analytics() {
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart 
                 margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
-                onClick={(data) => {
+                onClick={(data: any) => {
                   if (data && data.activePayload && data.activePayload[0]) {
                     const clientName = data.activePayload[0].payload.name;
                     const fullClient = (clienti as Cliente[]).find(c => c.ragione_sociale === clientName);

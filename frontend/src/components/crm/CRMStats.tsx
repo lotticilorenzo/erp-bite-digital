@@ -5,28 +5,28 @@ export function CRMStats({ stats }: { stats: CRMStatsType }) {
   const cards = [
     {
       label: "Valore Pipeline",
-      value: `€${stats.valore_totale.toLocaleString()}`,
+      value: `€${stats.valore_totale_pipeline.toLocaleString()}`,
       icon: TrendingUp,
       color: "text-emerald-500",
       bg: "bg-emerald-500/10"
     },
     {
       label: "Lead Attivi",
-      value: stats.count_totale.toString(),
+      value: stats.numero_lead_attivi.toString(),
       icon: Users,
       color: "text-blue-500",
       bg: "bg-blue-500/10"
     },
     {
       label: "Conversione Media",
-      value: `${stats.probabilita_media}%`,
+      value: `${stats.tasso_conversione}%`,
       icon: Target,
       color: "text-primary",
       bg: "bg-primary/10"
     },
     {
       label: "Valore Ponderato",
-      value: `€${stats.valore_ponderato.toLocaleString()}`,
+      value: `€${stats.previsione_ricavi.toLocaleString()}`,
       icon: BarChart3,
       color: "text-amber-500",
       bg: "bg-amber-500/10"

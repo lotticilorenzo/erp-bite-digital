@@ -1,4 +1,4 @@
-import { useParams, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useWiki } from "@/hooks/useWiki";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";

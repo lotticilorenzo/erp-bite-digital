@@ -1,0 +1,35 @@
+﻿src/components/chat/ChatInput.tsx(5,10): error TS1484: 'ChatMessage' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/components/chat/ChatMessageBubble.tsx(2,10): error TS6133: 'formatDistanceToNow' is declared but its value is never read.
+src/components/chat/ChatMessageBubble.tsx(3,1): error TS6133: 'it' is declared but its value is never read.
+src/components/chat/ChatMessageBubble.tsx(4,34): error TS6133: 'AvatarImage' is declared but its value is never read.
+src/components/chat/ChatMessageBubble.tsx(5,10): error TS1484: 'ChatMessage' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/components/chat/ChatMessageBubble.tsx(5,23): error TS1484: 'ChatReaction' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/components/chat/ChatMessageBubble.tsx(12,3): error TS6133: 'Edit2' is declared but its value is never read.
+src/components/chat/ChatMessageBubble.tsx(13,3): error TS6133: 'Check' is declared but its value is never read.
+src/components/chat/ChatMessageBubble.tsx(47,10): error TS6133: 'showEmojiPicker' is declared but its value is never read.
+src/components/chat/ChatMessageBubble.tsx(47,27): error TS6133: 'setShowEmojiPicker' is declared but its value is never read.
+src/components/crm/CRMStats.tsx(8,24): error TS2339: Property 'valore_totale' does not exist on type 'CRMStats'.
+src/components/crm/CRMStats.tsx(15,20): error TS2339: Property 'count_totale' does not exist on type 'CRMStats'.
+src/components/crm/CRMStats.tsx(22,23): error TS2339: Property 'probabilita_media' does not exist on type 'CRMStats'.
+src/components/crm/CRMStats.tsx(29,24): error TS2339: Property 'valore_ponderato' does not exist on type 'CRMStats'.
+src/components/gantt/GanttChart.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/studio/StudioKanbanView.tsx(4,3): error TS6133: 'MoreVertical' is declared but its value is never read.
+src/components/studio/StudioKanbanView.tsx(21,3): error TS1484: 'DragEndEvent' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/components/studio/StudioKanbanView.tsx(22,3): error TS1484: 'DragStartEvent' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/components/studio/StudioListView.tsx(12,3): error TS6133: 'ListTodo' is declared but its value is never read.
+src/components/studio/StudioTaskModal.tsx(30,1): error TS6192: All imports in import declaration are unused.
+src/components/wiki/WikiArticleView.tsx(1,10): error TS6133: 'useParams' is declared but its value is never read.
+src/hooks/useBudget.ts(3,10): error TS1484: 'BudgetCategory' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/hooks/useBudget.ts(3,26): error TS1484: 'BudgetMensile' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/hooks/useBudget.ts(3,41): error TS1484: 'BudgetConsuntivo' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/pages/Analytics.tsx(382,94): error TS2345: Argument of type 'ActiveLabel' is not assignable to parameter of type 'SetStateAction<string | null>'.
+  Type 'undefined' is not assignable to type 'SetStateAction<string | null>'.
+src/pages/Analytics.tsx(426,94): error TS2345: Argument of type 'ActiveLabel' is not assignable to parameter of type 'SetStateAction<string | null>'.
+  Type 'undefined' is not assignable to type 'SetStateAction<string | null>'.
+src/pages/Analytics.tsx(522,36): error TS2339: Property 'activePayload' does not exist on type 'MouseHandlerDataParam'.
+src/pages/Analytics.tsx(522,58): error TS2339: Property 'activePayload' does not exist on type 'MouseHandlerDataParam'.
+src/pages/Analytics.tsx(523,45): error TS2339: Property 'activePayload' does not exist on type 'MouseHandlerDataParam'.
+src/pages/ClienteDetail.tsx(33,3): error TS6133: 'DialogDescription' is declared but its value is never read.
+src/pages/CRM.tsx(82,17): error TS2322: Type 'CRMStats | undefined' is not assignable to type 'CRMStats'.
+  Type 'undefined' is not assignable to type 'CRMStats'.
+src/pages/GanttPage.tsx(1,8): error TS6133: 'React' is declared but its value is never read.

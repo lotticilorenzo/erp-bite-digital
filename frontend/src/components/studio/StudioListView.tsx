@@ -8,8 +8,7 @@ import {
   User as UserIcon,
   Play,
   StopCircle,
-  CheckCircle2,
-  ListTodo
+  CheckCircle2
 } from "lucide-react";
 import { 
   Table, 

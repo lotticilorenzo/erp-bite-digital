@@ -1,16 +1,12 @@
-import { useState } from "react";
-import { formatDistanceToNow, format } from "date-fns";
-import { it } from "date-fns/locale";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ChatMessage, ChatReaction } from "@/types/chat";
+import { format } from "date-fns";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import type { ChatMessage, ChatReaction } from "@/types/chat";
 import { cn } from "@/lib/utils";
 import { 
   Reply, 
   Smile, 
   MoreHorizontal, 
   Trash2, 
-  Edit2,
-  Check,
   CornerDownRight
 } from "lucide-react";
 import { 
@@ -44,8 +40,6 @@ export function ChatMessageBubble({
   onReact,
   onRemoveReact
 }: ChatMessageBubbleProps) {
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-
   // Formatta contenuto con menzioni
   const renderContent = (text: string) => {
     const parts = text.split(/(@[^ \n\r\t]+ [^ \n\r\t]+)/g);

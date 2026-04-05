@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from "react";
+import { useMemo, useRef } from "react";
 import { format, addDays, startOfToday, differenceInDays, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, isValid } from "date-fns";
 import { it } from "date-fns/locale";
 import { motion } from "framer-motion";

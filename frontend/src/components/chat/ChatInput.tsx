@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Send, X, AtSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ChatMessage } from "@/types/chat";
+import type { ChatMessage } from "@/types/chat";
 import { cn } from "@/lib/utils";
 
 interface ChatInputProps {

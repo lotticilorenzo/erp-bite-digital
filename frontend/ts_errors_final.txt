@@ -1,0 +1,1 @@
+﻿src/pages/ClienteDetail.tsx(33,3): error TS6133: 'DialogDescription' is declared but its value is never read.

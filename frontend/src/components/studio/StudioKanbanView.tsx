@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { 
   Plus, 
-  MoreVertical, 
   Clock, 
   User as UserIcon
 } from "lucide-react";
@@ -18,10 +17,9 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  DragEndEvent,
-  DragStartEvent,
   defaultDropAnimationSideEffects,
 } from "@dnd-kit/core";
+import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
