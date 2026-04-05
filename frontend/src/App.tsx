@@ -12,6 +12,7 @@ const ProgettiPage = React.lazy(() => import("./pages/Progetti"));
 const ProgettoDetailPage = React.lazy(() => import("./pages/ProgettoDetail"));
 const CommessePage = React.lazy(() => import("./pages/Commesse"));
 const CommessaDetailPage = React.lazy(() => import("./pages/CommessaDetail"));
+const PreventiviPage = React.lazy(() => import("./pages/PreventiviPage"));
 const TimesheetPage = React.lazy(() => import("./pages/Timesheet"));
 const FatturePage = React.lazy(() => import("./pages/Fatture"));
 const CassaPage = React.lazy(() => import("./pages/Cassa"));
@@ -76,6 +77,7 @@ function App() {
           <Route path="/progetti/:id" element={<ProgettoDetailPage />} />
           <Route path="/commesse" element={<CommessePage />} />
           <Route path="/commesse/:id" element={<CommessaDetailPage />} />
+          <Route path="/preventivi" element={<PreventiviPage />} />
           <Route path="/timesheet" element={<TimesheetPage />} />
           <Route path="/fatture" element={<FatturePage />} />
           <Route path="/cassa" element={<CassaPage />} />

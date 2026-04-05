@@ -15,13 +15,15 @@ from app.models.models import (
     User, Cliente, Progetto, Commessa, CommessaProgetto, Timesheet, Task,
     Costo, AuditLog, CoefficienteAllocazione,
     Fornitore, FatturaAttiva, FatturaPassiva, FicSyncRun, CategoriaFornitore,
-    UserRole, CommessaStatus, TaskStatus, TimesheetStatus, TimerSession
+    Preventivo, PreventivoRiga,
+    UserRole, CommessaStatus, TaskStatus, TimesheetStatus, TimerSession, PreventivoStatus
 )
 from app.schemas.schemas import (
     UserCreate, UserUpdate, ClienteCreate, ClienteUpdate,
     ProgettoCreate, ProgettoUpdate, CommessaCreate, CommessaUpdate,
     TimesheetCreate, CostoCreate, CoefficienteCreate, TimesheetApprova,
-    FornitoreOut, FatturaAttivaOut, FatturaPassivaOut, FicSyncStatusOut
+    FornitoreOut, FatturaAttivaOut, FatturaPassivaOut, FicSyncStatusOut,
+    PreventivoCreate, PreventivoUpdate
 )
 from app.core.config import settings
 from app.core.security import hash_password
@@ -2360,3 +2362,163 @@ async def save_timer_to_timesheet(
     for ts in created_timesheets:
         await db.refresh(ts)
     return created_timesheets
+
+# ── PREVENTIVO SERVICE ────────────────────────────────────
+async def list_preventivi(
+    db: AsyncSession,
+    cliente_id: Optional[uuid.UUID] = None,
+    stato: Optional[PreventivoStatus] = None
+) -> List[Preventivo]:
+    q = select(Preventivo).options(selectinload(Preventivo.cliente), selectinload(Preventivo.voci))
+    if cliente_id:
+        q = q.where(Preventivo.cliente_id == cliente_id)
+    if stato:
+        q = q.where(Preventivo.stato == stato)
+    result = await db.execute(q.order_by(Preventivo.created_at.desc()))
+    return result.unique().scalars().all()
+
+async def get_preventivo(db: AsyncSession, preventivo_id: uuid.UUID) -> Optional[Preventivo]:
+    result = await db.execute(
+        select(Preventivo).options(selectinload(Preventivo.cliente), selectinload(Preventivo.voci))
+        .where(Preventivo.id == preventivo_id)
+    )
+    return result.scalar_one_or_none()
+
+async def create_preventivo(db: AsyncSession, data: PreventivoCreate, user_id: uuid.UUID) -> Preventivo:
+    importo_totale = sum(v.quantita * v.prezzo_unitario for v in data.voci)
+    
+    p = Preventivo(
+        id=uuid.uuid4(),
+        cliente_id=data.cliente_id,
+        numero=data.numero,
+        titolo=data.titolo,
+        descrizione=data.descrizione,
+        data_scadenza=data.data_scadenza,
+        note=data.note,
+        importo_totale=importo_totale,
+        created_by=user_id,
+        stato=PreventivoStatus.BOZZA
+    )
+    db.add(p)
+    await db.flush()
+
+    voci = []
+    for v in data.voci:
+        riga = PreventivoRiga(
+            id=uuid.uuid4(),
+            preventivo_id=p.id,
+            descrizione=v.descrizione,
+            quantita=v.quantita,
+            prezzo_unitario=v.prezzo_unitario,
+            totale=v.quantita * v.prezzo_unitario,
+            ordine=v.ordine
+        )
+        voci.append(riga)
+    db.add_all(voci)
+    await db.flush()
+    return await get_preventivo(db, p.id)
+
+async def update_preventivo(db: AsyncSession, preventivo_id: uuid.UUID, data: PreventivoUpdate, user_id: uuid.UUID) -> Optional[Preventivo]:
+    p = await get_preventivo(db, preventivo_id)
+    if not p:
+        return None
+    
+    payload = data.model_dump(exclude_none=True)
+    voci_data = payload.pop("voci", None)
+    
+    for field, val in payload.items():
+        setattr(p, field, val)
+    
+    if voci_data is not None:
+        # Semplice: rimuovi vecchie e aggiungi nuove
+        await db.execute(text("DELETE FROM preventivo_voci WHERE preventivo_id = :pid"), {"pid": str(preventivo_id)})
+        voci = []
+        importo_totale = Decimal("0")
+        for v in voci_data:
+            tot = Decimal(str(v["quantita"])) * Decimal(str(v["prezzo_unitario"]))
+            riga = PreventivoRiga(
+                id=uuid.uuid4(),
+                preventivo_id=p.id,
+                descrizione=v["descrizione"],
+                quantita=v["quantita"],
+                prezzo_unitario=v["prezzo_unitario"],
+                totale=tot,
+                ordine=v.get("ordine", 0)
+            )
+            voci.append(riga)
+            importo_totale += tot
+        db.add_all(voci)
+        p.importo_totale = importo_totale
+
+    await db.flush()
+    return await get_preventivo(db, p.id)
+
+async def delete_preventivo(db: AsyncSession, preventivo_id: uuid.UUID) -> bool:
+    p = await get_preventivo(db, preventivo_id)
+    if not p:
+        return False
+    await db.delete(p)
+    await db.flush()
+    return True
+
+async def converti_preventivo_in_commessa(db: AsyncSession, preventivo_id: uuid.UUID, current_user: User) -> Commessa:
+    from fastapi import HTTPException
+    p = await get_preventivo(db, preventivo_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Preventivo non trovato")
+    
+    # 1. Trova o Crea Progetto
+    proj_res = await db.execute(select(Progetto).where(Progetto.cliente_id == p.cliente_id, Progetto.nome == p.titolo))
+    progetto = proj_res.scalar_one_or_none()
+    
+    if not progetto:
+        from app.models.models import ProjectType
+        progetto = Progetto(
+            id=uuid.uuid4(),
+            cliente_id=p.cliente_id,
+            nome=p.titolo,
+            tipo=ProjectType.ONE_OFF,
+            importo_fisso=p.importo_totale,
+            note=f"Creato da preventivo {p.numero}"
+        )
+        db.add(progetto)
+        await db.flush()
+    
+    # 2. Crea Commessa per il mese corrente
+    today = date.today().replace(day=1)
+    
+    comm_res = await db.execute(select(Commessa).where(Commessa.cliente_id == p.cliente_id, Commessa.mese_competenza == today))
+    commessa = comm_res.scalar_one_or_none()
+    
+    if not commessa:
+        commessa = Commessa(
+            id=uuid.uuid4(),
+            cliente_id=p.cliente_id,
+            mese_competenza=today,
+            stato=CommessaStatus.APERTA,
+            note=f"Aperta da preventivo {p.numero}"
+        )
+        db.add(commessa)
+        await db.flush()
+    
+    # 3. Aggiungi riga progetto alla commessa
+    link_res = await db.execute(select(CommessaProgetto).where(CommessaProgetto.commessa_id == commessa.id, CommessaProgetto.progetto_id == progetto.id))
+    link = link_res.scalar_one_or_none()
+    
+    if not link:
+        link = CommessaProgetto(
+            id=uuid.uuid4(),
+            commessa_id=commessa.id,
+            progetto_id=progetto.id,
+            importo_fisso=progetto.importo_fisso,
+            delivery_attesa=0,
+            delivery_consuntiva=0
+        )
+        db.add(link)
+    
+    # 4. Aggiorna stato preventivo
+    p.stato = PreventivoStatus.ACCETTATO
+    p.data_accettazione = date.today()
+    
+    await db.flush()
+    return await get_commessa(db, commessa.id)

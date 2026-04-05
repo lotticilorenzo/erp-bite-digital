@@ -10,7 +10,8 @@ import {
   Calendar,
   Download,
   FileText,
-  Eye
+  Eye,
+  Plus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +29,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger
+  DialogTrigger,
+  DialogDescription
 } from "@/components/ui/dialog";
 import { 
   Select,
@@ -38,6 +40,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useState, useMemo } from "react";
+import { usePreventivi, usePreventivoMutations } from "@/hooks/usePreventivi";
+import { PreventiviTable } from "@/components/preventivi/PreventiviTable";
+import { PreventivoModal } from "@/components/preventivi/PreventivoModal";
+import type { Preventivo, PreventivoStatus } from "@/types/preventivi";
+import { toast } from "sonner";
 
 export default function ClienteDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -45,8 +52,12 @@ export default function ClienteDetailPage() {
   const { data: cliente, isLoading: loadingC } = useCliente(id);
   const { data: health, isLoading: loadingH } = useClientHealthScore(id);
   const { data: commesse = [] } = useCommesse({ cliente_id: id });
+  const { data: preventivi = [] } = usePreventivi({ cliente_id: id });
+  const { updatePreventivo, deletePreventivo, convertToCommessa } = usePreventivoMutations();
 
   const [periodo, setPeriodo] = useState<"YTD" | "PREV_YEAR" | "6M" | "ALL">("YTD");
+  const [isPModalOpen, setIsPModalOpen] = useState(false);
+  const [selectedP, setSelectedP] = useState<Preventivo | undefined>();
 
   const filteredCommesse = useMemo(() => {
     const now = new Date();
@@ -73,6 +84,33 @@ export default function ClienteDetailPage() {
       return d >= start && d <= end;
     });
   }, [commesse, periodo]);
+
+  const handleEditP = (p: Preventivo) => {
+    setSelectedP(p);
+    setIsPModalOpen(true);
+  };
+
+  const handleStatusChangeP = async (pId: string, status: PreventivoStatus) => {
+    await updatePreventivo.mutateAsync({ id: pId, payload: { stato: status } });
+    toast.success("Stato preventivo aggiornato");
+  };
+
+  const handleDeleteP = async (pId: string) => {
+    if (confirm("Sei sicuro di voler eliminare questo preventivo?")) {
+      await deletePreventivo.mutateAsync(pId);
+      toast.success("Preventivo eliminato");
+    }
+  };
+
+  const handleConvertP = async (pId: string) => {
+    try {
+      const result = await convertToCommessa.mutateAsync(pId);
+      toast.success(result.message);
+      navigate(`/commesse/${result.id}`);
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || "Errore durante la conversione");
+    }
+  };
 
   if (loadingC || loadingH) {
     return (
@@ -124,7 +162,6 @@ export default function ClienteDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Health Score Main Card */}
         <Card className="bg-card border-border overflow-hidden relative group">
           <div className={`absolute top-0 left-0 w-full h-1 ${score >= 70 ? 'bg-emerald-500' : score >= 40 ? 'bg-amber-500' : 'bg-red-500'}`} />
           <CardHeader>
@@ -166,7 +203,6 @@ export default function ClienteDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Factors Breakdown */}
         <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
           <FactorCard 
             title="Marginalità (40%)"
@@ -196,8 +232,7 @@ export default function ClienteDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Project History */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-8">
           <Card className="bg-card border-border">
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-lg font-medium flex items-center gap-2 text-white">
@@ -272,9 +307,29 @@ export default function ClienteDetailPage() {
                </div>
             </CardContent>
           </Card>
+
+          <Card className="bg-card border-border">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-lg font-medium flex items-center gap-2 text-white">
+                <FileText className="w-4 h-4 text-blue-400" />
+                Preventivi & Offerte
+              </CardTitle>
+              <Button size="sm" variant="outline" className="h-8 border-border" onClick={() => { setSelectedP(undefined); setIsPModalOpen(true); }}>
+                <Plus className="w-3 h-3 mr-1" /> Nuovo
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <PreventiviTable 
+                data={preventivi} 
+                onEdit={handleEditP}
+                onDelete={handleDeleteP}
+                onStatusChange={handleStatusChangeP}
+                onConvert={handleConvertP}
+              />
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Reporting & Info Column */}
         <div className="space-y-8">
           <Card className="bg-card border-border shadow-2xl relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-blue-500" />
@@ -363,11 +418,17 @@ export default function ClienteDetailPage() {
           </Card>
         </div>
       </div>
+
+      <PreventivoModal 
+        isOpen={isPModalOpen} 
+        onClose={() => setIsPModalOpen(false)} 
+        preventivo={selectedP} 
+      />
     </div>
   );
 }
 
-function FactorCard({ title, score, detail, icon }: any) {
+function FactorCard({ title, score, detail, icon }: { title: string, score: number, detail: string, icon: React.ReactNode }) {
   return (
     <Card className="bg-card border-border hover:shadow-xl transition-shadow duration-300">
       <CardContent className="p-6">

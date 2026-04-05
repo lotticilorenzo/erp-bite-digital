@@ -27,7 +27,8 @@ from app.schemas.schemas import (
     FornitoreOut, FornitoreCreate, FornitoreUpdate,
     FatturaAttivaOut, FatturaPassivaOut, FatturaPassivaUpdate, FatturaIncassaRequest,
     FicSyncStatusOut, TaskCreate, TaskUpdate, TaskOut,
-    CategoriaFornitoreCreate, CategoriaFornitoreOut, CategoriaFornitoreUpdate
+    CategoriaFornitoreCreate, CategoriaFornitoreOut, CategoriaFornitoreUpdate,
+    PreventivoCreate, PreventivoUpdate, PreventivoOut
 )
 from app.schemas.auth import ForgotPasswordRequest, ResetPasswordRequest
 import httpx
@@ -43,7 +44,8 @@ from app.services.services import (
     list_fornitori_full, update_fornitore, list_fatture_passive, update_fattura_passiva, list_fornitori,
     list_movimenti_cassa, list_costi_fissi, create_costo_fisso, update_costo_fisso, delete_costo_fisso,
     get_servizi_progetto, create_servizio_progetto, update_servizio_progetto, delete_servizio_progetto,
-    elimina_timesheet_bulk, aggiorna_mese_competenza_bulk
+    elimina_timesheet_bulk, aggiorna_mese_competenza_bulk,
+    list_preventivi, get_preventivo, create_preventivo, update_preventivo, delete_preventivo, converti_preventivo_in_commessa
 )
 from app.api.v1 import timer
 from app.api.v1 import ai
@@ -80,7 +82,87 @@ async def me(current_user: User = Depends(get_current_user)):
 @router.delete("/auth/sessions", tags=["Auth"])
 async def logout_all_sessions(current_user: User = Depends(get_current_user)):
     """Mock endpoint to simulate disconnecting all sessions."""
-    return {"message": "Disconnesso da tutti i dispositivi", "success": True}
+    return {"message": "Successo"}
+
+# ═══════════════════════════════════════════════════════
+# PREVENTIVI
+# ═══════════════════════════════════════════════════════
+@router.get("/preventivi", response_model=List[PreventivoOut], tags=["Preventivi"])
+async def get_preventivi(
+    cliente_id: Optional[uuid.UUID] = Query(None),
+    stato: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    from app.models.models import PreventivoStatus
+    p_status = None
+    if stato:
+        try:
+            p_status = PreventivoStatus(stato)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Stato preventivo non valido")
+    return await list_preventivi(db, cliente_id, p_status)
+
+@router.get("/preventivi/{preventivo_id}", response_model=PreventivoOut, tags=["Preventivi"])
+async def get_single_preventivo(
+    preventivo_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    p = await get_preventivo(db, preventivo_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Preventivo non trovato")
+    return p
+
+@router.post("/preventivi", response_model=PreventivoOut, status_code=201, tags=["Preventivi"])
+async def add_preventivo(
+    data: PreventivoCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    p = await create_preventivo(db, data, current_user.id)
+    await db.commit()
+    return p
+
+@router.patch("/preventivi/{preventivo_id}", response_model=PreventivoOut, tags=["Preventivi"])
+async def patch_preventivo(
+    preventivo_id: uuid.UUID,
+    data: PreventivoUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    p = await update_preventivo(db, preventivo_id, data, current_user.id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Preventivo non trovato")
+    await db.commit()
+    return p
+
+@router.delete("/preventivi/{preventivo_id}", status_code=204, tags=["Preventivi"])
+async def remove_preventivo(
+    preventivo_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN))
+):
+    ok = await delete_preventivo(db, preventivo_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Preventivo non trovato")
+    await db.commit()
+
+@router.post("/preventivi/{preventivo_id}/converti-commessa", tags=["Preventivi"])
+async def converti_preventivo(
+    preventivo_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    try:
+        commessa = await converti_preventivo_in_commessa(db, preventivo_id, current_user)
+        await db.commit()
+        return {"id": commessa.id, "message": "Preventivo convertito in commessa con successo"}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Rate limiting in-memory (semplice)
 password_reset_history = {} # {email: [timestamp1, timestamp2, ...]}

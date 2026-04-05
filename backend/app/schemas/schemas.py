@@ -6,7 +6,7 @@ from typing import Optional, List
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from app.models.models import (
     UserRole, ProjectType, ProjectStatus, CommessaStatus,
-    TaskStatus, TimesheetStatus, CostoTipo
+    TaskStatus, TimesheetStatus, CostoTipo, PreventivoStatus
 )
 
 
@@ -684,3 +684,55 @@ class AIChatRequest(BaseModel):
 
 class AIChatResponse(BaseModel):
     response: str
+
+# ── PREVENTIVO ────────────────────────────────────────────
+class PreventivoRigaCreate(BaseModel):
+    descrizione: str
+    quantita: Decimal = Decimal("1")
+    prezzo_unitario: Decimal = Decimal("0")
+    ordine: int = 0
+
+class PreventivoRigaOut(OrmBase):
+    id: uuid.UUID
+    descrizione: str
+    quantita: Decimal
+    prezzo_unitario: Decimal
+    totale: Decimal
+    ordine: int
+
+class PreventivoCreate(BaseModel):
+    cliente_id: uuid.UUID
+    titolo: str
+    numero: str
+    descrizione: Optional[str] = None
+    data_scadenza: Optional[date] = None
+    note: Optional[str] = None
+    voci: List[PreventivoRigaCreate]
+
+class PreventivoUpdate(BaseModel):
+    titolo: Optional[str] = None
+    numero: Optional[str] = None
+    descrizione: Optional[str] = None
+    stato: Optional[PreventivoStatus] = None
+    data_scadenza: Optional[date] = None
+    data_accettazione: Optional[date] = None
+    note: Optional[str] = None
+    voci: Optional[List[PreventivoRigaCreate]] = None
+
+class PreventivoOut(OrmBase):
+    id: uuid.UUID
+    cliente_id: uuid.UUID
+    numero: str
+    titolo: str
+    descrizione: Optional[str] = None
+    stato: PreventivoStatus
+    data_creazione: date
+    data_scadenza: Optional[date] = None
+    data_accettazione: Optional[date] = None
+    importo_totale: Decimal
+    note: Optional[str] = None
+    created_by: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+    voci: List[PreventivoRigaOut]
+    cliente: Optional[ClienteOut] = None

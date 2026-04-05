@@ -71,6 +71,13 @@ class MovimentoStatus(str, enum.Enum):
     RICONCILIATO = "RICONCILIATO"
     DA_VERIFICARE = "DA_VERIFICARE"
 
+class PreventivoStatus(str, enum.Enum):
+    BOZZA = "BOZZA"
+    INVIATO = "INVIATO"
+    ACCETTATO = "ACCETTATO"
+    RIFIUTATO = "RIFIUTATO"
+    SCADUTO = "SCADUTO"
+
 
 # ── USER ──────────────────────────────────────────────────
 class User(Base):
@@ -139,6 +146,7 @@ class Cliente(Base):
 
     progetti: Mapped[List["Progetto"]] = relationship(back_populates="cliente")
     commesse: Mapped[List["Commessa"]] = relationship(back_populates="cliente")
+    preventivi: Mapped[List["Preventivo"]] = relationship(back_populates="cliente")
 
 
 # ── PROGETTO ──────────────────────────────────────────────
@@ -717,3 +725,40 @@ class Assenza(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["User"] = relationship()
+
+# ── PREVENTIVO ────────────────────────────────────────────
+class Preventivo(Base):
+    __tablename__ = "preventivi"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cliente_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("clienti.id"))
+    numero: Mapped[str] = mapped_column(String(50))
+    titolo: Mapped[str] = mapped_column(String(255))
+    descrizione: Mapped[Optional[str]] = mapped_column(Text)
+    stato: Mapped[PreventivoStatus] = mapped_column(SAEnum(PreventivoStatus, name="preventivo_status"), default=PreventivoStatus.BOZZA)
+    data_creazione: Mapped[date] = mapped_column(Date, server_default=func.current_date())
+    data_scadenza: Mapped[Optional[date]] = mapped_column(Date)
+    data_accettazione: Mapped[Optional[date]] = mapped_column(Date)
+    importo_totale: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    cliente: Mapped["Cliente"] = relationship(back_populates="preventivi")
+    voci: Mapped[List["PreventivoRiga"]] = relationship(back_populates="preventivo", cascade="all, delete-orphan")
+    autore: Mapped["User"] = relationship()
+
+
+class PreventivoRiga(Base):
+    __tablename__ = "preventivo_voci"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    preventivo_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("preventivi.id", ondelete="CASCADE"))
+    descrizione: Mapped[str] = mapped_column(String(500))
+    quantita: Mapped[Decimal] = mapped_column(Numeric(8, 2), default=1)
+    prezzo_unitario: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    totale: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    ordine: Mapped[int] = mapped_column(Integer, default=0)
+
+    preventivo: Mapped["Preventivo"] = relationship(back_populates="voci")

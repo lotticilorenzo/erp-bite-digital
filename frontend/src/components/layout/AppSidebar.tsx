@@ -57,8 +57,9 @@ const navItems = [
     title: "Gestione",
     items: [
       { title: "Clienti", url: "/clienti", icon: Users },
-      { title: "Progetti", url: "/progetti", icon: Briefcase },
-      { title: "Commesse", url: "/commesse", icon: ClipboardList },
+      { title: "Gantt", url: "/gantt", icon: LayoutDashboard },
+      { title: "Preventivi", url: "/preventivi", icon: FileText },
+      { title: "Commesse", url: "/commesse", icon: Briefcase },
       { title: "Planning", url: "/planning", icon: ClipboardList },
     ],
   },
