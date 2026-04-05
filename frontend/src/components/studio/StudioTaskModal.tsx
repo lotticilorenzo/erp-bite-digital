@@ -60,6 +60,7 @@ export function StudioTaskModal() {
     descrizione: "",
     commessa_id: "none",
     stato: "DA_FARE",
+    data_inizio: "",
     data_scadenza: "",
     assegnatario_id: "none",
     stima_minuti: 0,
@@ -101,6 +102,7 @@ export function StudioTaskModal() {
         descrizione: task.desc || "",
         commessa_id: task.commessa_id || "none",
         stato: task.state_id,
+        data_inizio: task.data_inizio || "",
         data_scadenza: task.due_date || "",
         assegnatario_id: task.assegnatario_id || "none",
         stima_minuti: task.stima_minuti || 0,
@@ -111,6 +113,7 @@ export function StudioTaskModal() {
         descrizione: "",
         commessa_id: "none",
         stato: "DA_FARE",
+        data_inizio: "",
         data_scadenza: "",
         assegnatario_id: "none",
         stima_minuti: 0,
@@ -485,8 +488,29 @@ export function StudioTaskModal() {
                  )}
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                   <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Inizio</span>
+                   <input 
+                    type="date"
+                    className="w-full bg-muted/30 border border-border h-10 rounded-xl px-4 text-xs font-black text-white"
+                    value={formData.data_inizio}
+                    onChange={(e) => setFormData(prev => ({ ...prev, data_inizio: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                   <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Scadenza</span>
+                   <input 
+                    type="date"
+                    className="w-full bg-muted/30 border border-border h-10 rounded-xl px-4 text-xs font-black text-white"
+                    value={formData.data_scadenza}
+                    onChange={(e) => setFormData(prev => ({ ...prev, data_scadenza: e.target.value }))}
+                  />
+                </div>
+              </div>
+
               <div className="space-y-4">
-                 <span className="text-[10px) font-black text-[#475569] uppercase tracking-[0.2em]">Stima Ore</span>
+                 <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Stima Ore</span>
                  <div className="flex items-center gap-3">
                     <input 
                       type="number"

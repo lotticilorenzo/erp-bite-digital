@@ -316,6 +316,7 @@ class Task(Base):
     titolo: Mapped[str] = mapped_column(String(500))
     descrizione: Mapped[Optional[str]] = mapped_column(Text)
     stato: Mapped[TaskStatus] = mapped_column(SAEnum(TaskStatus, name="task_status"), default=TaskStatus.DA_FARE)
+    data_inizio: Mapped[Optional[date]] = mapped_column(Date)
     data_scadenza: Mapped[Optional[date]] = mapped_column(Date)
     stima_minuti: Mapped[Optional[int]] = mapped_column(Integer)
     clickup_synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))

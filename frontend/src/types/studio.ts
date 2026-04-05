@@ -33,7 +33,7 @@ export type TaskSO = {
   title: string;
   desc?: string;
   assignees: string[]; // User IDs
-  start_date: string | null;
+  data_inizio: string | null;
   due_date: string | null;
   state_id: string;
   estimated_hours: number;

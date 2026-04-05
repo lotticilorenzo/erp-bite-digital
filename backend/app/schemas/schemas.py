@@ -425,6 +425,7 @@ class TaskCreate(BaseModel):
     titolo: str
     descrizione: Optional[str] = None
     stato: TaskStatus = TaskStatus.DA_FARE
+    data_inizio: Optional[date] = None
     data_scadenza: Optional[date] = None
     stima_minuti: Optional[int] = None
 
@@ -437,6 +438,7 @@ class TaskUpdate(BaseModel):
     titolo: Optional[str] = None
     descrizione: Optional[str] = None
     stato: Optional[TaskStatus] = None
+    data_inizio: Optional[date] = None
     data_scadenza: Optional[date] = None
     stima_minuti: Optional[int] = None
 
@@ -450,6 +452,7 @@ class TaskOut(OrmBase):
     titolo: str
     descrizione: Optional[str] = None
     stato: TaskStatus
+    data_inizio: Optional[date] = None
     data_scadenza: Optional[date] = None
     stima_minuti: Optional[int] = None
     clickup_synced_at: Optional[datetime] = None

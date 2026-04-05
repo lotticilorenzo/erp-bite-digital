@@ -25,7 +25,7 @@ export function useTasks(filters?: {
         desc: t.descrizione || "",
         state_id: t.stato,
         assignees: t.assegnatario_id ? [t.assegnatario_id] : [],
-        start_date: null,
+        data_inizio: t.data_inizio,
         due_date: t.data_scadenza,
         estimated_hours: t.stima_minuti ? t.stima_minuti / 60 : 0,
         subtasks: (t.subtasks || []).map((st: any) => ({
@@ -58,7 +58,7 @@ export function useTask(id: string | null) {
         desc: data.descrizione || "",
         state_id: data.stato,
         assignees: data.assegnatario_id ? [data.assegnatario_id] : [],
-        start_date: null,
+        data_inizio: data.data_inizio,
         due_date: data.data_scadenza,
         estimated_hours: data.stima_minuti ? data.stima_minuti / 60 : 0,
         subtasks: (data.subtasks || []),
