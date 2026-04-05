@@ -52,6 +52,13 @@ export interface Cliente {
   health_score?: number; // Computed score
 }
 
+export interface ProgettoTeam {
+  id: string;
+  user_id: string;
+  ruolo_progetto?: string;
+  user?: User;
+}
+
 export interface Progetto {
   id: string;
   cliente_id: string;
@@ -65,6 +72,7 @@ export interface Progetto {
   note?: string;
   created_at: string;
   cliente?: Cliente;
+  team?: ProgettoTeam[];
 }
 
 export interface CommessaRiga {

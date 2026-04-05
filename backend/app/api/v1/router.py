@@ -17,7 +17,12 @@ from app.core.security import (
     verify_password, create_access_token,
     get_current_user, require_roles
 )
-from app.models.models import User, UserRole, CommessaStatus, TaskStatus, TimesheetStatus, FatturaAttiva
+from app.models.models import (
+    User, UserRole, ProjectStatus, ProjectType, 
+    CommessaStatus, TaskStatus, PreventivoStatus,
+    TimesheetStatus, ServiceType, ServiceCadenza,
+    CostoTipo, MovimentoStatus
+)
 from app.schemas.schemas import (
     LoginRequest, TokenResponse, UserOut, UserCreate, UserUpdate,
     ClienteCreate, ClienteUpdate, ClienteOut,
@@ -28,7 +33,10 @@ from app.schemas.schemas import (
     FatturaAttivaOut, FatturaPassivaOut, FatturaPassivaUpdate, FatturaIncassaRequest,
     FicSyncStatusOut, TaskCreate, TaskUpdate, TaskOut,
     CategoriaFornitoreCreate, CategoriaFornitoreOut, CategoriaFornitoreUpdate,
-    PreventivoCreate, PreventivoUpdate, PreventivoOut
+    PreventivoCreate, PreventivoUpdate, PreventivoOut,
+    BudgetCategoryCreate, BudgetCategoryOut, BudgetMensileCreate, BudgetMensileUpdate, BudgetMensileOut, BudgetConsuntivoOut,
+    WikiCategoryCreate, WikiCategoryOut, WikiArticleCreate, WikiArticleUpdate, WikiArticleOut,
+    ChatReactionBase, ChatReactionRead, ChatMessageCreate, ChatMessageUpdate, ChatMessageRead
 )
 from app.schemas.auth import ForgotPasswordRequest, ResetPasswordRequest
 import httpx
@@ -2212,8 +2220,195 @@ async def search_wiki_articles_endpoint(
     
     result = await db.execute(stmt)
     articles = result.scalars().all()
-    
     for a in articles:
         a.autore_nome = f"{a.autore.nome} {a.autore.cognome}" if a.autore else "Anonimo"
-    
     return articles
+
+
+# ── CHAT ──────────────────────────────────────────────────
+
+@router.get("/chat/{progetto_id}/messaggi", response_model=List[ChatMessageRead])
+async def get_chat_messages(
+    progetto_id: uuid.UUID,
+    limite: int = 50,
+    prima_di: Optional[datetime] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import ChatMessage, ChatReaction, User
+    from sqlalchemy.orm import joinedload, selectinload
+    
+    stmt = select(ChatMessage).options(
+        joinedload(ChatMessage.autore),
+        selectinload(ChatMessage.reazioni).joinedload(ChatReaction.user)
+    ).where(ChatMessage.progetto_id == progetto_id)
+    
+    if prima_di:
+        stmt = stmt.where(ChatMessage.created_at < prima_di)
+    
+    stmt = stmt.order_by(ChatMessage.created_at.desc()).limit(limite)
+    
+    result = await db.execute(stmt)
+    messages = result.scalars().all()
+    
+    # Formatta autore_nome e user_nome nelle reazioni
+    for m in messages:
+        m.autore_nome = f"{m.autore.nome} {m.autore.cognome}" if m.autore else "Anonimo"
+        for r in m.reazioni:
+            r.user_nome = f"{r.user.nome} {r.user.cognome}" if r.user else "Anonimo"
+            
+    return sorted(messages, key=lambda x: x.created_at)
+
+@router.post("/chat/{progetto_id}/messaggi", response_model=ChatMessageRead)
+async def create_chat_message(
+    progetto_id: uuid.UUID,
+    message_in: ChatMessageCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import ChatMessage, Progetto, User
+    from app.services.notification_service import create_notification
+    from sqlalchemy import func
+    import re
+    
+    # Verifica progetto
+    progetto_res = await db.execute(select(Progetto).where(Progetto.id == progetto_id))
+    progetto = progetto_res.scalar_one_or_none()
+    if not progetto:
+        raise HTTPException(status_code=404, detail="Progetto non trovato")
+        
+    new_message = ChatMessage(
+        progetto_id=progetto_id,
+        autore_id=current_user.id,
+        contenuto=message_in.contenuto,
+        tipo=message_in.tipo,
+        risposta_a=message_in.risposta_a
+    )
+    db.add(new_message)
+    await db.commit()
+    await db.refresh(new_message)
+    
+    # Autore nome per risposta
+    new_message.autore_nome = f"{current_user.nome} {current_user.cognome}"
+    new_message.reazioni = []
+    
+    # Gestione Menzioni e Notifiche
+    mentions = re.findall(r"@([^ \n\r\t]+ [^ \n\r\t]+)", message_in.contenuto)
+    for mention_name in mentions:
+        user_stmt = select(User).where(
+            func.concat(User.nome, " ", User.cognome).ilike(mention_name.strip()),
+            User.attivo == True
+        )
+        u_res = await db.execute(user_stmt)
+        u_tagged = u_res.scalar_one_or_none()
+        if u_tagged and u_tagged.id != current_user.id:
+            await create_notification(
+                db,
+                user_id=u_tagged.id,
+                title=f"Menzionato in {progetto.nome}",
+                message=f"{current_user.nome} ti ha menzionato.",
+                type="MESSAGGIO",
+                link=f"/progetti/{progetto_id}?tab=chat"
+            )
+            
+    return new_message
+
+@router.patch("/chat/messaggi/{id}", response_model=ChatMessageRead)
+async def update_chat_message(
+    id: uuid.UUID,
+    message_in: ChatMessageUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import ChatMessage
+    from sqlalchemy.orm import joinedload
+    
+    stmt = select(ChatMessage).options(joinedload(ChatMessage.autore)).where(ChatMessage.id == id)
+    res = await db.execute(stmt)
+    message = res.scalar_one_or_none()
+    
+    if not message:
+        raise HTTPException(status_code=404, detail="Messaggio non trovato")
+    if message.autore_id != current_user.id and current_user.ruolo != "ADMIN":
+        raise HTTPException(status_code=403, detail="Non autorizzato")
+        
+    if message_in.contenuto is not None:
+        message.contenuto = message_in.contenuto
+        message.modificato = True
+        
+    await db.commit()
+    await db.refresh(message)
+    message.autore_nome = f"{message.autore.nome} {message.autore.cognome}" if message.autore else "Anonimo"
+    return message
+
+@router.delete("/chat/messaggi/{id}")
+async def delete_chat_message(
+    id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import ChatMessage
+    res = await db.execute(select(ChatMessage).where(ChatMessage.id == id))
+    message = res.scalar_one_or_none()
+    
+    if not message:
+        raise HTTPException(status_code=404, detail="Messaggio non trovato")
+    if message.autore_id != current_user.id and current_user.ruolo != "ADMIN":
+        raise HTTPException(status_code=403, detail="Non autorizzato")
+        
+    await db.delete(message)
+    await db.commit()
+    return {"status": "ok"}
+
+@router.post("/chat/messaggi/{id}/reazione", response_model=ChatReactionRead)
+async def add_chat_reazione(
+    id: uuid.UUID,
+    reaction_in: ChatReactionBase,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import ChatReaction
+    from sqlalchemy.exc import IntegrityError
+    
+    new_reaction = ChatReaction(
+        messaggio_id=id,
+        user_id=current_user.id,
+        emoji=reaction_in.emoji
+    )
+    db.add(new_reaction)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        res = await db.execute(select(ChatReaction).where(
+            ChatReaction.messaggio_id == id,
+            ChatReaction.user_id == current_user.id,
+            ChatReaction.emoji == reaction_in.emoji
+        ))
+        return res.scalar_one()
+        
+    await db.refresh(new_reaction)
+    new_reaction.user_nome = f"{current_user.nome} {current_user.cognome}"
+    return new_reaction
+
+@router.delete("/chat/messaggi/{id}/reazione")
+async def remove_chat_reazione(
+    id: uuid.UUID,
+    emoji: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import ChatReaction
+    stmt = select(ChatReaction).where(
+        ChatReaction.messaggio_id == id,
+        ChatReaction.user_id == current_user.id,
+        ChatReaction.emoji == emoji
+    )
+    res = await db.execute(stmt)
+    reaction = res.scalar_one_or_none()
+    
+    if reaction:
+        await db.delete(reaction)
+        await db.commit()
+        
+    return {"status": "ok"}

@@ -170,6 +170,7 @@ class Progetto(Base):
     commesse_link: Mapped[List["CommessaProgetto"]] = relationship(back_populates="progetto")
     team: Mapped[List["ProgettoTeam"]] = relationship(back_populates="progetto")
     servizi: Mapped[List["ServizioProgetto"]] = relationship(back_populates="progetto", cascade="all, delete-orphan", lazy="selectin")
+    messaggi_chat: Mapped[List["ChatMessage"]] = relationship(back_populates="progetto", cascade="all, delete-orphan")
 
 
 class ProgettoTeam(Base):
@@ -819,3 +820,36 @@ class WikiArticle(Base):
 
     categoria: Mapped["WikiCategory"] = relationship(back_populates="articoli")
     autore: Mapped["User"] = relationship()
+
+
+# ── CHAT ──────────────────────────────────────────────────
+class ChatMessage(Base):
+    __tablename__ = "chat_messaggi"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    progetto_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id", ondelete="CASCADE"))
+    autore_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    contenuto: Mapped[str] = mapped_column(Text, nullable=False)
+    tipo: Mapped[str] = mapped_column(String(20), default='testo')
+    risposta_a: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("chat_messaggi.id", ondelete="SET NULL"))
+    modificato: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    progetto: Mapped["Progetto"] = relationship(back_populates="messaggi_chat")
+    autore: Mapped["User"] = relationship()
+    reazioni: Mapped[List["ChatReaction"]] = relationship(back_populates="messaggio", cascade="all, delete-orphan")
+
+
+class ChatReaction(Base):
+    __tablename__ = "chat_reazioni"
+    __table_args__ = (UniqueConstraint("messaggio_id", "user_id", "emoji"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    messaggio_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("chat_messaggi.id", ondelete="CASCADE"))
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    emoji: Mapped[str] = mapped_column(String(10), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    messaggio: Mapped["ChatMessage"] = relationship(back_populates="reazioni")
+    user: Mapped["User"] = relationship()

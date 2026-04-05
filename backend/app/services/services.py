@@ -306,7 +306,11 @@ async def list_progetti(
     cliente_id: Optional[uuid.UUID] = None,
     stato: Optional[str] = None
 ) -> List[Progetto]:
-    q = select(Progetto).options(selectinload(Progetto.cliente))
+    from sqlalchemy.orm import selectinload
+    q = select(Progetto).options(
+        selectinload(Progetto.cliente),
+        selectinload(Progetto.team).selectinload(ProgettoTeam.user)
+    )
     if cliente_id:
         q = q.where(Progetto.cliente_id == cliente_id)
     if stato:
@@ -315,8 +319,12 @@ async def list_progetti(
     return result.scalars().all()
 
 async def get_progetto(db: AsyncSession, progetto_id: uuid.UUID) -> Optional[Progetto]:
+    from sqlalchemy.orm import selectinload
     result = await db.execute(
-        select(Progetto).options(selectinload(Progetto.cliente))
+        select(Progetto).options(
+            selectinload(Progetto.cliente),
+            selectinload(Progetto.team).selectinload(ProgettoTeam.user)
+        )
         .where(Progetto.id == progetto_id)
     )
     return result.scalar_one_or_none()
@@ -337,6 +345,18 @@ async def update_progetto(db: AsyncSession, progetto_id: uuid.UUID, data: Proget
     await write_audit(db, by_user_id, "progetti", progetto_id, "UPDATE", prima)
     await db.flush()
     return p
+
+async def get_progetto_with_servizi(db: AsyncSession, progetto_id: uuid.UUID) -> Optional[Progetto]:
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(
+        select(Progetto).options(
+            selectinload(Progetto.cliente),
+            selectinload(Progetto.servizi),
+            selectinload(Progetto.team).selectinload(ProgettoTeam.user)
+        )
+        .where(Progetto.id == progetto_id)
+    )
+    return result.scalar_one_or_none()
 
 
 # ── COMMESSA SERVICE ──────────────────────────────────────

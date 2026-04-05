@@ -12,7 +12,8 @@ import {
   Plus,
   ExternalLink,
   Maximize2,
-  LayoutDashboard
+  LayoutDashboard,
+  MessageSquare
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +26,7 @@ import { format } from "date-fns";
 import { it } from "date-fns/locale";
 import { GanttChart } from "@/components/gantt/GanttChart";
 import { StudioTaskModal } from "@/components/studio/StudioTaskModal";
+import { ChatProgetto } from "@/components/chat/ChatProgetto";
 
 export default function ProgettoDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -86,8 +88,8 @@ export default function ProgettoDetailPage() {
         </div>
         
         <div className="bg-muted/20 p-1.5 rounded-2xl border border-white/5 backdrop-blur-md">
-          <Tabs defaultValue="overview" className="w-[400px]">
-             <TabsList className="bg-transparent grid grid-cols-2 p-0 h-10">
+          <Tabs defaultValue="overview" className="w-[500px]">
+             <TabsList className="bg-transparent grid grid-cols-3 p-0 h-10">
                 <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
                    <LayoutDashboard className="w-3.5 h-3.5 mr-2" />
                    Panoramica
@@ -96,15 +98,16 @@ export default function ProgettoDetailPage() {
                    <Maximize2 className="w-3.5 h-3.5 mr-2" />
                    Gantt / Timeline
                 </TabsTrigger>
+                <TabsTrigger value="chat" className="data-[state=active]:bg-primary data-[state=active]:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+                   <MessageSquare className="w-3.5 h-3.5 mr-2" />
+                   Chat Progetto
+                </TabsTrigger>
              </TabsList>
           </Tabs>
         </div>
       </div>
 
       <Tabs defaultValue="overview" className="flex-1 flex flex-col overflow-hidden">
-        {/* We use a hidden TabsContent trick to keep the UI above consistent while switching the main view */}
-        {/* Wait, standard tabs structure is better */}
-        
         <div className="hidden">
            <TabsList autoFocus />
         </div>
@@ -248,10 +251,17 @@ export default function ProgettoDetailPage() {
                <GanttChart 
                  tasks={tasks} 
                  period="month" 
-                 onTaskClick={(id) => selectTask(id)} 
+                 onTaskClick={(tid) => selectTask(tid)} 
                />
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="chat" className="flex-1 overflow-hidden">
+           <ChatProgetto 
+            progettoId={id!} 
+            teamMembers={progetto.team || []} 
+           />
         </TabsContent>
       </Tabs>
 

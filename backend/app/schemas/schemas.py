@@ -206,6 +206,12 @@ class ProgettoCreate(BaseModel):
     clickup_list_id: Optional[str] = None
     note: Optional[str] = None
 
+class ProgettoTeamOut(OrmBase):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    ruolo_progetto: Optional[str] = None
+    user: Optional[UserOut] = None
+
 class ProgettoUpdate(BaseModel):
     nome: Optional[str] = None
     cliente_id: Optional[uuid.UUID] = None
@@ -231,6 +237,7 @@ class ProgettoOut(OrmBase):
     created_at: datetime
 
     servizi: List[ServizioProgettoOut] = Field(default_factory=list)
+    team: List[ProgettoTeamOut] = Field(default_factory=list)
 
 class ProgettoWithCliente(ProgettoOut):
     cliente: Optional[ClienteOut] = None
@@ -825,6 +832,48 @@ class WikiArticleOut(WikiArticleBase):
     created_at: datetime
     categoria: Optional[WikiCategoryOut] = None
     autore_nome: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ── CHAT SCHEMAS ──────────────────────────────────────────
+class ChatReactionBase(BaseModel):
+    emoji: str
+
+class ChatReactionCreate(ChatReactionBase):
+    messaggio_id: uuid.UUID
+
+class ChatReactionRead(ChatReactionBase):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    user_nome: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ChatMessageBase(BaseModel):
+    contenuto: str
+    tipo: str = "testo"
+    risposta_a: Optional[uuid.UUID] = None
+
+class ChatMessageCreate(ChatMessageBase):
+    progetto_id: uuid.UUID
+
+class ChatMessageUpdate(BaseModel):
+    contenuto: Optional[str] = None
+    modificato: bool = True
+
+class ChatMessageRead(ChatMessageBase):
+    id: uuid.UUID
+    progetto_id: uuid.UUID
+    autore_id: uuid.UUID
+    autore_nome: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    modificato: bool
+    reazioni: List[ChatReactionRead] = []
 
     class Config:
         from_attributes = True
