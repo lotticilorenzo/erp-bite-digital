@@ -694,13 +694,13 @@ class AIChatResponse(BaseModel):
     response: str
 
 # ── PREVENTIVO ────────────────────────────────────────────
-class PreventivoRigaCreate(BaseModel):
+class PreventivoVoceCreate(BaseModel):
     descrizione: str
     quantita: Decimal = Decimal("1")
     prezzo_unitario: Decimal = Decimal("0")
     ordine: int = 0
 
-class PreventivoRigaOut(OrmBase):
+class PreventivoVoceOut(OrmBase):
     id: uuid.UUID
     descrizione: str
     quantita: Decimal
@@ -715,7 +715,7 @@ class PreventivoCreate(BaseModel):
     descrizione: Optional[str] = None
     data_scadenza: Optional[date] = None
     note: Optional[str] = None
-    voci: List[PreventivoRigaCreate]
+    voci: List[PreventivoVoceCreate]
 
 class PreventivoUpdate(BaseModel):
     titolo: Optional[str] = None
@@ -725,7 +725,7 @@ class PreventivoUpdate(BaseModel):
     data_scadenza: Optional[date] = None
     data_accettazione: Optional[date] = None
     note: Optional[str] = None
-    voci: Optional[List[PreventivoRigaCreate]] = None
+    voci: Optional[List[PreventivoVoceCreate]] = None
 
 class PreventivoOut(OrmBase):
     id: uuid.UUID
@@ -742,7 +742,7 @@ class PreventivoOut(OrmBase):
     created_by: uuid.UUID
     created_at: datetime
     updated_at: datetime
-    voci: List[PreventivoRigaOut]
+    voci: List[PreventivoVoceOut]
     cliente: Optional[ClienteOut] = None
 
 
@@ -795,43 +795,43 @@ class BudgetConsuntivoOut(BaseModel):
 
 
 # ── WIKI SCHEMAS ──────────────────────────────────────────
-class WikiCategoryBase(BaseModel):
+class WikiCategoriaBase(BaseModel):
     nome: str
     icona: Optional[str] = None
     ordine: Optional[int] = 0
 
-class WikiCategoryCreate(WikiCategoryBase):
+class WikiCategoriaCreate(WikiCategoriaBase):
     pass
 
-class WikiCategoryOut(WikiCategoryBase):
+class WikiCategoriaOut(WikiCategoriaBase):
     id: uuid.UUID
     created_at: datetime
 
     class Config:
         from_attributes = True
 
-class WikiArticleBase(BaseModel):
+class WikiArticoloBase(BaseModel):
     categoria_id: uuid.UUID
     titolo: str
     contenuto: Optional[str] = None
     pubblicato: Optional[bool] = True
 
-class WikiArticleCreate(WikiArticleBase):
+class WikiArticoloCreate(WikiArticoloBase):
     pass
 
-class WikiArticleUpdate(BaseModel):
+class WikiArticoloUpdate(BaseModel):
     categoria_id: Optional[uuid.UUID] = None
     titolo: Optional[str] = None
     contenuto: Optional[str] = None
     pubblicato: Optional[bool] = None
 
-class WikiArticleOut(WikiArticleBase):
+class WikiArticoloOut(WikiArticoloBase):
     id: uuid.UUID
     autore_id: uuid.UUID
     ultimo_aggiornamento: datetime
     visualizzazioni: int
     created_at: datetime
-    categoria: Optional[WikiCategoryOut] = None
+    categoria: Optional[WikiCategoriaOut] = None
     autore_nome: Optional[str] = None
 
     class Config:
@@ -839,13 +839,13 @@ class WikiArticleOut(WikiArticleBase):
 
 
 # ── CHAT SCHEMAS ──────────────────────────────────────────
-class ChatReactionBase(BaseModel):
+class ChatReazioneBase(BaseModel):
     emoji: str
 
-class ChatReactionCreate(ChatReactionBase):
+class ChatReazioneCreate(ChatReazioneBase):
     messaggio_id: uuid.UUID
 
-class ChatReactionRead(ChatReactionBase):
+class ChatReazioneRead(ChatReazioneBase):
     id: uuid.UUID
     user_id: uuid.UUID
     user_nome: Optional[str] = None
@@ -854,19 +854,19 @@ class ChatReactionRead(ChatReactionBase):
     class Config:
         from_attributes = True
 
-class ChatMessageBase(BaseModel):
+class ChatMessaggioBase(BaseModel):
     contenuto: str
     tipo: str = "testo"
     risposta_a: Optional[uuid.UUID] = None
 
-class ChatMessageCreate(ChatMessageBase):
+class ChatMessaggioCreate(ChatMessaggioBase):
     progetto_id: uuid.UUID
 
-class ChatMessageUpdate(BaseModel):
+class ChatMessaggioUpdate(BaseModel):
     contenuto: Optional[str] = None
     modificato: bool = True
 
-class ChatMessageRead(ChatMessageBase):
+class ChatMessaggioRead(ChatMessaggioBase):
     id: uuid.UUID
     progetto_id: uuid.UUID
     autore_id: uuid.UUID
@@ -874,7 +874,7 @@ class ChatMessageRead(ChatMessageBase):
     created_at: datetime
     updated_at: datetime
     modificato: bool
-    reazioni: List[ChatReactionRead] = []
+    reazioni: List[ChatReazioneRead] = []
 
     class Config:
         from_attributes = True

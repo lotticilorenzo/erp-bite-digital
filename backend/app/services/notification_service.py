@@ -95,7 +95,8 @@ async def notify_unpaid_invoices(db: AsyncSession):
     """Notifica fatture scadute non pagate agli ADMIN."""
     today = date.today()
     # Trova fatture scadute in attesa
-    stmt = select(FatturaAttiva).where(
+    from sqlalchemy.orm import selectinload
+    stmt = select(FatturaAttiva).options(selectinload(FatturaAttiva.cliente)).where(
         FatturaAttiva.stato_pagamento == "ATTESA",
         FatturaAttiva.data_scadenza < today
     )

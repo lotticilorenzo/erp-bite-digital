@@ -3,7 +3,7 @@ services.py — Tutta la business logic separata dagli endpoint.
 """
 import uuid
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 from decimal import Decimal
 from typing import Any, Optional, List
 import httpx
@@ -15,8 +15,13 @@ from app.models.models import (
     User, Cliente, Progetto, Commessa, CommessaProgetto, Timesheet, Task,
     Costo, AuditLog, CoefficienteAllocazione,
     Fornitore, FatturaAttiva, FatturaPassiva, FicSyncRun, CategoriaFornitore,
-    Preventivo, PreventivoRiga,
-    UserRole, CommessaStatus, TaskStatus, TimesheetStatus, TimerSession, PreventivoStatus
+    Preventivo, PreventivoVoce,
+    UserRole, CommessaStatus, TaskStatus, TimesheetStatus, TimerSession, PreventivoStatus,
+    ProjectType, ProjectStatus, ServiceType, ServiceCadenza,
+    ProgettoTeam, ServizioProgetto, MovimentoCassa,
+    BudgetCategory, BudgetMensile, WikiCategoria, WikiArticolo,
+    ChatMessaggio, ChatReazione, CRMStage, CRMLead, CRMActivity,
+    Notification
 )
 from app.schemas.schemas import (
     UserCreate, UserUpdate, ClienteCreate, ClienteUpdate,
@@ -102,14 +107,11 @@ async def write_audit(
 
 # ── USER SERVICE ──────────────────────────────────────────
 async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID | str) -> Optional[User]:
-    user_uuid = user_id if isinstance(user_id, uuid.UUID) else uuid.UUID(user_id)
-    result = await db.execute(select(User).where(User.id == user_uuid))
-    return result.scalar_one_or_none()
-
-async def get_user_by_id(db: AsyncSession, user_id: any) -> Optional[User]:
-    from sqlalchemy import select
     if isinstance(user_id, str):
-        user_id = uuid.UUID(user_id)
+        try:
+            user_id = uuid.UUID(user_id)
+        except ValueError:
+            return None
     result = await db.execute(select(User).where(User.id == user_id))
     return result.scalar_one_or_none()
 
@@ -306,28 +308,28 @@ async def list_progetti(
     cliente_id: Optional[uuid.UUID] = None,
     stato: Optional[str] = None
 ) -> List[Progetto]:
-    from sqlalchemy.orm import selectinload
     q = select(Progetto).options(
         selectinload(Progetto.cliente),
-        selectinload(Progetto.team).selectinload(ProgettoTeam.user)
+        selectinload(Progetto.team).selectinload(ProgettoTeam.user),
+        selectinload(Progetto.servizi)
     )
     if cliente_id:
         q = q.where(Progetto.cliente_id == cliente_id)
     if stato:
         q = q.where(Progetto.stato == stato)
     result = await db.execute(q.order_by(Progetto.nome))
-    return result.scalars().all()
+    return result.unique().scalars().all()
 
 async def get_progetto(db: AsyncSession, progetto_id: uuid.UUID) -> Optional[Progetto]:
-    from sqlalchemy.orm import selectinload
     result = await db.execute(
         select(Progetto).options(
             selectinload(Progetto.cliente),
-            selectinload(Progetto.team).selectinload(ProgettoTeam.user)
+            selectinload(Progetto.team).selectinload(ProgettoTeam.user),
+            selectinload(Progetto.servizi)
         )
         .where(Progetto.id == progetto_id)
     )
-    return result.scalar_one_or_none()
+    return result.unique().scalar_one_or_none()
 
 async def create_progetto(db: AsyncSession, data: ProgettoCreate) -> Progetto:
     p = Progetto(**data.model_dump())
@@ -347,7 +349,6 @@ async def update_progetto(db: AsyncSession, progetto_id: uuid.UUID, data: Proget
     return p
 
 async def get_progetto_with_servizi(db: AsyncSession, progetto_id: uuid.UUID) -> Optional[Progetto]:
-    from sqlalchemy.orm import selectinload
     result = await db.execute(
         select(Progetto).options(
             selectinload(Progetto.cliente),
@@ -356,7 +357,7 @@ async def get_progetto_with_servizi(db: AsyncSession, progetto_id: uuid.UUID) ->
         )
         .where(Progetto.id == progetto_id)
     )
-    return result.scalar_one_or_none()
+    return result.unique().scalar_one_or_none()
 
 
 # ── COMMESSA SERVICE ──────────────────────────────────────
@@ -390,10 +391,11 @@ async def get_commessa(db: AsyncSession, commessa_id: uuid.UUID) -> Optional[Com
         .options(
             selectinload(Commessa.cliente),
             selectinload(Commessa.righe_progetto).selectinload(CommessaProgetto.progetto),
+            selectinload(Commessa.timesheet)
         )
         .where(Commessa.id == commessa_id)
     )
-    return result.scalar_one_or_none()
+    return result.unique().scalar_one_or_none()
 
 async def _build_commessa_righe(
     db: AsyncSession,
@@ -819,7 +821,7 @@ async def list_tasks(
     parent_only: bool = False
 ) -> List[Task]:
     q = select(Task).options(
-        selectinload(Task.subtasks),
+        selectinload(Task.subtasks).selectinload(Task.timer_sessions),
         selectinload(Task.assegnatario),
         selectinload(Task.timer_sessions)
     )
@@ -840,12 +842,12 @@ async def list_tasks(
 async def get_task(db: AsyncSession, task_id: uuid.UUID) -> Optional[Task]:
     result = await db.execute(
         select(Task).options(
-            selectinload(Task.subtasks),
+            selectinload(Task.subtasks).selectinload(Task.timer_sessions),
             selectinload(Task.assegnatario),
             selectinload(Task.timer_sessions)
         ).where(Task.id == task_id)
     )
-    return result.scalar_one_or_none()
+    return result.unique().scalar_one_or_none()
 
 async def create_task(db: AsyncSession, data: Any) -> Task: # data: TaskCreate
     t = Task(**data.model_dump())
@@ -1565,7 +1567,6 @@ async def list_fornitori(db: AsyncSession) -> List[Fornitore]:
     return result.scalars().all()
 
 async def list_fornitori_full(db: AsyncSession):
-    from app.models.models import Fornitore, FatturaPassiva, CategoriaFornitore
     from sqlalchemy import func
     result = await db.execute(
         select(
@@ -1698,7 +1699,7 @@ async def seed_budget_categories(db: AsyncSession):
 
 
 async def seed_wiki_categories(db: AsyncSession):
-    from app.models.models import WikiCategory
+    from app.models.models import WikiCategoria
     defaults = [
         {"nome": "Procedure operative", "icona": "ClipboardList", "ordine": 1},
         {"nome": "Onboarding", "icona": "UserPlus", "ordine": 2},
@@ -1708,9 +1709,9 @@ async def seed_wiki_categories(db: AsyncSession):
         {"nome": "FAQ", "icona": "HelpCircle", "ordine": 6},
     ]
     for d in defaults:
-        res = await db.execute(select(WikiCategory).where(WikiCategory.nome == d["nome"]))
+        res = await db.execute(select(WikiCategoria).where(WikiCategoria.nome == d["nome"]))
         if not res.scalar_one_or_none():
-            db.add(WikiCategory(**d))
+            db.add(WikiCategoria(**d))
     await db.commit()
 
 
@@ -2200,8 +2201,6 @@ async def delete_risorsa(db: AsyncSession, risorsa_id: uuid.UUID):
     return True
 
 async def get_progetto_with_servizi(db: AsyncSession, progetto_id):
-    from app.models.models import Progetto, ServizioProgetto
-    from sqlalchemy.orm import selectinload
     result = await db.execute(
         select(Progetto).options(selectinload(Progetto.servizi)).where(Progetto.id == progetto_id)
     )
@@ -2209,14 +2208,12 @@ async def get_progetto_with_servizi(db: AsyncSession, progetto_id):
 
 # ── SERVIZI PROGETTO ──────────────────────────────────────
 async def get_servizi_progetto(db: AsyncSession, progetto_id: uuid.UUID):
-    from app.models.models import ServizioProgetto
     result = await db.execute(
         select(ServizioProgetto).where(ServizioProgetto.progetto_id == progetto_id).order_by(ServizioProgetto.created_at)
     )
     return result.scalars().all()
 
 async def create_servizio_progetto(db: AsyncSession, progetto_id: uuid.UUID, data):
-    from app.models.models import ServizioProgetto
     s = ServizioProgetto(
         progetto_id=progetto_id,
         tipo=data.tipo,
@@ -2234,7 +2231,6 @@ async def create_servizio_progetto(db: AsyncSession, progetto_id: uuid.UUID, dat
     return s
 
 async def update_servizio_progetto(db: AsyncSession, servizio_id: uuid.UUID, data):
-    from app.models.models import ServizioProgetto
     result = await db.execute(select(ServizioProgetto).where(ServizioProgetto.id == servizio_id))
     s = result.scalar_one_or_none()
     if not s:
@@ -2313,7 +2309,6 @@ async def start_timer(db: AsyncSession, task_id: uuid.UUID, user_id: uuid.UUID) 
         await stop_timer(db, active_session.id)
     
     # 2. Create new session
-    # We use datetime.now(timezone.utc) to ensure we have a timezone-aware datetime
     new_session = TimerSession(
         task_id=task_id,
         user_id=user_id,
@@ -2322,8 +2317,14 @@ async def start_timer(db: AsyncSession, task_id: uuid.UUID, user_id: uuid.UUID) 
     )
     db.add(new_session)
     await db.commit()
-    await db.refresh(new_session)
-    return new_session
+    
+    # Reload with task for the response model
+    result = await db.execute(
+        select(TimerSession)
+        .options(selectinload(TimerSession.task))
+        .where(TimerSession.id == new_session.id)
+    )
+    return result.scalar_one()
 
 async def stop_timer(db: AsyncSession, session_id: uuid.UUID, note: Optional[str] = None) -> Optional[TimerSession]:
     result = await db.execute(select(TimerSession).where(TimerSession.id == session_id))
@@ -2340,8 +2341,14 @@ async def stop_timer(db: AsyncSession, session_id: uuid.UUID, note: Optional[str
     session.durata_minuti = max(1, int(delta.total_seconds() / 60))
     
     await db.commit()
-    await db.refresh(session)
-    return session
+    
+    # Reload with task for the response model
+    result = await db.execute(
+        select(TimerSession)
+        .options(selectinload(TimerSession.task))
+        .where(TimerSession.id == session.id)
+    )
+    return result.scalar_one()
 
 async def get_active_timer(db: AsyncSession, user_id: uuid.UUID) -> Optional[dict]:
     result = await db.execute(
@@ -2364,6 +2371,7 @@ async def get_active_timer(db: AsyncSession, user_id: uuid.UUID) -> Optional[dic
 async def list_timer_sessions(db: AsyncSession, task_id: uuid.UUID) -> List[TimerSession]:
     result = await db.execute(
         select(TimerSession)
+        .options(selectinload(TimerSession.task))
         .where(TimerSession.task_id == task_id)
         .order_by(TimerSession.started_at.desc())
     )
@@ -2378,6 +2386,7 @@ async def save_timer_to_timesheet(
 ) -> List[Timesheet]:
     result = await db.execute(
         select(TimerSession)
+        .options(selectinload(TimerSession.task))
         .where(TimerSession.id.in_(session_ids))
         .where(TimerSession.user_id == user.id)
         .where(TimerSession.stopped_at != None)
@@ -2462,7 +2471,7 @@ async def create_preventivo(db: AsyncSession, data: PreventivoCreate, user_id: u
 
     voci = []
     for v in data.voci:
-        riga = PreventivoRiga(
+        riga = PreventivoVoce(
             id=uuid.uuid4(),
             preventivo_id=p.id,
             descrizione=v.descrizione,
@@ -2494,7 +2503,7 @@ async def update_preventivo(db: AsyncSession, preventivo_id: uuid.UUID, data: Pr
         importo_totale = Decimal("0")
         for v in voci_data:
             tot = Decimal(str(v["quantita"])) * Decimal(str(v["prezzo_unitario"]))
-            riga = PreventivoRiga(
+            riga = PreventivoVoce(
                 id=uuid.uuid4(),
                 preventivo_id=p.id,
                 descrizione=v["descrizione"],
@@ -2530,7 +2539,6 @@ async def converti_preventivo_in_commessa(db: AsyncSession, preventivo_id: uuid.
     progetto = proj_res.scalar_one_or_none()
     
     if not progetto:
-        from app.models.models import ProjectType
         progetto = Progetto(
             id=uuid.uuid4(),
             cliente_id=p.cliente_id,

@@ -10,7 +10,7 @@ import shutil
 import io
 from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
+from sqlalchemy import text, select, func, and_, or_
 
 from app.db.session import get_db
 from app.core.security import (
@@ -36,8 +36,8 @@ from app.schemas.schemas import (
     CategoriaFornitoreCreate, CategoriaFornitoreOut, CategoriaFornitoreUpdate,
     PreventivoCreate, PreventivoUpdate, PreventivoOut,
     BudgetCategoryCreate, BudgetCategoryOut, BudgetMensileCreate, BudgetMensileUpdate, BudgetMensileOut, BudgetConsuntivoOut,
-    WikiCategoryCreate, WikiCategoryOut, WikiArticleCreate, WikiArticleUpdate, WikiArticleOut,
-    ChatReactionBase, ChatReactionRead, ChatMessageCreate, ChatMessageUpdate, ChatMessageRead,
+    WikiCategoriaCreate, WikiCategoriaOut, WikiArticoloCreate, WikiArticoloUpdate, WikiArticoloOut,
+    ChatReazioneBase, ChatReazioneRead, ChatMessaggioCreate, ChatMessaggioUpdate, ChatMessaggioRead,
     CRMStageOut, CRMLeadCreate, CRMLeadUpdate, CRMLeadOut, CRMActivityCreate, CRMActivityOut, CRMStatsOut
 )
 from app.schemas.auth import ForgotPasswordRequest, ResetPasswordRequest
@@ -742,18 +742,7 @@ async def patch_progetto(
 async def _enrich_commessa(db: AsyncSession, c, coeff_cache: Optional[dict[date, Decimal]] = None) -> dict:
     """Aggiunge i campi calcolati alla commessa prima della serializzazione."""
     from sqlalchemy import text as _text
-    from sqlalchemy.orm import selectinload as _sil
     from sqlalchemy import select as _sel2
-    from app.models.models import Commessa as _Commessa, CommessaProgetto as _CP
-    # Ricarica con relazioni esplicite per evitare MissingGreenlet
-    # Ricarica con relazioni esplicite per evitare MissingGreenlet
-    res = await db.execute(
-        _sel2(_Commessa).options(
-            _sil(_Commessa.righe_progetto).selectinload(_CP.progetto),
-            _sil(_Commessa.cliente)
-        ).where(_Commessa.id == c.id)
-    )
-    c = res.scalar_one_or_none() or c
     row = await db.execute(
         _text("""
             SELECT fa.id, fa.numero, fa.data_emissione, fa.importo_netto, fa.stato_pagamento
@@ -2088,40 +2077,40 @@ async def get_budget_consuntivo(
 
 # ── WIKI ──────────────────────────────────────────────────
 
-@router.get("/wiki/categorie", response_model=List[WikiCategoryOut], tags=["Wiki"])
+@router.get("/wiki/categorie", response_model=List[WikiCategoriaOut], tags=["Wiki"])
 async def list_wiki_categories_endpoint(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.models import WikiCategory
-    result = await db.execute(select(WikiCategory).order_by(WikiCategory.ordine, WikiCategory.nome))
+    from app.models.models import WikiCategoria
+    result = await db.execute(select(WikiCategoria).order_by(WikiCategoria.ordine, WikiCategoria.nome))
     return result.scalars().all()
 
-@router.post("/wiki/categorie", response_model=WikiCategoryOut, status_code=201, tags=["Wiki"])
+@router.post("/wiki/categorie", response_model=WikiCategoriaOut, status_code=201, tags=["Wiki"])
 async def create_wiki_category_endpoint(
-    data: WikiCategoryCreate,
+    data: WikiCategoriaCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.models import WikiCategory
-    cat = WikiCategory(**data.model_dump())
+    from app.models.models import WikiCategoria
+    cat = WikiCategoria(**data.model_dump())
     db.add(cat)
     await db.commit()
     await db.refresh(cat)
     return cat
 
-@router.get("/wiki/articoli", response_model=List[WikiArticleOut], tags=["Wiki"])
+@router.get("/wiki/articoli", response_model=List[WikiArticoloOut], tags=["Wiki"])
 async def list_wiki_articles_endpoint(
     categoria_id: Optional[uuid.UUID] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.models import WikiArticle
+    from app.models.models import WikiArticolo
     from sqlalchemy.orm import joinedload
-    stmt = select(WikiArticle).options(joinedload(WikiArticle.autore), joinedload(WikiArticle.categoria))
+    stmt = select(WikiArticolo).options(joinedload(WikiArticolo.autore), joinedload(WikiArticolo.categoria))
     if categoria_id:
-        stmt = stmt.where(WikiArticle.categoria_id == categoria_id)
-    result = await db.execute(stmt.order_by(WikiArticle.ultimo_aggiornamento.desc()))
+        stmt = stmt.where(WikiArticolo.categoria_id == categoria_id)
+    result = await db.execute(stmt.order_by(WikiArticolo.ultimo_aggiornamento.desc()))
     articles = result.scalars().all()
     
     # Map autore_nome
@@ -2130,15 +2119,15 @@ async def list_wiki_articles_endpoint(
     
     return articles
 
-@router.get("/wiki/articoli/{articolo_id}", response_model=WikiArticleOut, tags=["Wiki"])
+@router.get("/wiki/articoli/{articolo_id}", response_model=WikiArticoloOut, tags=["Wiki"])
 async def get_wiki_article_endpoint(
     articolo_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.models import WikiArticle
+    from app.models.models import WikiArticolo
     from sqlalchemy.orm import joinedload
-    stmt = select(WikiArticle).options(joinedload(WikiArticle.autore), joinedload(WikiArticle.categoria)).where(WikiArticle.id == articolo_id)
+    stmt = select(WikiArticolo).options(joinedload(WikiArticolo.autore), joinedload(WikiArticolo.categoria)).where(WikiArticolo.id == articolo_id)
     result = await db.execute(stmt)
     article = result.scalar_one_or_none()
     if not article:
@@ -2152,28 +2141,28 @@ async def get_wiki_article_endpoint(
     article.autore_nome = f"{article.autore.nome} {article.autore.cognome}" if article.autore else "Anonimo"
     return article
 
-@router.post("/wiki/articoli", response_model=WikiArticleOut, status_code=201, tags=["Wiki"])
+@router.post("/wiki/articoli", response_model=WikiArticoloOut, status_code=201, tags=["Wiki"])
 async def create_wiki_article_endpoint(
-    data: WikiArticleCreate,
+    data: WikiArticoloCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.models import WikiArticle
-    art = WikiArticle(**data.model_dump(), autore_id=current_user.id)
+    from app.models.models import WikiArticolo
+    art = WikiArticolo(**data.model_dump(), autore_id=current_user.id)
     db.add(art)
     await db.commit()
     await db.refresh(art)
     return art
 
-@router.patch("/wiki/articoli/{articolo_id}", response_model=WikiArticleOut, tags=["Wiki"])
+@router.patch("/wiki/articoli/{articolo_id}", response_model=WikiArticoloOut, tags=["Wiki"])
 async def update_wiki_article_endpoint(
     articolo_id: uuid.UUID,
-    data: WikiArticleUpdate,
+    data: WikiArticoloUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.models import WikiArticle
-    stmt = select(WikiArticle).where(WikiArticle.id == articolo_id)
+    from app.models.models import WikiArticolo
+    stmt = select(WikiArticolo).where(WikiArticolo.id == articolo_id)
     res = await db.execute(stmt)
     article = res.scalar_one_or_none()
     if not article:
@@ -2193,8 +2182,8 @@ async def delete_wiki_article_endpoint(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.models import WikiArticle
-    stmt = select(WikiArticle).where(WikiArticle.id == articolo_id)
+    from app.models.models import WikiArticolo
+    stmt = select(WikiArticolo).where(WikiArticolo.id == articolo_id)
     res = await db.execute(stmt)
     article = res.scalar_one_or_none()
     if not article:
@@ -2204,22 +2193,22 @@ async def delete_wiki_article_endpoint(
     await db.commit()
     return {"status": "ok"}
 
-@router.get("/wiki/cerca", response_model=List[WikiArticleOut], tags=["Wiki"])
+@router.get("/wiki/cerca", response_model=List[WikiArticoloOut], tags=["Wiki"])
 async def search_wiki_articles_endpoint(
     q: str = Query(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.models import WikiArticle
+    from app.models.models import WikiArticolo
     from sqlalchemy.orm import joinedload
     from sqlalchemy import or_
     
-    stmt = select(WikiArticle).options(joinedload(WikiArticle.autore), joinedload(WikiArticle.categoria)).where(
+    stmt = select(WikiArticolo).options(joinedload(WikiArticolo.autore), joinedload(WikiArticolo.categoria)).where(
         or_(
-            WikiArticle.titolo.ilike(f"%{q}%"),
-            WikiArticle.contenuto.ilike(f"%{q}%")
+            WikiArticolo.titolo.ilike(f"%{q}%"),
+            WikiArticolo.contenuto.ilike(f"%{q}%")
         )
-    ).order_by(WikiArticle.ultimo_aggiornamento.desc())
+    ).order_by(WikiArticolo.ultimo_aggiornamento.desc())
     
     result = await db.execute(stmt)
     articles = result.scalars().all()
@@ -2230,7 +2219,7 @@ async def search_wiki_articles_endpoint(
 
 # ── CHAT ──────────────────────────────────────────────────
 
-@router.get("/chat/{progetto_id}/messaggi", response_model=List[ChatMessageRead])
+@router.get("/chat/{progetto_id}/messaggi", response_model=List[ChatMessaggioRead])
 async def get_chat_messages(
     progetto_id: uuid.UUID,
     limite: int = 50,
@@ -2238,18 +2227,18 @@ async def get_chat_messages(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.models import ChatMessage, ChatReaction, User
+    from app.models.models import ChatMessaggio, ChatReazione, User
     from sqlalchemy.orm import joinedload, selectinload
     
-    stmt = select(ChatMessage).options(
-        joinedload(ChatMessage.autore),
-        selectinload(ChatMessage.reazioni).joinedload(ChatReaction.user)
-    ).where(ChatMessage.progetto_id == progetto_id)
+    stmt = select(ChatMessaggio).options(
+        joinedload(ChatMessaggio.autore),
+        selectinload(ChatMessaggio.reazioni).joinedload(ChatReazione.user)
+    ).where(ChatMessaggio.progetto_id == progetto_id)
     
     if prima_di:
-        stmt = stmt.where(ChatMessage.created_at < prima_di)
+        stmt = stmt.where(ChatMessaggio.created_at < prima_di)
     
-    stmt = stmt.order_by(ChatMessage.created_at.desc()).limit(limite)
+    stmt = stmt.order_by(ChatMessaggio.created_at.desc()).limit(limite)
     
     result = await db.execute(stmt)
     messages = result.scalars().all()
@@ -2262,14 +2251,14 @@ async def get_chat_messages(
             
     return sorted(messages, key=lambda x: x.created_at)
 
-@router.post("/chat/{progetto_id}/messaggi", response_model=ChatMessageRead)
+@router.post("/chat/{progetto_id}/messaggi", response_model=ChatMessaggioRead)
 async def create_chat_message(
     progetto_id: uuid.UUID,
-    message_in: ChatMessageCreate,
+    message_in: ChatMessaggioCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.models import ChatMessage, Progetto, User
+    from app.models.models import ChatMessaggio, Progetto, User
     from app.services.notification_service import create_notification
     from sqlalchemy import func
     import re
@@ -2280,7 +2269,7 @@ async def create_chat_message(
     if not progetto:
         raise HTTPException(status_code=404, detail="Progetto non trovato")
         
-    new_message = ChatMessage(
+    new_message = ChatMessaggio(
         progetto_id=progetto_id,
         autore_id=current_user.id,
         contenuto=message_in.contenuto,
@@ -2316,17 +2305,17 @@ async def create_chat_message(
             
     return new_message
 
-@router.patch("/chat/messaggi/{id}", response_model=ChatMessageRead)
+@router.patch("/chat/messaggi/{id}", response_model=ChatMessaggioRead)
 async def update_chat_message(
     id: uuid.UUID,
-    message_in: ChatMessageUpdate,
+    message_in: ChatMessaggioUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.models import ChatMessage
+    from app.models.models import ChatMessaggio
     from sqlalchemy.orm import joinedload
     
-    stmt = select(ChatMessage).options(joinedload(ChatMessage.autore)).where(ChatMessage.id == id)
+    stmt = select(ChatMessaggio).options(joinedload(ChatMessaggio.autore)).where(ChatMessaggio.id == id)
     res = await db.execute(stmt)
     message = res.scalar_one_or_none()
     
@@ -2350,8 +2339,8 @@ async def delete_chat_message(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.models import ChatMessage
-    res = await db.execute(select(ChatMessage).where(ChatMessage.id == id))
+    from app.models.models import ChatMessaggio
+    res = await db.execute(select(ChatMessaggio).where(ChatMessaggio.id == id))
     message = res.scalar_one_or_none()
     
     if not message:
@@ -2363,17 +2352,17 @@ async def delete_chat_message(
     await db.commit()
     return {"status": "ok"}
 
-@router.post("/chat/messaggi/{id}/reazione", response_model=ChatReactionRead)
+@router.post("/chat/messaggi/{id}/reazione", response_model=ChatReazioneRead)
 async def add_chat_reazione(
     id: uuid.UUID,
-    reaction_in: ChatReactionBase,
+    reaction_in: ChatReazioneBase,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.models import ChatReaction
+    from app.models.models import ChatReazione
     from sqlalchemy.exc import IntegrityError
     
-    new_reaction = ChatReaction(
+    new_reaction = ChatReazione(
         messaggio_id=id,
         user_id=current_user.id,
         emoji=reaction_in.emoji
@@ -2383,10 +2372,10 @@ async def add_chat_reazione(
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        res = await db.execute(select(ChatReaction).where(
-            ChatReaction.messaggio_id == id,
-            ChatReaction.user_id == current_user.id,
-            ChatReaction.emoji == reaction_in.emoji
+        res = await db.execute(select(ChatReazione).where(
+            ChatReazione.messaggio_id == id,
+            ChatReazione.user_id == current_user.id,
+            ChatReazione.emoji == reaction_in.emoji
         ))
         return res.scalar_one()
         
@@ -2401,11 +2390,11 @@ async def remove_chat_reazione(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.models import ChatReaction
-    stmt = select(ChatReaction).where(
-        ChatReaction.messaggio_id == id,
-        ChatReaction.user_id == current_user.id,
-        ChatReaction.emoji == emoji
+    from app.models.models import ChatReazione
+    stmt = select(ChatReazione).where(
+        ChatReazione.messaggio_id == id,
+        ChatReazione.user_id == current_user.id,
+        ChatReazione.emoji == emoji
     )
     res = await db.execute(stmt)
     reaction = res.scalar_one_or_none()

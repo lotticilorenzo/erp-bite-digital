@@ -45,6 +45,58 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi import Request
+from starlette.responses import JSONResponse
+import traceback
+import sys
+from datetime import datetime
+
+@app.middleware("http")
+async def catch_exceptions_middleware(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        # Log to stdout for docker logs
+        print(f"\n--- ERROR {datetime.now()} ---", file=sys.stderr)
+        print(f"URL: {request.url}", file=sys.stderr)
+        traceback.print_exc()
+        print("-" * 80 + "\n", file=sys.stderr)
+        
+        # Also write to a file for persistence
+        with open("/tmp/error_traceback.txt", "a") as f:
+            f.write(f"\n--- ERROR {datetime.now()} ---\n")
+            f.write(f"URL: {request.url}\n")
+            f.write(traceback.format_exc())
+            f.write("-" * 80 + "\n")
+            
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal Server Error - Traceback logged"}
+        )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    print(f"\n--- GLOBAL ERROR {datetime.now()} ---", file=sys.stderr)
+    print(f"URL: {request.url}", file=sys.stderr)
+    traceback.print_exc()
+    print("-" * 80 + "\n", file=sys.stderr)
+    
+    # Scrivi anche su file
+    with open("/tmp/error_traceback.txt", "a") as f:
+        f.write(f"\n--- GLOBAL ERROR {datetime.now()} ---\n")
+        f.write(f"URL: {request.url}\n")
+        f.write(traceback.format_exc())
+        f.write("-" * 80 + "\n")
+        
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error - Global Traceback logged"}
+    )
+
+@app.get("/")
+async def root():
+    return {"message": "Bite ERP API is running"}
+
 app.include_router(router, prefix="/api/v1")
 
 

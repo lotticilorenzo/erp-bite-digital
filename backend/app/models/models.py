@@ -169,8 +169,8 @@ class Progetto(Base):
     cliente: Mapped["Cliente"] = relationship(back_populates="progetti")
     commesse_link: Mapped[List["CommessaProgetto"]] = relationship(back_populates="progetto")
     team: Mapped[List["ProgettoTeam"]] = relationship(back_populates="progetto")
-    servizi: Mapped[List["ServizioProgetto"]] = relationship(back_populates="progetto", cascade="all, delete-orphan", lazy="selectin")
-    messaggi_chat: Mapped[List["ChatMessage"]] = relationship(back_populates="progetto", cascade="all, delete-orphan")
+    servizi: Mapped[List["ServizioProgetto"]] = relationship(back_populates="progetto", cascade="all, delete-orphan")
+    messaggi_chat: Mapped[List["ChatMessaggio"]] = relationship(back_populates="progetto", cascade="all, delete-orphan")
 
 
 class ProgettoTeam(Base):
@@ -232,7 +232,7 @@ class Commessa(Base):
     cliente: Mapped["Cliente"] = relationship(back_populates="commesse")
     righe_progetto: Mapped[List["CommessaProgetto"]] = relationship(
         back_populates="commessa",
-        cascade="all, delete-orphan",
+        cascade="all, delete-orphan"
     )
     timesheet: Mapped[List["Timesheet"]] = relationship("Timesheet", back_populates="commessa")
     fattura: Mapped[Optional["FatturaAttiva"]] = relationship(foreign_keys="[Commessa.fattura_id]", back_populates="commesse")
@@ -336,7 +336,7 @@ class Task(Base):
     timesheet: Mapped[List["Timesheet"]] = relationship("Timesheet", back_populates="task")
     subtasks: Mapped[List["Task"]] = relationship(
         back_populates="parent",
-        cascade="all, delete-orphan",
+        cascade="all, delete-orphan"
     )
     parent: Mapped[Optional["Task"]] = relationship(
         back_populates="subtasks",
@@ -754,11 +754,11 @@ class Preventivo(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     cliente: Mapped["Cliente"] = relationship(back_populates="preventivi")
-    voci: Mapped[List["PreventivoRiga"]] = relationship(back_populates="preventivo", cascade="all, delete-orphan")
+    voci: Mapped[List["PreventivoVoce"]] = relationship(back_populates="preventivo", cascade="all, delete-orphan")
     autore: Mapped["User"] = relationship()
 
 
-class PreventivoRiga(Base):
+class PreventivoVoce(Base):
     __tablename__ = "preventivo_voci"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -800,7 +800,7 @@ class BudgetMensile(Base):
 
 
 # ── WIKI ──────────────────────────────────────────────────
-class WikiCategory(Base):
+class WikiCategoria(Base):
     __tablename__ = "wiki_categorie"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -809,10 +809,10 @@ class WikiCategory(Base):
     ordine: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    articoli: Mapped[List["WikiArticle"]] = relationship(back_populates="categoria", cascade="all, delete-orphan")
+    articoli: Mapped[List["WikiArticolo"]] = relationship(back_populates="categoria", cascade="all, delete-orphan")
 
 
-class WikiArticle(Base):
+class WikiArticolo(Base):
     __tablename__ = "wiki_articoli"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -825,12 +825,12 @@ class WikiArticle(Base):
     visualizzazioni: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    categoria: Mapped["WikiCategory"] = relationship(back_populates="articoli")
+    categoria: Mapped["WikiCategoria"] = relationship(back_populates="articoli")
     autore: Mapped["User"] = relationship()
 
 
 # ── CHAT ──────────────────────────────────────────────────
-class ChatMessage(Base):
+class ChatMessaggio(Base):
     __tablename__ = "chat_messaggi"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -845,10 +845,10 @@ class ChatMessage(Base):
 
     progetto: Mapped["Progetto"] = relationship(back_populates="messaggi_chat")
     autore: Mapped["User"] = relationship()
-    reazioni: Mapped[List["ChatReaction"]] = relationship(back_populates="messaggio", cascade="all, delete-orphan")
+    reazioni: Mapped[List["ChatReazione"]] = relationship(back_populates="messaggio", cascade="all, delete-orphan")
 
 
-class ChatReaction(Base):
+class ChatReazione(Base):
     __tablename__ = "chat_reazioni"
     __table_args__ = (UniqueConstraint("messaggio_id", "user_id", "emoji"),)
 
@@ -858,7 +858,7 @@ class ChatReaction(Base):
     emoji: Mapped[str] = mapped_column(String(10), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    messaggio: Mapped["ChatMessage"] = relationship(back_populates="reazioni")
+    messaggio: Mapped["ChatMessaggio"] = relationship(back_populates="reazioni")
     user: Mapped["User"] = relationship()
 
 
