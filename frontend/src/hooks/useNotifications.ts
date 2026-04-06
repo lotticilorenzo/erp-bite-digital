@@ -29,7 +29,7 @@ export function useNotifications() {
       await api.patch(`/notifications/${id}/read`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"], exact: false });
     },
   });
 
@@ -38,7 +38,7 @@ export function useNotifications() {
       await api.post("/notifications/read-all");
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"], exact: false });
     },
   });
 

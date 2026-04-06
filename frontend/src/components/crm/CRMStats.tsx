@@ -34,7 +34,7 @@ export function CRMStats({ stats }: { stats: CRMStatsType }) {
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
       {cards.map((card, i) => (
         <div key={i} className="bg-card/40 border border-white/5 p-6 rounded-3xl backdrop-blur-sm group hover:border-primary/20 transition-all">
           <div className="flex items-center justify-between mb-4">

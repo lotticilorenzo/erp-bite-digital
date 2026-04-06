@@ -79,17 +79,26 @@ export function useTaskMutations() {
 
   const createTask = useMutation({
     mutationFn: (data: any) => api.post("/tasks", data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["studio-tasks"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["studio-tasks"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["tasks"], exact: false });
+    },
   });
 
   const updateTask = useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) => api.patch(`/tasks/${id}`, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["studio-tasks"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["studio-tasks"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["tasks"], exact: false });
+    },
   });
 
   const deleteTask = useMutation({
     mutationFn: (id: string) => api.delete(`/tasks/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["studio-tasks"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["studio-tasks"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["tasks"], exact: false });
+    },
   });
 
   return { createTask, updateTask, deleteTask };

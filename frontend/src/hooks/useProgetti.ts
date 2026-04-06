@@ -35,7 +35,7 @@ export function useCreateProgetto() {
       return response;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["progetti"] });
+      queryClient.invalidateQueries({ queryKey: ["progetti"], exact: false });
     },
   });
 }
@@ -48,8 +48,8 @@ export function useUpdateProgetto() {
       return response;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["progetti"] });
-      queryClient.invalidateQueries({ queryKey: ["progetti", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["progetti"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["progetti", variables.id], exact: false });
     },
   });
 }
@@ -61,7 +61,7 @@ export function useDeleteProgetto() {
       await api.delete(`/progetti/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["progetti"] });
+      queryClient.invalidateQueries({ queryKey: ["progetti"], exact: false });
     },
   });
 }

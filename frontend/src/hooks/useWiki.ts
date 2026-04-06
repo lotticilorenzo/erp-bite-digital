@@ -37,7 +37,7 @@ export function useWiki() {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["wiki-articles"] });
+      queryClient.invalidateQueries({ queryKey: ["wiki-articles"], exact: false });
     },
   });
 
@@ -47,8 +47,8 @@ export function useWiki() {
       return res.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["wiki-articles"] });
-      queryClient.invalidateQueries({ queryKey: ["wiki-article", data.id] });
+      queryClient.invalidateQueries({ queryKey: ["wiki-articles"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["wiki-article", data.id], exact: false });
     },
   });
 
@@ -57,7 +57,7 @@ export function useWiki() {
       await api.delete(`/wiki/articoli/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["wiki-articles"] });
+      queryClient.invalidateQueries({ queryKey: ["wiki-articles"], exact: false });
     },
   });
 

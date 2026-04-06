@@ -32,7 +32,7 @@ export const usePreventivoMutations = () => {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["preventivi"] });
+      queryClient.invalidateQueries({ queryKey: ["preventivi"], exact: false });
     },
   });
 
@@ -42,8 +42,8 @@ export const usePreventivoMutations = () => {
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["preventivi"] });
-      queryClient.invalidateQueries({ queryKey: ["preventivi", data.id] });
+      queryClient.invalidateQueries({ queryKey: ["preventivi"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["preventivi", data.id], exact: false });
     },
   });
 
@@ -52,7 +52,7 @@ export const usePreventivoMutations = () => {
       await api.delete(`/preventivi/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["preventivi"] });
+      queryClient.invalidateQueries({ queryKey: ["preventivi"], exact: false });
     },
   });
 
@@ -62,8 +62,8 @@ export const usePreventivoMutations = () => {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["preventivi"] });
-      queryClient.invalidateQueries({ queryKey: ["commesse"] });
+      queryClient.invalidateQueries({ queryKey: ["preventivi"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["commesse"], exact: false });
     },
   });
 

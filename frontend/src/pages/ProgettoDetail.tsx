@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { 
   ChevronLeft, 
@@ -34,6 +34,7 @@ export default function ProgettoDetailPage() {
   const { data: progetto, isLoading: isLoadingProj, error } = useProgetto(id);
   const { data: tasks = [], isLoading: isLoadingTasks } = useTasks({ progetto_id: id, parent_only: false });
   const { selectTask } = useStudio();
+  const [activeTab, setActiveTab] = useState("overview");
 
   if (isLoadingProj) {
     return (
@@ -88,7 +89,7 @@ export default function ProgettoDetailPage() {
         </div>
         
         <div className="bg-muted/20 p-1.5 rounded-2xl border border-white/5 backdrop-blur-md">
-          <Tabs defaultValue="overview" className="w-[500px]">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-[500px]">
              <TabsList className="bg-transparent grid grid-cols-3 p-0 h-10">
                 <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
                    <LayoutDashboard className="w-3.5 h-3.5 mr-2" />
@@ -107,7 +108,7 @@ export default function ProgettoDetailPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="overview" className="flex-1 flex flex-col overflow-hidden">
+      <Tabs value={activeTab} className="flex-1 flex flex-col overflow-hidden">
         <div className="hidden">
            <TabsList autoFocus />
         </div>
@@ -247,7 +248,7 @@ export default function ProgettoDetailPage() {
                <p className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Genesi del piano temporale...</p>
             </div>
           ) : (
-            <div className="h-full">
+            <div style={{ width: "100%", overflowX: "auto", maxHeight: "600px", overflowY: "auto" }}>
                <GanttChart 
                  tasks={tasks} 
                  period="month" 

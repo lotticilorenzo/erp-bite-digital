@@ -6,7 +6,7 @@ import { useCRM } from "@/hooks/useCRM";
 import type { CRMLead, CRMStage } from "@/types/crm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+// ScrollArea import removed
 import {
   DndContext,
   DragOverlay,
@@ -64,7 +64,7 @@ export function CRMBoard({ onSelectLead }: CRMBoardProps) {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <ScrollArea className="flex-1 w-full bg-background/20 rounded-3xl overflow-hidden">
+      <div className="flex-1 w-full bg-background/20 rounded-3xl overflow-x-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
         <div className="flex gap-6 p-6 h-[calc(100vh-280px)] min-w-max">
           {stages.map((stage) => (
             <DroppableColumn 
@@ -76,8 +76,7 @@ export function CRMBoard({ onSelectLead }: CRMBoardProps) {
             />
           ))}
         </div>
-        <ScrollBar orientation="horizontal" />
-      </ScrollArea>
+      </div>
 
       <DragOverlay dropAnimation={{
         sideEffects: defaultDropAnimationSideEffects({
@@ -118,7 +117,7 @@ function DroppableColumn({
   return (
     <div 
       ref={setNodeRef}
-      className={`w-80 flex flex-col gap-4 rounded-3xl transition-colors ${
+      className={`min-w-[280px] w-[280px] shrink-0 flex flex-col gap-4 rounded-3xl transition-colors ${
         isOver ? 'bg-primary/5 ring-2 ring-primary/20 ring-inset shadow-inner' : 'bg-transparent'
       }`}
     >

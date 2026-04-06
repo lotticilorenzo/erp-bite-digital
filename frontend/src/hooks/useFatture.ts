@@ -30,8 +30,8 @@ export function useIncassaFattura() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["fatture-attive"] });
-      queryClient.invalidateQueries({ queryKey: ["commesse"] });
+      queryClient.invalidateQueries({ queryKey: ["fatture-attive"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["commesse"], exact: false });
     },
   });
 }
@@ -44,7 +44,7 @@ export function useUpdateFatturaPassiva() {
       return response;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["fatture-passive"] });
+      queryClient.invalidateQueries({ queryKey: ["fatture-passive"], exact: false });
     },
   });
 }

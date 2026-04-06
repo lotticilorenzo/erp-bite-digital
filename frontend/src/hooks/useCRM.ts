@@ -36,7 +36,7 @@ export function useCRM() {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["crm"] });
+      queryClient.invalidateQueries({ queryKey: ["crm"], exact: false });
       toast.success("Lead creato con successo");
     },
     onError: (err: any) => {
@@ -50,7 +50,7 @@ export function useCRM() {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["crm"] });
+      queryClient.invalidateQueries({ queryKey: ["crm"], exact: false });
     },
   });
 
@@ -60,7 +60,7 @@ export function useCRM() {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["crm"] });
+      queryClient.invalidateQueries({ queryKey: ["crm"], exact: false });
       toast.success("Stadio aggiornato");
     },
   });
@@ -71,7 +71,7 @@ export function useCRM() {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["crm"] });
+      queryClient.invalidateQueries({ queryKey: ["crm"], exact: false });
       toast.success("Attività salvata");
     },
   });
@@ -81,7 +81,7 @@ export function useCRM() {
       await api.delete(`/crm/lead/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["crm"] });
+      queryClient.invalidateQueries({ queryKey: ["crm"], exact: false });
       toast.success("Lead eliminato");
     },
   });
@@ -92,8 +92,8 @@ export function useCRM() {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["crm"] });
-      queryClient.invalidateQueries({ queryKey: ["clienti"] });
+      queryClient.invalidateQueries({ queryKey: ["crm"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["clienti"], exact: false });
       toast.success("Lead convertito in cliente!");
     },
   });
@@ -109,6 +109,6 @@ export function useCRM() {
     addActivity,
     deleteLead,
     convertLeadToClient,
-    refresh: () => queryClient.invalidateQueries({ queryKey: ["crm"] })
+    refresh: () => queryClient.invalidateQueries({ queryKey: ["crm"], exact: false })
   };
 }

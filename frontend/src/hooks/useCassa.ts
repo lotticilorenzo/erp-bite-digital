@@ -19,7 +19,7 @@ export function useUpdateMovimento() {
       return response;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["movimenti-cassa"] });
+      queryClient.invalidateQueries({ queryKey: ["movimenti-cassa"], exact: false });
     },
   });
 }
@@ -32,7 +32,7 @@ export function useRiconciliaMovimento() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["movimenti-cassa"] });
+      queryClient.invalidateQueries({ queryKey: ["movimenti-cassa"], exact: false });
     },
   });
 }

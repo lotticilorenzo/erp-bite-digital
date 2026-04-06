@@ -42,7 +42,7 @@ export default function CRM() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex p-1.5 bg-white/5 rounded-2xl border border-white/5 backdrop-blur-xl">
             <Button 
               variant={view === "kanban" ? "secondary" : "ghost"} 

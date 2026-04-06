@@ -24,7 +24,7 @@ export function useChat(progetto_id: string) {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["chat-messages", progetto_id] });
+      queryClient.invalidateQueries({ queryKey: ["chat-messages", progetto_id], exact: false });
     },
   });
 
@@ -34,7 +34,7 @@ export function useChat(progetto_id: string) {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["chat-messages", progetto_id] });
+      queryClient.invalidateQueries({ queryKey: ["chat-messages", progetto_id], exact: false });
     },
   });
 
@@ -43,7 +43,7 @@ export function useChat(progetto_id: string) {
       await api.delete(`/chat/messaggi/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["chat-messages", progetto_id] });
+      queryClient.invalidateQueries({ queryKey: ["chat-messages", progetto_id], exact: false });
     },
   });
 
@@ -53,7 +53,7 @@ export function useChat(progetto_id: string) {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["chat-messages", progetto_id] });
+      queryClient.invalidateQueries({ queryKey: ["chat-messages", progetto_id], exact: false });
     },
   });
 
@@ -62,7 +62,7 @@ export function useChat(progetto_id: string) {
       await api.delete(`/chat/messaggi/${message_id}/reazione?emoji=${encodeURIComponent(emoji)}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["chat-messages", progetto_id] });
+      queryClient.invalidateQueries({ queryKey: ["chat-messages", progetto_id], exact: false });
     },
   });
 

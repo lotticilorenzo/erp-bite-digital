@@ -32,7 +32,7 @@ export function useCreateCommessa() {
       return response;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["commesse"] });
+      queryClient.invalidateQueries({ queryKey: ["commesse"], exact: false });
     },
   });
 }
@@ -45,8 +45,8 @@ export function useUpdateCommessa() {
       return response;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["commesse"] });
-      queryClient.invalidateQueries({ queryKey: ["commessa", data.id] });
+      queryClient.invalidateQueries({ queryKey: ["commesse"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["commessa", data.id], exact: false });
     },
   });
 }
@@ -58,7 +58,7 @@ export function useDeleteCommessa() {
       await api.delete(`/commesse/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["commesse"] });
+      queryClient.invalidateQueries({ queryKey: ["commesse"], exact: false });
     },
   });
 }
@@ -71,8 +71,8 @@ export function useCollegaFattura() {
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["commesse"] });
-      queryClient.invalidateQueries({ queryKey: ["commessa", data.id] });
+      queryClient.invalidateQueries({ queryKey: ["commesse"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["commessa", data.id], exact: false });
     },
   });
 }

@@ -22,10 +22,12 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ClientAvatar } from "../common/ClientAvatar";
+import { ProgettoDialog } from "../progetti/ProgettoDialog";
 
 export function StudioSidebar() {
   const { nav, selectFolder, setView, spaces } = useStudio();
   const [search, setSearch] = React.useState("");
+  const [isProgettoModalOpen, setIsProgettoModalOpen] = React.useState(false);
 
   return (
     <div className="flex flex-col h-full bg-transparent border-r border-border/30">
@@ -61,7 +63,7 @@ export function StudioSidebar() {
           <SidebarGroup key={space.id} className="py-2">
             <SidebarGroupLabel className="px-3 mb-2 flex items-center justify-between text-[10px] uppercase font-black tracking-[0.2em] text-[#475569]">
               {space.name}
-              <button className="hover:text-primary transition-colors">
+              <button className="hover:text-primary transition-colors" onClick={() => setIsProgettoModalOpen(true)}>
                 <Plus className="h-3 w-3" />
               </button>
             </SidebarGroupLabel>
@@ -108,6 +110,11 @@ export function StudioSidebar() {
           </SidebarGroup>
         ))}
       </ScrollArea>
+
+      <ProgettoDialog 
+        open={isProgettoModalOpen} 
+        onOpenChange={setIsProgettoModalOpen} 
+      />
     </div>
   );
 }

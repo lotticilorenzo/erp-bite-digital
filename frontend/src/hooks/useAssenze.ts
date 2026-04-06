@@ -28,7 +28,7 @@ export function useAssenze(params?: { user_id?: string; start_date?: string; end
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["assenze"] });
+      queryClient.invalidateQueries({ queryKey: ["assenze"], exact: false });
     },
   });
 
@@ -37,7 +37,7 @@ export function useAssenze(params?: { user_id?: string; start_date?: string; end
       await api.delete(`/assenze/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["assenze"] });
+      queryClient.invalidateQueries({ queryKey: ["assenze"], exact: false });
     },
   });
 

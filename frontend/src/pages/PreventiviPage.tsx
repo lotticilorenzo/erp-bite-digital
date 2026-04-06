@@ -68,14 +68,14 @@ export const PreventiviPage: React.FC = () => {
   };
 
   return (
-    <div className="p-8 space-y-8 animate-in fade-in duration-500">
+    <div className="flex-1 h-screen overflow-y-auto p-8 space-y-8 animate-in fade-in duration-500 bg-background text-foreground">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-3xl font-black tracking-tight text-slate-900 flex items-center gap-3">
+          <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-3">
             <FileText className="w-8 h-8 text-purple-600" />
             VENDITE: Preventivi
           </h1>
-          <p className="text-slate-500 font-medium">Gestisci le offerte commerciali e convertile in commesse operative.</p>
+          <p className="text-muted-foreground font-medium">Gestisci le offerte commerciali e convertile in commesse operative.</p>
         </div>
         <Button onClick={handleCreate} className="bg-purple-600 hover:bg-purple-700 h-11 px-6 shadow-lg shadow-purple-200">
           <Plus className="w-5 h-5 mr-2" /> Nuova Offerta
@@ -83,66 +83,66 @@ export const PreventiviPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-          <div className="bg-purple-100 p-3 rounded-xl text-purple-600">
+        <div className="bg-card p-4 rounded-2xl border border-border shadow-sm flex items-center gap-4">
+          <div className="bg-purple-500/10 p-3 rounded-xl text-purple-500">
             <TrendingUp className="w-6 h-6" />
           </div>
           <div className="flex flex-col">
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Volume Preventivato</span>
-            <span className="text-xl font-black text-slate-800">
+            <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Volume Preventivato</span>
+            <span className="text-xl font-black text-foreground">
               {new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(stats.totale)}
             </span>
           </div>
         </div>
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-          <div className="bg-emerald-100 p-3 rounded-xl text-emerald-600">
+        <div className="bg-card p-4 rounded-2xl border border-border shadow-sm flex items-center gap-4">
+          <div className="bg-emerald-500/10 p-3 rounded-xl text-emerald-500">
             <FileCheck2 className="w-6 h-6" />
           </div>
           <div className="flex flex-col">
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Accettati</span>
-            <span className="text-xl font-black text-emerald-700">{stats.accettati}</span>
+            <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Accettati</span>
+            <span className="text-xl font-black text-emerald-400">{stats.accettati}</span>
           </div>
         </div>
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-          <div className="bg-blue-100 p-3 rounded-xl text-blue-600">
+        <div className="bg-card p-4 rounded-2xl border border-border shadow-sm flex items-center gap-4">
+          <div className="bg-blue-500/10 p-3 rounded-xl text-blue-500">
             <ArrowRight className="w-6 h-6" />
           </div>
           <div className="flex flex-col">
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">In Attesa</span>
-            <span className="text-xl font-black text-blue-700">{stats.inviati}</span>
+            <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">In Attesa</span>
+            <span className="text-xl font-black text-blue-400">{stats.inviati}</span>
           </div>
         </div>
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-          <div className="bg-slate-100 p-3 rounded-xl text-slate-600">
+        <div className="bg-card p-4 rounded-2xl border border-border shadow-sm flex items-center gap-4">
+          <div className="bg-muted p-3 rounded-xl text-muted-foreground">
             <FileWarning className="w-6 h-6" />
           </div>
           <div className="flex flex-col">
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Bozze</span>
-            <span className="text-xl font-black text-slate-700">{stats.bozze}</span>
+            <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Bozze</span>
+            <span className="text-xl font-black text-foreground">{stats.bozze}</span>
           </div>
         </div>
       </div>
 
-      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xl shadow-slate-100/50 space-y-6">
+      <div className="bg-card p-6 rounded-3xl border border-border shadow-xl shadow-black/10 space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
             <Input 
               placeholder="Cerca per titolo, numero o cliente..." 
-              className="pl-10 h-10 rounded-xl"
+              className="pl-10 h-10 rounded-xl bg-background border-border text-foreground"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="h-10 rounded-xl text-slate-500">
+            <Button variant="outline" size="sm" className="h-10 rounded-xl text-muted-foreground border-border hover:bg-muted">
               <Filter className="w-4 h-4 mr-2" /> Filtri Avanzati
             </Button>
           </div>
         </div>
 
         {isLoading ? (
-          <div className="h-64 flex flex-col items-center justify-center gap-3 text-slate-400">
+          <div className="h-64 flex flex-col items-center justify-center gap-3 text-muted-foreground">
             <Loader2 className="w-10 h-10 animate-spin text-purple-500" />
             <span className="font-medium">Caricamento preventivi...</span>
           </div>

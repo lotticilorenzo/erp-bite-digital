@@ -1,10 +1,12 @@
-import { Fragment } from "react";
+import { Fragment, useState, useEffect } from "react";
 import { 
   Search, 
   Plus,
   UserPlus,
   Briefcase,
-  ListTodo
+  ListTodo,
+  HelpCircle,
+  BookOpen
 } from "lucide-react";
 import { ThemePanel } from "../ThemePanel";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -31,6 +33,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { HelpCenterPanel } from "../common/HelpCenterPanel";
 
 export function AppTopbar() {
   const { user } = useAuth();
@@ -39,6 +42,25 @@ export function AppTopbar() {
   const { openNewTask } = useStudio();
   const pathnames = location.pathname.split("/").filter((x) => x);
   const isStudioOS = location.pathname.startsWith("/studio-os");
+
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in input/textarea
+      const target = e.target as HTMLElement;
+      if (['INPUT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable) {
+        return;
+      }
+      
+      if (e.key === '?') {
+        setIsHelpOpen(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const getBreadcrumbLabel = (path: string) => {
     switch (path) {
@@ -113,6 +135,24 @@ export function AppTopbar() {
 
         <div className="flex items-center gap-1">
           <NotificationDropdown />
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-8 w-8 text-muted-foreground hover:text-foreground" 
+            onClick={() => navigate("/wiki")}
+            title="Wiki Aziendale"
+          >
+            <BookOpen className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-8 w-8 text-muted-foreground hover:text-foreground" 
+            onClick={() => setIsHelpOpen(true)}
+            title="Centro Assistenza"
+          >
+            <HelpCircle className="h-4 w-4" />
+          </Button>
           <ThemePanel />
 
           <div className="h-6 w-[1px] bg-muted mx-2 hidden md:block" />
@@ -163,6 +203,7 @@ export function AppTopbar() {
           )}
         </div>
       </div>
+      <HelpCenterPanel open={isHelpOpen} onOpenChange={setIsHelpOpen} />
     </header>
   );
 }

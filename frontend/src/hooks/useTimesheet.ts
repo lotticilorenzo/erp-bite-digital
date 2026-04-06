@@ -31,7 +31,7 @@ export function useCreateTimesheetManual() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["timesheets"] });
+      queryClient.invalidateQueries({ queryKey: ["timesheets"], exact: false });
       toast.success("Ore registrate con successo");
     },
     onError: (error: any) => {
@@ -48,7 +48,7 @@ export function useBulkApproveTimesheets() {
       return data;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["timesheets"] });
+      queryClient.invalidateQueries({ queryKey: ["timesheets"], exact: false });
       const msg = variables.azione === "APPROVA" ? "Timesheet approvati" : "Timesheet rifiutati/inviati";
       toast.success(msg);
     },
@@ -66,7 +66,7 @@ export function useBulkDeleteTimesheets() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["timesheets"] });
+      queryClient.invalidateQueries({ queryKey: ["timesheets"], exact: false });
       toast.success("Timesheet eliminati con successo");
     },
     onError: () => {
@@ -83,7 +83,7 @@ export function useBulkUpdateMeseTimesheets() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["timesheets"] });
+      queryClient.invalidateQueries({ queryKey: ["timesheets"], exact: false });
       toast.success("Mese di competenza aggiornato");
     },
     onError: () => {

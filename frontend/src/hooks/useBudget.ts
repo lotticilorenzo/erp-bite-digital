@@ -30,7 +30,7 @@ export function useBudget(mese?: Date) {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["budget-consuntivo"] });
+      queryClient.invalidateQueries({ queryKey: ["budget-consuntivo"], exact: false });
     },
   });
 
@@ -40,7 +40,7 @@ export function useBudget(mese?: Date) {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["budget-consuntivo"] });
+      queryClient.invalidateQueries({ queryKey: ["budget-consuntivo"], exact: false });
     },
   });
 
@@ -50,7 +50,7 @@ export function useBudget(mese?: Date) {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["budget-categories"] });
+      queryClient.invalidateQueries({ queryKey: ["budget-categories"], exact: false });
     },
   });
 

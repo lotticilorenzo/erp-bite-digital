@@ -34,7 +34,7 @@ export function useStartTimer() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["timer"] });
+      queryClient.invalidateQueries({ queryKey: ["timer"], exact: false });
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || "Errore nell'avvio del timer");
@@ -50,7 +50,7 @@ export function useStopTimer() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["timer"] });
+      queryClient.invalidateQueries({ queryKey: ["timer"], exact: false });
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || "Errore nella fermata del timer");
@@ -66,8 +66,8 @@ export function useSaveTimerToTimesheet() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["timer"] });
-      queryClient.invalidateQueries({ queryKey: ["timesheets"] });
+      queryClient.invalidateQueries({ queryKey: ["timer"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["timesheets"], exact: false });
       toast.success("Sessioni salvate nel timesheet");
     },
     onError: (error: any) => {

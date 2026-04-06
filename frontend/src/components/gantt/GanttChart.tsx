@@ -98,35 +98,20 @@ export function GanttChart({ tasks, period, onTaskClick }: GanttChartProps) {
   };
 
   return (
-    <div className="relative border border-border/50 rounded-3xl bg-card/20 overflow-hidden flex flex-col h-full shadow-2xl backdrop-blur-xl">
-      <div className="flex shrink-0 border-b border-border/50 bg-card/40">
-        <div style={{ width: LEFT_PANEL_WIDTH }} className="border-r border-border/50 p-4 flex items-center">
-            <span className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Attività / Progetti</span>
+    <div className="flex border border-border/50 w-full min-w-[900px] h-full rounded-3xl bg-[#0a0c10] shadow-2xl overflow-y-auto overflow-x-hidden">
+      
+      {/* Sidebar SINISTRA - FISSA */}
+      <div 
+        style={{ minWidth: LEFT_PANEL_WIDTH, maxWidth: LEFT_PANEL_WIDTH }}
+        className="shrink-0 bg-[#0a0c10] border-r border-border/50 sticky left-0 z-30 flex flex-col"
+      >
+        <div className="h-[48px] p-4 flex items-center shrink-0 border-b border-border/50 sticky top-0 bg-[#0a0c10] z-40">
+          <span className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Attività / Progetti</span>
         </div>
-        <div className="flex-1 overflow-hidden" ref={containerRef}>
-          <div style={{ width: timelineWidth }} className="flex h-full">
-            {days.map((day: Date, i: number) => (
-              <div 
-                key={i} 
-                style={{ width: dayWidth }} 
-                className={`flex flex-col items-center justify-center border-r border-border/20 py-2 shrink-0 ${isSameDay(day, today) ? "bg-primary/10" : ""}`}
-              >
-                <span className="text-[10px] font-black text-slate-500 uppercase">{format(day, "eee", { locale: it })}</span>
-                <span className={`text-xs font-black ${isSameDay(day, today) ? "text-primary" : "text-slate-300"}`}>{format(day, "dd")}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 flex overflow-hidden">
-        <div 
-          style={{ width: LEFT_PANEL_WIDTH }} 
-          className="border-r border-border/50 overflow-y-auto bg-card/10 scrollbar-none"
-        >
+        <div className="relative bg-[#0a0c10]">
           {Object.entries(groupedTasks).map(([projId, projTasks]) => (
             <div key={projId}>
-              <div className="bg-muted/30 px-4 py-2 border-y border-border/20 sticky top-0">
+              <div className="h-[34px] bg-muted/30 px-4 flex items-center border-y border-border/20 sticky top-[48px] z-30">
                  <span className="text-[10px] font-black uppercase text-primary tracking-tighter">
                    {projTasks[0]?.progetto_id ? "Progetto ID: " + projTasks[0].progetto_id.split('-')[0] : "Task Generali"}
                  </span>
@@ -135,7 +120,7 @@ export function GanttChart({ tasks, period, onTaskClick }: GanttChartProps) {
                 <div 
                   key={task.id} 
                   style={{ height: ROW_HEIGHT }} 
-                  className="px-4 flex items-center border-b border-border/10 hover:bg-white/5 transition-colors cursor-pointer group"
+                  className="px-4 flex items-center border-b border-border/10 hover:bg-white/5 transition-colors cursor-pointer group bg-[#0a0c10]"
                   onClick={() => onTaskClick(task.id)}
                 >
                   <span className="text-xs font-bold text-slate-300 truncate transition-colors group-hover:text-primary">
@@ -146,121 +131,141 @@ export function GanttChart({ tasks, period, onTaskClick }: GanttChartProps) {
             </div>
           ))}
         </div>
+      </div>
 
-        <div className="flex-1 overflow-auto relative">
-          <div style={{ width: timelineWidth, height: "100%" }} className="absolute top-0 left-0 flex">
-             {days.map((day: Date, i: number) => (
-               <div 
-                 key={i} 
-                 style={{ width: dayWidth }} 
-                 className={`border-r border-border/5 shrink-0 ${isSameDay(day, today) ? "bg-primary/5" : ""}`}
-               />
-             ))}
-          </div>
-
-          <div 
-            style={{ 
-              left: differenceInDays(today, startDate) * dayWidth + dayWidth / 2,
-              height: "100%"
-            }}
-            className="absolute top-0 w-px bg-red-500/50 z-10 pointer-events-none"
-          >
-            <div className="absolute top-0 -left-1 w-2 h-2 bg-red-500 rounded-full" />
-          </div>
-
-          <div style={{ width: timelineWidth }} className="relative z-20">
-            {Object.entries(groupedTasks).map(([projId, projTasks]) => (
-              <div key={projId}>
-                <div className="h-[25px]" />
-                {(projTasks as TaskSO[]).map((task: TaskSO) => {
-                  const geom = getTaskGeometry(task);
-                  if (!geom) return <div key={task.id} style={{ height: ROW_HEIGHT }} className="border-b border-border/10" />;
-
-                  return (
-                    <div 
-                      key={task.id} 
-                      style={{ height: ROW_HEIGHT }} 
-                      className="border-b border-border/10 flex items-center relative group/row"
-                    >
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <motion.div
-                              drag="x"
-                              dragMomentum={false}
-                              dragElastic={0}
-                              onDragEnd={(_, info) => {
-                                const offsetDays = Math.round(info.offset.x / dayWidth);
-                                if (offsetDays === 0) return;
-                                
-                                const currentStart = parseISO(task.data_inizio!);
-                                const currentEnd = parseISO(task.due_date!);
-                                const newStart = addDays(currentStart, offsetDays);
-                                const newEnd = addDays(currentEnd, offsetDays);
-                                
-                                updateTask.mutate({
-                                  id: task.id,
-                                  data: {
-                                    data_inizio: format(newStart, "yyyy-MM-dd"),
-                                    data_scadenza: format(newEnd, "yyyy-MM-dd")
-                                  }
-                                }, {
-                                  onSuccess: () => toast.success("Task spostato"),
-                                  onError: () => toast.error("Errore nello spostamento")
-                                });
-                              }}
-                              initial={{ opacity: 0, x: geom.x - 20 }}
-                              animate={{ opacity: 1, x: geom.x }}
-                              whileHover={{ scaleY: 1.05 }}
-                              style={{ 
-                                width: geom.width,
-                                left: 0 
-                              }}
-                              onClick={() => {
-                                onTaskClick(task.id);
-                              }}
-                              className={`absolute h-8 rounded-lg border flex items-center justify-between px-3 cursor-pointer shadow-lg transition-all ${getStatusColor(task.state_id)} group hover:shadow-primary/20 backdrop-blur-sm z-30`}
-                            >
-                              <span className="text-[10px] font-black truncate max-w-full text-white tracking-widest drop-shadow-md">
-                                {task.title}
-                              </span>
-                              {task.stima_minuti && (
-                                <span className={`text-[8px] font-black opacity-0 group-hover:opacity-100 transition-opacity ${getStatusTextToken(task.state_id)}`}>
-                                  {task.stima_minuti}m
-                                </span>
-                              )}
-                            </motion.div>
-                          </TooltipTrigger>
-                          <TooltipContent className="bg-card border-border p-4 w-64 shadow-2xl rounded-2xl">
-                             <div className="space-y-2">
-                                <div className="flex justify-between items-start">
-                                   <Badge variant="outline" className={`${getStatusColor(task.state_id)} text-[8px] border-none font-black`}>
-                                      {task.state_id}
-                                   </Badge>
-                                </div>
-                                <h4 className="text-sm font-black text-white leading-tight">{task.title}</h4>
-                                <div className="flex items-center gap-3 text-[10px] text-slate-400 font-bold">
-                                   <div className="flex flex-col">
-                                      <span>Inizio</span>
-                                      <span className="text-white">{task.data_inizio ? format(parseISO(task.data_inizio), "dd MMM yyyy") : "-"}</span>
-                                   </div>
-                                   <div className="flex flex-col">
-                                      <span>Scadenza</span>
-                                      <span className={task.due_date && isSameDay(parseISO(task.due_date), today) ? "text-orange-400" : "text-white"}>
-                                        {task.due_date ? format(parseISO(task.due_date), "dd MMM yyyy") : "-"}
-                                      </span>
-                                   </div>
-                                </div>
-                                {task.desc && <p className="text-[10px] text-slate-500 italic line-clamp-2">{task.desc}</p>}
-                             </div>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                  );
-                })}
+      {/* Timeline DESTRA - SCROLLA Orizzontalmente */}
+      <div className="flex-1 overflow-y-hidden custom-scrollbar bg-[#0a0c10] relative" style={{ overflowX: "auto", width: "100%" }}>
+        <div style={{ width: timelineWidth }} className="flex flex-col min-h-full">
+          {/* Header Date */}
+          <div className="h-[48px] flex shrink-0 border-b border-border/50 bg-[#0a0c10] sticky top-0 z-40">
+            {days.map((day: Date, i: number) => (
+              <div 
+                key={i} 
+                style={{ width: dayWidth }} 
+                className={`flex flex-col items-center justify-center border-r border-border/20 shrink-0 ${isSameDay(day, today) ? "bg-primary/10" : ""}`}
+              >
+                <span className="text-[10px] font-black text-slate-500 uppercase">{format(day, "eee", { locale: it })}</span>
+                <span className={`text-xs font-black ${isSameDay(day, today) ? "text-primary" : "text-slate-300"}`}>{format(day, "dd")}</span>
               </div>
             ))}
+          </div>
+          
+          {/* Timeline Rows Area */}
+          <div className="relative flex-1" ref={containerRef}>
+            {/* Background Lines */}
+            <div className="absolute top-0 left-0 bottom-0 flex pointer-events-none z-0">
+               {days.map((day: Date, i: number) => (
+                 <div 
+                   key={i} 
+                   style={{ width: dayWidth }} 
+                   className={`border-r border-border/5 shrink-0 ${isSameDay(day, today) ? "bg-primary/5" : ""}`}
+                 />
+               ))}
+            </div>
+
+            {/* Today Indicator */}
+            <div 
+              style={{ left: differenceInDays(today, startDate) * dayWidth + dayWidth / 2 }}
+              className="absolute top-0 bottom-0 w-px bg-red-500/50 z-10 pointer-events-none"
+            >
+              <div className="absolute top-0 -left-1 w-2 h-2 bg-red-500 rounded-full" />
+            </div>
+
+            {/* Tasks Geometry */}
+            <div className="relative z-20">
+              {Object.entries(groupedTasks).map(([projId, projTasks]) => (
+                <div key={projId}>
+                  <div className="h-[34px] border-y border-transparent shrink-0" />
+                  {(projTasks as TaskSO[]).map((task: TaskSO) => {
+                    const geom = getTaskGeometry(task);
+                    if (!geom) return <div key={task.id} style={{ height: ROW_HEIGHT }} className="border-b border-border/10" />;
+
+                    return (
+                      <div 
+                        key={task.id} 
+                        style={{ height: ROW_HEIGHT }} 
+                        className="border-b border-border/10 flex items-center relative group/row w-full"
+                      >
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <motion.div
+                                drag="x"
+                                dragMomentum={false}
+                                dragElastic={0}
+                                onDragEnd={(_, info) => {
+                                  const offsetDays = Math.round(info.offset.x / dayWidth);
+                                  if (offsetDays === 0) return;
+                                  
+                                  const currentStart = parseISO(task.data_inizio!);
+                                  const currentEnd = parseISO(task.due_date!);
+                                  const newStart = addDays(currentStart, offsetDays);
+                                  const newEnd = addDays(currentEnd, offsetDays);
+                                  
+                                  updateTask.mutate({
+                                    id: task.id,
+                                    data: {
+                                      data_inizio: format(newStart, "yyyy-MM-dd"),
+                                      data_scadenza: format(newEnd, "yyyy-MM-dd")
+                                    }
+                                  }, {
+                                    onSuccess: () => toast.success("Task spostato"),
+                                    onError: () => toast.error("Errore nello spostamento")
+                                  });
+                                }}
+                                initial={{ opacity: 0, x: geom.x - 20 }}
+                                animate={{ opacity: 1, x: geom.x }}
+                                whileHover={{ scaleY: 1.05 }}
+                                style={{ 
+                                  width: geom.width,
+                                  left: 0 
+                                }}
+                                onClick={() => {
+                                  onTaskClick(task.id);
+                                }}
+                                className={`absolute h-8 rounded-lg border flex items-center justify-between px-3 cursor-pointer shadow-lg transition-all ${getStatusColor(task.state_id)} group hover:shadow-primary/20 backdrop-blur-sm z-30`}
+                              >
+                                <span className="text-[10px] font-black truncate max-w-full text-white tracking-widest drop-shadow-md">
+                                  {task.title}
+                                </span>
+                                {task.stima_minuti && (
+                                  <span className={`text-[8px] font-black opacity-0 group-hover:opacity-100 transition-opacity ${getStatusTextToken(task.state_id)}`}>
+                                    {task.stima_minuti}m
+                                  </span>
+                                )}
+                              </motion.div>
+                            </TooltipTrigger>
+                            <TooltipContent className="bg-card border-border p-4 w-64 shadow-2xl rounded-2xl">
+                               <div className="space-y-2">
+                                  <div className="flex justify-between items-start">
+                                     <Badge variant="outline" className={`${getStatusColor(task.state_id)} text-[8px] border-none font-black`}>
+                                        {task.state_id}
+                                     </Badge>
+                                  </div>
+                                  <h4 className="text-sm font-black text-white leading-tight">{task.title}</h4>
+                                  <div className="flex items-center gap-3 text-[10px] text-slate-400 font-bold">
+                                     <div className="flex flex-col">
+                                        <span>Inizio</span>
+                                        <span className="text-white">{task.data_inizio ? format(parseISO(task.data_inizio), "dd MMM yyyy") : "-"}</span>
+                                     </div>
+                                     <div className="flex flex-col">
+                                        <span>Scadenza</span>
+                                        <span className={task.due_date && isSameDay(parseISO(task.due_date), today) ? "text-orange-400" : "text-white"}>
+                                          {task.due_date ? format(parseISO(task.due_date), "dd MMM yyyy") : "-"}
+                                        </span>
+                                     </div>
+                                  </div>
+                                  {task.desc && <p className="text-[10px] text-slate-500 italic line-clamp-2">{task.desc}</p>}
+                               </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

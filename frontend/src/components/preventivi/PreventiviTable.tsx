@@ -26,11 +26,11 @@ interface Props {
 }
 
 const statusColors: Record<PreventivoStatus, string> = {
-  BOZZA: "bg-slate-100 text-slate-700 border-slate-200",
-  INVIATO: "bg-blue-100 text-blue-700 border-blue-200",
-  ACCETTATO: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  RIFIUTATO: "bg-rose-100 text-rose-700 border-rose-200",
-  SCADUTO: "bg-amber-100 text-amber-700 border-amber-200",
+  BOZZA: "bg-muted/50 text-foreground border-border",
+  INVIATO: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  ACCETTATO: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  RIFIUTATO: "bg-rose-500/10 text-rose-400 border-rose-500/20",
+  SCADUTO: "bg-amber-500/10 text-amber-400 border-amber-500/20",
 };
 
 const statusIcons: Record<PreventivoStatus, React.ReactNode> = {
@@ -45,9 +45,9 @@ export const PreventiviTable: React.FC<Props> = ({
   data, onEdit, onDelete, onConvert, onStatusChange 
 }) => {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+    <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
       <Table>
-        <TableHeader className="bg-slate-50/50">
+        <TableHeader className="bg-muted/20">
           <TableRow>
             <TableHead className="w-[100px]">Codice</TableHead>
             <TableHead>Titolo / Oggetto</TableHead>
@@ -61,34 +61,34 @@ export const PreventiviTable: React.FC<Props> = ({
         <TableBody>
           {data.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="h-32 text-center text-slate-400">
+              <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
                 Nessun preventivo trovato.
               </TableCell>
             </TableRow>
           ) : (
             data.map((p) => (
-              <TableRow key={p.id} className="group hover:bg-slate-50/50 transition-colors">
-                <TableCell className="font-mono text-xs font-bold text-slate-500">
+              <TableRow key={p.id} className="group hover:bg-muted/50 transition-colors">
+                <TableCell className="font-mono text-xs font-bold text-muted-foreground">
                   {p.numero}
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-col">
-                    <span className="font-semibold text-slate-900 line-clamp-1">{p.titolo}</span>
-                    <span className="text-[10px] text-slate-400 uppercase tracking-tighter">
+                    <span className="font-semibold text-foreground line-clamp-1">{p.titolo}</span>
+                    <span className="text-[10px] text-muted-foreground uppercase tracking-tighter">
                       Creato il {format(parseISO(p.data_creazione), "dd/MM/yyyy")}
                     </span>
                   </div>
                 </TableCell>
                 <TableCell>
-                  <span className="text-slate-600 truncate max-w-[150px] inline-block font-medium">
+                  <span className="text-foreground truncate max-w-[150px] inline-block font-medium">
                     {p.cliente?.ragione_sociale || "N.D."}
                   </span>
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-col gap-1">
-                    <span className="text-xs text-slate-500">Creazione: {format(parseISO(p.data_creazione), "dd/MM/yy")}</span>
+                    <span className="text-xs text-muted-foreground">Creazione: {format(parseISO(p.data_creazione), "dd/MM/yy")}</span>
                     {p.data_scadenza && (
-                      <span className="text-[10px] text-rose-500 font-bold">Scadenza: {format(parseISO(p.data_scadenza), "dd/MM/yy")}</span>
+                      <span className="text-[10px] text-rose-400 font-bold">Scadenza: {format(parseISO(p.data_scadenza), "dd/MM/yy")}</span>
                     )}
                   </div>
                 </TableCell>
@@ -98,7 +98,7 @@ export const PreventiviTable: React.FC<Props> = ({
                     {p.stato}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-right font-mono font-black text-slate-700">
+                <TableCell className="text-right font-mono font-black text-foreground">
                   {new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(p.importo_totale)}
                 </TableCell>
                 <TableCell>
@@ -108,41 +108,41 @@ export const PreventiviTable: React.FC<Props> = ({
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuContent align="end" className="w-48 bg-card border-border text-foreground">
                       <DropdownMenuLabel>Azioni Preventivo</DropdownMenuLabel>
-                      <DropdownMenuItem onClick={() => onEdit(p)}>
+                      <DropdownMenuItem onClick={() => onEdit(p)} className="hover:bg-muted cursor-pointer">
                         <Edit2 className="w-4 h-4 mr-2" /> Modifica
                       </DropdownMenuItem>
                       
-                      <DropdownMenuSeparator />
+                      <DropdownMenuSeparator className="bg-border" />
                       
-                      <DropdownMenuLabel className="text-[10px] uppercase text-slate-400">Cambia Stato</DropdownMenuLabel>
-                      <DropdownMenuItem onClick={() => onStatusChange(p.id, 'INVIATO')}>
-                        <Send className="w-3 h-3 mr-2 text-blue-500" /> Segna come Inviato
+                      <DropdownMenuLabel className="text-[10px] uppercase text-muted-foreground">Cambia Stato</DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => onStatusChange(p.id, 'INVIATO')} className="hover:bg-muted cursor-pointer">
+                        <Send className="w-3 h-3 mr-2 text-blue-400" /> Segna come Inviato
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => onStatusChange(p.id, 'ACCETTATO')}>
-                        <CheckCircle2 className="w-3 h-3 mr-2 text-emerald-500" /> Segna come Accettato
+                      <DropdownMenuItem onClick={() => onStatusChange(p.id, 'ACCETTATO')} className="hover:bg-muted cursor-pointer">
+                        <CheckCircle2 className="w-3 h-3 mr-2 text-emerald-400" /> Segna come Accettato
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => onStatusChange(p.id, 'RIFIUTATO')}>
-                        <XCircle className="w-3 h-3 mr-2 text-rose-500" /> Segna come Rifiutato
+                      <DropdownMenuItem onClick={() => onStatusChange(p.id, 'RIFIUTATO')} className="hover:bg-muted cursor-pointer">
+                        <XCircle className="w-3 h-3 mr-2 text-rose-400" /> Segna come Rifiutato
                       </DropdownMenuItem>
 
-                      <DropdownMenuSeparator />
+                      <DropdownMenuSeparator className="bg-border" />
 
                       {p.stato === 'ACCETTATO' && (
-                        <DropdownMenuItem onClick={() => onConvert(p.id)} className="bg-purple-50 text-purple-700 font-bold">
+                        <DropdownMenuItem onClick={() => onConvert(p.id)} className="bg-primary/20 text-primary font-bold cursor-pointer">
                           <ArrowRight className="w-4 h-4 mr-2" /> Converti in Commessa
                         </DropdownMenuItem>
                       )}
 
-                      <DropdownMenuItem asChild>
+                      <DropdownMenuItem asChild className="hover:bg-muted cursor-pointer">
                         <PDFDownloadLink
                           document={<PreventivoReportPDF preventivo={p} />}
                           fileName={`Preventivo_${p.numero}_${p.cliente?.ragione_sociale.replace(/\s+/g, '_')}.pdf`}
                           className="w-full"
                         >
                           {({ loading }) => (
-                            <div className="flex items-center">
+                            <div className="flex items-center text-foreground">
                               <Download className={`w-4 h-4 mr-2 ${loading ? 'animate-bounce' : ''}`} />
                               Scarica PDF
                             </div>
@@ -150,9 +150,9 @@ export const PreventiviTable: React.FC<Props> = ({
                         </PDFDownloadLink>
                       </DropdownMenuItem>
 
-                      <DropdownMenuSeparator />
+                      <DropdownMenuSeparator className="bg-border" />
 
-                      <DropdownMenuItem onClick={() => onDelete(p.id)} className="text-red-600 focus:text-red-700">
+                      <DropdownMenuItem onClick={() => onDelete(p.id)} className="text-red-500 focus:text-red-400 hover:bg-red-500/10 cursor-pointer">
                         <Trash2 className="w-4 h-4 mr-2" /> Elimina
                       </DropdownMenuItem>
                     </DropdownMenuContent>

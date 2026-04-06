@@ -46,9 +46,9 @@ export default function GanttPage() {
   }, [tasks, filters]);
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-[#0a0c10]">
+    <div className="flex flex-col h-screen bg-[#0a0c10]" style={{ width: "100%", overflowX: "hidden" }}>
       {/* Premium Header */}
-      <div className="shrink-0 p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-gradient-to-b from-[#11141d] to-transparent">
+      <div className="shrink-0 p-4 md:p-8 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-gradient-to-b from-[#11141d] to-transparent w-full">
         <div className="space-y-1">
            <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-2xl bg-primary/10 border border-primary/20">
@@ -63,11 +63,11 @@ export default function GanttPage() {
            </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4 bg-card/20 backdrop-blur-md p-2 rounded-2xl border border-white/5 shadow-2xl">
-           <div className="flex items-center gap-2 px-3 border-r border-white/10">
+        <div className="flex flex-wrap items-center gap-2 md:gap-4 bg-card/20 backdrop-blur-md p-2 rounded-2xl border border-white/5 shadow-2xl w-full xl:w-auto">
+           <div className="flex items-center gap-2 px-2 md:px-3 border-r border-white/10 shrink-0">
               <FolderSearch className="h-4 w-4 text-slate-500" />
               <Select value={filters.cliente_id} onValueChange={(v) => setFilters(f => ({...f, cliente_id: v}))}>
-                <SelectTrigger className="w-40 bg-transparent border-none text-xs font-black text-white hover:text-primary transition-colors focus:ring-0">
+                <SelectTrigger className="w-32 md:w-40 bg-transparent border-none text-[10px] md:text-xs font-black text-white hover:text-primary transition-colors focus:ring-0 px-0 md:px-3">
                   <SelectValue placeholder="Tutti i Clienti" />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-border">
@@ -77,10 +77,10 @@ export default function GanttPage() {
               </Select>
            </div>
 
-           <div className="flex items-center gap-2 px-3 border-r border-white/10">
+           <div className="flex items-center gap-2 px-2 md:px-3 border-r border-white/10 shrink-0">
               <UserIcon className="h-4 w-4 text-slate-500" />
               <Select value={filters.assegnatario_id} onValueChange={(v) => setFilters(f => ({...f, assegnatario_id: v}))}>
-                <SelectTrigger className="w-40 bg-transparent border-none text-xs font-black text-white hover:text-primary transition-colors focus:ring-0">
+                <SelectTrigger className="w-32 md:w-40 bg-transparent border-none text-[10px] md:text-xs font-black text-white hover:text-primary transition-colors focus:ring-0 px-0 md:px-3">
                   <SelectValue placeholder="Tutti gli Utenti" />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-border">
@@ -90,10 +90,10 @@ export default function GanttPage() {
               </Select>
            </div>
 
-           <div className="flex items-center gap-2 px-3 border-r border-white/10">
+           <div className="flex items-center gap-2 px-2 md:px-3 border-r md:border-r-0 xl:border-r border-white/10 shrink-0">
               <Calendar className="h-4 w-4 text-slate-500" />
               <Select value={filters.period} onValueChange={(v: any) => setFilters(f => ({...f, period: v}))}>
-                <SelectTrigger className="w-40 bg-transparent border-none text-xs font-black text-white hover:text-primary transition-colors focus:ring-0">
+                <SelectTrigger className="w-24 md:w-40 bg-transparent border-none text-[10px] md:text-xs font-black text-white hover:text-primary transition-colors focus:ring-0 px-0 md:px-3">
                   <SelectValue placeholder="Periodo" />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-border">
@@ -104,7 +104,7 @@ export default function GanttPage() {
               </Select>
            </div>
 
-           <div className="flex items-center gap-6 px-4">
+           <div className="flex items-center gap-4 md:gap-6 px-2 md:px-4 shrink-0">
               <div className="flex items-center space-x-2">
                 <Checkbox 
                   id="show-completed" 
@@ -116,7 +116,7 @@ export default function GanttPage() {
                   htmlFor="show-completed"
                   className="text-[10px] font-black uppercase tracking-widest text-slate-400 cursor-pointer"
                 >
-                  Mostra Chiusi
+                  Chiuse
                 </Label>
               </div>
               <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-white transition-colors">
@@ -127,19 +127,21 @@ export default function GanttPage() {
       </div>
 
       {/* Gantt Container */}
-      <div className="flex-1 px-8 pb-8 overflow-hidden">
-        {isLoading ? (
-          <div className="w-full h-full flex flex-col items-center justify-center space-y-4 bg-card/10 rounded-3xl border border-white/5">
-             <div className="h-12 w-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-             <p className="text-xs font-black uppercase tracking-widest text-[#475569]">Caricamento Timeline...</p>
-          </div>
-        ) : (
-          <GanttChart 
-            tasks={filteredTasks} 
-            period={filters.period} 
-            onTaskClick={(id) => selectTask(id)}
-          />
-        )}
+      <div className="flex-1 w-full overflow-hidden min-w-0 min-h-0 flex flex-col px-4 md:px-8 pb-8">
+        <div className="w-full flex-1 overflow-x-auto">
+          {isLoading ? (
+             <div className="w-full h-[600px] flex flex-col items-center justify-center space-y-4 bg-card/10 rounded-3xl border border-white/5">
+               <div className="h-12 w-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+               <p className="text-xs font-black uppercase tracking-widest text-[#475569]">Caricamento Timeline...</p>
+             </div>
+          ) : (
+            <GanttChart 
+              tasks={filteredTasks} 
+              period={filters.period} 
+              onTaskClick={(id) => selectTask(id)}
+            />
+          )}
+        </div>
       </div>
 
       <StudioTaskModal />
