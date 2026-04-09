@@ -1,0 +1,667 @@
+- generic [ref=e1]:
+  - generic [ref=e30]:
+    - generic [ref=e33]:
+      - link "Bite Digital Finance & Operations" [ref=e35] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e36]:
+          - img "Bite Digital" [ref=e38]
+          - generic [ref=e39]: Finance & Operations
+      - generic [ref=e40]:
+        - generic [ref=e41]:
+          - generic [ref=e42]: Generale
+          - list [ref=e44]:
+            - listitem [ref=e45]:
+              - link "Dashboard" [ref=e46] [cursor=pointer]:
+                - /url: /
+                - img [ref=e47]
+                - generic [ref=e52]: Dashboard
+            - listitem [ref=e53]:
+              - link "Analytics" [ref=e54] [cursor=pointer]:
+                - /url: /analytics
+                - img [ref=e55]
+                - generic [ref=e58]: Analytics
+            - listitem [ref=e59]:
+              - link "Timesheet" [ref=e60] [cursor=pointer]:
+                - /url: /timesheet
+                - img [ref=e61]
+                - generic [ref=e64]: Timesheet
+        - generic [ref=e65]:
+          - generic [ref=e66]: Gestione
+          - list [ref=e68]:
+            - listitem [ref=e69]:
+              - link "Clienti" [ref=e70] [cursor=pointer]:
+                - /url: /clienti
+                - img [ref=e71]
+                - generic [ref=e76]: Clienti
+            - listitem [ref=e77]:
+              - link "Gantt" [ref=e78] [cursor=pointer]:
+                - /url: /gantt
+                - img [ref=e79]
+                - generic [ref=e84]: Gantt
+            - listitem [ref=e85]:
+              - link "Preventivi" [ref=e86] [cursor=pointer]:
+                - /url: /preventivi
+                - img [ref=e87]
+                - generic [ref=e90]: Preventivi
+            - listitem [ref=e91]:
+              - link "Commesse" [ref=e92] [cursor=pointer]:
+                - /url: /commesse
+                - img [ref=e93]
+                - generic [ref=e96]: Commesse
+            - listitem [ref=e97]:
+              - link "Planning" [ref=e98] [cursor=pointer]:
+                - /url: /planning
+                - img [ref=e99]
+                - generic [ref=e102]: Planning
+            - listitem [ref=e103]:
+              - link "CRM" [ref=e104] [cursor=pointer]:
+                - /url: /crm
+                - img [ref=e105]
+                - generic [ref=e109]: CRM
+        - generic [ref=e110]:
+          - generic [ref=e111]: Documenti
+          - list [ref=e113]:
+            - listitem [ref=e114]:
+              - link "Report Mensili" [active] [ref=e115] [cursor=pointer]:
+                - /url: /report
+                - img [ref=e116]
+                - generic [ref=e119]: Report Mensili
+            - listitem [ref=e120]:
+              - link "Wiki" [ref=e121] [cursor=pointer]:
+                - /url: /wiki
+                - img [ref=e122]
+                - generic [ref=e124]: Wiki
+        - generic [ref=e125]:
+          - generic [ref=e126]: Amministrazione
+          - list [ref=e128]:
+            - listitem [ref=e129]:
+              - link "Fatture" [ref=e130] [cursor=pointer]:
+                - /url: /fatture
+                - img [ref=e131]
+                - generic [ref=e134]: Fatture
+            - listitem [ref=e135]:
+              - link "Fornitori" [ref=e136] [cursor=pointer]:
+                - /url: /fornitori
+                - img [ref=e137]
+                - generic [ref=e141]: Fornitori
+            - listitem [ref=e142]:
+              - link "Cassa" [ref=e143] [cursor=pointer]:
+                - /url: /cassa
+                - img [ref=e144]
+                - generic [ref=e147]: Cassa
+            - listitem [ref=e148]:
+              - link "Budget" [ref=e149] [cursor=pointer]:
+                - /url: /budget
+                - img [ref=e150]
+                - generic [ref=e154]: Budget
+        - generic [ref=e155]:
+          - generic [ref=e156]: Economia
+          - list [ref=e158]:
+            - listitem [ref=e159]:
+              - link "Riconnetti API" [ref=e160] [cursor=pointer]:
+                - /url: /settings/api-recon
+                - img [ref=e161]
+                - generic [ref=e163]: Riconnetti API
+            - listitem [ref=e164]:
+              - link "Disconnetti API" [ref=e165] [cursor=pointer]:
+                - /url: /settings/api-disc
+                - img [ref=e166]
+                - generic [ref=e168]: Disconnetti API
+            - listitem [ref=e169]:
+              - link "Configura alert" [ref=e170] [cursor=pointer]:
+                - /url: /settings/alerts
+                - img [ref=e171]
+                - generic [ref=e174]: Configura alert
+      - generic [ref=e177]:
+        - link "ERP" [ref=e178] [cursor=pointer]:
+          - /url: /
+          - img [ref=e179]
+          - text: ERP
+        - link "Studio OS" [ref=e181] [cursor=pointer]:
+          - /url: /studio-os
+          - img [ref=e182]
+          - text: Studio OS
+      - list [ref=e185]:
+        - listitem [ref=e186]:
+          - button "LB Lorenzo Bite ADMIN" [ref=e187] [cursor=pointer]:
+            - generic [ref=e189]: LB
+            - generic [ref=e190]:
+              - generic [ref=e191]: Lorenzo Bite
+              - generic [ref=e192]: ADMIN
+            - img [ref=e193]
+    - main [ref=e195]:
+      - generic [ref=e196]:
+        - generic [ref=e197]:
+          - button "Toggle Sidebar" [ref=e198] [cursor=pointer]:
+            - img
+            - generic [ref=e199]: Toggle Sidebar
+          - navigation "breadcrumb" [ref=e200]:
+            - list [ref=e201]:
+              - listitem [ref=e202]:
+                - link "Home" [ref=e203] [cursor=pointer]:
+                  - /url: /
+              - listitem [ref=e1345]:
+                - img [ref=e1346]
+              - listitem [ref=e1348]:
+                - link "Report" [ref=e1349] [cursor=pointer]:
+                  - /url: /report
+        - generic [ref=e204]:
+          - generic [ref=e205]:
+            - img [ref=e206]
+            - textbox "Cerca..." [ref=e209]
+            - generic [ref=e210]:
+              - generic [ref=e211]: ⌘
+              - text: K
+          - generic [ref=e213]:
+            - img [ref=e214]
+            - generic [ref=e217]: Nessun task attivo
+          - generic [ref=e218]:
+            - button "3" [ref=e219] [cursor=pointer]:
+              - img
+              - generic [ref=e220]: "3"
+            - button "Wiki Aziendale" [ref=e221] [cursor=pointer]:
+              - img
+            - button "Centro Assistenza" [ref=e222] [cursor=pointer]:
+              - img
+            - button [ref=e223] [cursor=pointer]:
+              - img
+            - link "LB" [ref=e225] [cursor=pointer]:
+              - /url: /settings/profile
+              - generic [ref=e227]: LB
+            - button "Nuovo" [ref=e228] [cursor=pointer]:
+              - img
+              - text: Nuovo
+      - main [ref=e229]:
+        - generic [ref=e1350]:
+          - generic [ref=e1351]:
+            - generic [ref=e1352]:
+              - generic [ref=e1353]:
+                - generic [ref=e1354]: Report & Analisi
+                - generic [ref=e1355]: Report generale
+              - generic [ref=e1356]:
+                - heading "Modulo Report" [level=1] [ref=e1357]
+                - paragraph [ref=e1358]: Panoramica aziendale | aprile 2026
+            - generic [ref=e1360]:
+              - generic [ref=e1361]:
+                - generic [ref=e1362]:
+                  - paragraph [ref=e1363]: Export
+                  - paragraph [ref=e1364]: Archivio commesse
+                - img [ref=e1365]
+              - generic [ref=e1368]:
+                - paragraph [ref=e1369]: Gli export PDF esistenti per singola commessa restano disponibili nella tabella qui sotto.
+                - paragraph [ref=e1370]: Seleziona un cliente per riusare anche il consolidato PDF esistente.
+          - generic [ref=e1371]:
+            - generic [ref=e1373]:
+              - img [ref=e1374]
+              - text: Filtri Report
+            - generic [ref=e1376]:
+              - generic [ref=e1377]:
+                - generic [ref=e1378]:
+                  - text: Preset periodo
+                  - combobox [ref=e1379]:
+                    - option "Mese corrente" [selected]
+                    - option "Mese precedente"
+                    - option "Trimestre"
+                    - option "Semestre"
+                    - option "Anno corrente"
+                    - option "Personalizzato"
+                - generic [ref=e1380]:
+                  - text: Data da
+                  - textbox [ref=e1381]: 2026-04-01
+                - generic [ref=e1382]:
+                  - text: Data a
+                  - textbox [ref=e1383]: 2026-04-30
+                - generic [ref=e1384]:
+                  - text: Cliente
+                  - combobox [ref=e1385]:
+                    - option "Tutti i clienti" [selected]
+                    - option "ABLONDI GIORGIA"
+                    - option "AUTOCENTRO F.LLI MUTO SOCIETA' A RESPONSABILITA' LIMITATA"
+                    - option "Alba Ristorazione S.r.l."
+                    - option "Aurora Real Estate S.r.l."
+                    - option "BERNAZZOLI BY GHILBA S.R.L."
+                    - option "Bite Digital Test"
+                    - option "CAVAZZINI DISTRIBUZIONE BEVANDE SOCIETA' A RESPONSABILITA' LIMITATA"
+                    - option "CENTRO VERDE S.S."
+                    - option "Citta Verde Resort S.r.l."
+                    - option "Cloud Lab Academy S.r.l."
+                    - option "FERRAMENTA PIAZZA S.R.L."
+                    - option "Fenix Logistics Italia S.r.l."
+                    - option "ITALIAN FOOD & CHEESE S.R.L."
+                    - option "La Beccheria srl"
+                    - option "Lumen Home Design S.r.l."
+                    - option "Motori Nord S.r.l."
+                    - option "Nova Clinic STP"
+                    - option "Orizzonte Wellness Club"
+                    - option "Riviera Food Lab S.r.l."
+                    - option "Vento Moda S.p.A."
+                    - option "crc srls"
+                    - option "steli di stile di grassi benedetta"
+                - generic [ref=e1386]:
+                  - text: Azioni
+                  - button "Reset filtri" [ref=e1387] [cursor=pointer]:
+                    - img
+                    - text: Reset filtri
+              - generic [ref=e1388]:
+                - generic [ref=e1389]:
+                  - paragraph [ref=e1390]: Modalità
+                  - paragraph [ref=e1391]: Generale aziendale
+                - generic [ref=e1392]:
+                  - paragraph [ref=e1393]: Periodo applicato
+                  - paragraph [ref=e1394]: aprile 2026
+                - generic [ref=e1395]:
+                  - paragraph [ref=e1396]: Copertura
+                  - paragraph [ref=e1397]: 11 commesse · 11 clienti
+          - generic [ref=e1398]:
+            - generic [ref=e1400]:
+              - generic [ref=e1401]:
+                - paragraph [ref=e1403]: Fatturato
+                - img [ref=e1405]
+              - generic [ref=e1408]:
+                - paragraph [ref=e1409]: 19.616 €
+                - paragraph [ref=e1410]: 11 commesse nel periodo
+            - generic [ref=e1412]:
+              - generic [ref=e1413]:
+                - paragraph [ref=e1415]: Margine Lordo
+                - img [ref=e1417]
+              - generic [ref=e1420]:
+                - paragraph [ref=e1421]: 6056 €
+                - paragraph [ref=e1422]: 30.9% sul fatturato
+            - generic [ref=e1424]:
+              - generic [ref=e1425]:
+                - paragraph [ref=e1427]: Costi Struttura
+                - img [ref=e1429]
+              - generic [ref=e1432]:
+                - paragraph [ref=e1433]: 0 €
+                - paragraph [ref=e1434]: 0 voci costo considerate
+            - generic [ref=e1436]:
+              - generic [ref=e1437]:
+                - paragraph [ref=e1439]: Margine Netto
+                - img [ref=e1441]
+              - generic [ref=e1445]:
+                - paragraph [ref=e1446]: 6056 €
+                - paragraph [ref=e1447]: Periodo in utile
+          - generic [ref=e1448]:
+            - generic [ref=e1450]:
+              - img [ref=e1451]
+              - text: Clienti Nel Periodo
+            - table [ref=e1455]:
+              - rowgroup [ref=e1456]:
+                - row "Cliente Commesse Mesi attivi Fatturato Margine lordo Incassato" [ref=e1457]:
+                  - columnheader "Cliente" [ref=e1458]
+                  - columnheader "Commesse" [ref=e1459]
+                  - columnheader "Mesi attivi" [ref=e1460]
+                  - columnheader "Fatturato" [ref=e1461]
+                  - columnheader "Margine lordo" [ref=e1462]
+                  - columnheader "Incassato" [ref=e1463]
+              - rowgroup [ref=e1464]:
+                - row "Cliente non associato Apri scheda cliente 1 1 2862 € 1760 € 0 €" [ref=e1465]:
+                  - cell "Cliente non associato Apri scheda cliente" [ref=e1466]:
+                    - button "Cliente non associato Apri scheda cliente" [ref=e1467] [cursor=pointer]:
+                      - paragraph [ref=e1468]: Cliente non associato
+                      - paragraph [ref=e1469]: Apri scheda cliente
+                  - cell "1" [ref=e1470]
+                  - cell "1" [ref=e1471]
+                  - cell "2862 €" [ref=e1472]
+                  - cell "1760 €" [ref=e1473]
+                  - cell "0 €" [ref=e1474]
+                - row "Cliente non associato Apri scheda cliente 1 1 2646 € 1751 € 0 €" [ref=e1475]:
+                  - cell "Cliente non associato Apri scheda cliente" [ref=e1476]:
+                    - button "Cliente non associato Apri scheda cliente" [ref=e1477] [cursor=pointer]:
+                      - paragraph [ref=e1478]: Cliente non associato
+                      - paragraph [ref=e1479]: Apri scheda cliente
+                  - cell "1" [ref=e1480]
+                  - cell "1" [ref=e1481]
+                  - cell "2646 €" [ref=e1482]
+                  - cell "1751 €" [ref=e1483]
+                  - cell "0 €" [ref=e1484]
+                - row "Cliente non associato Apri scheda cliente 1 1 2578 € 1260 € 1415 €" [ref=e1485]:
+                  - cell "Cliente non associato Apri scheda cliente" [ref=e1486]:
+                    - button "Cliente non associato Apri scheda cliente" [ref=e1487] [cursor=pointer]:
+                      - paragraph [ref=e1488]: Cliente non associato
+                      - paragraph [ref=e1489]: Apri scheda cliente
+                  - cell "1" [ref=e1490]
+                  - cell "1" [ref=e1491]
+                  - cell "2578 €" [ref=e1492]
+                  - cell "1260 €" [ref=e1493]
+                  - cell "1415 €" [ref=e1494]
+                - row "Cliente non associato Apri scheda cliente 1 1 1939 € 467 € 0 €" [ref=e1495]:
+                  - cell "Cliente non associato Apri scheda cliente" [ref=e1496]:
+                    - button "Cliente non associato Apri scheda cliente" [ref=e1497] [cursor=pointer]:
+                      - paragraph [ref=e1498]: Cliente non associato
+                      - paragraph [ref=e1499]: Apri scheda cliente
+                  - cell "1" [ref=e1500]
+                  - cell "1" [ref=e1501]
+                  - cell "1939 €" [ref=e1502]
+                  - cell "467 €" [ref=e1503]
+                  - cell "0 €" [ref=e1504]
+                - row "Cliente non associato Apri scheda cliente 1 1 1751 € 267 € 0 €" [ref=e1505]:
+                  - cell "Cliente non associato Apri scheda cliente" [ref=e1506]:
+                    - button "Cliente non associato Apri scheda cliente" [ref=e1507] [cursor=pointer]:
+                      - paragraph [ref=e1508]: Cliente non associato
+                      - paragraph [ref=e1509]: Apri scheda cliente
+                  - cell "1" [ref=e1510]
+                  - cell "1" [ref=e1511]
+                  - cell "1751 €" [ref=e1512]
+                  - cell "267 €" [ref=e1513]
+                  - cell "0 €" [ref=e1514]
+                - row "Cliente non associato Apri scheda cliente 1 1 1638 € 645 € 0 €" [ref=e1515]:
+                  - cell "Cliente non associato Apri scheda cliente" [ref=e1516]:
+                    - button "Cliente non associato Apri scheda cliente" [ref=e1517] [cursor=pointer]:
+                      - paragraph [ref=e1518]: Cliente non associato
+                      - paragraph [ref=e1519]: Apri scheda cliente
+                  - cell "1" [ref=e1520]
+                  - cell "1" [ref=e1521]
+                  - cell "1638 €" [ref=e1522]
+                  - cell "645 €" [ref=e1523]
+                  - cell "0 €" [ref=e1524]
+                - row "Cliente non associato Apri scheda cliente 1 1 1500 € -500 € 0 €" [ref=e1525]:
+                  - cell "Cliente non associato Apri scheda cliente" [ref=e1526]:
+                    - button "Cliente non associato Apri scheda cliente" [ref=e1527] [cursor=pointer]:
+                      - paragraph [ref=e1528]: Cliente non associato
+                      - paragraph [ref=e1529]: Apri scheda cliente
+                  - cell "1" [ref=e1530]
+                  - cell "1" [ref=e1531]
+                  - cell "1500 €" [ref=e1532]
+                  - cell "-500 €" [ref=e1533]
+                  - cell "0 €" [ref=e1534]
+                - row "Cliente non associato Apri scheda cliente 1 1 1345 € 795 € 0 €" [ref=e1535]:
+                  - cell "Cliente non associato Apri scheda cliente" [ref=e1536]:
+                    - button "Cliente non associato Apri scheda cliente" [ref=e1537] [cursor=pointer]:
+                      - paragraph [ref=e1538]: Cliente non associato
+                      - paragraph [ref=e1539]: Apri scheda cliente
+                  - cell "1" [ref=e1540]
+                  - cell "1" [ref=e1541]
+                  - cell "1345 €" [ref=e1542]
+                  - cell "795 €" [ref=e1543]
+                  - cell "0 €" [ref=e1544]
+                - row "Cliente non associato Apri scheda cliente 1 1 1260 € -322 € 692 €" [ref=e1545]:
+                  - cell "Cliente non associato Apri scheda cliente" [ref=e1546]:
+                    - button "Cliente non associato Apri scheda cliente" [ref=e1547] [cursor=pointer]:
+                      - paragraph [ref=e1548]: Cliente non associato
+                      - paragraph [ref=e1549]: Apri scheda cliente
+                  - cell "1" [ref=e1550]
+                  - cell "1" [ref=e1551]
+                  - cell "1260 €" [ref=e1552]
+                  - cell "-322 €" [ref=e1553]
+                  - cell "692 €" [ref=e1554]
+                - row "Cliente non associato Apri scheda cliente 1 1 1177 € -298 € 646 €" [ref=e1555]:
+                  - cell "Cliente non associato Apri scheda cliente" [ref=e1556]:
+                    - button "Cliente non associato Apri scheda cliente" [ref=e1557] [cursor=pointer]:
+                      - paragraph [ref=e1558]: Cliente non associato
+                      - paragraph [ref=e1559]: Apri scheda cliente
+                  - cell "1" [ref=e1560]
+                  - cell "1" [ref=e1561]
+                  - cell "1177 €" [ref=e1562]
+                  - cell "-298 €" [ref=e1563]
+                  - cell "646 €" [ref=e1564]
+                - row "Cliente non associato Apri scheda cliente 1 1 920 € 231 € 0 €" [ref=e1565]:
+                  - cell "Cliente non associato Apri scheda cliente" [ref=e1566]:
+                    - button "Cliente non associato Apri scheda cliente" [ref=e1567] [cursor=pointer]:
+                      - paragraph [ref=e1568]: Cliente non associato
+                      - paragraph [ref=e1569]: Apri scheda cliente
+                  - cell "1" [ref=e1570]
+                  - cell "1" [ref=e1571]
+                  - cell "920 €" [ref=e1572]
+                  - cell "231 €" [ref=e1573]
+                  - cell "0 €" [ref=e1574]
+          - generic [ref=e1575]:
+            - generic [ref=e1577]:
+              - img [ref=e1578]
+              - text: Commesse nel periodo
+            - table [ref=e1583]:
+              - rowgroup [ref=e1584]:
+                - row "Cliente Progetti Competenza Stato Fatturabile Margine Azioni" [ref=e1585]:
+                  - columnheader "Cliente" [ref=e1586]
+                  - columnheader "Progetti" [ref=e1587]
+                  - columnheader "Competenza" [ref=e1588]
+                  - columnheader "Stato" [ref=e1589]
+                  - columnheader "Fatturabile" [ref=e1590]
+                  - columnheader "Margine" [ref=e1591]
+                  - columnheader "Azioni" [ref=e1592]
+              - rowgroup [ref=e1593]:
+                - row "Cliente non associato Vai al cliente Retainer social fitness, Manutenzione sito e promo Commessa 253af171 apr 2026 APERTA 1345 € 59.1%" [ref=e1594]:
+                  - cell "Cliente non associato Vai al cliente" [ref=e1595]:
+                    - button "Cliente non associato Vai al cliente" [ref=e1596] [cursor=pointer]:
+                      - paragraph [ref=e1597]: Cliente non associato
+                      - paragraph [ref=e1598]: Vai al cliente
+                  - cell "Retainer social fitness, Manutenzione sito e promo Commessa 253af171" [ref=e1599]:
+                    - generic [ref=e1600]:
+                      - paragraph [ref=e1601]: Retainer social fitness, Manutenzione sito e promo
+                      - paragraph [ref=e1602]: Commessa 253af171
+                  - cell "apr 2026" [ref=e1603]
+                  - cell "APERTA" [ref=e1604]:
+                    - generic [ref=e1605]: APERTA
+                  - cell "1345 €" [ref=e1606]
+                  - cell "59.1%" [ref=e1607]
+                  - cell [ref=e1608]:
+                    - generic [ref=e1609]:
+                      - button [ref=e1610] [cursor=pointer]:
+                        - img
+                      - link [ref=e1611] [cursor=pointer]:
+                        - /url: blob:http://127.0.0.1:5173/3ac7e4ad-1c94-4e1a-bac9-e5ef2916ef89
+                        - button [ref=e1612]:
+                          - img
+                - row "Cliente non associato Vai al cliente Booking funnel estate Commessa a32433c4 apr 2026 PRONTA CHIUSURA 1751 € 15.3%" [ref=e1613]:
+                  - cell "Cliente non associato Vai al cliente" [ref=e1614]:
+                    - button "Cliente non associato Vai al cliente" [ref=e1615] [cursor=pointer]:
+                      - paragraph [ref=e1616]: Cliente non associato
+                      - paragraph [ref=e1617]: Vai al cliente
+                  - cell "Booking funnel estate Commessa a32433c4" [ref=e1618]:
+                    - generic [ref=e1619]:
+                      - paragraph [ref=e1620]: Booking funnel estate
+                      - paragraph [ref=e1621]: Commessa a32433c4
+                  - cell "apr 2026" [ref=e1622]
+                  - cell "PRONTA CHIUSURA" [ref=e1623]:
+                    - generic [ref=e1624]: PRONTA CHIUSURA
+                  - cell "1751 €" [ref=e1625]
+                  - cell "15.3%" [ref=e1626]
+                  - cell [ref=e1627]:
+                    - generic [ref=e1628]:
+                      - button [ref=e1629] [cursor=pointer]:
+                        - img
+                      - link [ref=e1630] [cursor=pointer]:
+                        - /url: blob:http://127.0.0.1:5173/e74fd291-4c54-4d35-b321-e07b094022f5
+                        - button [ref=e1631]:
+                          - img
+                - row "Cliente non associato Vai al cliente Campagne lead immobiliari Commessa 57e8cbba apr 2026 FATTURATA 1177 € -25.3%" [ref=e1632]:
+                  - cell "Cliente non associato Vai al cliente" [ref=e1633]:
+                    - button "Cliente non associato Vai al cliente" [ref=e1634] [cursor=pointer]:
+                      - paragraph [ref=e1635]: Cliente non associato
+                      - paragraph [ref=e1636]: Vai al cliente
+                  - cell "Campagne lead immobiliari Commessa 57e8cbba" [ref=e1637]:
+                    - generic [ref=e1638]:
+                      - paragraph [ref=e1639]: Campagne lead immobiliari
+                      - paragraph [ref=e1640]: Commessa 57e8cbba
+                  - cell "apr 2026" [ref=e1641]
+                  - cell "FATTURATA" [ref=e1642]:
+                    - generic [ref=e1643]: FATTURATA
+                  - cell "1177 €" [ref=e1644]
+                  - cell "-25.3%" [ref=e1645]
+                  - cell [ref=e1646]:
+                    - generic [ref=e1647]:
+                      - button [ref=e1648] [cursor=pointer]:
+                        - img
+                      - link [ref=e1649] [cursor=pointer]:
+                        - /url: blob:http://127.0.0.1:5173/0254a35b-df9c-4b64-beb5-cbe6d100da7f
+                        - button [ref=e1650]:
+                          - img
+                - row "Cliente non associato Vai al cliente Lead generation automotive Commessa c7b1b8e8 apr 2026 APERTA 1638 € 39.4%" [ref=e1651]:
+                  - cell "Cliente non associato Vai al cliente" [ref=e1652]:
+                    - button "Cliente non associato Vai al cliente" [ref=e1653] [cursor=pointer]:
+                      - paragraph [ref=e1654]: Cliente non associato
+                      - paragraph [ref=e1655]: Vai al cliente
+                  - cell "Lead generation automotive Commessa c7b1b8e8" [ref=e1656]:
+                    - generic [ref=e1657]:
+                      - paragraph [ref=e1658]: Lead generation automotive
+                      - paragraph [ref=e1659]: Commessa c7b1b8e8
+                  - cell "apr 2026" [ref=e1660]
+                  - cell "APERTA" [ref=e1661]:
+                    - generic [ref=e1662]: APERTA
+                  - cell "1638 €" [ref=e1663]
+                  - cell "39.4%" [ref=e1664]
+                  - cell [ref=e1665]:
+                    - generic [ref=e1666]:
+                      - button [ref=e1667] [cursor=pointer]:
+                        - img
+                      - link [ref=e1668] [cursor=pointer]:
+                        - /url: blob:http://127.0.0.1:5173/e6fbbba9-2f4f-4e66-8a1e-6d261bdce7d5
+                        - button [ref=e1669]:
+                          - img
+                - row "Cliente non associato Vai al cliente Brand awareness medico, SEO specialistica clinica Commessa 6b1cf9c0 apr 2026 FATTURATA 2578 € 48.9%" [ref=e1670]:
+                  - cell "Cliente non associato Vai al cliente" [ref=e1671]:
+                    - button "Cliente non associato Vai al cliente" [ref=e1672] [cursor=pointer]:
+                      - paragraph [ref=e1673]: Cliente non associato
+                      - paragraph [ref=e1674]: Vai al cliente
+                  - cell "Brand awareness medico, SEO specialistica clinica Commessa 6b1cf9c0" [ref=e1675]:
+                    - generic [ref=e1676]:
+                      - paragraph [ref=e1677]: Brand awareness medico, SEO specialistica clinica
+                      - paragraph [ref=e1678]: Commessa 6b1cf9c0
+                  - cell "apr 2026" [ref=e1679]
+                  - cell "FATTURATA" [ref=e1680]:
+                    - generic [ref=e1681]: FATTURATA
+                  - cell "2578 €" [ref=e1682]
+                  - cell "48.9%" [ref=e1683]
+                  - cell [ref=e1684]:
+                    - generic [ref=e1685]:
+                      - button [ref=e1686] [cursor=pointer]:
+                        - img
+                      - link [ref=e1687] [cursor=pointer]:
+                        - /url: blob:http://127.0.0.1:5173/d29c78b6-3a93-4bef-8d35-2cf2ef1d32ba
+                        - button [ref=e1688]:
+                          - img
+                - row "Cliente non associato Vai al cliente Gestione profili social, Campagne ADV local store Commessa 5c5a73b2 apr 2026 PRONTA CHIUSURA 1939 € 24.1%" [ref=e1689]:
+                  - cell "Cliente non associato Vai al cliente" [ref=e1690]:
+                    - button "Cliente non associato Vai al cliente" [ref=e1691] [cursor=pointer]:
+                      - paragraph [ref=e1692]: Cliente non associato
+                      - paragraph [ref=e1693]: Vai al cliente
+                  - cell "Gestione profili social, Campagne ADV local store Commessa 5c5a73b2" [ref=e1694]:
+                    - generic [ref=e1695]:
+                      - paragraph [ref=e1696]: Gestione profili social, Campagne ADV local store
+                      - paragraph [ref=e1697]: Commessa 5c5a73b2
+                  - cell "apr 2026" [ref=e1698]
+                  - cell "PRONTA CHIUSURA" [ref=e1699]:
+                    - generic [ref=e1700]: PRONTA CHIUSURA
+                  - cell "1939 €" [ref=e1701]
+                  - cell "24.1%" [ref=e1702]
+                  - cell [ref=e1703]:
+                    - generic [ref=e1704]:
+                      - button [ref=e1705] [cursor=pointer]:
+                        - img
+                      - link [ref=e1706] [cursor=pointer]:
+                        - /url: blob:http://127.0.0.1:5173/61c76864-212d-4220-82e3-dec4399da893
+                        - button [ref=e1707]:
+                          - img
+                - row "Cliente non associato Vai al cliente Lead generation B2B, SEO verticale logistica Commessa dbba1b19 apr 2026 APERTA 2646 € 66.2%" [ref=e1708]:
+                  - cell "Cliente non associato Vai al cliente" [ref=e1709]:
+                    - button "Cliente non associato Vai al cliente" [ref=e1710] [cursor=pointer]:
+                      - paragraph [ref=e1711]: Cliente non associato
+                      - paragraph [ref=e1712]: Vai al cliente
+                  - cell "Lead generation B2B, SEO verticale logistica Commessa dbba1b19" [ref=e1713]:
+                    - generic [ref=e1714]:
+                      - paragraph [ref=e1715]: Lead generation B2B, SEO verticale logistica
+                      - paragraph [ref=e1716]: Commessa dbba1b19
+                  - cell "apr 2026" [ref=e1717]
+                  - cell "APERTA" [ref=e1718]:
+                    - generic [ref=e1719]: APERTA
+                  - cell "2646 €" [ref=e1720]
+                  - cell "66.2%" [ref=e1721]
+                  - cell [ref=e1722]:
+                    - generic [ref=e1723]:
+                      - button [ref=e1724] [cursor=pointer]:
+                        - img
+                      - link [ref=e1725] [cursor=pointer]:
+                        - /url: blob:http://127.0.0.1:5173/1d173756-a5b1-426a-b787-b3f6dbc52138
+                        - button [ref=e1726]:
+                          - img
+                - row "Cliente non associato Vai al cliente Piano editoriale corsi Commessa cee5e1e0 apr 2026 APERTA 920 € 25.1%" [ref=e1727]:
+                  - cell "Cliente non associato Vai al cliente" [ref=e1728]:
+                    - button "Cliente non associato Vai al cliente" [ref=e1729] [cursor=pointer]:
+                      - paragraph [ref=e1730]: Cliente non associato
+                      - paragraph [ref=e1731]: Vai al cliente
+                  - cell "Piano editoriale corsi Commessa cee5e1e0" [ref=e1732]:
+                    - generic [ref=e1733]:
+                      - paragraph [ref=e1734]: Piano editoriale corsi
+                      - paragraph [ref=e1735]: Commessa cee5e1e0
+                  - cell "apr 2026" [ref=e1736]
+                  - cell "APERTA" [ref=e1737]:
+                    - generic [ref=e1738]: APERTA
+                  - cell "920 €" [ref=e1739]
+                  - cell "25.1%" [ref=e1740]
+                  - cell [ref=e1741]:
+                    - generic [ref=e1742]:
+                      - button [ref=e1743] [cursor=pointer]:
+                        - img
+                      - link [ref=e1744] [cursor=pointer]:
+                        - /url: blob:http://127.0.0.1:5173/15005661-b814-41ab-9315-513aa18d167c
+                        - button [ref=e1745]:
+                          - img
+                - row "Cliente non associato Vai al cliente Retainer social premium Commessa a1822926 apr 2026 FATTURATA 1260 € -25.6%" [ref=e1746]:
+                  - cell "Cliente non associato Vai al cliente" [ref=e1747]:
+                    - button "Cliente non associato Vai al cliente" [ref=e1748] [cursor=pointer]:
+                      - paragraph [ref=e1749]: Cliente non associato
+                      - paragraph [ref=e1750]: Vai al cliente
+                  - cell "Retainer social premium Commessa a1822926" [ref=e1751]:
+                    - generic [ref=e1752]:
+                      - paragraph [ref=e1753]: Retainer social premium
+                      - paragraph [ref=e1754]: Commessa a1822926
+                  - cell "apr 2026" [ref=e1755]
+                  - cell "FATTURATA" [ref=e1756]:
+                    - generic [ref=e1757]: FATTURATA
+                  - cell "1260 €" [ref=e1758]
+                  - cell "-25.6%" [ref=e1759]
+                  - cell [ref=e1760]:
+                    - generic [ref=e1761]:
+                      - button [ref=e1762] [cursor=pointer]:
+                        - img
+                      - link [ref=e1763] [cursor=pointer]:
+                        - /url: blob:http://127.0.0.1:5173/b6cf18f6-ed3c-4112-8611-f590199b95a2
+                        - button [ref=e1764]:
+                          - img
+                - row "Cliente non associato Vai al cliente Manutenzione ecommerce, Email automation retail Commessa a0b62f7f apr 2026 APERTA 2862 € 61.5%" [ref=e1765]:
+                  - cell "Cliente non associato Vai al cliente" [ref=e1766]:
+                    - button "Cliente non associato Vai al cliente" [ref=e1767] [cursor=pointer]:
+                      - paragraph [ref=e1768]: Cliente non associato
+                      - paragraph [ref=e1769]: Vai al cliente
+                  - cell "Manutenzione ecommerce, Email automation retail Commessa a0b62f7f" [ref=e1770]:
+                    - generic [ref=e1771]:
+                      - paragraph [ref=e1772]: Manutenzione ecommerce, Email automation retail
+                      - paragraph [ref=e1773]: Commessa a0b62f7f
+                  - cell "apr 2026" [ref=e1774]
+                  - cell "APERTA" [ref=e1775]:
+                    - generic [ref=e1776]: APERTA
+                  - cell "2862 €" [ref=e1777]
+                  - cell "61.5%" [ref=e1778]
+                  - cell [ref=e1779]:
+                    - generic [ref=e1780]:
+                      - button [ref=e1781] [cursor=pointer]:
+                        - img
+                      - link [ref=e1782] [cursor=pointer]:
+                        - /url: blob:http://127.0.0.1:5173/e6167655-d5eb-47b5-8025-030240ed3b0f
+                        - button [ref=e1783]:
+                          - img
+                - row "Cliente non associato Vai al cliente Progetto Test Final Commessa f962ec72 apr 2026 APERTA 1500 € -33.3%" [ref=e1784]:
+                  - cell "Cliente non associato Vai al cliente" [ref=e1785]:
+                    - button "Cliente non associato Vai al cliente" [ref=e1786] [cursor=pointer]:
+                      - paragraph [ref=e1787]: Cliente non associato
+                      - paragraph [ref=e1788]: Vai al cliente
+                  - cell "Progetto Test Final Commessa f962ec72" [ref=e1789]:
+                    - generic [ref=e1790]:
+                      - paragraph [ref=e1791]: Progetto Test Final
+                      - paragraph [ref=e1792]: Commessa f962ec72
+                  - cell "apr 2026" [ref=e1793]
+                  - cell "APERTA" [ref=e1794]:
+                    - generic [ref=e1795]: APERTA
+                  - cell "1500 €" [ref=e1796]
+                  - cell "-33.3%" [ref=e1797]
+                  - cell [ref=e1798]:
+                    - generic [ref=e1799]:
+                      - button [ref=e1800] [cursor=pointer]:
+                        - img
+                      - link [ref=e1801] [cursor=pointer]:
+                        - /url: blob:http://127.0.0.1:5173/de4452be-87a4-4762-bad8-dd2a06cd4107
+                        - button [ref=e1802]:
+                          - img
+      - button [ref=e907] [cursor=pointer]:
+        - img
+  - generic [ref=e1344]: "3000"

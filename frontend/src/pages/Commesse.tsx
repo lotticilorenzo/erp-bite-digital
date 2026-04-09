@@ -4,8 +4,11 @@ import { Button } from "@/components/ui/button";
 import { CommessaTable } from "@/components/commesse/CommessaTable";
 import { CommessaDialog } from "@/components/commesse/CommessaDialog";
 import { useCommesse, useDeleteCommessa } from "@/hooks/useCommesse";
+import { useCliente } from "@/hooks/useClienti";
 import type { Commessa } from "@/types";
 import { useSearchParams } from "react-router-dom";
+import { format, parseISO } from "date-fns";
+import { it } from "date-fns/locale";
 import {
   Dialog,
   DialogContent,
@@ -16,9 +19,17 @@ import {
 } from "@/components/ui/dialog";
 
 export default function CommessePage() {
-  const { data: commesse = [], isLoading } = useCommesse();
-  const deleteCommessa = useDeleteCommessa();
   const [searchParams, setSearchParams] = useSearchParams();
+  const clienteIdFilter = searchParams.get("cliente_id") || undefined;
+  const clienteNomeFilter = searchParams.get("cliente_nome") || undefined;
+  const meseFilter = searchParams.get("mese") || undefined;
+
+  const { data: commesse = [], isLoading } = useCommesse({
+    cliente_id: clienteIdFilter,
+    mese: meseFilter,
+  });
+  const { data: clienteFiltro } = useCliente(clienteIdFilter);
+  const deleteCommessa = useDeleteCommessa();
   
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
   const [selectedCommessa, setSelectedCommessa] = React.useState<Commessa | null>(null);
@@ -37,11 +48,30 @@ export default function CommessePage() {
   useEffect(() => {
     if (searchParams.get("action") === "new") {
       handleNew();
-      // Remove param after triggering
-      searchParams.delete("action");
-      setSearchParams(searchParams, { replace: true });
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("action");
+      setSearchParams(nextParams, { replace: true });
     }
-  }, [searchParams]);
+  }, [searchParams, setSearchParams]);
+
+  const clearClienteFilter = () => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("cliente_id");
+    nextParams.delete("cliente_nome");
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  const clearMeseFilter = () => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("mese");
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  const meseLabel = meseFilter ? format(parseISO(meseFilter), "MMM yyyy", { locale: it }) : null;
+  const activeFilters = [
+    clienteIdFilter ? `cliente ${clienteFiltro?.ragione_sociale || clienteNomeFilter || "selezionato"}` : null,
+    meseLabel ? `mese ${meseLabel}` : null,
+  ].filter(Boolean);
 
   const handleDeleteConfirm = async () => {
     if (commessaToDelete) {
@@ -60,10 +90,22 @@ export default function CommessePage() {
         <div>
           <h1 className="text-3xl font-bold text-foreground tracking-tight">Commesse</h1>
           <p className="text-muted-foreground mt-1">
-            Gestisci l'avanzamento economico e la fatturazione mensile per cliente.
+            {activeFilters.length > 0
+              ? `Vista filtrata per ${activeFilters.join(" · ")}.`
+              : "Gestisci l'avanzamento economico e la fatturazione mensile per cliente."}
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {clienteIdFilter && (
+            <Button variant="outline" onClick={clearClienteFilter}>
+              Rimuovi cliente
+            </Button>
+          )}
+          {meseFilter && (
+            <Button variant="outline" onClick={clearMeseFilter}>
+              Rimuovi mese
+            </Button>
+          )}
           <Button 
             onClick={handleNew}
             className="bg-primary hover:bg-primary/90 text-white shadow-[0_0_15px_hsl(var(--primary)/0.2)] transition-all hover:scale-105"

@@ -7,6 +7,8 @@ export function useTasks(filters?: {
   commessa_id?: string; 
   assegnatario_id?: string; 
   parent_only?: boolean;
+  start_date?: string;
+  end_date?: string;
 }) {
   return useQuery({
     queryKey: ["studio-tasks", filters],
@@ -35,6 +37,7 @@ export function useTasks(filters?: {
           subtasks: [] 
         })),
         progetto_id: t.progetto_id,
+        progetto: t.progetto,
         commessa_id: t.commessa_id,
         parent_id: t.parent_id,
         stima_minuti: t.stima_minuti,

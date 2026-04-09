@@ -77,7 +77,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       selectedFolderId: id, 
       selectedListId: null, 
       selectedTaskId: null, 
-      view: id ? "dash" : "home" 
+      view: id ? "overview" : "home" 
     }));
   }, []);
 
@@ -87,7 +87,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       selectedListId: id, 
       selectedFolderId: folderId ?? prev.selectedFolderId,
       selectedTaskId: null, 
-      view: id ? "list" : "dash" 
+      view: id ? "overview" : "dash" 
     }));
   }, []);
 

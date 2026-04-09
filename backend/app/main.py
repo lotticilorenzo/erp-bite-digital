@@ -111,6 +111,23 @@ async def ensure_schema_tables_on_startup():
         try:
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
+                await conn.execute(
+                    text(
+                        """
+                        ALTER TABLE clienti
+                        ADD COLUMN IF NOT EXISTS affidabilita VARCHAR(10) DEFAULT 'MEDIA'
+                        """
+                    )
+                )
+                await conn.execute(
+                    text(
+                        """
+                        UPDATE clienti
+                        SET affidabilita = 'MEDIA'
+                        WHERE affidabilita IS NULL
+                        """
+                    )
+                )
             logger.info("Schema database garantito.")
             break
         except Exception as e:

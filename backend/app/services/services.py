@@ -818,7 +818,9 @@ async def list_tasks(
     commessa_id: Optional[uuid.UUID] = None,
     assegnatario_id: Optional[uuid.UUID] = None,
     stato: Optional[TaskStatus] = None,
-    parent_only: bool = False
+    parent_only: bool = False,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None
 ) -> List[Task]:
     q = select(Task).options(
         selectinload(Task.subtasks).selectinload(Task.timer_sessions),
@@ -835,9 +837,83 @@ async def list_tasks(
         q = q.where(Task.stato == stato)
     if parent_only:
         q = q.where(Task.parent_id == None)
+    if start_date:
+        q = q.where(Task.data_scadenza >= start_date)
+    if end_date:
+        q = q.where(Task.data_scadenza <= end_date)
     
     result = await db.execute(q.order_by(Task.created_at.desc()))
     return result.unique().scalars().all()
+
+async def get_project_stats(db: AsyncSession, progetto_id: uuid.UUID) -> dict:
+    from app.models.models import Task, User, ProgettoTeam, TaskStatus
+    from datetime import date, timedelta
+    from sqlalchemy import func
+    
+    today = date.today()
+    next_week = today + timedelta(days=7)
+    
+    # 1. Fetch all tasks for the project
+    stmt = select(Task).where(Task.progetto_id == progetto_id).options(selectinload(Task.assegnatario))
+    result = await db.execute(stmt)
+    tasks = result.scalars().all()
+    
+    # 2. Basic KPIs
+    total = len(tasks)
+    due_today = len([t for t in tasks if t.data_scadenza == today and t.stato != TaskStatus.PUBBLICATO])
+    overdue = len([t for t in tasks if t.data_scadenza and t.data_scadenza < today and t.stato != TaskStatus.PUBBLICATO])
+    upcoming = len([t for t in tasks if t.data_scadenza and today < t.data_scadenza <= next_week and t.stato != TaskStatus.PUBBLICATO])
+    
+    # 3. Status Distribution
+    status_counts = {}
+    for t in tasks:
+        status_counts[t.stato] = status_counts.get(t.stato, 0) + 1
+    
+    # 4. Team Stats (Tasks and Overdue per member)
+    team_stmt = select(User).join(ProgettoTeam).where(ProgettoTeam.progetto_id == progetto_id)
+    team_result = await db.execute(team_stmt)
+    team_users = team_result.scalars().all()
+    
+    team_stats = []
+    for u in team_users:
+        user_tasks = [t for t in tasks if t.assegnatario_id == u.id]
+        user_overdue = [t for t in user_tasks if t.data_scadenza and t.data_scadenza < today and t.stato != TaskStatus.PUBBLICATO]
+        team_stats.append({
+            "id": u.id,
+            "nome": u.nome,
+            "cognome": u.cognome,
+            "avatar_url": u.avatar_url,
+            "total_tasks": len(user_tasks),
+            "overdue_tasks": len(user_overdue)
+        })
+    
+    # 5. Overdue Tasks Details (Limit to 10)
+    critical_tasks = []
+    overdue_list = [t for t in tasks if t.data_scadenza and t.data_scadenza < today and t.stato != TaskStatus.PUBBLICATO]
+    overdue_list.sort(key=lambda x: x.data_scadenza) # Oldest first
+    
+    for t in overdue_list[:10]:
+        critical_tasks.append({
+            "id": t.id,
+            "titolo": t.titolo,
+            "data_scadenza": t.data_scadenza,
+            "assegnatario": {
+                "nome": t.assegnatario.nome if t.assegnatario else "Nessuno",
+                "avatar_url": t.assegnatario.avatar_url if t.assegnatario else None
+            } if t.assegnatario else None
+        })
+        
+    return {
+        "kpis": {
+            "total": total,
+            "today": due_today,
+            "overdue": overdue,
+            "upcoming": upcoming
+        },
+        "status_distribution": [{"status": s, "count": c} for s, c in status_counts.items()],
+        "team_stats": team_stats,
+        "critical_tasks": critical_tasks
+    }
 
 async def get_task(db: AsyncSession, task_id: uuid.UUID) -> Optional[Task]:
     result = await db.execute(

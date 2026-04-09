@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Square, Timer, ChevronUp, RefreshCw, CheckCircle2 } from "lucide-react";
+import { Square, Timer, ChevronUp } from "lucide-react";
 import { useActiveTimer, useStopTimer, useStartTimer } from "@/hooks/useTimer";
 import { useTasks } from "@/hooks/useTasks";
 import { useAuth } from "@/hooks/useAuth";
@@ -55,74 +55,72 @@ export function TimerBar() {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 h-[48px] bg-card border-t border-purple-500/30 flex items-center px-4 z-50 shadow-[0_-4px_12px_rgba(0,0,0,0.3)]">
-      <div className="container mx-auto flex items-center justify-between gap-4">
-        {/* Left: Active Task Info */}
-        <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center animate-pulse">
-            <Timer className="w-4 h-4 text-purple-400" />
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-8 duration-500">
+      <div className="bg-[#121216]/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] px-4 py-2.5 flex items-center gap-6 min-w-[400px]">
+        {/* Active Task Info */}
+        <div className="flex items-center gap-3 border-r border-white/10 pr-4">
+          <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+            <Timer className="w-4 h-4 text-primary animate-pulse" />
           </div>
-          <div className="flex flex-col min-w-0">
-            <span className="text-[10px] text-purple-400 font-medium uppercase tracking-wider leading-none">
-              In corso
+          <div className="flex flex-col min-w-0 max-w-[150px]">
+            <span className="text-[10px] text-muted-foreground font-black uppercase tracking-widest leading-none mb-0.5 opacity-50">
+              In registrazione
             </span>
-            <span className="text-sm text-gray-100 font-medium truncate">
-              {activeTimer.task_title || "Task senza titolo"}
+            <span className="text-xs text-white font-bold truncate">
+              {activeTimer.task_title || "Task generico"}
             </span>
           </div>
         </div>
 
-        {/* Center: Timer Display */}
-        <div className="flex items-center gap-6">
-          <div className="text-xl font-mono text-white tabular-nums tracking-wider leading-none">
+        {/* Timer Display */}
+        <div className="flex items-center gap-4">
+          <div className="text-xl font-black text-white tabular-nums tracking-tighter w-24">
             {elapsed}
           </div>
-          <div className="h-4 w-[1px] bg-gray-700 hidden sm:block" />
+          
           <div className="flex items-center gap-2">
             <Button
               size="sm"
-              variant="destructive"
-              className="h-8 px-3 gap-2 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/20 transition-all duration-200"
+              variant="default"
+              className="h-9 px-4 bg-primary hover:bg-primary/90 text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg shadow-primary/20"
               onClick={handleStop}
             >
-              <Square className="w-3 h-3 fill-current" />
-              <span className="hidden sm:inline">Ferma</span>
+              <Square className="w-3.5 h-3.5 fill-current mr-2" />
+              Stop
             </Button>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 px-3 gap-2 bg-white/5 hover:bg-white/10 text-gray-300 border-white/10"
+                <button
+                  className="p-2 hover:bg-white/5 rounded-xl transition-colors border border-transparent hover:border-white/10 text-muted-foreground"
                 >
-                  <RefreshCw className="w-3 h-3" />
-                  <span className="hidden sm:inline">Switch</span>
-                  <ChevronUp className="w-3 h-3 opacity-50" />
-                </Button>
+                  <ChevronUp className="w-4 h-4" />
+                </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64 bg-muted border-gray-700 text-gray-200">
-                <DropdownMenuLabel className="text-xs font-semibold text-gray-400">
-                  I tuoi task attivi
+              <DropdownMenuContent align="end" side="top" sideOffset={12} className="w-64 bg-[#121216] border-white/10 text-gray-200 rounded-xl shadow-2xl p-2">
+                <DropdownMenuLabel className="text-[9px] font-black tracking-widest uppercase opacity-50 px-2 py-1.5">
+                  Switch rapido
                 </DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-gray-700" />
-                <div className="max-h-[300px] overflow-y-auto">
+                <DropdownMenuSeparator className="bg-white/5" />
+                <div className="max-h-[300px] overflow-y-auto space-y-1">
                   {tasks?.filter(t => t.id !== activeTimer.task_id).map((task) => (
                     <DropdownMenuItem
                       key={task.id}
-                      className="gap-2 cursor-pointer focus:bg-white/5 focus:text-purple-400 py-2"
+                      className="gap-3 cursor-pointer rounded-lg focus:bg-primary/10 focus:text-primary p-2 group"
                       onClick={() => handleSwitch(task.id)}
                     >
-                      <CheckCircle2 className="w-4 h-4 text-gray-500" />
+                      <div className="w-6 h-6 rounded-md bg-muted flex items-center justify-center text-[10px] font-bold group-focus:bg-primary group-focus:text-white transition-colors">
+                        {task.title.substring(0, 1).toUpperCase()}
+                      </div>
                       <div className="flex flex-col min-w-0">
-                        <span className="text-sm font-medium truncate">{task.title}</span>
-                        <span className="text-[10px] text-gray-400">Clicca per iniziare</span>
+                        <span className="text-xs font-bold truncate">{task.title}</span>
+                        <span className="text-[10px] text-muted-foreground opacity-50">Riprendi attività</span>
                       </div>
                     </DropdownMenuItem>
                   ))}
                   {(!tasks || tasks.length <= 1) && (
-                    <div className="p-4 text-center text-xs text-gray-500">
-                      Nessun altro task assegnato disponibile per lo switch rapido.
+                    <div className="p-4 text-center text-[10px] text-muted-foreground italic">
+                      Nessun altro task disponibile
                     </div>
                   )}
                 </div>

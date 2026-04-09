@@ -1,0 +1,155 @@
+[     232ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:17236
+[     704ms] TypeError: costiFissi.reduce is not a function
+    at http://127.0.0.1:5173/src/pages/Reports.tsx?t=1775654746395:166:37
+    at updateMemo (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:10138:20)
+    at Object.useMemo (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:10610:13)
+    at useMemo (http://127.0.0.1:5173/node_modules/.vite/deps/react.js?v=f7237726:927:31)
+    at Reports (http://127.0.0.1:5173/src/pages/Reports.tsx?t=1775654746395:163:15)
+    at renderWithHooks (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:9624:19)
+    at updateFunctionComponent (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:12126:19)
+    at beginWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:13100:13)
+    at HTMLUnknownElement.callCallback (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:3144:11)
+    at Object.invokeGuardedCallbackDev (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:3164:14)
+[     711ms] TypeError: costiFissi.reduce is not a function
+    at http://127.0.0.1:5173/src/pages/Reports.tsx?t=1775654746395:166:37
+    at updateMemo (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:10138:20)
+    at Object.useMemo (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:10610:13)
+    at useMemo (http://127.0.0.1:5173/node_modules/.vite/deps/react.js?v=f7237726:927:31)
+    at Reports (http://127.0.0.1:5173/src/pages/Reports.tsx?t=1775654746395:163:15)
+    at renderWithHooks (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:9624:19)
+    at updateFunctionComponent (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:12126:19)
+    at beginWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:13100:13)
+    at HTMLUnknownElement.callCallback (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:3144:11)
+    at Object.invokeGuardedCallbackDev (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:3164:14)
+[     713ms] [ERROR] The above error occurred in the <Reports> component:
+
+    at Reports (http://127.0.0.1:5173/src/pages/Reports.tsx?t=1775654746395:85:19)
+    at RenderedRoute (http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=f0036319:4004:26)
+    at Outlet (http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=f0036319:4570:25)
+    at div
+    at main
+    at main
+    at _c10 (http://127.0.0.1:5173/src/components/ui/sidebar.tsx:294:49)
+    at div
+    at div
+    at Provider (http://127.0.0.1:5173/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=17515461:24:12)
+    at TooltipProvider (http://127.0.0.1:5173/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=17515461:216:10)
+    at http://127.0.0.1:5173/src/components/ui/sidebar.tsx:33:59
+    at DashboardLayout
+    at StudioProvider (http://127.0.0.1:5173/src/context/StudioContext.tsx?t=1775646549068:11:34)
+    at RenderedRoute (http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=f0036319:4004:26)
+    at Routes (http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=f0036319:4623:19)
+    at Suspense
+    at ThemeProvider (http://127.0.0.1:5173/src/context/ThemeContext.tsx:21:33)
+    at App (http://127.0.0.1:5173/src/App.tsx?t=1775654746395:68:30)
+    at Router (http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=f0036319:4575:29)
+    at BrowserRouter (http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=f0036319:6927:26)
+    at QueryClientProvider (http://127.0.0.1:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=32d9a8dd:2517:30)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries. @ http://127.0.0.1:5173/@vite/client:509
+[     715ms] TypeError: costiFissi.reduce is not a function
+    at http://127.0.0.1:5173/src/pages/Reports.tsx?t=1775654746395:166:37
+    at updateMemo (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:10138:20)
+    at Object.useMemo (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:10610:13)
+    at useMemo (http://127.0.0.1:5173/node_modules/.vite/deps/react.js?v=f7237726:927:31)
+    at Reports (http://127.0.0.1:5173/src/pages/Reports.tsx?t=1775654746395:163:15)
+    at renderWithHooks (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:9624:19)
+    at updateFunctionComponent (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:12126:19)
+    at beginWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:13100:13)
+    at beginWork$1 (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:15986:12)
+    at performUnitOfWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:15572:12)
+[   17967ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:17236
+[   18323ms] TypeError: costiFissi.reduce is not a function
+    at http://127.0.0.1:5173/src/pages/Reports.tsx?t=1775654746395:166:37
+    at updateMemo (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:10138:20)
+    at Object.useMemo (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:10610:13)
+    at useMemo (http://127.0.0.1:5173/node_modules/.vite/deps/react.js?v=f7237726:927:31)
+    at Reports (http://127.0.0.1:5173/src/pages/Reports.tsx?t=1775654746395:163:15)
+    at renderWithHooks (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:9624:19)
+    at updateFunctionComponent (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:12126:19)
+    at beginWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:13100:13)
+    at HTMLUnknownElement.callCallback (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:3144:11)
+    at Object.invokeGuardedCallbackDev (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:3164:14)
+[   18327ms] TypeError: costiFissi.reduce is not a function
+    at http://127.0.0.1:5173/src/pages/Reports.tsx?t=1775654746395:166:37
+    at updateMemo (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:10138:20)
+    at Object.useMemo (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:10610:13)
+    at useMemo (http://127.0.0.1:5173/node_modules/.vite/deps/react.js?v=f7237726:927:31)
+    at Reports (http://127.0.0.1:5173/src/pages/Reports.tsx?t=1775654746395:163:15)
+    at renderWithHooks (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:9624:19)
+    at updateFunctionComponent (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:12126:19)
+    at beginWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:13100:13)
+    at HTMLUnknownElement.callCallback (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:3144:11)
+    at Object.invokeGuardedCallbackDev (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:3164:14)
+[   18328ms] [ERROR] The above error occurred in the <Reports> component:
+
+    at Reports (http://127.0.0.1:5173/src/pages/Reports.tsx?t=1775654746395:85:19)
+    at RenderedRoute (http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=f0036319:4004:26)
+    at Outlet (http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=f0036319:4570:25)
+    at div
+    at main
+    at main
+    at _c10 (http://127.0.0.1:5173/src/components/ui/sidebar.tsx:294:49)
+    at div
+    at div
+    at Provider (http://127.0.0.1:5173/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=17515461:24:12)
+    at TooltipProvider (http://127.0.0.1:5173/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=17515461:216:10)
+    at http://127.0.0.1:5173/src/components/ui/sidebar.tsx:33:59
+    at DashboardLayout
+    at StudioProvider (http://127.0.0.1:5173/src/context/StudioContext.tsx?t=1775646549068:11:34)
+    at RenderedRoute (http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=f0036319:4004:26)
+    at Routes (http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=f0036319:4623:19)
+    at Suspense
+    at ThemeProvider (http://127.0.0.1:5173/src/context/ThemeContext.tsx:21:33)
+    at App (http://127.0.0.1:5173/src/App.tsx?t=1775654746395:68:30)
+    at Router (http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=f0036319:4575:29)
+    at BrowserRouter (http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=f0036319:6927:26)
+    at QueryClientProvider (http://127.0.0.1:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=32d9a8dd:2517:30)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries. @ http://127.0.0.1:5173/@vite/client:509
+[   18334ms] TypeError: costiFissi.reduce is not a function
+    at http://127.0.0.1:5173/src/pages/Reports.tsx?t=1775654746395:166:37
+    at updateMemo (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:10138:20)
+    at Object.useMemo (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:10610:13)
+    at useMemo (http://127.0.0.1:5173/node_modules/.vite/deps/react.js?v=f7237726:927:31)
+    at Reports (http://127.0.0.1:5173/src/pages/Reports.tsx?t=1775654746395:163:15)
+    at renderWithHooks (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:9624:19)
+    at updateFunctionComponent (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:12126:19)
+    at beginWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:13100:13)
+    at beginWork$1 (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:15986:12)
+    at performUnitOfWork (http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:15572:12)
+[   42155ms] [ERROR] Error: Invalid border width: undefined
+    at Object.resolveBorderShorthand (http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:83589:41)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:84089:35
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:79605:12
+    at resolveStyles$1 (http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:84107:70)
+    at computeStyle (http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100332:9)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100341:16
+    at Array.map (<anonymous>)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100343:33
+    at Array.map (<anonymous>)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100343:33 @ http://127.0.0.1:5173/@vite/client:509
+[   42158ms] [ERROR] Error: Invalid border width: undefined
+    at Object.resolveBorderShorthand (http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:83589:41)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:84089:35
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:79605:12
+    at resolveStyles$1 (http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:84107:70)
+    at computeStyle (http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100332:9)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100341:16
+    at Array.map (<anonymous>)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100343:33
+    at Array.map (<anonymous>)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100343:33 @ http://127.0.0.1:5173/@vite/client:509
+[   58811ms] [ERROR] Error: Invalid border width: undefined
+    at Object.resolveBorderShorthand (http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:83589:41)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:84089:35
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:79605:12
+    at resolveStyles$1 (http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:84107:70)
+    at computeStyle (http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100332:9)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100341:16
+    at Array.map (<anonymous>)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100343:33
+    at Array.map (<anonymous>)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100343:33 @ http://127.0.0.1:5173/@vite/client:509

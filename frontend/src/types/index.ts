@@ -2,6 +2,7 @@ export type UserRole = "ADMIN" | "PM" | "DIPENDENTE" | "FREELANCER";
 export type ProjectType = "RETAINER" | "ONE_OFF";
 export type ProjectStatus = "ATTIVO" | "CHIUSO";
 export type CommessaStatus = "APERTA" | "PRONTA_CHIUSURA" | "CHIUSA" | "FATTURATA" | "INCASSATA";
+export type ClienteAffidabilita = "ALTA" | "MEDIA" | "BASSA";
 export type TaskStatus = "DA_FARE" | "BOZZE_IDEE" | "DA_CORREGGERE" | "IN_REVIEW" | "PRONTO" | "PROGRAMMATO" | "PUBBLICATO";
 export type TimesheetStatus = "PENDING" | "APPROVATO" | "RIFIUTATO";
 export type CostoTipo = "FISSO" | "VARIABILE";
@@ -48,6 +49,7 @@ export interface Cliente {
   attivo: boolean;
   logo_url?: string | null;
   drive_files?: any[];
+  affidabilita?: ClienteAffidabilita | null;
   created_at?: string;
   health_score?: number; // Computed score
 }
@@ -75,6 +77,12 @@ export interface Progetto {
   team?: ProgettoTeam[];
 }
 
+export interface ProgettoRef {
+  id: string;
+  nome: string;
+  tipo?: ProjectType;
+}
+
 export interface CommessaRiga {
   id: string;
   commessa_id: string;
@@ -84,6 +92,7 @@ export interface CommessaRiga {
   delivery_attesa: number;
   delivery_consuntiva: number;
   created_at: string;
+  progetto?: ProgettoRef;
 }
 
 export interface Commessa {

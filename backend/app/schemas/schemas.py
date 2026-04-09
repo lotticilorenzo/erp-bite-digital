@@ -2,7 +2,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, date
 from decimal import Decimal
-from typing import Optional, List
+from typing import Optional, List, Literal
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from app.models.models import (
     UserRole, ProjectType, ProjectStatus, CommessaStatus,
@@ -13,6 +13,9 @@ from app.models.models import (
 # ── BASE ──────────────────────────────────────────────────
 class OrmBase(BaseModel):
     model_config = {"from_attributes": True}
+
+
+ClienteAffidabilita = Literal["ALTA", "MEDIA", "BASSA"]
 
 
 # ── USER ──────────────────────────────────────────────────
@@ -104,6 +107,7 @@ class ClienteCreate(BaseModel):
     condizioni_pagamento: Optional[str] = None
     drive_files: Optional[list] = None
     logo_url: Optional[str] = None
+    affidabilita: Optional[ClienteAffidabilita] = None
 
 class ClienteUpdate(BaseModel):
     codice_cliente: Optional[str] = None
@@ -128,6 +132,7 @@ class ClienteUpdate(BaseModel):
     attivo: Optional[bool] = None
     drive_files: Optional[list] = None
     logo_url: Optional[str] = None
+    affidabilita: Optional[ClienteAffidabilita] = None
 
 class ClienteOut(OrmBase):
     id: uuid.UUID
@@ -154,6 +159,7 @@ class ClienteOut(OrmBase):
     attivo: bool = True
     drive_files: Optional[list] = None
     logo_url: Optional[str] = None
+    affidabilita: Optional[ClienteAffidabilita] = None
     created_at: Optional[datetime] = None
 
 
@@ -243,6 +249,12 @@ class ProgettoWithCliente(ProgettoOut):
     cliente: Optional[ClienteOut] = None
 
 
+class ProgettoRefOut(OrmBase):
+    id: uuid.UUID
+    nome: str
+    tipo: Optional[ProjectType] = None
+
+
 # ── COMMESSA ──────────────────────────────────────────────
 class CommessaRigaCreate(BaseModel):
     progetto_id: uuid.UUID
@@ -267,6 +279,7 @@ class CommessaRigaOut(OrmBase):
     delivery_attesa: int
     delivery_consuntiva: int
     created_at: datetime
+    progetto: Optional[ProgettoRefOut] = None
 
 class CommessaCreate(BaseModel):
     cliente_id: uuid.UUID

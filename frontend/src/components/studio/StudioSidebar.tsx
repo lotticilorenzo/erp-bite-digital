@@ -4,7 +4,8 @@ import {
   Hash, 
   Plus,
   Search,
-  Home
+  Home,
+  BarChart3
 } from "lucide-react";
 import { 
   SidebarGroup, 
@@ -53,6 +54,19 @@ export function StudioSidebar() {
             >
               <Home className="h-4 w-4" />
               <span className="font-bold text-xs uppercase tracking-wider">Home</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+
+          <SidebarMenuItem>
+            <SidebarMenuButton 
+              isActive={nav.view === "carico-lavoro"}
+              onClick={() => setView("carico-lavoro")}
+              className={`h-9 px-3 rounded-lg transition-all ${
+                nav.view === "carico-lavoro" ? "bg-primary/10 text-primary border border-primary/20 shadow-[0_0_15px_hsl(var(--primary)/0.2)]" : "text-muted-foreground hover:text-white"
+              }`}
+            >
+              <BarChart3 className="h-4 w-4" />
+              <span className="font-bold text-xs uppercase tracking-wider">Carico Lavoro</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

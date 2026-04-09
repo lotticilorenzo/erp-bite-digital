@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Badge } from "@/components/ui/badge";
 import { useTaskMutations } from "@/hooks/useTasks";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import type { TaskSO } from "@/types/studio";
 
 interface GanttChartProps {
@@ -15,7 +16,7 @@ interface GanttChartProps {
 }
 
 const ROW_HEIGHT = 48;
-const LEFT_PANEL_WIDTH = 250;
+const LEFT_PANEL_WIDTH = 300;
 
 export function GanttChart({ tasks, period, onTaskClick }: GanttChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -98,17 +99,17 @@ export function GanttChart({ tasks, period, onTaskClick }: GanttChartProps) {
   };
 
   return (
-    <div className="flex border border-border/50 w-full min-w-[900px] h-full rounded-3xl bg-[#0a0c10] shadow-2xl overflow-y-auto overflow-x-hidden">
+    <div className="flex w-full h-full bg-card shadow-2xl overflow-y-auto overflow-x-hidden border-t border-border/20">
       
       {/* Sidebar SINISTRA - FISSA */}
       <div 
         style={{ minWidth: LEFT_PANEL_WIDTH, maxWidth: LEFT_PANEL_WIDTH }}
-        className="shrink-0 bg-[#0a0c10] border-r border-border/50 sticky left-0 z-30 flex flex-col"
+        className="shrink-0 bg-card border-r border-border/50 sticky left-0 z-30 flex flex-col"
       >
-        <div className="h-[48px] p-4 flex items-center shrink-0 border-b border-border/50 sticky top-0 bg-[#0a0c10] z-40">
-          <span className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Attività / Progetti</span>
+        <div className="h-[48px] p-4 flex items-center shrink-0 border-b border-border/50 sticky top-0 bg-card z-40">
+          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Attività / Progetti</span>
         </div>
-        <div className="relative bg-[#0a0c10]">
+        <div className="relative bg-card">
           {Object.entries(groupedTasks).map(([projId, projTasks]) => (
             <div key={projId}>
               <div className="h-[34px] bg-muted/30 px-4 flex items-center border-y border-border/20 sticky top-[48px] z-30">
@@ -120,10 +121,10 @@ export function GanttChart({ tasks, period, onTaskClick }: GanttChartProps) {
                 <div 
                   key={task.id} 
                   style={{ height: ROW_HEIGHT }} 
-                  className="px-4 flex items-center border-b border-border/10 hover:bg-white/5 transition-colors cursor-pointer group bg-[#0a0c10]"
+                  className="px-4 flex items-center border-b border-border/10 hover:bg-muted/50 transition-colors cursor-pointer group bg-card"
                   onClick={() => onTaskClick(task.id)}
                 >
-                  <span className="text-xs font-bold text-slate-300 truncate transition-colors group-hover:text-primary">
+                  <span className="text-xs font-bold text-foreground truncate transition-colors group-hover:text-primary">
                     {task.title}
                   </span>
                 </div>
@@ -134,18 +135,18 @@ export function GanttChart({ tasks, period, onTaskClick }: GanttChartProps) {
       </div>
 
       {/* Timeline DESTRA - SCROLLA Orizzontalmente */}
-      <div className="flex-1 overflow-y-hidden custom-scrollbar bg-[#0a0c10] relative" style={{ overflowX: "auto", width: "100%" }}>
+      <div className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar bg-card relative">
         <div style={{ width: timelineWidth }} className="flex flex-col min-h-full">
           {/* Header Date */}
-          <div className="h-[48px] flex shrink-0 border-b border-border/50 bg-[#0a0c10] sticky top-0 z-40">
+          <div className="h-[48px] flex shrink-0 border-b border-border/50 bg-card sticky top-0 z-40">
             {days.map((day: Date, i: number) => (
               <div 
                 key={i} 
                 style={{ width: dayWidth }} 
                 className={`flex flex-col items-center justify-center border-r border-border/20 shrink-0 ${isSameDay(day, today) ? "bg-primary/10" : ""}`}
               >
-                <span className="text-[10px] font-black text-slate-500 uppercase">{format(day, "eee", { locale: it })}</span>
-                <span className={`text-xs font-black ${isSameDay(day, today) ? "text-primary" : "text-slate-300"}`}>{format(day, "dd")}</span>
+                <span className="text-[10px] font-black text-muted-foreground uppercase">{format(day, "eee", { locale: it })}</span>
+                <span className={`text-xs font-black ${isSameDay(day, today) ? "text-primary" : "text-foreground"}`}>{format(day, "dd")}</span>
               </div>
             ))}
           </div>
@@ -225,7 +226,7 @@ export function GanttChart({ tasks, period, onTaskClick }: GanttChartProps) {
                                 }}
                                 className={`absolute h-8 rounded-lg border flex items-center justify-between px-3 cursor-pointer shadow-lg transition-all ${getStatusColor(task.state_id)} group hover:shadow-primary/20 backdrop-blur-sm z-30`}
                               >
-                                <span className="text-[10px] font-black truncate max-w-full text-white tracking-widest drop-shadow-md">
+                                <span className="text-[10px] font-black truncate max-w-full text-foreground tracking-widest drop-shadow-md">
                                   {task.title}
                                 </span>
                                 {task.stima_minuti && (
@@ -242,20 +243,28 @@ export function GanttChart({ tasks, period, onTaskClick }: GanttChartProps) {
                                         {task.state_id}
                                      </Badge>
                                   </div>
-                                  <h4 className="text-sm font-black text-white leading-tight">{task.title}</h4>
-                                  <div className="flex items-center gap-3 text-[10px] text-slate-400 font-bold">
+                                  <span className={cn(
+                                    "text-[10px] uppercase font-black truncate",
+                                    task.due_date && isSameDay(parseISO(task.due_date), today) ? "text-orange-400" : "text-foreground"
+                                  )}>
+                                    Attività
+                                  </span>
+                                  <h4 className="text-sm font-black text-foreground truncate leading-tight">
+                                    {task.title}
+                                  </h4>
+                                  <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-bold">
                                      <div className="flex flex-col">
                                         <span>Inizio</span>
-                                        <span className="text-white">{task.data_inizio ? format(parseISO(task.data_inizio), "dd MMM yyyy") : "-"}</span>
+                                        <span className="text-foreground">{task.data_inizio ? format(parseISO(task.data_inizio), "dd MMM yyyy") : "-"}</span>
                                      </div>
                                      <div className="flex flex-col">
                                         <span>Scadenza</span>
-                                        <span className={task.due_date && isSameDay(parseISO(task.due_date), today) ? "text-orange-400" : "text-white"}>
+                                        <span className={task.due_date && isSameDay(parseISO(task.due_date), today) ? "text-orange-400" : "text-foreground"}>
                                           {task.due_date ? format(parseISO(task.due_date), "dd MMM yyyy") : "-"}
                                         </span>
                                      </div>
                                   </div>
-                                  {task.desc && <p className="text-[10px] text-slate-500 italic line-clamp-2">{task.desc}</p>}
+                                  {task.desc && <p className="text-[10px] text-muted-foreground italic line-clamp-2">{task.desc}</p>}
                                </div>
                             </TooltipContent>
                           </Tooltip>

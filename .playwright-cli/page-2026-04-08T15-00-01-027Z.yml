@@ -1,0 +1,403 @@
+- generic [ref=e1]:
+  - generic [ref=e30]:
+    - generic [ref=e33]:
+      - link "Bite Digital Finance & Operations" [ref=e35] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e36]:
+          - img "Bite Digital" [ref=e38]
+          - generic [ref=e39]: Finance & Operations
+      - generic [ref=e40]:
+        - generic [ref=e41]:
+          - generic [ref=e42]: Generale
+          - list [ref=e44]:
+            - listitem [ref=e45]:
+              - link "Dashboard" [ref=e46] [cursor=pointer]:
+                - /url: /
+                - img [ref=e47]
+                - generic [ref=e52]: Dashboard
+            - listitem [ref=e53]:
+              - link "Analytics" [active] [ref=e54] [cursor=pointer]:
+                - /url: /analytics
+                - img [ref=e55]
+                - generic [ref=e58]: Analytics
+            - listitem [ref=e59]:
+              - link "Timesheet" [ref=e60] [cursor=pointer]:
+                - /url: /timesheet
+                - img [ref=e61]
+                - generic [ref=e64]: Timesheet
+        - generic [ref=e65]:
+          - generic [ref=e66]: Gestione
+          - list [ref=e68]:
+            - listitem [ref=e69]:
+              - link "Clienti" [ref=e70] [cursor=pointer]:
+                - /url: /clienti
+                - img [ref=e71]
+                - generic [ref=e76]: Clienti
+            - listitem [ref=e77]:
+              - link "Gantt" [ref=e78] [cursor=pointer]:
+                - /url: /gantt
+                - img [ref=e79]
+                - generic [ref=e84]: Gantt
+            - listitem [ref=e85]:
+              - link "Preventivi" [ref=e86] [cursor=pointer]:
+                - /url: /preventivi
+                - img [ref=e87]
+                - generic [ref=e90]: Preventivi
+            - listitem [ref=e91]:
+              - link "Commesse" [ref=e92] [cursor=pointer]:
+                - /url: /commesse
+                - img [ref=e93]
+                - generic [ref=e96]: Commesse
+            - listitem [ref=e97]:
+              - link "Planning" [ref=e98] [cursor=pointer]:
+                - /url: /planning
+                - img [ref=e99]
+                - generic [ref=e102]: Planning
+            - listitem [ref=e103]:
+              - link "CRM" [ref=e104] [cursor=pointer]:
+                - /url: /crm
+                - img [ref=e105]
+                - generic [ref=e109]: CRM
+        - generic [ref=e110]:
+          - generic [ref=e111]: Documenti
+          - list [ref=e113]:
+            - listitem [ref=e114]:
+              - link "Report Mensili" [ref=e115] [cursor=pointer]:
+                - /url: /report
+                - img [ref=e116]
+                - generic [ref=e119]: Report Mensili
+            - listitem [ref=e120]:
+              - link "Wiki" [ref=e121] [cursor=pointer]:
+                - /url: /wiki
+                - img [ref=e122]
+                - generic [ref=e124]: Wiki
+        - generic [ref=e125]:
+          - generic [ref=e126]: Amministrazione
+          - list [ref=e128]:
+            - listitem [ref=e129]:
+              - link "Fatture" [ref=e130] [cursor=pointer]:
+                - /url: /fatture
+                - img [ref=e131]
+                - generic [ref=e134]: Fatture
+            - listitem [ref=e135]:
+              - link "Fornitori" [ref=e136] [cursor=pointer]:
+                - /url: /fornitori
+                - img [ref=e137]
+                - generic [ref=e141]: Fornitori
+            - listitem [ref=e142]:
+              - link "Cassa" [ref=e143] [cursor=pointer]:
+                - /url: /cassa
+                - img [ref=e144]
+                - generic [ref=e147]: Cassa
+            - listitem [ref=e148]:
+              - link "Budget" [ref=e149] [cursor=pointer]:
+                - /url: /budget
+                - img [ref=e150]
+                - generic [ref=e154]: Budget
+        - generic [ref=e155]:
+          - generic [ref=e156]: Economia
+          - list [ref=e158]:
+            - listitem [ref=e159]:
+              - link "Riconnetti API" [ref=e160] [cursor=pointer]:
+                - /url: /settings/api-recon
+                - img [ref=e161]
+                - generic [ref=e163]: Riconnetti API
+            - listitem [ref=e164]:
+              - link "Disconnetti API" [ref=e165] [cursor=pointer]:
+                - /url: /settings/api-disc
+                - img [ref=e166]
+                - generic [ref=e168]: Disconnetti API
+            - listitem [ref=e169]:
+              - link "Configura alert" [ref=e170] [cursor=pointer]:
+                - /url: /settings/alerts
+                - img [ref=e171]
+                - generic [ref=e174]: Configura alert
+      - generic [ref=e177]:
+        - link "ERP" [ref=e178] [cursor=pointer]:
+          - /url: /
+          - img [ref=e179]
+          - text: ERP
+        - link "Studio OS" [ref=e181] [cursor=pointer]:
+          - /url: /studio-os
+          - img [ref=e182]
+          - text: Studio OS
+      - list [ref=e185]:
+        - listitem [ref=e186]:
+          - button "LB Lorenzo Bite ADMIN" [ref=e187] [cursor=pointer]:
+            - generic [ref=e189]: LB
+            - generic [ref=e190]:
+              - generic [ref=e191]: Lorenzo Bite
+              - generic [ref=e192]: ADMIN
+            - img [ref=e193]
+    - main [ref=e195]:
+      - generic [ref=e196]:
+        - generic [ref=e197]:
+          - button "Toggle Sidebar" [ref=e198] [cursor=pointer]:
+            - img
+            - generic [ref=e199]: Toggle Sidebar
+          - navigation "breadcrumb" [ref=e200]:
+            - list [ref=e201]:
+              - listitem [ref=e202]:
+                - link "Home" [ref=e203] [cursor=pointer]:
+                  - /url: /
+              - listitem [ref=e909]:
+                - img [ref=e910]
+              - listitem [ref=e912]:
+                - link "Analytics" [ref=e913] [cursor=pointer]:
+                  - /url: /analytics
+        - generic [ref=e204]:
+          - generic [ref=e205]:
+            - img [ref=e206]
+            - textbox "Cerca..." [ref=e209]
+            - generic [ref=e210]:
+              - generic [ref=e211]: ⌘
+              - text: K
+          - generic [ref=e213]:
+            - img [ref=e214]
+            - generic [ref=e217]: Nessun task attivo
+          - generic [ref=e218]:
+            - button "3" [ref=e219] [cursor=pointer]:
+              - img
+              - generic [ref=e220]: "3"
+            - button "Wiki Aziendale" [ref=e221] [cursor=pointer]:
+              - img
+            - button "Centro Assistenza" [ref=e222] [cursor=pointer]:
+              - img
+            - button [ref=e223] [cursor=pointer]:
+              - img
+            - link "LB" [ref=e225] [cursor=pointer]:
+              - /url: /settings/profile
+              - generic [ref=e227]: LB
+            - button "Nuovo" [ref=e228] [cursor=pointer]:
+              - img
+              - text: Nuovo
+      - main [ref=e229]:
+        - generic [ref=e914]:
+          - generic [ref=e915]:
+            - generic [ref=e916]:
+              - heading "Business Intelligence" [level=1] [ref=e917]
+              - paragraph [ref=e918]: Analisi avanzata performance e marginalità | Anno corrente | 01 gen 2026 - 30 apr 2026
+            - generic [ref=e919]:
+              - generic [ref=e921]:
+                - button "Mese corrente" [ref=e922] [cursor=pointer]
+                - button "Mese precedente" [ref=e923] [cursor=pointer]
+                - button "Trimestre" [ref=e924] [cursor=pointer]
+                - button "Semestre" [ref=e925] [cursor=pointer]
+                - button "Anno corrente" [ref=e926] [cursor=pointer]
+                - button "Personalizzato" [ref=e927] [cursor=pointer]
+              - link "Esporta PDF" [ref=e928] [cursor=pointer]:
+                - /url: blob:http://127.0.0.1:5173/06e921a2-5c61-4cf3-9071-5e74de918d4c
+                - button "Esporta PDF" [ref=e929]:
+                  - img
+                  - text: Esporta PDF
+          - generic [ref=e930]:
+            - generic [ref=e931]:
+              - generic:
+                - img
+              - generic [ref=e932]:
+                - generic [ref=e933]:
+                  - img [ref=e935]
+                  - generic [ref=e938]:
+                    - img [ref=e939]
+                    - text: +100.0%
+                - generic [ref=e942]:
+                  - paragraph [ref=e943]: Fatturato Periodo
+                  - paragraph [ref=e944]: 78.209 €
+                  - paragraph [ref=e945]: Totale anno corrente
+            - generic [ref=e946]:
+              - generic:
+                - img
+              - generic [ref=e947]:
+                - img [ref=e950]
+                - generic [ref=e954]:
+                  - paragraph [ref=e955]: Margine Medio
+                  - paragraph [ref=e956]: 40.5%
+                  - paragraph [ref=e957]: Media ponderata sulle commesse visibili
+            - generic [ref=e958]:
+              - generic:
+                - img
+              - generic [ref=e959]:
+                - generic [ref=e960]:
+                  - img [ref=e962]
+                  - generic [ref=e965]:
+                    - img [ref=e966]
+                    - text: +100.0%
+                - generic [ref=e969]:
+                  - paragraph [ref=e970]: Ore Lavorate
+                  - paragraph [ref=e971]: 779h
+                  - paragraph [ref=e972]: Stima basata sulle commesse del periodo
+            - generic [ref=e973]:
+              - generic:
+                - img
+              - generic [ref=e974]:
+                - img [ref=e977]
+                - generic [ref=e982]:
+                  - paragraph [ref=e983]: Clienti Attivi
+                  - paragraph [ref=e984]: "22"
+                  - paragraph [ref=e985]: Partner con gestioni nel periodo
+          - generic [ref=e986]:
+            - generic [ref=e987]:
+              - generic [ref=e989]:
+                - generic [ref=e990]:
+                  - generic [ref=e991]: Andamento Fatturato
+                  - generic [ref=e992]: Andamento mensile del periodo selezionato
+                - img [ref=e994]
+              - application [ref=e1000]:
+                - generic [ref=e1020]:
+                  - generic [ref=e1021]:
+                    - generic [ref=e1023]: GEN 26
+                    - generic [ref=e1025]: FEB 26
+                    - generic [ref=e1027]: MAR 26
+                    - generic [ref=e1029]: APR 26
+                  - generic [ref=e1030]:
+                    - generic [ref=e1032]: €0k
+                    - generic [ref=e1034]: €6k
+                    - generic [ref=e1036]: €12k
+                    - generic [ref=e1038]: €18k
+                    - generic [ref=e1040]: €24k
+            - generic [ref=e1041]:
+              - generic [ref=e1043]:
+                - generic [ref=e1044]:
+                  - generic [ref=e1045]: Trend Margine
+                  - generic [ref=e1046]: Andamento mensile del periodo selezionato
+                - img [ref=e1048]
+              - application [ref=e1055]:
+                - generic [ref=e1069]:
+                  - generic [ref=e1070]:
+                    - generic [ref=e1072]: GEN 26
+                    - generic [ref=e1074]: FEB 26
+                    - generic [ref=e1076]: MAR 26
+                    - generic [ref=e1078]: APR 26
+                  - generic [ref=e1079]:
+                    - generic [ref=e1081]: 0%
+                    - generic [ref=e1083]: 15%
+                    - generic [ref=e1085]: 30%
+                    - generic [ref=e1087]: 45%
+                    - generic [ref=e1089]: 60%
+          - generic [ref=e1090]:
+            - generic [ref=e1091]:
+              - generic [ref=e1092]:
+                - generic [ref=e1093]: Top 5 Clienti
+                - generic [ref=e1094]: Per volume nel periodo selezionato
+              - generic [ref=e1095]:
+                - generic [ref=e1096] [cursor=pointer]:
+                  - generic [ref=e1097]:
+                    - generic [ref=e1098]:
+                      - generic [ref=e1100]: CA
+                      - generic [ref=e1101]: Cliente non associato
+                    - generic [ref=e1102]: 11.826 €
+                  - generic [ref=e1103]:
+                    - progressbar [ref=e1104]
+                    - generic [ref=e1106]:
+                      - img [ref=e1107]
+                      - text: 100.0%
+                - generic [ref=e1110] [cursor=pointer]:
+                  - generic [ref=e1111]:
+                    - generic [ref=e1112]:
+                      - generic [ref=e1114]: CA
+                      - generic [ref=e1115]: Cliente non associato
+                    - generic [ref=e1116]: 7812 €
+                  - generic [ref=e1117]:
+                    - progressbar [ref=e1118]
+                    - generic [ref=e1120]:
+                      - img [ref=e1121]
+                      - text: 100.0%
+                - generic [ref=e1124] [cursor=pointer]:
+                  - generic [ref=e1125]:
+                    - generic [ref=e1126]:
+                      - generic [ref=e1128]: CA
+                      - generic [ref=e1129]: Cliente non associato
+                    - generic [ref=e1130]: 7574 €
+                  - generic [ref=e1131]:
+                    - progressbar [ref=e1132]
+                    - generic [ref=e1134]:
+                      - img [ref=e1135]
+                      - text: 100.0%
+                - generic [ref=e1138] [cursor=pointer]:
+                  - generic [ref=e1139]:
+                    - generic [ref=e1140]:
+                      - generic [ref=e1142]: CA
+                      - generic [ref=e1143]: Cliente non associato
+                    - generic [ref=e1144]: 6906 €
+                  - generic [ref=e1145]:
+                    - progressbar [ref=e1146]
+                    - generic [ref=e1148]:
+                      - img [ref=e1149]
+                      - text: 100.0%
+                - generic [ref=e1152] [cursor=pointer]:
+                  - generic [ref=e1153]:
+                    - generic [ref=e1154]:
+                      - generic [ref=e1156]: CA
+                      - generic [ref=e1157]: Cliente non associato
+                    - generic [ref=e1158]: 6397 €
+                  - generic [ref=e1159]:
+                    - progressbar [ref=e1160]
+                    - generic [ref=e1162]:
+                      - img [ref=e1163]
+                      - text: 100.0%
+            - generic [ref=e1166]:
+              - generic [ref=e1168]:
+                - generic [ref=e1169]:
+                  - generic [ref=e1170]: Efficienza Operativa
+                  - generic [ref=e1171]: Fatturato vs Ore Lavorate per Cliente
+                - generic [ref=e1172]:
+                  - generic [ref=e1173]: Profittevole
+                  - generic [ref=e1175]: Critico
+              - application [ref=e1180]:
+                - generic [ref=e1262]:
+                  - generic [ref=e1263]:
+                    - generic [ref=e1265]: 0h
+                    - generic [ref=e1267]: 35h
+                    - generic [ref=e1269]: 70h
+                    - generic [ref=e1271]: 105h
+                    - generic [ref=e1273]: 140h
+                  - generic [ref=e1274]:
+                    - generic [ref=e1276]: 0€
+                    - generic [ref=e1278]: 3000€
+                    - generic [ref=e1280]: 6000€
+                    - generic [ref=e1282]: 9000€
+                    - generic [ref=e1284]: 12000€
+          - generic [ref=e1285]:
+            - heading "Critical Insights" [level=2] [ref=e1286]:
+              - img [ref=e1287]
+              - text: Critical Insights
+            - generic [ref=e1289]:
+              - generic [ref=e1290] [cursor=pointer]:
+                - img [ref=e1292]
+                - generic [ref=e1295]:
+                  - paragraph [ref=e1296]: SCOPE
+                  - paragraph [ref=e1297]: "Scope check: a3243"
+                - generic [ref=e1298]: 82%
+              - generic [ref=e1299] [cursor=pointer]:
+                - img [ref=e1301]
+                - generic [ref=e1304]:
+                  - paragraph [ref=e1305]: SCOPE
+                  - paragraph [ref=e1306]: "Scope check: 57e8c"
+                - generic [ref=e1307]: 97%
+              - generic [ref=e1308] [cursor=pointer]:
+                - img [ref=e1310]
+                - generic [ref=e1313]:
+                  - paragraph [ref=e1314]: SCOPE
+                  - paragraph [ref=e1315]: "Scope check: 6b1cf"
+                - generic [ref=e1316]: 97%
+              - generic [ref=e1317] [cursor=pointer]:
+                - img [ref=e1319]
+                - generic [ref=e1322]:
+                  - paragraph [ref=e1323]: SCOPE
+                  - paragraph [ref=e1324]: "Scope check: 5c5a7"
+                - generic [ref=e1325]: 82%
+              - generic [ref=e1326] [cursor=pointer]:
+                - img [ref=e1328]
+                - generic [ref=e1331]:
+                  - paragraph [ref=e1332]: SCOPE
+                  - paragraph [ref=e1333]: "Scope check: a1822"
+                - generic [ref=e1334]: 97%
+              - generic [ref=e1335] [cursor=pointer]:
+                - img [ref=e1337]
+                - generic [ref=e1340]:
+                  - paragraph [ref=e1341]: SCOPE
+                  - paragraph [ref=e1342]: "Scope check: b727b"
+                - generic [ref=e1343]: 100%
+      - button [ref=e907] [cursor=pointer]:
+        - img
+  - generic [ref=e1344]: "3000"

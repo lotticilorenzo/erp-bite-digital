@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
-import type { Cliente, HealthScore } from "@/types";
+import type { Cliente, ClienteAffidabilita, HealthScore } from "@/types";
 import { toast } from "sonner";
 
 // ... existing hooks
@@ -73,6 +73,54 @@ export function useUpdateCliente() {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || "Errore durante l'aggiornamento del cliente");
+    },
+  });
+}
+
+export function useUpdateClienteAffidabilita() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, affidabilita }: { id: string; affidabilita: ClienteAffidabilita }) => {
+      const { data: response } = await api.patch<Cliente>(`/clienti/${id}`, { affidabilita });
+      return response;
+    },
+    onMutate: async ({ id, affidabilita }) => {
+      await queryClient.cancelQueries({ queryKey: ["clienti"], exact: false });
+
+      const previousQueries = queryClient.getQueriesData<Cliente[] | Cliente | null>({
+        queryKey: ["clienti"],
+      });
+
+      previousQueries.forEach(([queryKey, data]) => {
+        if (Array.isArray(data)) {
+          queryClient.setQueryData<Cliente[]>(
+            queryKey,
+            data.map((cliente) =>
+              cliente.id === id ? { ...cliente, affidabilita } : cliente
+            )
+          );
+          return;
+        }
+
+        if (data && !Array.isArray(data) && data.id === id) {
+          queryClient.setQueryData<Cliente>(queryKey, { ...data, affidabilita });
+        }
+      });
+
+      return { previousQueries };
+    },
+    onError: (_error, _variables, context) => {
+      context?.previousQueries?.forEach(([queryKey, data]) => {
+        queryClient.setQueryData(queryKey, data);
+      });
+      toast.error("Errore durante l'aggiornamento dell'affidabilita");
+    },
+    onSettled: (_data, _error, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["clienti"], exact: false });
+      if (variables?.id) {
+        queryClient.invalidateQueries({ queryKey: ["clienti", variables.id], exact: false });
+      }
     },
   });
 }

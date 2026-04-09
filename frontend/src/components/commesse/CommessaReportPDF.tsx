@@ -1,17 +1,17 @@
 import React from "react";
-import { 
-  Document, 
-  Page, 
-  Text, 
-  View, 
-  StyleSheet, 
+import {
+  Document,
   Image,
-} from "@react-pdf/renderer";
+  Page,
+  StyleSheet,
+  Text,
+  View,
+} from "@/lib/react-pdf";
 import { format, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
+import { ensurePdfArray, resolvePdfAssetSrc, safePdfNumber, safePdfText } from "@/lib/pdf-utils";
 import type { Commessa, Timesheet } from "@/types";
 
-// Register fonts if needed. Standard fonts like Helvetica work out of the box.
 const styles = StyleSheet.create({
   page: {
     padding: 40,
@@ -23,7 +23,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    borderBottom: "2pt solid #7c3aed",
+    borderBottomWidth: 2,
+    borderBottomStyle: "solid",
+    borderBottomColor: "#7c3aed",
     paddingBottom: 20,
     marginBottom: 30,
   },
@@ -34,10 +36,13 @@ const styles = StyleSheet.create({
   },
   logoImage: {
     height: 40,
-    width: "auto",
+    width: 120,
+    objectFit: "contain",
   },
   companyInfo: {
-    borderLeft: "1pt solid #e2e8f0",
+    borderLeftWidth: 1,
+    borderLeftStyle: "solid",
+    borderLeftColor: "#e2e8f0",
     paddingLeft: 15,
     height: 30,
     justifyContent: "center",
@@ -69,7 +74,9 @@ const styles = StyleSheet.create({
     color: "#7c3aed",
     textTransform: "uppercase",
     marginBottom: 8,
-    borderBottom: "0.5pt solid #e2e8f0",
+    borderBottomWidth: 0.5,
+    borderBottomStyle: "solid",
+    borderBottomColor: "#e2e8f0",
     paddingBottom: 4,
   },
   infoGrid: {
@@ -88,7 +95,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "bold",
   },
-  // Kpi Cards
   kpiContainer: {
     flexDirection: "row",
     gap: 10,
@@ -99,14 +105,24 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 4,
     backgroundColor: "#f8fafc",
-    border: "0.5pt solid #e2e8f0",
+    borderTopWidth: 0.5,
+    borderTopStyle: "solid",
+    borderTopColor: "#e2e8f0",
+    borderRightWidth: 0.5,
+    borderRightStyle: "solid",
+    borderRightColor: "#e2e8f0",
+    borderBottomWidth: 0.5,
+    borderBottomStyle: "solid",
+    borderBottomColor: "#e2e8f0",
+    borderLeftWidth: 0.5,
+    borderLeftStyle: "solid",
+    borderLeftColor: "#e2e8f0",
   },
   kpiValue: {
     fontSize: 14,
     fontWeight: "black",
     color: "#1e293b",
   },
-  // Margin Bar
   marginBarContainer: {
     marginTop: 10,
     height: 12,
@@ -118,18 +134,16 @@ const styles = StyleSheet.create({
   marginBarFill: {
     height: "100%",
   },
-  // Table
   table: {
     display: "flex",
     width: "auto",
-    borderStyle: "solid",
-    borderWidth: 0,
     marginTop: 10,
   },
   tableRow: {
     flexDirection: "row",
     borderBottomColor: "#f1f5f9",
     borderBottomWidth: 0.5,
+    borderBottomStyle: "solid",
     alignItems: "center",
     minHeight: 24,
   },
@@ -137,6 +151,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f8fafc",
     borderBottomColor: "#7c3aed",
     borderBottomWidth: 1,
+    borderBottomStyle: "solid",
   },
   tableCell: {
     padding: 4,
@@ -146,13 +161,14 @@ const styles = StyleSheet.create({
   col2: { width: "20%", textAlign: "center" },
   col3: { width: "20%", textAlign: "right" },
   col4: { width: "20%", textAlign: "right" },
-  
   footer: {
     position: "absolute",
     bottom: 40,
     left: 40,
     right: 40,
-    borderTop: "0.5pt solid #e2e8f0",
+    borderTopWidth: 0.5,
+    borderTopStyle: "solid",
+    borderTopColor: "#e2e8f0",
     paddingTop: 10,
     flexDirection: "row",
     justifyContent: "space-between",
@@ -166,36 +182,27 @@ interface Props {
   timesheets: Timesheet[];
 }
 
-const getFullUrl = (url?: string | null) => {
-  if (!url) return null;
-  if (url.startsWith('http')) return url;
-  return window.location.origin + url;
-};
-
-const formatEuro = (val: number = 0) => 
-  new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(val);
+const formatEuro = (value = 0) =>
+  new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(value);
 
 export const CommessaReportPDF: React.FC<Props> = ({ commessa, timesheets }) => {
-  const monthName = commessa.mese_competenza 
-    ? format(parseISO(commessa.mese_competenza), "MMMM yyyy", { locale: it }) 
+  const righeProgetto = ensurePdfArray(commessa?.righe_progetto);
+  const timesheetRows = ensurePdfArray(timesheets);
+  const logoSrc = resolvePdfAssetSrc("/logo_bite.jpg");
+  const clienteLogoSrc = resolvePdfAssetSrc(commessa?.cliente?.logo_url);
+  const monthName = commessa?.mese_competenza
+    ? format(parseISO(commessa.mese_competenza), "MMMM yyyy", { locale: it })
     : "Periodo non specificato";
-
-  const marginColor = (commessa.margine_percentuale || 0) > 30 
-    ? "#10b981" 
-    : (commessa.margine_percentuale || 0) > 15 
-      ? "#f59e0b" 
-      : "#ef4444";
+  const marginPercent = safePdfNumber(commessa?.margine_percentuale);
+  const marginColor =
+    marginPercent > 30 ? "#10b981" : marginPercent > 15 ? "#f59e0b" : "#ef4444";
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoSection}>
-            <Image 
-              src={getFullUrl('/logo_bite.jpg')!} 
-              style={styles.logoImage} 
-            />
+            {logoSrc ? <Image src={logoSrc} style={styles.logoImage} /> : null}
             <View style={styles.companyInfo}>
               <Text style={styles.companyName}>Bite Digital S.r.l.</Text>
               <Text style={styles.reportDate}>Data Report: {format(new Date(), "dd/MM/yyyy")}</Text>
@@ -207,27 +214,51 @@ export const CommessaReportPDF: React.FC<Props> = ({ commessa, timesheets }) => 
           </View>
         </View>
 
-        {/* Client Info */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Anagrafica Committente</Text>
           <View style={styles.infoGrid}>
             <View style={{ width: 40, marginRight: 10 }}>
-              {commessa.cliente?.logo_url ? (
-                <Image 
-                  src={getFullUrl(commessa.cliente.logo_url)!} 
-                  style={{ width: 32, height: 32, borderRadius: 4, border: "0.5pt solid #e2e8f0" }} 
+              {clienteLogoSrc ? (
+                <Image
+                  src={clienteLogoSrc}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 4,
+                    borderTopWidth: 0.5,
+                    borderTopStyle: "solid",
+                    borderTopColor: "#e2e8f0",
+                    borderRightWidth: 0.5,
+                    borderRightStyle: "solid",
+                    borderRightColor: "#e2e8f0",
+                    borderBottomWidth: 0.5,
+                    borderBottomStyle: "solid",
+                    borderBottomColor: "#e2e8f0",
+                    borderLeftWidth: 0.5,
+                    borderLeftStyle: "solid",
+                    borderLeftColor: "#e2e8f0",
+                  }}
                 />
               ) : (
-                <View style={{ width: 32, height: 32, borderRadius: 4, backgroundColor: "#f1f5f9", alignItems: "center", justifyContent: "center" }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 4,
+                    backgroundColor: "#f1f5f9",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
                   <Text style={{ fontSize: 10, color: "#94a3b8", fontWeight: "bold" }}>
-                    {commessa.cliente?.ragione_sociale?.charAt(0) || "C"}
+                    {safePdfText(commessa?.cliente?.ragione_sociale, "C").charAt(0)}
                   </Text>
                 </View>
               )}
             </View>
             <View style={styles.infoCol}>
               <Text style={styles.label}>Cliente</Text>
-              <Text style={styles.value}>{commessa.cliente?.ragione_sociale || "N/D"}</Text>
+              <Text style={styles.value}>{safePdfText(commessa?.cliente?.ragione_sociale, "N/D")}</Text>
             </View>
             <View style={styles.infoCol}>
               <Text style={styles.label}>Mese Competenza</Text>
@@ -235,42 +266,42 @@ export const CommessaReportPDF: React.FC<Props> = ({ commessa, timesheets }) => 
             </View>
             <View style={styles.infoCol}>
               <Text style={styles.label}>Stato</Text>
-              <Text style={styles.value}>{commessa.stato}</Text>
+              <Text style={styles.value}>{safePdfText(commessa?.stato, "N/D")}</Text>
             </View>
           </View>
         </View>
 
-        {/* Economic Summary */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Riepilogo Economico</Text>
           <View style={styles.kpiContainer}>
             <View style={styles.kpiCard}>
               <Text style={styles.label}>Valore Fatturabile</Text>
-              <Text style={styles.kpiValue}>{formatEuro(commessa.valore_fatturabile)}</Text>
+              <Text style={styles.kpiValue}>{formatEuro(safePdfNumber(commessa?.valore_fatturabile))}</Text>
             </View>
             <View style={styles.kpiCard}>
               <Text style={styles.label}>Costi Totali</Text>
-              <Text style={styles.kpiValue}>{formatEuro((commessa.costo_manodopera || 0) + (commessa.costi_diretti || 0))}</Text>
+              <Text style={styles.kpiValue}>
+                {formatEuro(safePdfNumber(commessa?.costo_manodopera) + safePdfNumber(commessa?.costi_diretti))}
+              </Text>
             </View>
             <View style={styles.kpiCard}>
               <Text style={[styles.label, { color: marginColor }]}>Margine Lordo</Text>
               <Text style={[styles.kpiValue, { color: marginColor }]}>
-                {formatEuro(commessa.margine_euro)} ({commessa.margine_percentuale}%)
+                {formatEuro(safePdfNumber(commessa?.margine_euro))} ({marginPercent.toFixed(1)}%)
               </Text>
             </View>
           </View>
-          
+
           <View style={styles.marginBarContainer}>
-            <View 
+            <View
               style={[
-                styles.marginBarFill, 
-                { width: `${Math.min(Math.max((commessa.margine_percentuale || 0), 0), 100)}%`, backgroundColor: marginColor }
-              ]} 
+                styles.marginBarFill,
+                { width: `${Math.min(Math.max(marginPercent, 0), 100)}%`, backgroundColor: marginColor },
+              ]}
             />
           </View>
         </View>
 
-        {/* Projects Table */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Dettaglio Progetti</Text>
           <View style={styles.table}>
@@ -280,18 +311,28 @@ export const CommessaReportPDF: React.FC<Props> = ({ commessa, timesheets }) => 
               <Text style={[styles.tableCell, styles.col3, { fontWeight: "bold" }]}>Fisso</Text>
               <Text style={[styles.tableCell, styles.col4, { fontWeight: "bold" }]}>Totale</Text>
             </View>
-            {commessa.righe_progetto.map((riga, i) => (
-              <View key={i} style={styles.tableRow}>
-                <Text style={[styles.tableCell, styles.col1]}>{riga.id.substring(0, 8)}...</Text>
+            {righeProgetto.map((riga, index) => (
+              <View key={index} style={styles.tableRow}>
+                <Text style={[styles.tableCell, styles.col1]}>
+                  {safePdfText(riga.progetto?.nome, `${safePdfText(riga.id, "Riga")}`.slice(0, 8))}
+                </Text>
                 <Text style={[styles.tableCell, styles.col2]}>Attivo</Text>
-                <Text style={[styles.tableCell, styles.col3]}>{formatEuro(riga.importo_fisso)}</Text>
-                <Text style={[styles.tableCell, styles.col4]}>{formatEuro(riga.importo_fisso + riga.importo_variabile)}</Text>
+                <Text style={[styles.tableCell, styles.col3]}>{formatEuro(safePdfNumber(riga.importo_fisso))}</Text>
+                <Text style={[styles.tableCell, styles.col4]}>
+                  {formatEuro(safePdfNumber(riga.importo_fisso) + safePdfNumber(riga.importo_variabile))}
+                </Text>
               </View>
             ))}
+            {righeProgetto.length === 0 ? (
+              <View style={styles.tableRow}>
+                <Text style={[styles.tableCell, { width: "100%", textAlign: "center", color: "#64748b" }]}>
+                  Nessun progetto collegato
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
-        {/* Timesheet Table */}
         <View style={styles.section} break>
           <Text style={styles.sectionTitle}>Dettaglio Attività (Timesheet)</Text>
           <View style={styles.table}>
@@ -301,25 +342,32 @@ export const CommessaReportPDF: React.FC<Props> = ({ commessa, timesheets }) => 
               <Text style={[styles.tableCell, { width: "45%", fontWeight: "bold" }]}>Servizio / Task</Text>
               <Text style={[styles.tableCell, { width: "20%", fontWeight: "bold", textAlign: "right" }]}>Durata</Text>
             </View>
-            {timesheets.map((ts, i) => (
-              <View key={i} style={styles.tableRow}>
-                <Text style={[styles.tableCell, { width: "15%" }]}>{format(parseISO(ts.data_attivita), "dd/MM/yy")}</Text>
-                <Text style={[styles.tableCell, { width: "20%" }]}>{ts.user?.nome} {ts.user?.cognome?.charAt(0)}.</Text>
-                <Text style={[styles.tableCell, { width: "45%" }]}>{ts.task_display_name || ts.servizio || "-"}</Text>
+            {timesheetRows.map((ts, index) => (
+              <View key={index} style={styles.tableRow}>
+                <Text style={[styles.tableCell, { width: "15%" }]}>
+                  {ts.data_attivita ? format(parseISO(ts.data_attivita), "dd/MM/yy") : "-"}
+                </Text>
+                <Text style={[styles.tableCell, { width: "20%" }]}>
+                  {safePdfText(ts.user?.nome, "N/D")} {safePdfText(ts.user?.cognome, "").charAt(0)}.
+                </Text>
+                <Text style={[styles.tableCell, { width: "45%" }]}>
+                  {safePdfText(ts.task_display_name || ts.servizio, "-")}
+                </Text>
                 <Text style={[styles.tableCell, { width: "20%", textAlign: "right" }]}>
-                  {Math.floor(ts.durata_minuti / 60)}h {ts.durata_minuti % 60}m
+                  {Math.floor(safePdfNumber(ts.durata_minuti) / 60)}h {safePdfNumber(ts.durata_minuti) % 60}m
                 </Text>
               </View>
             ))}
-            {timesheets.length === 0 && (
+            {timesheetRows.length === 0 ? (
               <View style={styles.tableRow}>
-                <Text style={[styles.tableCell, { width: "100%", textAlign: "center", color: "#64748b" }]}>Nessuna attività registrata</Text>
+                <Text style={[styles.tableCell, { width: "100%", textAlign: "center", color: "#64748b" }]}>
+                  Nessuna attività registrata
+                </Text>
               </View>
-            )}
+            ) : null}
           </View>
         </View>
 
-        {/* Footer */}
         <View style={styles.footer}>
           <View>
             <Text>Bite Digital S.r.l.</Text>

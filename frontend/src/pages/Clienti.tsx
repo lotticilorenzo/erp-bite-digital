@@ -31,7 +31,7 @@ export default function ClientiPage() {
   }, [searchParams]);
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto pt-4 pb-12">
+    <div className="p-8 space-y-8 pt-4 pb-12">
       <header className="flex flex-col gap-1">
         <h1 className="text-4xl font-black tracking-tight text-foreground mb-1">Clienti</h1>
         <p className="text-muted-foreground text-sm font-medium">

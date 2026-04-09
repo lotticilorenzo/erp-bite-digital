@@ -1,0 +1,332 @@
+- generic [ref=e6]:
+  - generic [ref=e9]:
+    - link "Bite Digital Finance & Operations" [ref=e11] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e12]:
+        - img "Bite Digital" [ref=e14]
+        - generic [ref=e15]: Finance & Operations
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - generic [ref=e18]: Generale
+        - list [ref=e20]:
+          - listitem [ref=e21]:
+            - link "Dashboard" [ref=e22] [cursor=pointer]:
+              - /url: /
+              - img [ref=e23]
+              - generic [ref=e28]: Dashboard
+          - listitem [ref=e29]:
+            - link "Analytics" [ref=e30] [cursor=pointer]:
+              - /url: /analytics
+              - img [ref=e31]
+              - generic [ref=e34]: Analytics
+          - listitem [ref=e35]:
+            - link "Timesheet" [ref=e36] [cursor=pointer]:
+              - /url: /timesheet
+              - img [ref=e37]
+              - generic [ref=e40]: Timesheet
+      - generic [ref=e41]:
+        - generic [ref=e42]: Gestione
+        - list [ref=e44]:
+          - listitem [ref=e45]:
+            - link "Clienti" [ref=e46] [cursor=pointer]:
+              - /url: /clienti
+              - img [ref=e47]
+              - generic [ref=e52]: Clienti
+          - listitem [ref=e53]:
+            - link "Gantt" [ref=e54] [cursor=pointer]:
+              - /url: /gantt
+              - img [ref=e55]
+              - generic [ref=e60]: Gantt
+          - listitem [ref=e61]:
+            - link "Preventivi" [ref=e62] [cursor=pointer]:
+              - /url: /preventivi
+              - img [ref=e63]
+              - generic [ref=e66]: Preventivi
+          - listitem [ref=e67]:
+            - link "Commesse" [ref=e68] [cursor=pointer]:
+              - /url: /commesse
+              - img [ref=e69]
+              - generic [ref=e72]: Commesse
+          - listitem [ref=e73]:
+            - link "Planning" [ref=e74] [cursor=pointer]:
+              - /url: /planning
+              - img [ref=e75]
+              - generic [ref=e78]: Planning
+          - listitem [ref=e79]:
+            - link "CRM" [ref=e80] [cursor=pointer]:
+              - /url: /crm
+              - img [ref=e81]
+              - generic [ref=e85]: CRM
+      - generic [ref=e86]:
+        - generic [ref=e87]: Documenti
+        - list [ref=e89]:
+          - listitem [ref=e90]:
+            - link "Report Mensili" [ref=e91] [cursor=pointer]:
+              - /url: /report
+              - img [ref=e92]
+              - generic [ref=e95]: Report Mensili
+          - listitem [ref=e96]:
+            - link "Wiki" [ref=e97] [cursor=pointer]:
+              - /url: /wiki
+              - img [ref=e98]
+              - generic [ref=e100]: Wiki
+      - generic [ref=e101]:
+        - generic [ref=e102]: Amministrazione
+        - list [ref=e104]:
+          - listitem [ref=e105]:
+            - link "Fatture" [ref=e106] [cursor=pointer]:
+              - /url: /fatture
+              - img [ref=e107]
+              - generic [ref=e110]: Fatture
+          - listitem [ref=e111]:
+            - link "Fornitori" [ref=e112] [cursor=pointer]:
+              - /url: /fornitori
+              - img [ref=e113]
+              - generic [ref=e117]: Fornitori
+          - listitem [ref=e118]:
+            - link "Cassa" [ref=e119] [cursor=pointer]:
+              - /url: /cassa
+              - img [ref=e120]
+              - generic [ref=e123]: Cassa
+          - listitem [ref=e124]:
+            - link "Budget" [ref=e125] [cursor=pointer]:
+              - /url: /budget
+              - img [ref=e126]
+              - generic [ref=e130]: Budget
+      - generic [ref=e131]:
+        - generic [ref=e132]: Economia
+        - list [ref=e134]:
+          - listitem [ref=e135]:
+            - link "Riconnetti API" [ref=e136] [cursor=pointer]:
+              - /url: /settings/api-recon
+              - img [ref=e137]
+              - generic [ref=e139]: Riconnetti API
+          - listitem [ref=e140]:
+            - link "Disconnetti API" [ref=e141] [cursor=pointer]:
+              - /url: /settings/api-disc
+              - img [ref=e142]
+              - generic [ref=e144]: Disconnetti API
+          - listitem [ref=e145]:
+            - link "Configura alert" [ref=e146] [cursor=pointer]:
+              - /url: /settings/alerts
+              - img [ref=e147]
+              - generic [ref=e150]: Configura alert
+    - generic [ref=e153]:
+      - link "ERP" [ref=e154] [cursor=pointer]:
+        - /url: /
+        - img [ref=e155]
+        - text: ERP
+      - link "Studio OS" [ref=e157] [cursor=pointer]:
+        - /url: /studio-os
+        - img [ref=e158]
+        - text: Studio OS
+    - list [ref=e161]:
+      - listitem [ref=e162]:
+        - button "LB Lorenzo Bite ADMIN" [ref=e163] [cursor=pointer]:
+          - generic [ref=e165]: LB
+          - generic [ref=e166]:
+            - generic [ref=e167]: Lorenzo Bite
+            - generic [ref=e168]: ADMIN
+          - img [ref=e169]
+  - main [ref=e171]:
+    - generic [ref=e172]:
+      - generic [ref=e173]:
+        - button "Toggle Sidebar" [ref=e174] [cursor=pointer]:
+          - img
+          - generic [ref=e175]: Toggle Sidebar
+        - navigation "breadcrumb" [ref=e176]:
+          - list [ref=e177]:
+            - listitem [ref=e178]:
+              - link "Home" [ref=e179] [cursor=pointer]:
+                - /url: /
+            - listitem [ref=e180]:
+              - img [ref=e181]
+            - listitem [ref=e183]:
+              - link "Report" [ref=e184] [cursor=pointer]:
+                - /url: /report
+      - generic [ref=e185]:
+        - generic [ref=e186]:
+          - img [ref=e187]
+          - textbox "Cerca..." [ref=e190]
+          - generic [ref=e191]:
+            - generic [ref=e192]: ⌘
+            - text: K
+        - generic [ref=e194]:
+          - img [ref=e195]
+          - generic [ref=e198]: Nessun task attivo
+        - generic [ref=e199]:
+          - button "3" [ref=e200] [cursor=pointer]:
+            - img
+            - generic [ref=e201]: "3"
+          - button "Wiki Aziendale" [ref=e202] [cursor=pointer]:
+            - img
+          - button "Centro Assistenza" [ref=e203] [cursor=pointer]:
+            - img
+          - button [ref=e204] [cursor=pointer]:
+            - img
+          - link "LB" [ref=e206] [cursor=pointer]:
+            - /url: /settings/profile
+            - generic [ref=e208]: LB
+          - button "Nuovo" [ref=e209] [cursor=pointer]:
+            - img
+            - text: Nuovo
+    - main [ref=e210]:
+      - generic [ref=e212]:
+        - generic [ref=e213]:
+          - generic [ref=e214]:
+            - generic [ref=e215]:
+              - generic [ref=e216]: Report & Analisi
+              - generic [ref=e217]: Report generale
+            - generic [ref=e218]:
+              - heading "Modulo Report" [level=1] [ref=e219]
+              - paragraph [ref=e220]: Panoramica aziendale | Trimestre | 01 apr 2026 - 30 apr 2026
+          - generic [ref=e222]:
+            - generic [ref=e223]:
+              - generic [ref=e224]:
+                - paragraph [ref=e225]: Export
+                - paragraph [ref=e226]: Archivio commesse
+              - img [ref=e227]
+            - generic [ref=e230]:
+              - paragraph [ref=e231]: Gli export PDF esistenti per singola commessa restano disponibili nella tabella qui sotto.
+              - paragraph [ref=e232]: Seleziona un cliente per riusare anche il consolidato PDF esistente.
+        - generic [ref=e233]:
+          - generic [ref=e235]:
+            - img [ref=e236]
+            - text: Filtri Report
+          - generic [ref=e238]:
+            - generic [ref=e239]:
+              - generic [ref=e240]:
+                - text: Preset periodo
+                - combobox [ref=e241]:
+                  - option "Mese corrente"
+                  - option "Mese precedente"
+                  - option "Trimestre" [selected]
+                  - option "Semestre"
+                  - option "Anno corrente"
+                  - option "Personalizzato"
+              - generic [ref=e242]:
+                - text: Data da
+                - textbox [ref=e243]: 2026-04-01
+              - generic [ref=e244]:
+                - text: Data a
+                - textbox [ref=e245]: 2026-04-30
+              - generic [ref=e246]:
+                - text: Cliente
+                - combobox [ref=e247]:
+                  - option "Tutti i clienti" [selected]
+                  - option "ABLONDI GIORGIA"
+                  - option "AUTOCENTRO F.LLI MUTO SOCIETA' A RESPONSABILITA' LIMITATA"
+                  - option "BERNAZZOLI BY GHILBA S.R.L."
+                  - option "Bite Digital Test"
+                  - option "CAVAZZINI DISTRIBUZIONE BEVANDE SOCIETA' A RESPONSABILITA' LIMITATA"
+                  - option "CENTRO VERDE S.S."
+                  - option "FERRAMENTA PIAZZA S.R.L."
+                  - option "ITALIAN FOOD & CHEESE S.R.L."
+                  - option "La Beccheria srl"
+                  - option "crc srls"
+                  - option "steli di stile di grassi benedetta"
+              - generic [ref=e248]:
+                - text: Azioni
+                - button "Reset filtri" [ref=e249] [cursor=pointer]:
+                  - img
+                  - text: Reset filtri
+            - generic [ref=e250]:
+              - generic [ref=e251]:
+                - paragraph [ref=e252]: Modalità
+                - paragraph [ref=e253]: Generale aziendale
+              - generic [ref=e254]:
+                - paragraph [ref=e255]: Periodo applicato
+                - paragraph [ref=e256]: Trimestre | 01 apr 2026 - 30 apr 2026
+              - generic [ref=e257]:
+                - paragraph [ref=e258]: Copertura
+                - paragraph [ref=e259]: 1 commesse · 1 clienti
+        - generic [ref=e260]:
+          - generic [ref=e262]:
+            - generic [ref=e263]:
+              - paragraph [ref=e265]: Fatturato
+              - img [ref=e267]
+            - generic [ref=e270]:
+              - paragraph [ref=e271]: 1500 €
+              - paragraph [ref=e272]: 1 commesse nel periodo
+          - generic [ref=e274]:
+            - generic [ref=e275]:
+              - paragraph [ref=e277]: Margine Lordo
+              - img [ref=e279]
+            - generic [ref=e282]:
+              - paragraph [ref=e283]: "-500 €"
+              - paragraph [ref=e284]: "-33.3% sul fatturato"
+          - generic [ref=e286]:
+            - generic [ref=e287]:
+              - paragraph [ref=e289]: Costi Struttura
+              - img [ref=e291]
+            - generic [ref=e294]:
+              - paragraph [ref=e295]: 0 €
+              - paragraph [ref=e296]: 0 voci costo considerate
+          - generic [ref=e298]:
+            - generic [ref=e299]:
+              - paragraph [ref=e301]: Margine Netto
+              - img [ref=e303]
+            - generic [ref=e307]:
+              - paragraph [ref=e308]: "-500 €"
+              - paragraph [ref=e309]: Periodo sotto soglia
+        - generic [ref=e310]:
+          - generic [ref=e312]:
+            - img [ref=e313]
+            - text: Clienti Nel Periodo
+          - table [ref=e317]:
+            - rowgroup [ref=e318]:
+              - row "Cliente Commesse Mesi attivi Fatturato Margine lordo Incassato" [ref=e319]:
+                - columnheader "Cliente" [ref=e320]
+                - columnheader "Commesse" [ref=e321]
+                - columnheader "Mesi attivi" [ref=e322]
+                - columnheader "Fatturato" [ref=e323]
+                - columnheader "Margine lordo" [ref=e324]
+                - columnheader "Incassato" [ref=e325]
+            - rowgroup [ref=e326]:
+              - row "Cliente non associato Apri scheda cliente 1 1 1500 € -500 € 0 €" [ref=e327]:
+                - cell "Cliente non associato Apri scheda cliente" [ref=e328]:
+                  - button "Cliente non associato Apri scheda cliente" [ref=e329] [cursor=pointer]:
+                    - paragraph [ref=e330]: Cliente non associato
+                    - paragraph [ref=e331]: Apri scheda cliente
+                - cell "1" [ref=e332]
+                - cell "1" [ref=e333]
+                - cell "1500 €" [ref=e334]
+                - cell "-500 €" [ref=e335]
+                - cell "0 €" [ref=e336]
+        - generic [ref=e337]:
+          - generic [ref=e339]:
+            - img [ref=e340]
+            - text: Commesse nel periodo
+          - table [ref=e345]:
+            - rowgroup [ref=e346]:
+              - row "Cliente Progetti Competenza Stato Fatturabile Margine Azioni" [ref=e347]:
+                - columnheader "Cliente" [ref=e348]
+                - columnheader "Progetti" [ref=e349]
+                - columnheader "Competenza" [ref=e350]
+                - columnheader "Stato" [ref=e351]
+                - columnheader "Fatturabile" [ref=e352]
+                - columnheader "Margine" [ref=e353]
+                - columnheader "Azioni" [ref=e354]
+            - rowgroup [ref=e355]:
+              - row "Cliente non associato Vai al cliente Progetto Test Final Commessa f962ec72 apr 2026 APERTA 1500 € -33.3%" [ref=e356]:
+                - cell "Cliente non associato Vai al cliente" [ref=e357]:
+                  - button "Cliente non associato Vai al cliente" [ref=e358] [cursor=pointer]:
+                    - paragraph [ref=e359]: Cliente non associato
+                    - paragraph [ref=e360]: Vai al cliente
+                - cell "Progetto Test Final Commessa f962ec72" [ref=e361]:
+                  - generic [ref=e362]:
+                    - paragraph [ref=e363]: Progetto Test Final
+                    - paragraph [ref=e364]: Commessa f962ec72
+                - cell "apr 2026" [ref=e365]
+                - cell "APERTA" [ref=e366]:
+                  - generic [ref=e367]: APERTA
+                - cell "1500 €" [ref=e368]
+                - cell "-33.3%" [ref=e369]
+                - cell [ref=e370]:
+                  - generic [ref=e371]:
+                    - button [ref=e372] [cursor=pointer]:
+                      - img
+                    - button [ref=e374] [cursor=pointer]:
+                      - img
+    - button [ref=e376] [cursor=pointer]:
+      - img

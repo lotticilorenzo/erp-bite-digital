@@ -103,7 +103,7 @@ export default function SettingsLayout() {
       </aside>
 
       {/* Contenuto Principale */}
-      <main className="flex-1 min-w-0 max-w-4xl">
+      <main className="flex-1 min-w-0">
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
           <Outlet />
         </div>

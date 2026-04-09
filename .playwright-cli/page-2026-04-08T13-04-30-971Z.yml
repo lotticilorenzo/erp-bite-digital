@@ -1,0 +1,20 @@
+- generic [ref=e3]:
+  - generic:
+    - generic:
+      - generic:
+        - img "Bite Digital"
+      - generic: Bite ERP v4
+      - generic: Bentornato. Effettua l'accesso per gestire lo studio.
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - textbox "Email o Username"
+        - generic:
+          - generic:
+            - textbox "Password"
+      - generic:
+        - button "Accedi"
+        - paragraph:
+          - link "Password dimenticata?":
+            - /url: /forgot-password

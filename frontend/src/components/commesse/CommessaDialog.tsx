@@ -47,19 +47,26 @@ interface CommessaDialogProps {
   commessa?: Commessa | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultMeseCompetenza?: string;
 }
 
-export function CommessaDialog({ commessa, open, onOpenChange }: CommessaDialogProps) {
+export function CommessaDialog({
+  commessa,
+  open,
+  onOpenChange,
+  defaultMeseCompetenza,
+}: CommessaDialogProps) {
   const { data: clienti } = useClienti();
   const createCommessa = useCreateCommessa();
   const updateCommessa = useUpdateCommessa();
   const isEditing = !!commessa;
+  const fallbackMonth = defaultMeseCompetenza || format(startOfMonth(new Date()), "yyyy-MM-dd");
 
   const form = useForm<CommessaFormValues>({
     resolver: zodResolver(commessaSchema) as any,
     defaultValues: {
       cliente_id: "",
-      mese_competenza: format(startOfMonth(new Date()), "yyyy-MM-dd"),
+      mese_competenza: fallbackMonth,
       stato: "APERTA",
       costo_manodopera: 0,
       costi_diretti: 0,
@@ -80,14 +87,14 @@ export function CommessaDialog({ commessa, open, onOpenChange }: CommessaDialogP
     } else {
       form.reset({
         cliente_id: "",
-        mese_competenza: format(startOfMonth(new Date()), "yyyy-MM-dd"),
+        mese_competenza: fallbackMonth,
         stato: "APERTA",
         costo_manodopera: 0,
         costi_diretti: 0,
         note: "",
       });
     }
-  }, [commessa, form]);
+  }, [commessa, fallbackMonth, form]);
 
   const onSubmit = async (values: CommessaFormValues) => {
     try {

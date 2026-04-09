@@ -82,6 +82,14 @@ const navItems = [
       { title: "Budget", url: "/budget", icon: Target },
     ],
   },
+  {
+    title: "Economia",
+    items: [
+      { title: "Riconnetti API", url: "/settings/api-recon", icon: Zap },
+      { title: "Disconnetti API", url: "/settings/api-disc", icon: Zap },
+      { title: "Configura alert", url: "/settings/alerts", icon: Settings },
+    ],
+  },
 ];
 
 export function AppSidebar() {

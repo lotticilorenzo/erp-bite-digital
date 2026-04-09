@@ -60,6 +60,7 @@ CREATE TABLE clienti (
     drive_files          JSONB DEFAULT '[]',
     condizioni_pagamento VARCHAR(100),
     fic_cliente_id       VARCHAR(100),
+    affidabilita         VARCHAR(10) DEFAULT 'MEDIA',
     attivo               BOOLEAN DEFAULT TRUE,
     created_at           TIMESTAMPTZ DEFAULT NOW(),
     updated_at           TIMESTAMPTZ DEFAULT NOW()

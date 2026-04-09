@@ -5,9 +5,11 @@ import {
   Text, 
   View, 
   StyleSheet, 
-} from "@react-pdf/renderer";
+  Image,
+} from "@/lib/react-pdf";
 import { format, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
+import { ensurePdfArray, resolvePdfAssetSrc, safePdfNumber, safePdfText } from "@/lib/pdf-utils";
 import type { Commessa, Cliente } from "@/types";
 
 const styles = StyleSheet.create({
@@ -21,7 +23,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    borderBottom: "2pt solid #7c3aed",
+    borderBottomWidth: 2,
+    borderBottomStyle: "solid",
+    borderBottomColor: "#7c3aed",
     paddingBottom: 20,
     marginBottom: 30,
   },
@@ -35,7 +39,9 @@ const styles = StyleSheet.create({
     width: "auto",
   },
   companyInfo: {
-    borderLeft: "1pt solid #e2e8f0",
+    borderLeftWidth: 1,
+    borderLeftStyle: "solid",
+    borderLeftColor: "#e2e8f0",
     paddingLeft: 15,
     height: 30,
     justifyContent: "center",
@@ -73,7 +79,9 @@ const styles = StyleSheet.create({
     color: "#7c3aed",
     textTransform: "uppercase",
     marginBottom: 10,
-    borderBottom: "0.5pt solid #e2e8f0",
+    borderBottomWidth: 0.5,
+    borderBottomStyle: "solid",
+    borderBottomColor: "#e2e8f0",
     paddingBottom: 4,
   },
   kpiContainer: {
@@ -86,7 +94,18 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 6,
     backgroundColor: "#f8fafc",
-    border: "1pt solid #e2e8f0",
+    borderTopWidth: 1,
+    borderTopStyle: "solid",
+    borderTopColor: "#e2e8f0",
+    borderRightWidth: 1,
+    borderRightStyle: "solid",
+    borderRightColor: "#e2e8f0",
+    borderBottomWidth: 1,
+    borderBottomStyle: "solid",
+    borderBottomColor: "#e2e8f0",
+    borderLeftWidth: 1,
+    borderLeftStyle: "solid",
+    borderLeftColor: "#e2e8f0",
   },
   kpiLabel: {
     fontSize: 8,
@@ -109,6 +128,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     borderBottomColor: "#f1f5f9",
     borderBottomWidth: 0.5,
+    borderBottomStyle: "solid",
     alignItems: "center",
     minHeight: 28,
   },
@@ -116,6 +136,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f8fafc",
     borderBottomColor: "#7c3aed",
     borderBottomWidth: 1.5,
+    borderBottomStyle: "solid",
   },
   tableCell: {
     padding: 6,
@@ -143,7 +164,9 @@ const styles = StyleSheet.create({
     bottom: 30,
     left: 40,
     right: 40,
-    borderTop: "0.5pt solid #e2e8f0",
+    borderTopWidth: 0.5,
+    borderTopStyle: "solid",
+    borderTopColor: "#e2e8f0",
     paddingTop: 10,
     flexDirection: "row",
     justifyContent: "space-between",
@@ -162,11 +185,15 @@ const formatEuro = (val: number = 0) =>
   new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(val);
 
 export const ClienteReportPDF: React.FC<Props> = ({ cliente, commesse, periodo }) => {
-  const totals = commesse.reduce((acc, c) => ({
-    fatturato: acc.fatturato + (c.valore_fatturabile || 0),
-    costi: acc.costi + (c.costo_manodopera || 0) + (c.costi_diretti || 0),
-    ore: acc.ore + (c.ore_reali || 0),
+  const clienteData = cliente ?? ({ ragione_sociale: "Cliente non disponibile" } as Cliente);
+  const commesseList = ensurePdfArray(commesse);
+  const logoSrc = resolvePdfAssetSrc("/logo_bite.jpg");
+  const totals = commesseList.reduce((acc, c) => ({
+    fatturato: acc.fatturato + safePdfNumber(c.valore_fatturabile),
+    costi: acc.costi + safePdfNumber(c.costo_manodopera) + safePdfNumber(c.costi_diretti),
+    ore: acc.ore + safePdfNumber(c.ore_reali),
   }), { fatturato: 0, costi: 0, ore: 0 });
+  const sortedCommesse = [...commesseList].sort((a, b) => a.mese_competenza.localeCompare(b.mese_competenza));
 
   const margineMedio = totals.fatturato > 0 
     ? ((totals.fatturato - totals.costi) / totals.fatturato * 100).toFixed(1)
@@ -178,6 +205,7 @@ export const ClienteReportPDF: React.FC<Props> = ({ cliente, commesse, periodo }
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoSection}>
+            {logoSrc ? <Image src={logoSrc} style={styles.logoImage} /> : null}
             <View style={styles.companyInfo}>
               <Text style={styles.companyName}>Bite Digital S.r.l.</Text>
               <Text style={styles.reportDate}>Report Consolidato Partner</Text>
@@ -191,14 +219,35 @@ export const ClienteReportPDF: React.FC<Props> = ({ cliente, commesse, periodo }
 
         {/* Informazioni Cliente */}
         <View style={styles.section}>
-          <View style={{ flexDirection: "row", gap: 20, alignItems: "center", backgroundColor: "#f8fafc", padding: 15, borderRadius: 8, border: "1pt solid #e2e8f0" }}>
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 20,
+              alignItems: "center",
+              backgroundColor: "#f8fafc",
+              padding: 15,
+              borderRadius: 8,
+              borderTopWidth: 1,
+              borderTopStyle: "solid",
+              borderTopColor: "#e2e8f0",
+              borderRightWidth: 1,
+              borderRightStyle: "solid",
+              borderRightColor: "#e2e8f0",
+              borderBottomWidth: 1,
+              borderBottomStyle: "solid",
+              borderBottomColor: "#e2e8f0",
+              borderLeftWidth: 1,
+              borderLeftStyle: "solid",
+              borderLeftColor: "#e2e8f0",
+            }}
+          >
             <View style={styles.companyInfo}>
               <Text style={styles.kpiLabel}>Partner</Text>
-              <Text style={{ fontSize: 13, fontWeight: "bold" }}>{cliente.ragione_sociale}</Text>
+              <Text style={{ fontSize: 13, fontWeight: "bold" }}>{safePdfText(clienteData.ragione_sociale, "Cliente non disponibile")}</Text>
             </View>
             <View style={styles.companyInfo}>
               <Text style={styles.kpiLabel}>Periodo Analisi</Text>
-              <Text style={{ fontSize: 11, fontWeight: "bold" }}>{periodo}</Text>
+              <Text style={{ fontSize: 11, fontWeight: "bold" }}>{safePdfText(periodo, "Periodo non specificato")}</Text>
             </View>
           </View>
         </View>
@@ -235,31 +284,31 @@ export const ClienteReportPDF: React.FC<Props> = ({ cliente, commesse, periodo }
               <Text style={[styles.tableCell, styles.colValore, { fontWeight: "bold" }]}>Valore</Text>
               <Text style={[styles.tableCell, styles.colMargine, { fontWeight: "bold" }]}>Margine %</Text>
             </View>
-            {commesse.sort((a,b) => a.mese_competenza.localeCompare(b.mese_competenza)).map((c, i) => (
+            {sortedCommesse.map((c, i) => (
               <View key={i} style={styles.tableRow}>
                 <Text style={[styles.tableCell, styles.colMese]}>
                   {format(parseISO(c.mese_competenza), "MMMM yyyy", { locale: it }).toUpperCase()}
                 </Text>
                 <Text style={[styles.tableCell, styles.colProgetti]}>
-                  {c.righe_progetto.length} Progetti
+                  {ensurePdfArray(c.righe_progetto).length} Progetti
                 </Text>
                 <Text style={[styles.tableCell, styles.colOre]}>
-                  {Math.round(c.ore_reali || 0)}h
+                  {Math.round(safePdfNumber(c.ore_reali))}h
                 </Text>
                 <Text style={[styles.tableCell, styles.colValore]}>
-                  {formatEuro(c.valore_fatturabile)}
+                  {formatEuro(safePdfNumber(c.valore_fatturabile))}
                 </Text>
                 <View style={[styles.tableCell, styles.colMargine]}>
-                  <Text style={{ fontWeight: "bold", color: (c.margine_percentuale || 0) > 20 ? "#10b981" : "#ef4444" }}>
-                    {c.margine_percentuale}%
+                  <Text style={{ fontWeight: "bold", color: safePdfNumber(c.margine_percentuale) > 20 ? "#10b981" : "#ef4444" }}>
+                    {safePdfNumber(c.margine_percentuale).toFixed(1)}%
                   </Text>
                   <View style={styles.trendBar}>
                     <View 
                       style={[
                         styles.trendFill, 
                         { 
-                          width: `${Math.min(100, Math.max(0, c.margine_percentuale || 0))}%`, 
-                          backgroundColor: (c.margine_percentuale || 0) > 20 ? "#10b981" : "#ef4444" 
+                          width: `${Math.min(100, Math.max(0, safePdfNumber(c.margine_percentuale)))}%`, 
+                          backgroundColor: safePdfNumber(c.margine_percentuale) > 20 ? "#10b981" : "#ef4444" 
                         }
                       ]} 
                     />
@@ -267,11 +316,27 @@ export const ClienteReportPDF: React.FC<Props> = ({ cliente, commesse, periodo }
                 </View>
               </View>
             ))}
+            {sortedCommesse.length === 0 ? (
+              <View style={styles.tableRow}>
+                <Text style={[styles.tableCell, { width: "100%", textAlign: "center", color: "#64748b" }]}>
+                  Nessuna commessa disponibile per questo report
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
         {/* Totali Finali */}
-        <View style={{ marginTop: 20, padding: 15, borderTop: "2pt solid #7c3aed", backgroundColor: "#f8fafc" }}>
+        <View
+          style={{
+            marginTop: 20,
+            padding: 15,
+            borderTopWidth: 2,
+            borderTopStyle: "solid",
+            borderTopColor: "#7c3aed",
+            backgroundColor: "#f8fafc",
+          }}
+        >
           <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 5 }}>
             <Text style={{ fontSize: 10, fontWeight: "bold" }}>TOTALE ORE INVESTITE</Text>
             <Text style={{ fontSize: 12, fontWeight: "bold" }}>{totals.ore} Ore</Text>

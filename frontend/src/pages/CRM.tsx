@@ -29,7 +29,7 @@ export default function CRM() {
   );
 
   return (
-    <div className="p-8 max-w-[1600px] mx-auto min-h-screen bg-[#020617]">
+    <div className="p-8 min-h-screen bg-[#020617]">
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
         <div className="flex items-center gap-5">

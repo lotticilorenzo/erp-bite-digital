@@ -8,7 +8,8 @@ import {
   Filter,
   ArrowUpDown,
   Layers,
-  Users
+  Users,
+  LayoutDashboard
 } from "lucide-react";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 import { useStudio } from "@/hooks/useStudio";
@@ -80,6 +81,17 @@ export function StudioTopbar() {
         <div className="h-4 w-[1px] bg-muted" />
 
         <div className="flex items-center bg-card/80 p-1 rounded-xl border border-border/50 shadow-inner">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setView("overview")}
+            className={`h-7 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-300 ${
+              nav.view === "overview" ? "bg-primary text-white shadow-lg" : "text-[#475569] hover:text-muted-foreground"
+            }`}
+          >
+            <LayoutDashboard className="h-3.5 w-3.5 mr-1.5" />
+            Overview
+          </Button>
           <Button
             variant="ghost"
             size="sm"

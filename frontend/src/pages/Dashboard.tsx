@@ -1,271 +1,679 @@
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { format, parseISO, subMonths } from "date-fns";
+import { it } from "date-fns/locale";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Briefcase,
+  Building2,
+  Clock,
+  Eye,
+  FolderOpen,
+  History,
+  Info,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Trophy,
+  TrendingUp,
+  Zap,
+} from "lucide-react";
+import { useAnalytics } from "@/hooks/useAnalytics";
+import { useUpdateClienteAffidabilita } from "@/hooks/useClienti";
+import { DashboardKpiCard } from "@/components/analytics/DashboardKpiCard";
+import { ForecastTable } from "@/components/analytics/ForecastTable";
+import { CommessaDialog } from "@/components/commesse/CommessaDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Zap, Users, Briefcase, Timer, Calendar, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
-import { useAnalytics } from "@/hooks/useAnalytics";
-import { useTimesheets } from "@/hooks/useTimesheet";
-import { motion } from "framer-motion";
-import { 
-  formatDistanceToNow, 
-  parseISO, 
-  isBefore, 
-  isSameDay, 
-  startOfDay
-} from "date-fns";
-import { it } from "date-fns/locale";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+import type { ClienteAffidabilita, Commessa } from "@/types";
+
+function capitalizeLabel(value: string) {
+  return value.length > 0 ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { data: analytics, isLoading: isLoadingAnalytics } = useAnalytics();
-  const { data: allTimesheets = [], isLoading: isLoadingTimesheets } = useTimesheets();
+  const initialDate = useMemo(() => new Date(), []);
+  const [selectedMonth, setSelectedMonth] = useState(String(initialDate.getMonth()));
+  const [selectedYear, setSelectedYear] = useState(String(initialDate.getFullYear()));
+  const [isCommessaDialogOpen, setIsCommessaDialogOpen] = useState(false);
+  const [selectedCommessa, setSelectedCommessa] = useState<Commessa | null>(null);
+  const updateClienteAffidabilita = useUpdateClienteAffidabilita();
 
-  const isLoading = isLoadingAnalytics || isLoadingTimesheets;
+  const selectedDate = useMemo(
+    () => new Date(Number(selectedYear), Number(selectedMonth), 1),
+    [selectedMonth, selectedYear]
+  );
+  const { data: analytics, isLoading } = useAnalytics(selectedDate);
 
-  const stats = [
-    { 
-      label: "Clienti Attivi", 
-      value: isLoading ? "..." : analytics?.kpis.activeClients.toString(), 
-      icon: Users, 
-      color: "text-blue-500" 
+  const currentMonthName = format(selectedDate, "MMMM yyyy", { locale: it });
+  const currentMonthShortName = capitalizeLabel(format(selectedDate, "MMM yyyy", { locale: it }));
+  const previousMonthName = capitalizeLabel(
+    format(subMonths(selectedDate, 1), "MMM yyyy", { locale: it })
+  );
+  const selectedMonthQuery = format(selectedDate, "yyyy-MM-01");
+
+  const monthOptions = useMemo(
+    () =>
+      Array.from({ length: 12 }, (_, monthIndex) => ({
+        value: String(monthIndex),
+        label: capitalizeLabel(format(new Date(2026, monthIndex, 1), "LLLL", { locale: it })),
+      })),
+    []
+  );
+
+  const availableYears = useMemo(() => {
+    const years = new Set<number>();
+
+    (analytics?.commesse || []).forEach((commessa) => {
+      if (!commessa.mese_competenza) return;
+      years.add(parseISO(commessa.mese_competenza).getFullYear());
+    });
+
+    years.add(initialDate.getFullYear());
+    years.add(Number(selectedYear));
+
+    return Array.from(years).sort((a, b) => a - b);
+  }, [analytics?.commesse, initialDate, selectedYear]);
+
+  const currentCommesse = useMemo(
+    () =>
+      (analytics?.commesse || [])
+        .filter((commessa) => {
+          const competenceDate = parseISO(commessa.mese_competenza);
+          return (
+            competenceDate.getMonth() === selectedDate.getMonth() &&
+            competenceDate.getFullYear() === selectedDate.getFullYear()
+          );
+        })
+        .sort((a, b) => (b.valore_fatturabile || 0) - (a.valore_fatturabile || 0)),
+    [analytics?.commesse, selectedDate]
+  );
+
+  const currentClientsCount = useMemo(
+    () => new Set(currentCommesse.map((commessa) => commessa.cliente_id)).size,
+    [currentCommesse]
+  );
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("it-IT", {
+      style: "currency",
+      currency: "EUR",
+      maximumFractionDigits: 0,
+    }).format(value);
+
+  const openCommessePage = () => {
+    navigate("/commesse");
+  };
+
+  const openClientePage = (clienteId?: string) => {
+    if (!clienteId) return;
+    navigate(`/clienti/${clienteId}`);
+  };
+
+  const openProgettoPage = (progettoId?: string) => {
+    if (!progettoId) return;
+    navigate(`/progetti/${progettoId}`);
+  };
+
+  const openCommessaDetail = (commessaId: string) => {
+    navigate(`/commesse/${commessaId}`);
+  };
+
+  const handleNewCommessa = () => {
+    setSelectedCommessa(null);
+    setIsCommessaDialogOpen(true);
+  };
+
+  const handleEditCommessa = (commessa: Commessa) => {
+    setSelectedCommessa(commessa);
+    setIsCommessaDialogOpen(true);
+  };
+
+  const handleClienteAffidabilitaChange = (
+    clienteId: string,
+    affidabilita: ClienteAffidabilita
+  ) => {
+    updateClienteAffidabilita.mutate({ id: clienteId, affidabilita });
+  };
+
+  const kpis = [
+    {
+      label: "Fatturabile Mese Selezionato",
+      value: formatCurrency(analytics?.kpis.currentMonthFatturabile || 0),
+      subValue: `${analytics?.kpis.currentMonthCount || 0} commesse attive | ${analytics?.kpis.selectedMonthClientsCount || 0} clienti`,
+      icon: TrendingUp,
+      color: "text-purple-400",
     },
-    { 
-      label: "Progetti in Corso", 
-      value: isLoading ? "..." : analytics?.kpis.ongoingProjects.toString(), 
-      icon: Briefcase, 
-      color: "text-purple-500" 
+    {
+      label: "Fatturato Mese Precedente",
+      value: formatCurrency(analytics?.kpis.prevMonthFatturato || 0),
+      subValue: previousMonthName,
+      icon: History,
+      color: "text-blue-400",
     },
-    { 
-      label: "Ore Mese", 
-      value: isLoading ? "..." : `${Math.round(analytics?.kpis.monthlyHours || 0)}h`, 
-      icon: Timer, 
-      color: "text-green-500" 
+    {
+      label: "Margine Medio Mese",
+      value: `${(analytics?.kpis.selectedMonthMargin || 0).toFixed(0)}%`,
+      subValue: "Target aziendale > 30%",
+      icon: Trophy,
+      color: "text-green-400",
     },
-    { 
-      label: "Fatturato Mese", 
-      value: isLoading ? "..." : new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(analytics?.kpis.monthlyRevenue || 0), 
-      icon: Zap, 
-      color: "text-yellow-500" 
+    {
+      label: "Commesse Aperte",
+      value: analytics?.kpis.ongoingProjects || 0,
+      subValue: currentMonthShortName,
+      icon: Briefcase,
+      color: "text-amber-400",
+    },
+    {
+      label: "Costo Struttura",
+      value: formatCurrency(analytics?.kpis.costoStruttura || 0),
+      subValue: "Fissi mensili",
+      icon: Zap,
+      color: "text-red-400",
+    },
+    {
+      label: "Margini Sotto Soglia",
+      value: analytics?.kpis.marginiSottoSoglia || 0,
+      subValue: "A rischio perdita",
+      icon: AlertTriangle,
+      color: "text-orange-500",
     },
   ];
 
-  const currentDate = new Date().toLocaleDateString('it-IT', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
-
-  // 1. Prossime Scadenze (dagli alerts di tipo TASK con scadenza vicina)
-  const today = startOfDay(new Date());
-  
-  const relevantAlerts = (analytics?.alerts || [])
-    .filter(a => a.type === "TASK")
-    .map(a => {
-      const date = parseISO(a.value || "");
-      let colorClass = "text-blue-500";
-      if (isBefore(date, today)) colorClass = "text-red-500";
-      else if (isSameDay(date, today)) colorClass = "text-yellow-500";
-      
-      return { ...a, date, colorClass };
-    })
-    .sort((a, b) => a.date.getTime() - b.date.getTime())
-    .slice(0, 5);
-
-  // 2. Attività Recenti (ultimi timesheet inseriti)
-  const recentActivities = [...allTimesheets]
-    .sort((a, b) => new Date(b.created_at || b.data_attivita).getTime() - new Date(a.created_at || a.data_attivita).getTime())
-    .slice(0, 5);
+  const getStatusBadge = (stato: string) => {
+    switch (stato) {
+      case "FATTURATA":
+      case "INCASSATA":
+        return (
+          <Badge className="border-emerald-500/20 bg-emerald-500/10 px-2 text-[9px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20">
+            Fatturata
+          </Badge>
+        );
+      case "PRONTA_CHIUSURA":
+        return (
+          <Badge className="border-blue-500/20 bg-blue-500/10 px-2 text-[9px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 hover:bg-blue-500/20">
+            Pronta Chiusura
+          </Badge>
+        );
+      case "APERTA":
+      default:
+        return (
+          <Badge className="border-amber-500/20 bg-amber-500/10 px-2 text-[9px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-amber-500/20">
+            Aperta
+          </Badge>
+        );
+    }
+  };
 
   return (
-    <div className="space-y-12 max-w-7xl mx-auto pt-4 pb-12">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-4xl font-black tracking-tight text-foreground mb-1">Dashboard</h1>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium capitalize">
-          <span className="text-primary/80">⚡</span>
-          {currentDate}
+    <div className="w-full px-8 animate-in space-y-12 fade-in pt-8 pb-20 duration-700">
+      <header className="flex items-center justify-between px-1">
+        <div className="flex flex-col gap-1">
+          <h1 className="flex items-center gap-3 text-4xl font-black tracking-tighter text-foreground uppercase italic underline decoration-primary/30 decoration-8 underline-offset-[12px]">
+            Dashboard <span className="font-thin text-muted-foreground/30 not-italic">-</span>{" "}
+            <span className="capitalize text-primary not-italic">{currentMonthName}</span>
+          </h1>
+          <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.3em] text-muted-foreground/60">
+            Panoramica finanziaria e operativa in tempo reale
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex -space-x-2">
+            {[1, 2, 3, 4].map((index) => (
+              <div
+                key={index}
+                className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px] font-bold"
+              >
+                {String.fromCharCode(64 + index)}
+              </div>
+            ))}
+            <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-background bg-primary text-[10px] font-bold text-primary-foreground">
+              +5
+            </div>
+          </div>
+
+          <div className="mx-2 h-8 w-[1px] bg-border" />
+
+          <div className="flex items-center gap-2">
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="h-9 w-[150px] border-border/60 bg-card/60">
+                <SelectValue placeholder="Mese" />
+              </SelectTrigger>
+              <SelectContent>
+                {monthOptions.map((month) => (
+                  <SelectItem key={month.value} value={month.value}>
+                    {month.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedYear} onValueChange={setSelectedYear}>
+              <SelectTrigger className="h-9 w-[110px] border-border/60 bg-card/60">
+                <SelectValue placeholder="Anno" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableYears.map((year) => (
+                  <SelectItem key={year} value={String(year)}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <button className="rounded-xl p-2 transition-colors hover:bg-muted">
+            <Info className="h-5 w-5 text-muted-foreground" />
+          </button>
         </div>
       </header>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat, i) => (
-          <Card key={i} className={`
-            bg-card border-border relative overflow-hidden group shadow-2xl
-            hover:border-primary/50 transition-all duration-500 hover:shadow-primary/5 hover:-translate-y-1
-          `}>
-            {/* Top Gradient Border */}
-            <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${
-              i === 0 ? "from-purple-500 to-purple-400" :
-              i === 1 ? "from-blue-500 to-blue-400" :
-              i === 2 ? "from-green-500 to-green-400" :
-              "from-amber-500 to-amber-400"
-            }`} />
-            
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0 text-muted-foreground pt-5">
-              <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70">
-                {stat.label}
-              </CardTitle>
-              <div className={`p-2 rounded-lg bg-muted/50 border border-border/50 group-hover:bg-primary/10 group-hover:border-primary/30 transition-all duration-500`}>
-                <stat.icon className={`h-4 w-4 ${stat.color} group-hover:scale-110 transition-transform`} />
-              </div>
-            </CardHeader>
-            <CardContent className="pb-6">
-              <div className="text-4xl font-black tracking-tighter text-foreground mb-1 transition-colors duration-500">
-                {stat.value}
-              </div>
-              <div className="h-1 w-12 bg-muted rounded-full group-hover:w-20 group-hover:bg-primary/50 transition-all duration-700" />
-            </CardContent>
-
-            {/* Subtle Glow Effect on Hover */}
-            <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/2 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
-          </Card>
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+        {kpis.map((kpi) => (
+          <DashboardKpiCard
+            key={kpi.label}
+            label={kpi.label}
+            value={kpi.value}
+            subValue={kpi.subValue}
+            icon={kpi.icon}
+            color={kpi.color}
+            loading={isLoading}
+          />
         ))}
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
-        {/* PROSSIME SCADENZE */}
-        <Card className="col-span-4 bg-card border-border shadow-2xl overflow-hidden">
-          <CardHeader className="border-b border-border/50 bg-muted/20 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-primary" />
-                Prossime Scadenze
-              </CardTitle>
-              <Button 
-                size="sm" 
-                variant="ghost" 
-                onClick={() => navigate("/studio-os")}
-                className="text-[10px] uppercase font-bold tracking-widest text-primary hover:bg-primary/10"
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+        <div className="space-y-4 lg:col-span-8">
+          <div className="flex items-center justify-between px-1">
+            <button
+              onClick={openCommessePage}
+              className="text-left text-xl font-black italic uppercase tracking-tighter text-foreground transition-colors hover:text-primary"
+            >
+              Commesse {currentMonthShortName}
+            </button>
+
+            <div className="flex items-center gap-4">
+              <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60">
+                {currentClientsCount} clienti | {currentCommesse.length} commesse
+              </span>
+              <Button
+                type="button"
+                onClick={handleNewCommessa}
+                className="h-9 rounded-xl bg-primary px-4 text-[10px] font-black uppercase tracking-widest text-primary-foreground shadow-[0_0_15px_hsl(var(--primary)/0.2)] hover:bg-primary/90"
               >
-                Vedi tutte
+                <Plus className="h-3.5 w-3.5" />
+                Nuova commessa
               </Button>
+              <button
+                onClick={openCommessePage}
+                className="group flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-primary hover:underline"
+              >
+                Vedi tutte{" "}
+                <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-1" />
+              </button>
             </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            {relevantAlerts.length > 0 ? (
-              <div className="divide-y divide-border/50">
-                {relevantAlerts.map((alert, i) => (
-                  <div key={i} className="flex items-center gap-4 p-4 hover:bg-muted/30 transition-all duration-300 group cursor-pointer relative">
-                    <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-primary scale-y-0 group-hover:scale-y-100 transition-transform duration-500" />
-                    <div className="flex-1 min-w-0 pl-2">
-                      <div className="text-sm font-bold text-foreground truncate">{alert.title}</div>
-                      <div className={`text-[11px] font-medium ${alert.colorClass}`}>
-                        Scadenza: {new Intl.DateTimeFormat('it-IT').format(alert.date)}
-                      </div>
-                    </div>
-                    <div className="text-[10px] font-black text-primary/40 pr-2">
-                      TASK
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="py-12 flex flex-col items-center justify-center text-center gap-3">
-                <CheckCircle2 className="w-8 h-8 text-muted-foreground opacity-20" />
-                <div className="text-[11px] text-muted-foreground uppercase tracking-widest font-bold">
-                  Nessuna scadenza imminente
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* ATTIVITÀ RECENTI */}
-        <Card className="col-span-3 bg-card border-border shadow-2xl overflow-hidden">
-          <CardHeader className="border-b border-border/50 bg-muted/20 px-6 py-4">
-            <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
-              <Clock className="w-4 h-4 text-primary" />
-              Attività Recenti
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {recentActivities.length > 0 ? (
-              <div className="divide-y divide-border/50">
-                {recentActivities.map((ts, i) => (
-                  <div key={i} className="flex items-center gap-3 p-4 hover:bg-muted/30 transition-all duration-300">
-                    <Avatar className="h-8 w-8 border border-border/50">
-                      <AvatarImage src={ts.user?.avatar_url || undefined} />
-                      <AvatarFallback className="text-[10px] font-bold bg-primary/10 text-primary">
-                        {ts.user?.email?.[0].toUpperCase() || "U"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-bold text-foreground truncate">
-                        {ts.servizio || "Registrazione Ore"}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground font-medium">
-                        {ts.durata_minuti} min • {ts.task_display_name || "Generale"}
-                      </div>
-                    </div>
-                    <div className="text-[9px] text-muted-foreground whitespace-nowrap italic">
-                      {formatDistanceToNow(parseISO(ts.data_attivita), { addSuffix: true, locale: it })}
-                    </div>
+          <div className="overflow-hidden rounded-xl border border-border/40 bg-card/30 shadow-2xl">
+            <Table>
+              <TableHeader className="bg-muted/30">
+                <TableRow className="border-border/50 hover:bg-transparent">
+                  <TableHead className="py-4 pl-6 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">
+                    Cliente
+                  </TableHead>
+                  <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">
+                    Progetti
+                  </TableHead>
+                  <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">
+                    Fatturabile
+                  </TableHead>
+                  <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">
+                    Margine
+                  </TableHead>
+                  <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">
+                    Stato
+                  </TableHead>
+                  <TableHead className="py-4 pr-6 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">
+                    Azioni
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-10 text-center opacity-50">
+                      Caricamento in corso...
+                    </TableCell>
+                  </TableRow>
+                ) : currentCommesse.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-10 text-center opacity-50">
+                      Nessuna commessa trovata per il mese selezionato
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  currentCommesse.map((commessa) => {
+                    const linkedProjects = (commessa.righe_progetto || [])
+                      .map((riga) => ({
+                        id: riga.progetto?.id || riga.progetto_id,
+                        nome: riga.progetto?.nome || "Progetto collegato",
+                      }))
+                      .filter(
+                        (project, index, array) =>
+                          !!project.id &&
+                          array.findIndex((item) => item.id === project.id) === index
+                      );
+
+                    return (
+                      <TableRow
+                        key={commessa.id}
+                        className="group cursor-pointer border-border/30 transition-all hover:bg-muted/30"
+                        onClick={() => openCommessaDetail(commessa.id)}
+                      >
+                        <TableCell className="py-5 pl-6">
+                          <div className="flex flex-col">
+                            <button
+                              type="button"
+                              className="w-fit text-left text-xs font-black text-foreground transition-colors hover:underline group-hover:text-primary"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openClientePage(commessa.cliente_id);
+                              }}
+                            >
+                              {commessa.cliente?.ragione_sociale}
+                            </button>
+                            <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                              {commessa.cliente?.codice_cliente || "MOD"}
+                            </span>
+                          </div>
+                        </TableCell>
+
+                        <TableCell className="py-5">
+                          <div className="flex flex-col gap-1">
+                            {(commessa.righe_progetto || []).length > 0 ? (
+                              commessa.righe_progetto.map((riga) => (
+                                <button
+                                  key={riga.id}
+                                  type="button"
+                                  className="w-fit text-left text-[10px] font-bold text-muted-foreground transition-colors hover:text-primary hover:underline"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openProgettoPage(riga.progetto?.id || riga.progetto_id);
+                                  }}
+                                >
+                                  {riga.progetto?.nome || "Progetto collegato"}
+                                </button>
+                              ))
+                            ) : (
+                              <span className="text-[10px] italic text-muted-foreground/40">
+                                Nessun progetto
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+
+                        <TableCell className="py-5 text-right font-black text-foreground tabular-nums">
+                          {formatCurrency(commessa.valore_fatturabile || 0)}
+                        </TableCell>
+
+                        <TableCell className="py-5 text-right">
+                          <span
+                            className={`text-[12px] font-black tabular-nums ${
+                              (commessa.margine_percentuale || 0) < 30
+                                ? "text-rose-600 dark:text-rose-400"
+                                : "text-emerald-600 dark:text-emerald-400"
+                            }`}
+                          >
+                            {commessa.margine_percentuale?.toFixed(0)}%
+                          </span>
+                        </TableCell>
+
+                        <TableCell className="py-5 text-right">
+                          {getStatusBadge(commessa.stato)}
+                        </TableCell>
+
+                        <TableCell
+                          className="py-5 pr-6 text-right"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <div className="flex items-center justify-end gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"
+                              onClick={() => handleEditCommessa(commessa)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"
+                              onClick={() => openCommessaDetail(commessa.id)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent
+                                align="end"
+                                className="rounded-3xl border-border/50 bg-card/40 text-foreground shadow-2xl"
+                              >
+                                <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                                  Azioni commessa
+                                </DropdownMenuLabel>
+                                <DropdownMenuSeparator className="bg-border/50" />
+                                <DropdownMenuItem
+                                  onClick={() => handleEditCommessa(commessa)}
+                                  className="cursor-pointer text-xs font-bold focus:bg-muted"
+                                >
+                                  <Pencil className="mr-2 h-4 w-4" />
+                                  Modifica commessa
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => openClientePage(commessa.cliente_id)}
+                                  className="cursor-pointer text-xs font-bold focus:bg-muted"
+                                >
+                                  <Building2 className="mr-2 h-4 w-4" />
+                                  Vai al cliente
+                                </DropdownMenuItem>
+                                {linkedProjects.length === 1 && (
+                                  <DropdownMenuItem
+                                    onClick={() => openProgettoPage(linkedProjects[0].id)}
+                                    className="cursor-pointer text-xs font-bold focus:bg-muted"
+                                  >
+                                    <FolderOpen className="mr-2 h-4 w-4" />
+                                    Vai al progetto
+                                  </DropdownMenuItem>
+                                )}
+                                {linkedProjects.length > 1 && (
+                                  <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger className="cursor-pointer text-xs font-bold focus:bg-muted">
+                                      <FolderOpen className="mr-2 h-4 w-4" />
+                                      Vai al progetto
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent className="rounded-3xl border-border/50 bg-card/40 text-foreground shadow-2xl">
+                                      {linkedProjects.map((project) => (
+                                        <DropdownMenuItem
+                                          key={project.id}
+                                          onClick={() => openProgettoPage(project.id)}
+                                          className="cursor-pointer text-xs font-bold focus:bg-muted"
+                                        >
+                                          {project.nome}
+                                        </DropdownMenuItem>
+                                      ))}
+                                    </DropdownMenuSubContent>
+                                  </DropdownMenuSub>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        <div className="space-y-6 lg:col-span-4">
+          <Card className="group relative overflow-hidden border-rose-500/30 bg-card shadow-2xl transition-all hover:border-rose-500/50">
+            <div className="absolute top-0 right-0 p-3 opacity-50 group-hover:opacity-100 transition-opacity">
+              <AlertTriangle className="h-4 w-4 text-rose-500" />
+            </div>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-500">
+                Attenzione
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col gap-1">
+                <h3 className="text-xl font-black text-foreground uppercase italic tracking-tighter">
+                  Attention <span className="text-rose-500 not-italic">Required</span>
+                </h3>
+                <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/30">
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase">
+                    Timesheet da approvare
+                  </span>
+                  <span className="text-lg font-black text-rose-600 dark:text-rose-500">
+                    {analytics?.kpis.timesheetPendingCount || 0}
+                  </span>
+                </div>
+              </div>
+
+              {(analytics?.kpis.marginiSottoSoglia || 0) > 0 && (
+                <div className="flex items-start gap-2 rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4">
+                  <Info className="mt-0.5 h-4 w-4 text-rose-500" />
+                  <p className="text-[10px] font-bold leading-relaxed text-foreground/80">
+                    Rilevate{" "}
+                    <span className="font-black text-rose-600 dark:text-rose-500">{analytics?.kpis.marginiSottoSoglia} commesse</span>{" "}
+                    con margine critico sotto la soglia del 30%.
+                  </p>
+                </div>
+              )}
+
+              <button
+                onClick={() => navigate("/timesheet")}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-muted/50 py-3 text-[10px] font-black uppercase tracking-widest transition-all hover:bg-primary hover:text-primary-foreground shadow-sm hover:shadow-md active:scale-[0.98]"
+              >
+                Vai alla revisione <Clock className="h-3 w-3" />
+              </button>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-4">
+            <h4 className="px-1 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">
+              Alert di sistema
+            </h4>
+            <div className="space-y-2">
+              {analytics?.alerts.slice(0, 3).map((alert, index) => (
+                <div
+                  key={`${alert.title}-${index}`}
+                  className="group flex cursor-pointer items-center justify-between rounded-2xl border border-border/30 bg-card/40 p-4 transition-all hover:border-primary/40 hover:bg-card/60"
+                >
+                  <div className="flex flex-col gap-0.5">
+                    <span className="max-w-[200px] truncate text-xs font-bold text-foreground group-hover:text-primary transition-colors">
+                      {alert.title}
+                    </span>
+                    <span className="text-[9px] font-black uppercase tracking-wider text-muted-foreground/60">
+                      {alert.value}
+                    </span>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="py-12 flex flex-col items-center justify-center text-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-muted/50 flex items-center justify-center border border-border/50">
-                  <span className="text-lg opacity-30">📋</span>
+                  <div
+                    className={cn(
+                      "rounded-xl p-2 transition-transform group-hover:scale-110",
+                      alert.severity === "high"
+                        ? "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                        : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                    )}
+                  >
+                    {alert.type === "INVOICE" ? (
+                      <Zap className="h-3.5 w-3.5" />
+                    ) : (
+                      <Briefcase className="h-3.5 w-3.5" />
+                    )}
+                  </div>
                 </div>
-                <div className="text-[11px] text-muted-foreground uppercase tracking-widest font-bold">
-                  Nessuna attività registrata
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-6 grid-cols-1">
-        <Card className="bg-card border-border shadow-2xl overflow-hidden relative">
-          <div className="absolute top-0 left-0 bottom-0 w-1 bg-red-500" />
-          <CardHeader className="px-6 py-4 flex flex-row items-center justify-between border-b border-border/50">
-            <CardTitle className="text-lg font-bold text-foreground flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-red-500" />
-              Clienti & Progetti a Rischio
-            </CardTitle>
-            <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20 px-3 py-1 font-black text-[10px] tracking-widest">
-              MONITORAGGIO ATTIVO
-            </Badge>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-               {(analytics?.alerts || []).filter(a => a.type === "SCOPE" || a.type === "MARGIN").map((alert, i) => (
-                 <motion.div 
-                   key={i}
-                   initial={{ opacity: 0, y: 10 }}
-                   animate={{ opacity: 1, y: 0 }}
-                   transition={{ delay: i * 0.1 }}
-                   className="p-4 rounded-xl bg-muted/30 border border-border/50 hover:border-red-500/30 transition-all cursor-pointer group"
-                   onClick={() => navigate(alert.type === "SCOPE" ? "/commesse" : "/analytics")}
-                 >
-                   <div className="flex justify-between items-start mb-2">
-                      <div className={`p-1.5 rounded-lg ${alert.severity === 'high' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>
-                        {alert.type === "SCOPE" ? <Briefcase className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
-                      </div>
-                      <span className={`text-[10px] font-black tracking-widest ${alert.severity === 'high' ? 'text-red-400' : 'text-amber-400'}`}>
-                        {alert.value}
-                      </span>
-                   </div>
-                   <h4 className="text-sm font-bold text-foreground mb-1 group-hover:text-red-400 transition-colors">
-                     {alert.title.replace("Scope Check: ", "").replace("Margine basso: ", "")}
-                   </h4>
-                   <p className="text-[10px] text-muted-foreground uppercase opacity-70">
-                     {alert.type === "SCOPE" ? "Sforamento Scope" : "Criticità Margine"}
-                   </p>
-                 </motion.div>
-               ))}
-               {(analytics?.alerts || []).filter(a => a.type === "SCOPE" || a.type === "MARGIN").length === 0 && (
-                 <div className="col-span-full py-8 text-center text-muted-foreground/40 italic text-sm">
-                   Nessun rischio critico rilevato oggi.
-                 </div>
-               )}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="pt-4">
+        <ForecastTable
+          data={analytics?.forecast || []}
+          totals={[
+            (analytics?.forecast || []).reduce((acc, item) => acc + (item.months[0] || 0), 0),
+            (analytics?.forecast || []).reduce((acc, item) => acc + (item.months[1] || 0), 0),
+            (analytics?.forecast || []).reduce((acc, item) => acc + (item.months[2] || 0), 0),
+          ]}
+          costoMO={analytics?.kpis.monthlyHours ? (analytics.kpis.monthlyHours * 40) / 12 : 1200}
+          costoStruttura={analytics?.kpis.costoStruttura || 0}
+          loading={isLoading}
+          onClienteClick={openClientePage}
+          onAffidabilitaChange={handleClienteAffidabilitaChange}
+          updatingClienteId={
+            updateClienteAffidabilita.isPending
+              ? updateClienteAffidabilita.variables?.id || null
+              : null
+          }
+          baseDate={selectedDate}
+        />
       </div>
+
+      <CommessaDialog
+        open={isCommessaDialogOpen}
+        onOpenChange={setIsCommessaDialogOpen}
+        commessa={selectedCommessa}
+        defaultMeseCompetenza={selectedMonthQuery}
+      />
     </div>
   );
 }

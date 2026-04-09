@@ -1,0 +1,23 @@
+[     122ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:17236
+[     826ms] [ERROR] Error: Invalid border width: undefined
+    at Object.resolveBorderShorthand (http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:83589:41)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:84089:35
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:79605:12
+    at resolveStyles$1 (http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:84107:70)
+    at computeStyle (http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100332:9)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100341:16
+    at Array.map (<anonymous>)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100343:33
+    at Array.map (<anonymous>)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100343:33 @ http://127.0.0.1:5173/@vite/client:509
+[     828ms] [ERROR] Error: Invalid border width: undefined
+    at Object.resolveBorderShorthand (http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:83589:41)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:84089:35
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:79605:12
+    at resolveStyles$1 (http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:84107:70)
+    at computeStyle (http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100332:9)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100341:16
+    at Array.map (<anonymous>)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100343:33
+    at Array.map (<anonymous>)
+    at http://127.0.0.1:5173/node_modules/.vite/deps/@react-pdf_renderer.js?v=4c24a87b:100343:33 @ http://127.0.0.1:5173/@vite/client:509

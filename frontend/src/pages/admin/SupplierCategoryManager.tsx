@@ -80,7 +80,7 @@ export default function SupplierCategoryManager() {
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center gap-4 mb-2">
         <Button variant="ghost" size="icon" onClick={() => navigate("/fornitori")}>
           <ChevronLeft className="w-5 h-5" />

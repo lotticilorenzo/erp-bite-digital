@@ -1,6 +1,6 @@
 import type { Cliente } from "./index";
 
-export type StudioView = "home" | "dash" | "list" | "kanban" | "cal" | "team";
+export type StudioView = "home" | "dash" | "list" | "kanban" | "cal" | "team" | "carico-lavoro" | "overview";
 
 export interface StudioState {
   view: StudioView;
@@ -41,6 +41,7 @@ export type TaskSO = {
   subtasks: SubtaskSO[];
   custom_values?: Record<string, any>;
   progetto_id?: string;
+  progetto?: any;
   commessa_id?: string;
   parent_id?: string;
   assegnatario_id?: string;

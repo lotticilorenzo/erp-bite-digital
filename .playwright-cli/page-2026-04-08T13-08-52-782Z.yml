@@ -1,0 +1,477 @@
+- generic [ref=e30]:
+  - generic [ref=e33]:
+    - link "Bite Digital Finance & Operations" [ref=e35] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e36]:
+        - img "Bite Digital" [ref=e38]
+        - generic [ref=e39]: Finance & Operations
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e42]: Generale
+        - list [ref=e44]:
+          - listitem [ref=e45]:
+            - link "Dashboard" [ref=e46] [cursor=pointer]:
+              - /url: /
+              - img [ref=e47]
+              - generic [ref=e52]: Dashboard
+          - listitem [ref=e53]:
+            - link "Analytics" [ref=e54] [cursor=pointer]:
+              - /url: /analytics
+              - img [ref=e55]
+              - generic [ref=e58]: Analytics
+          - listitem [ref=e59]:
+            - link "Timesheet" [ref=e60] [cursor=pointer]:
+              - /url: /timesheet
+              - img [ref=e61]
+              - generic [ref=e64]: Timesheet
+      - generic [ref=e65]:
+        - generic [ref=e66]: Gestione
+        - list [ref=e68]:
+          - listitem [ref=e69]:
+            - link "Clienti" [ref=e70] [cursor=pointer]:
+              - /url: /clienti
+              - img [ref=e71]
+              - generic [ref=e76]: Clienti
+          - listitem [ref=e77]:
+            - link "Gantt" [ref=e78] [cursor=pointer]:
+              - /url: /gantt
+              - img [ref=e79]
+              - generic [ref=e84]: Gantt
+          - listitem [ref=e85]:
+            - link "Preventivi" [ref=e86] [cursor=pointer]:
+              - /url: /preventivi
+              - img [ref=e87]
+              - generic [ref=e90]: Preventivi
+          - listitem [ref=e91]:
+            - link "Commesse" [ref=e92] [cursor=pointer]:
+              - /url: /commesse
+              - img [ref=e93]
+              - generic [ref=e96]: Commesse
+          - listitem [ref=e97]:
+            - link "Planning" [ref=e98] [cursor=pointer]:
+              - /url: /planning
+              - img [ref=e99]
+              - generic [ref=e102]: Planning
+          - listitem [ref=e103]:
+            - link "CRM" [ref=e104] [cursor=pointer]:
+              - /url: /crm
+              - img [ref=e105]
+              - generic [ref=e109]: CRM
+      - generic [ref=e110]:
+        - generic [ref=e111]: Documenti
+        - list [ref=e113]:
+          - listitem [ref=e114]:
+            - link "Report Mensili" [ref=e115] [cursor=pointer]:
+              - /url: /report
+              - img [ref=e116]
+              - generic [ref=e119]: Report Mensili
+          - listitem [ref=e120]:
+            - link "Wiki" [ref=e121] [cursor=pointer]:
+              - /url: /wiki
+              - img [ref=e122]
+              - generic [ref=e124]: Wiki
+      - generic [ref=e125]:
+        - generic [ref=e126]: Amministrazione
+        - list [ref=e128]:
+          - listitem [ref=e129]:
+            - link "Fatture" [ref=e130] [cursor=pointer]:
+              - /url: /fatture
+              - img [ref=e131]
+              - generic [ref=e134]: Fatture
+          - listitem [ref=e135]:
+            - link "Fornitori" [ref=e136] [cursor=pointer]:
+              - /url: /fornitori
+              - img [ref=e137]
+              - generic [ref=e141]: Fornitori
+          - listitem [ref=e142]:
+            - link "Cassa" [ref=e143] [cursor=pointer]:
+              - /url: /cassa
+              - img [ref=e144]
+              - generic [ref=e147]: Cassa
+          - listitem [ref=e148]:
+            - link "Budget" [ref=e149] [cursor=pointer]:
+              - /url: /budget
+              - img [ref=e150]
+              - generic [ref=e154]: Budget
+      - generic [ref=e155]:
+        - generic [ref=e156]: Economia
+        - list [ref=e158]:
+          - listitem [ref=e159]:
+            - link "Riconnetti API" [ref=e160] [cursor=pointer]:
+              - /url: /settings/api-recon
+              - img [ref=e161]
+              - generic [ref=e163]: Riconnetti API
+          - listitem [ref=e164]:
+            - link "Disconnetti API" [ref=e165] [cursor=pointer]:
+              - /url: /settings/api-disc
+              - img [ref=e166]
+              - generic [ref=e168]: Disconnetti API
+          - listitem [ref=e169]:
+            - link "Configura alert" [ref=e170] [cursor=pointer]:
+              - /url: /settings/alerts
+              - img [ref=e171]
+              - generic [ref=e174]: Configura alert
+    - generic [ref=e177]:
+      - link "ERP" [ref=e178] [cursor=pointer]:
+        - /url: /
+        - img [ref=e179]
+        - text: ERP
+      - link "Studio OS" [ref=e181] [cursor=pointer]:
+        - /url: /studio-os
+        - img [ref=e182]
+        - text: Studio OS
+    - list [ref=e185]:
+      - listitem [ref=e186]:
+        - button "LB Lorenzo Bite ADMIN" [ref=e187] [cursor=pointer]:
+          - generic [ref=e189]: LB
+          - generic [ref=e190]:
+            - generic [ref=e191]: Lorenzo Bite
+            - generic [ref=e192]: ADMIN
+          - img [ref=e193]
+  - main [ref=e195]:
+    - generic [ref=e196]:
+      - generic [ref=e197]:
+        - button "Toggle Sidebar" [ref=e198] [cursor=pointer]:
+          - img
+          - generic [ref=e199]: Toggle Sidebar
+        - navigation "breadcrumb" [ref=e200]:
+          - list [ref=e201]:
+            - listitem [ref=e202]:
+              - link "Home" [ref=e203] [cursor=pointer]:
+                - /url: /
+      - generic [ref=e204]:
+        - generic [ref=e205]:
+          - img [ref=e206]
+          - textbox "Cerca..." [ref=e209]
+          - generic [ref=e210]:
+            - generic [ref=e211]: ⌘
+            - text: K
+        - generic [ref=e213]:
+          - img [ref=e214]
+          - generic [ref=e217]: Nessun task attivo
+        - generic [ref=e218]:
+          - button "3" [ref=e219] [cursor=pointer]:
+            - img
+            - generic [ref=e220]: "3"
+          - button "Wiki Aziendale" [ref=e221] [cursor=pointer]:
+            - img
+          - button "Centro Assistenza" [ref=e222] [cursor=pointer]:
+            - img
+          - button [ref=e223] [cursor=pointer]:
+            - img
+          - link "LB" [ref=e225] [cursor=pointer]:
+            - /url: /settings/profile
+            - generic [ref=e227]: LB
+          - button "Nuovo" [ref=e228] [cursor=pointer]:
+            - img
+            - text: Nuovo
+    - main [ref=e229]:
+      - generic [ref=e231]:
+        - generic [ref=e232]:
+          - generic [ref=e233]:
+            - heading "Dashboard - aprile 2026" [level=1] [ref=e234]:
+              - text: Dashboard
+              - generic [ref=e235]: "-"
+              - generic [ref=e236]: aprile 2026
+            - paragraph [ref=e237]: Panoramica finanziaria e operativa in tempo reale
+          - generic [ref=e238]:
+            - generic [ref=e239]:
+              - generic [ref=e240]: A
+              - generic [ref=e241]: B
+              - generic [ref=e242]: C
+              - generic [ref=e243]: D
+              - generic [ref=e244]: "+5"
+            - generic [ref=e246]:
+              - combobox [ref=e247] [cursor=pointer]:
+                - generic: Aprile
+                - img [ref=e248]
+              - combobox [ref=e250] [cursor=pointer]:
+                - generic: "2026"
+                - img [ref=e251]
+            - button [ref=e253] [cursor=pointer]:
+              - img [ref=e254]
+        - generic [ref=e256]:
+          - generic [ref=e257]:
+            - generic [ref=e258]:
+              - generic [ref=e259]: Fatturabile Mese Selezionato
+              - img [ref=e261]
+            - generic [ref=e264]:
+              - generic [ref=e265]: 1500 €
+              - generic [ref=e266]: 1 commesse attive | 1 clienti
+          - generic [ref=e267]:
+            - generic [ref=e268]:
+              - generic [ref=e269]: Fatturato Mese Precedente
+              - img [ref=e271]
+            - generic [ref=e275]:
+              - generic [ref=e276]: 4402 €
+              - generic [ref=e277]: Mar 2026
+          - generic [ref=e278]:
+            - generic [ref=e279]:
+              - generic [ref=e280]: Margine Medio Mese
+              - img [ref=e282]
+            - generic [ref=e288]:
+              - generic [ref=e289]: "-33%"
+              - generic [ref=e290]: Target aziendale > 30%
+          - generic [ref=e291]:
+            - generic [ref=e292]:
+              - generic [ref=e293]: Commesse Aperte
+              - img [ref=e295]
+            - generic [ref=e298]:
+              - generic [ref=e299]: "1"
+              - generic [ref=e300]: Apr 2026
+          - generic [ref=e301]:
+            - generic [ref=e302]:
+              - generic [ref=e303]: Costo Struttura
+              - img [ref=e305]
+            - generic [ref=e307]:
+              - generic [ref=e308]: 0 €
+              - generic [ref=e309]: Fissi mensili
+          - generic [ref=e310]:
+            - generic [ref=e311]:
+              - generic [ref=e312]: Margini Sotto Soglia
+              - img [ref=e314]
+            - generic [ref=e316]:
+              - generic [ref=e317]: "1"
+              - generic [ref=e318]: A rischio perdita
+        - generic [ref=e319]:
+          - generic [ref=e320]:
+            - generic [ref=e321]:
+              - button "Commesse Apr 2026" [ref=e322] [cursor=pointer]
+              - generic [ref=e323]:
+                - generic [ref=e324]: 1 clienti | 1 commesse
+                - button "Nuova commessa" [ref=e325] [cursor=pointer]:
+                  - img
+                  - text: Nuova commessa
+                - button "Vedi tutte" [ref=e326] [cursor=pointer]:
+                  - text: Vedi tutte
+                  - img [ref=e327]
+            - table [ref=e331]:
+              - rowgroup [ref=e332]:
+                - row "Cliente Progetti Fatturabile Margine Stato Azioni" [ref=e333]:
+                  - columnheader "Cliente" [ref=e334]
+                  - columnheader "Progetti" [ref=e335]
+                  - columnheader "Fatturabile" [ref=e336]
+                  - columnheader "Margine" [ref=e337]
+                  - columnheader "Stato" [ref=e338]
+                  - columnheader "Azioni" [ref=e339]
+              - rowgroup [ref=e340]:
+                - row "MOD Progetto Test Final 1500 € -33% Aperta" [ref=e341] [cursor=pointer]:
+                  - cell "MOD" [ref=e342]:
+                    - generic [ref=e343]:
+                      - button
+                      - generic [ref=e344]: MOD
+                  - cell "Progetto Test Final" [ref=e345]:
+                    - button "Progetto Test Final" [ref=e347]
+                  - cell "1500 €" [ref=e348]
+                  - cell "-33%" [ref=e349]:
+                    - generic [ref=e350]: "-33%"
+                  - cell "Aperta" [ref=e351]:
+                    - generic [ref=e352]: Aperta
+                  - cell [ref=e353]:
+                    - generic [ref=e354]:
+                      - button [ref=e355]:
+                        - img
+                      - button [ref=e356]:
+                        - img
+                      - button [ref=e357]:
+                        - img
+          - generic [ref=e358]:
+            - generic [ref=e359]:
+              - img [ref=e361]
+              - generic [ref=e364]: Attenzione
+              - generic [ref=e365]:
+                - generic [ref=e367]:
+                  - generic [ref=e368]: Timesheet da approvare
+                  - generic [ref=e369]: "3"
+                - generic [ref=e370]:
+                  - img [ref=e371]
+                  - paragraph [ref=e373]:
+                    - text: Rilevate
+                    - generic [ref=e374]: 1 commesse
+                    - text: con margine critico sotto la soglia del 30%.
+                - button "Vai alla revisione" [ref=e375] [cursor=pointer]:
+                  - text: Vai alla revisione
+                  - img [ref=e376]
+            - generic [ref=e379]:
+              - heading "Alert di sistema" [level=4] [ref=e380]
+              - generic [ref=e381] [cursor=pointer]:
+                - generic [ref=e382]:
+                  - generic [ref=e383]: "Margine basso: Commessa #f962e"
+                  - generic [ref=e384]: 2026-04-01
+                - img [ref=e386]
+              - generic [ref=e389] [cursor=pointer]:
+                - generic [ref=e390]:
+                  - generic [ref=e391]: "Overdue: sito web"
+                  - generic [ref=e392]: 0464-06-06
+                - img [ref=e394]
+        - generic [ref=e398]:
+          - generic [ref=e400]:
+            - heading "Forecast 3 mesi" [level=3] [ref=e401]
+            - generic [ref=e402]: Storico ultimi 3 mesi - solo RETAINER
+          - table [ref=e405]:
+            - rowgroup [ref=e406]:
+              - row "Cliente mag 2026 giu 2026 lug 2026 Affidabilita" [ref=e407]:
+                - columnheader "Cliente" [ref=e408]
+                - columnheader "mag 2026" [ref=e409]
+                - columnheader "giu 2026" [ref=e410]
+                - columnheader "lug 2026" [ref=e411]
+                - columnheader "Affidabilita" [ref=e412]
+            - rowgroup [ref=e413]:
+              - row "ABLONDI GIORGIA AGS 167,50 € 167,50 € 167,50 € ALTA" [ref=e414] [cursor=pointer]:
+                - cell "ABLONDI GIORGIA AGS" [ref=e415]:
+                  - generic [ref=e416]:
+                    - generic [ref=e417]: ABLONDI GIORGIA
+                    - generic [ref=e418]: AGS
+                - cell "167,50 €" [ref=e419]
+                - cell "167,50 €" [ref=e420]
+                - cell "167,50 €" [ref=e421]
+                - cell "ALTA" [ref=e422]:
+                  - button "ALTA" [ref=e423]:
+                    - generic [ref=e424]: ALTA
+                    - img [ref=e425]
+              - row "AUTOCENTRO F.LLI MUTO SOCIETA' A RESPONSABILITA' LIMITATA BNR 800,00 € 800,00 € 800,00 € ALTA" [ref=e427] [cursor=pointer]:
+                - cell "AUTOCENTRO F.LLI MUTO SOCIETA' A RESPONSABILITA' LIMITATA BNR" [ref=e428]:
+                  - generic [ref=e429]:
+                    - generic [ref=e430]: AUTOCENTRO F.LLI MUTO SOCIETA' A RESPONSABILITA' LIMITATA
+                    - generic [ref=e431]: BNR
+                - cell "800,00 €" [ref=e432]
+                - cell "800,00 €" [ref=e433]
+                - cell "800,00 €" [ref=e434]
+                - cell "ALTA" [ref=e435]:
+                  - button "ALTA" [ref=e436]:
+                    - generic [ref=e437]: ALTA
+                    - img [ref=e438]
+              - row "BERNAZZOLI BY GHILBA S.R.L. BER 450,00 € 450,00 € 450,00 € ALTA" [ref=e440] [cursor=pointer]:
+                - cell "BERNAZZOLI BY GHILBA S.R.L. BER" [ref=e441]:
+                  - generic [ref=e442]:
+                    - generic [ref=e443]: BERNAZZOLI BY GHILBA S.R.L.
+                    - generic [ref=e444]: BER
+                - cell "450,00 €" [ref=e445]
+                - cell "450,00 €" [ref=e446]
+                - cell "450,00 €" [ref=e447]
+                - cell "ALTA" [ref=e448]:
+                  - button "ALTA" [ref=e449]:
+                    - generic [ref=e450]: ALTA
+                    - img [ref=e451]
+              - row "CAVAZZINI DISTRIBUZIONE BEVANDE SOCIETA' A RESPONSABILITA' LIMITATA CVZ 270,00 € 270,00 € 270,00 € ALTA" [ref=e453] [cursor=pointer]:
+                - cell "CAVAZZINI DISTRIBUZIONE BEVANDE SOCIETA' A RESPONSABILITA' LIMITATA CVZ" [ref=e454]:
+                  - generic [ref=e455]:
+                    - generic [ref=e456]: CAVAZZINI DISTRIBUZIONE BEVANDE SOCIETA' A RESPONSABILITA' LIMITATA
+                    - generic [ref=e457]: CVZ
+                - cell "270,00 €" [ref=e458]
+                - cell "270,00 €" [ref=e459]
+                - cell "270,00 €" [ref=e460]
+                - cell "ALTA" [ref=e461]:
+                  - button "ALTA" [ref=e462]:
+                    - generic [ref=e463]: ALTA
+                    - img [ref=e464]
+              - row "CENTRO VERDE S.S. CEV 376,88 € 376,88 € 376,88 € ALTA" [ref=e466] [cursor=pointer]:
+                - cell "CENTRO VERDE S.S. CEV" [ref=e467]:
+                  - generic [ref=e468]:
+                    - generic [ref=e469]: CENTRO VERDE S.S.
+                    - generic [ref=e470]: CEV
+                - cell "376,88 €" [ref=e471]
+                - cell "376,88 €" [ref=e472]
+                - cell "376,88 €" [ref=e473]
+                - cell "ALTA" [ref=e474]:
+                  - button "ALTA" [ref=e475]:
+                    - generic [ref=e476]: ALTA
+                    - img [ref=e477]
+              - row "FERRAMENTA PIAZZA S.R.L. FEP 500,00 € 500,00 € 500,00 € MEDIA" [ref=e479] [cursor=pointer]:
+                - cell "FERRAMENTA PIAZZA S.R.L. FEP" [ref=e480]:
+                  - generic [ref=e481]:
+                    - generic [ref=e482]: FERRAMENTA PIAZZA S.R.L.
+                    - generic [ref=e483]: FEP
+                - cell "500,00 €" [ref=e484]
+                - cell "500,00 €" [ref=e485]
+                - cell "500,00 €" [ref=e486]
+                - cell "MEDIA" [ref=e487]:
+                  - button "MEDIA" [ref=e488]:
+                    - generic [ref=e489]: MEDIA
+                    - img [ref=e490]
+              - row "ITALIAN FOOD & CHEESE S.R.L. CAL 500,00 € 500,00 € 500,00 € MEDIA" [ref=e492] [cursor=pointer]:
+                - cell "ITALIAN FOOD & CHEESE S.R.L. CAL" [ref=e493]:
+                  - generic [ref=e494]:
+                    - generic [ref=e495]: ITALIAN FOOD & CHEESE S.R.L.
+                    - generic [ref=e496]: CAL
+                - cell "500,00 €" [ref=e497]
+                - cell "500,00 €" [ref=e498]
+                - cell "500,00 €" [ref=e499]
+                - cell "MEDIA" [ref=e500]:
+                  - button "MEDIA" [ref=e501]:
+                    - generic [ref=e502]: MEDIA
+                    - img [ref=e503]
+              - row "La Beccheria srl BEC 1554,25 € 1554,25 € 1554,25 € ALTA" [ref=e505] [cursor=pointer]:
+                - cell "La Beccheria srl BEC" [ref=e506]:
+                  - generic [ref=e507]:
+                    - generic [ref=e508]: La Beccheria srl
+                    - generic [ref=e509]: BEC
+                - cell "1554,25 €" [ref=e510]
+                - cell "1554,25 €" [ref=e511]
+                - cell "1554,25 €" [ref=e512]
+                - cell "ALTA" [ref=e513]:
+                  - button "ALTA" [ref=e514]:
+                    - generic [ref=e515]: ALTA
+                    - img [ref=e516]
+              - row "crc srls GUP 391,67 € 391,67 € 391,67 € ALTA" [ref=e518] [cursor=pointer]:
+                - cell "crc srls GUP" [ref=e519]:
+                  - generic [ref=e520]:
+                    - generic [ref=e521]: crc srls
+                    - generic [ref=e522]: GUP
+                - cell "391,67 €" [ref=e523]
+                - cell "391,67 €" [ref=e524]
+                - cell "391,67 €" [ref=e525]
+                - cell "ALTA" [ref=e526]:
+                  - button "ALTA" [ref=e527]:
+                    - generic [ref=e528]: ALTA
+                    - img [ref=e529]
+              - row "steli di stile di grassi benedetta SDS 391,67 € 391,67 € 391,67 € ALTA" [ref=e531] [cursor=pointer]:
+                - cell "steli di stile di grassi benedetta SDS" [ref=e532]:
+                  - generic [ref=e533]:
+                    - generic [ref=e534]: steli di stile di grassi benedetta
+                    - generic [ref=e535]: SDS
+                - cell "391,67 €" [ref=e536]
+                - cell "391,67 €" [ref=e537]
+                - cell "391,67 €" [ref=e538]
+                - cell "ALTA" [ref=e539]:
+                  - button "ALTA" [ref=e540]:
+                    - generic [ref=e541]: ALTA
+                    - img [ref=e542]
+            - rowgroup [ref=e544]:
+              - row "Fatturabile totale 5401,97 € 5401,97 € 5401,97 €" [ref=e545]:
+                - cell "Fatturabile totale" [ref=e546]
+                - cell "5401,97 €" [ref=e547]
+                - cell "5401,97 €" [ref=e548]
+                - cell "5401,97 €" [ref=e549]
+                - cell [ref=e550]
+              - row "Costo MO (media 3m) - 23,39 € - 23,39 € - 23,39 €" [ref=e551]:
+                - cell "Costo MO (media 3m)" [ref=e552]
+                - cell "- 23,39 €" [ref=e553]
+                - cell "- 23,39 €" [ref=e554]
+                - cell "- 23,39 €" [ref=e555]
+                - cell [ref=e556]
+              - row "Costo struttura - 0,00 € - 0,00 € - 0,00 €" [ref=e557]:
+                - cell "Costo struttura" [ref=e558]
+                - cell "- 0,00 €" [ref=e559]
+                - cell "- 0,00 €" [ref=e560]
+                - cell "- 0,00 €" [ref=e561]
+                - cell [ref=e562]
+              - row "Margine previsto 100% 100% 100%" [ref=e563]:
+                - cell "Margine previsto" [ref=e564]
+                - cell "100%" [ref=e565]
+                - cell "100%" [ref=e566]
+                - cell "100%" [ref=e567]
+                - cell [ref=e568]
+          - generic [ref=e569]:
+            - generic [ref=e570]:
+              - generic [ref=e571]: ALTA
+              - generic [ref=e572]: cliente molto stabile
+            - generic [ref=e573]:
+              - generic [ref=e574]: MEDIA
+              - generic [ref=e575]: andamento regolare
+            - generic [ref=e576]:
+              - generic [ref=e577]: BASSA
+              - generic [ref=e578]: cliente da monitorare
+            - generic [ref=e579]: Clienti senza storico RETAINER non inclusi
+    - button [ref=e581] [cursor=pointer]:
+      - img

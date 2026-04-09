@@ -1,0 +1,7 @@
+[     149ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:17236
+[    1028ms] [WARNING] Buffer is not defined @ http://127.0.0.1:5173/@vite/client:509
+[    1028ms] [WARNING] Buffer is not defined @ http://127.0.0.1:5173/@vite/client:509
+[    1136ms] [WARNING] Buffer is not defined @ http://127.0.0.1:5173/@vite/client:509
+[    1136ms] [WARNING] Buffer is not defined @ http://127.0.0.1:5173/@vite/client:509
+[    1197ms] [WARNING] Buffer is not defined @ http://127.0.0.1:5173/@vite/client:509
+[    1233ms] [WARNING] Buffer is not defined @ http://127.0.0.1:5173/@vite/client:509

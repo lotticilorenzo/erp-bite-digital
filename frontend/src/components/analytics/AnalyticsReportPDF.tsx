@@ -1,12 +1,7 @@
 import React from "react";
-import { 
-  Document, 
-  Page, 
-  Text, 
-  View, 
-  StyleSheet, 
-} from "@react-pdf/renderer";
+import { Document, Image, Page, StyleSheet, Text, View } from "@/lib/react-pdf";
 import { format } from "date-fns";
+import { ensurePdfArray, resolvePdfAssetSrc, safePdfNumber, safePdfText } from "@/lib/pdf-utils";
 
 const styles = StyleSheet.create({
   page: {
@@ -19,7 +14,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    borderBottom: "2pt solid #7c3aed",
+    borderBottomWidth: 2,
+    borderBottomStyle: "solid",
+    borderBottomColor: "#7c3aed",
     paddingBottom: 20,
     marginBottom: 30,
   },
@@ -30,10 +27,13 @@ const styles = StyleSheet.create({
   },
   logoImage: {
     height: 40,
-    width: "auto",
+    width: 120,
+    objectFit: "contain",
   },
   companyInfo: {
-    borderLeft: "1pt solid #e2e8f0",
+    borderLeftWidth: 1,
+    borderLeftStyle: "solid",
+    borderLeftColor: "#e2e8f0",
     paddingLeft: 15,
     height: 30,
     justifyContent: "center",
@@ -64,7 +64,9 @@ const styles = StyleSheet.create({
     color: "#7c3aed",
     textTransform: "uppercase",
     marginBottom: 8,
-    borderBottom: "0.5pt solid #e2e8f0",
+    borderBottomWidth: 0.5,
+    borderBottomStyle: "solid",
+    borderBottomColor: "#e2e8f0",
     paddingBottom: 4,
   },
   kpiContainer: {
@@ -77,7 +79,18 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 4,
     backgroundColor: "#f8fafc",
-    border: "0.5pt solid #e2e8f0",
+    borderTopWidth: 0.5,
+    borderTopStyle: "solid",
+    borderTopColor: "#e2e8f0",
+    borderRightWidth: 0.5,
+    borderRightStyle: "solid",
+    borderRightColor: "#e2e8f0",
+    borderBottomWidth: 0.5,
+    borderBottomStyle: "solid",
+    borderBottomColor: "#e2e8f0",
+    borderLeftWidth: 0.5,
+    borderLeftStyle: "solid",
+    borderLeftColor: "#e2e8f0",
   },
   label: {
     fontSize: 8,
@@ -98,6 +111,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     borderBottomColor: "#f1f5f9",
     borderBottomWidth: 0.5,
+    borderBottomStyle: "solid",
     alignItems: "center",
     minHeight: 24,
   },
@@ -105,6 +119,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f8fafc",
     borderBottomColor: "#7c3aed",
     borderBottomWidth: 1,
+    borderBottomStyle: "solid",
   },
   tableCell: {
     padding: 4,
@@ -118,7 +133,9 @@ const styles = StyleSheet.create({
     bottom: 40,
     left: 40,
     right: 40,
-    borderTop: "0.5pt solid #e2e8f0",
+    borderTopWidth: 0.5,
+    borderTopStyle: "solid",
+    borderTopColor: "#e2e8f0",
     paddingTop: 10,
     flexDirection: "row",
     justifyContent: "space-between",
@@ -127,20 +144,36 @@ const styles = StyleSheet.create({
   },
 });
 
-interface Props {
-  data: any;
+interface AnalyticsReportData {
+  kpis?: {
+    revenueYTD?: number;
+    marginYTD?: number;
+    monthlyHours?: number;
+  };
+  clientStats?: Array<{ name?: string; delta?: number; revenue?: number }>;
+  revenueTrend?: Array<{ month?: string; revenue?: number }>;
 }
 
-const formatEuro = (val: number = 0) => 
-  new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(val);
+interface Props {
+  data: AnalyticsReportData;
+}
+
+const formatEuro = (value = 0) =>
+  new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(value);
 
 export const AnalyticsReportPDF: React.FC<Props> = ({ data }) => {
+  const reportData = data ?? {};
+  const kpis = reportData.kpis ?? {};
+  const clientStats = ensurePdfArray(reportData.clientStats);
+  const revenueTrend = ensurePdfArray(reportData.revenueTrend);
+  const logoSrc = resolvePdfAssetSrc("/logo_bite.jpg");
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoSection}>
+            {logoSrc ? <Image src={logoSrc} style={styles.logoImage} /> : null}
             <View style={styles.companyInfo}>
               <Text style={styles.companyName}>Bite Digital S.r.l.</Text>
               <Text style={styles.reportDate}>Data Report: {format(new Date(), "dd/MM/yyyy")}</Text>
@@ -152,64 +185,80 @@ export const AnalyticsReportPDF: React.FC<Props> = ({ data }) => {
           </View>
         </View>
 
-        {/* KPI Summary */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Performance Principali (YTD)</Text>
+          <Text style={styles.sectionTitle}>Performance Principali</Text>
           <View style={styles.kpiContainer}>
             <View style={styles.kpiCard}>
-              <Text style={styles.label}>Fatturato Annuale</Text>
-              <Text style={styles.kpiValue}>{formatEuro(data.kpis.revenueYTD)}</Text>
+              <Text style={styles.label}>Fatturato</Text>
+              <Text style={styles.kpiValue}>{formatEuro(safePdfNumber(kpis.revenueYTD))}</Text>
             </View>
             <View style={styles.kpiCard}>
               <Text style={styles.label}>Margine Medio</Text>
-              <Text style={styles.kpiValue}>{data.kpis.marginYTD.toFixed(1)}%</Text>
+              <Text style={styles.kpiValue}>{safePdfNumber(kpis.marginYTD).toFixed(1)}%</Text>
             </View>
             <View style={styles.kpiCard}>
-              <Text style={styles.label}>Ore Lavorate (Mese)</Text>
-              <Text style={styles.kpiValue}>{Math.round(data.kpis.monthlyHours)}h</Text>
+              <Text style={styles.label}>Ore Lavorate</Text>
+              <Text style={styles.kpiValue}>{Math.round(safePdfNumber(kpis.monthlyHours))}h</Text>
             </View>
           </View>
         </View>
 
-        {/* Top Clients Table */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Top 5 Clienti per Fatturato</Text>
+          <Text style={styles.sectionTitle}>Top Clienti per Fatturato</Text>
           <View style={styles.table}>
             <View style={[styles.tableRow, styles.tableHeader]}>
               <Text style={[styles.tableCell, styles.col1, { fontWeight: "bold" }]}>Cliente</Text>
               <Text style={[styles.tableCell, styles.col2, { fontWeight: "bold" }]}>Delta %</Text>
-              <Text style={[styles.tableCell, styles.col3, { fontWeight: "bold" }]}>Fatturato Totale</Text>
+              <Text style={[styles.tableCell, styles.col3, { fontWeight: "bold" }]}>Fatturato</Text>
             </View>
-            {data.clientStats.map((client: any, i: number) => (
-              <View key={i} style={styles.tableRow}>
-                <Text style={[styles.tableCell, styles.col1]}>{client.name}</Text>
-                <Text style={[styles.tableCell, styles.col2, { color: client.delta >= 0 ? "#10b981" : "#ef4444" }]}>
-                  {client.delta >= 0 ? "+" : ""}{client.delta.toFixed(1)}%
+            {clientStats.map((client, index) => {
+              const delta = safePdfNumber(client.delta);
+              return (
+                <View key={index} style={styles.tableRow}>
+                  <Text style={[styles.tableCell, styles.col1]}>{safePdfText(client.name, "Cliente non disponibile")}</Text>
+                  <Text style={[styles.tableCell, styles.col2, { color: delta >= 0 ? "#10b981" : "#ef4444" }]}>
+                    {delta >= 0 ? "+" : ""}
+                    {delta.toFixed(1)}%
+                  </Text>
+                  <Text style={[styles.tableCell, styles.col3]}>{formatEuro(safePdfNumber(client.revenue))}</Text>
+                </View>
+              );
+            })}
+            {clientStats.length === 0 ? (
+              <View style={styles.tableRow}>
+                <Text style={[styles.tableCell, { width: "100%", textAlign: "center", color: "#64748b" }]}>
+                  Nessun cliente disponibile nel periodo
                 </Text>
-                <Text style={[styles.tableCell, styles.col3]}>{formatEuro(client.revenue)}</Text>
               </View>
-            ))}
+            ) : null}
           </View>
         </View>
 
-        {/* Revenue Trend Summary */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Andamento Mensile Fatturato</Text>
+          <Text style={styles.sectionTitle}>Andamento Fatturato</Text>
           <View style={styles.table}>
             <View style={[styles.tableRow, styles.tableHeader]}>
               <Text style={[styles.tableCell, { width: "50%", fontWeight: "bold" }]}>Mese</Text>
               <Text style={[styles.tableCell, { width: "50%", fontWeight: "bold", textAlign: "right" }]}>Fatturato</Text>
             </View>
-            {data.revenueTrend.slice(-6).map((item: any, i: number) => (
-              <View key={i} style={styles.tableRow}>
-                <Text style={[styles.tableCell, { width: "50%" }]}>{item.month}</Text>
-                <Text style={[styles.tableCell, { width: "50%", textAlign: "right" }]}>{formatEuro(item.revenue)}</Text>
+            {revenueTrend.slice(-6).map((item, index) => (
+              <View key={index} style={styles.tableRow}>
+                <Text style={[styles.tableCell, { width: "50%" }]}>{safePdfText(item.month, "Periodo")}</Text>
+                <Text style={[styles.tableCell, { width: "50%", textAlign: "right" }]}>
+                  {formatEuro(safePdfNumber(item.revenue))}
+                </Text>
               </View>
             ))}
+            {revenueTrend.length === 0 ? (
+              <View style={styles.tableRow}>
+                <Text style={[styles.tableCell, { width: "100%", textAlign: "center", color: "#64748b" }]}>
+                  Nessun trend disponibile
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
-        {/* Footer */}
         <View style={styles.footer}>
           <View>
             <Text>Bite Digital S.r.l. - Report Riservato</Text>

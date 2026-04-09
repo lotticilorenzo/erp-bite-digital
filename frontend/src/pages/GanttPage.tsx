@@ -126,22 +126,20 @@ export default function GanttPage() {
         </div>
       </div>
 
-      {/* Gantt Container */}
-      <div className="flex-1 w-full overflow-hidden min-w-0 min-h-0 flex flex-col px-4 md:px-8 pb-8">
-        <div className="w-full flex-1 overflow-x-auto">
-          {isLoading ? (
-             <div className="w-full h-[600px] flex flex-col items-center justify-center space-y-4 bg-card/10 rounded-3xl border border-white/5">
-               <div className="h-12 w-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-               <p className="text-xs font-black uppercase tracking-widest text-[#475569]">Caricamento Timeline...</p>
-             </div>
-          ) : (
-            <GanttChart 
-              tasks={filteredTasks} 
-              period={filters.period} 
-              onTaskClick={(id) => selectTask(id)}
-            />
-          )}
-        </div>
+      {/* Gantt Container - FULL WIDTH */}
+      <div className="flex-1 w-full overflow-hidden min-w-0 min-h-0 flex flex-col px-8 pb-8">
+        {isLoading ? (
+           <div className="w-full h-[600px] flex flex-col items-center justify-center space-y-4 bg-card/10 rounded-3xl border border-white/5">
+             <div className="h-12 w-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+             <p className="text-xs font-black uppercase tracking-widest text-[#475569]">Caricamento Timeline...</p>
+           </div>
+        ) : (
+          <GanttChart 
+            tasks={filteredTasks} 
+            period={filters.period} 
+            onTaskClick={(id) => selectTask(id)}
+          />
+        )}
       </div>
 
       <StudioTaskModal />

@@ -1,0 +1,76 @@
+[     424ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:5173/node_modules/.vite/deps/react-dom-PNx-7w4U.js?v=5b04b3f8:17236
+[     803ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ http://127.0.0.1:5173/login:0
+[  174490ms] [WARNING] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width. @ http://127.0.0.1:5173/@vite/client:509
+[  174493ms] [WARNING] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width. @ http://127.0.0.1:5173/@vite/client:509
+[  174495ms] [WARNING] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width. @ http://127.0.0.1:5173/@vite/client:509
+[  174496ms] [WARNING] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width. @ http://127.0.0.1:5173/@vite/client:509
+[  174512ms] [WARNING] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width. @ http://127.0.0.1:5173/@vite/client:509
+[  174512ms] [WARNING] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width. @ http://127.0.0.1:5173/@vite/client:509
+[ 1763178ms] [WARNING] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width. @ http://127.0.0.1:5173/@vite/client:509
+[ 1763181ms] [WARNING] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width. @ http://127.0.0.1:5173/@vite/client:509
+[ 1763194ms] [WARNING] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width. @ http://127.0.0.1:5173/@vite/client:509
+[ 1763196ms] [WARNING] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width. @ http://127.0.0.1:5173/@vite/client:509
+[ 1763224ms] [WARNING] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width. @ http://127.0.0.1:5173/@vite/client:509
+[ 1763227ms] [WARNING] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width. @ http://127.0.0.1:5173/@vite/client:509
+[ 1763281ms] [ERROR] Warning: Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.%s Scope check: Citta Verde Resort S.r.l. 
+    at div
+    at div
+    at div
+    at Analytics (http://127.0.0.1:5173/src/pages/Analytics.tsx?t=1775661639063:57:16)
+    at RenderedRoute (http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=f0036319:4004:26)
+    at Outlet (http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=f0036319:4570:25)
+    at div
+    at main
+    at main
+    at _c10 (http://127.0.0.1:5173/src/components/ui/sidebar.tsx:294:49)
+    at div
+    at div
+    at Provider (http://127.0.0.1:5173/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=17515461:24:12)
+    at TooltipProvider (http://127.0.0.1:5173/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=17515461:216:10)
+    at http://127.0.0.1:5173/src/components/ui/sidebar.tsx:33:59
+    at DashboardLayout
+    at StudioProvider (http://127.0.0.1:5173/src/context/StudioContext.tsx?t=1775646549068:11:34)
+    at RenderedRoute (http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=f0036319:4004:26)
+    at Routes (http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=f0036319:4623:19)
+    at Suspense
+    at ThemeProvider (http://127.0.0.1:5173/src/context/ThemeContext.tsx:21:33)
+    at App (http://127.0.0.1:5173/src/App.tsx?t=1775656880253:68:30)
+    at Router (http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=f0036319:4575:29)
+    at BrowserRouter (http://127.0.0.1:5173/node_modules/.vite/deps/react-router-dom.js?v=f0036319:6927:26)
+    at QueryClientProvider (http://127.0.0.1:5173/node_modules/.vite/deps/@tanstack_react-query.js?v=32d9a8dd:2517:30) @ http://127.0.0.1:5173/@vite/client:509

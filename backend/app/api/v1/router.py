@@ -1799,6 +1799,77 @@ async def get_user_capacity_today(
     }
 
 # ═══════════════════════════════════════════════════════
+# ── DASHBOARD & STATS ───────────────────────────────────
+
+@router.get("/projects/{progetto_id}/stats", tags=["Dashboard", "Progetti"])
+async def get_project_dashboard_stats(
+    progetto_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Restituisce le statistiche per la dashboard del progetto."""
+    from app.services.services import get_project_stats
+    return await get_project_stats(db, progetto_id)
+
+@router.get("/clienti/{cliente_id}/stats", tags=["Dashboard", "Clienti"])
+async def get_client_dashboard_stats(
+    cliente_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Restituisce le statistiche aggregate per tutti i progetti di un cliente."""
+    from app.services.services import get_project_stats
+    from app.models.models import Progetto
+    from sqlalchemy import select
+    
+    # 1. Recupera tutti i progetti del cliente
+    result = await db.execute(select(Progetto.id).where(Progetto.cliente_id == cliente_id))
+    project_ids = result.scalars().all()
+    
+    if not project_ids:
+        return {
+            "kpis": {"total": 0, "today": 0, "overdue": 0, "upcoming": 0},
+            "status_distribution": [],
+            "team_stats": [],
+            "critical_tasks": []
+        }
+    
+    # 2. Aggrega i dati (per ora riutilizziamo la logica di progetto ma su scala cliente)
+    # Una versione più efficiente farebbe una singola query, ma per ora aggreghiamo
+    all_stats = []
+    for pid in project_ids:
+        all_stats.append(await get_project_stats(db, pid))
+        
+    # Semplice merge dei dati
+    merged_kpis = {"total": 0, "today": 0, "overdue": 0, "upcoming": 0}
+    merged_status = {}
+    merged_team = {}
+    merged_critical = []
+    
+    for s in all_stats:
+        for k in merged_kpis:
+            merged_kpis[k] += s["kpis"][k]
+        for item in s["status_distribution"]:
+            merged_status[item["status"]] = merged_status.get(item["status"], 0) + item["count"]
+        for team in s["team_stats"]:
+            tid = str(team["id"])
+            if tid not in merged_team:
+                merged_team[tid] = team
+            else:
+                merged_team[tid]["total_tasks"] += team["total_tasks"]
+                merged_team[tid]["overdue_tasks"] += team["overdue_tasks"]
+        merged_critical.extend(s["critical_tasks"])
+        
+    merged_critical.sort(key=lambda x: x["data_scadenza"] or date.max)
+    
+    return {
+        "kpis": merged_kpis,
+        "status_distribution": [{"status": s, "count": c} for s, c in merged_status.items()],
+        "team_stats": list(merged_team.values()),
+        "critical_tasks": merged_critical[:10]
+    }
+
+# ═══════════════════════════════════════════════════════
 
 @router.get("/tasks", response_model=List[TaskOut], tags=["Tasks"])
 async def get_tasks(
@@ -1807,10 +1878,12 @@ async def get_tasks(
     assegnatario_id: Optional[uuid.UUID] = Query(None),
     stato: Optional[TaskStatus] = Query(None),
     parent_only: bool = Query(False),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return await list_tasks(db, progetto_id, commessa_id, assegnatario_id, stato, parent_only)
+    return await list_tasks(db, progetto_id, commessa_id, assegnatario_id, stato, parent_only, start_date, end_date)
 
 @router.get("/tasks/{task_id}", response_model=TaskOut, tags=["Tasks"])
 async def get_single_task(

@@ -72,10 +72,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const root = document.documentElement;
     
     // Theme Mode
-    if (settings.mode === "dark") {
-      root.classList.add("dark");
+    if (settings.mode === "light") {
+      root.classList.add("light");
     } else {
-      root.classList.remove("dark");
+      root.classList.remove("light");
     }
 
     // Accent Color

@@ -140,6 +140,7 @@ class Cliente(Base):
     drive_files: Mapped[Optional[list]] = mapped_column(JSON, default=list)
     fic_cliente_id: Mapped[Optional[str]] = mapped_column(String(100))
     logo_url: Mapped[Optional[str]] = mapped_column(String(500))
+    affidabilita: Mapped[Optional[str]] = mapped_column(String(10), default="MEDIA", server_default="MEDIA")
     attivo: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
