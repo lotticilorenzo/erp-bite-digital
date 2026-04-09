@@ -1679,6 +1679,68 @@ async def add_timesheet_manuale(
     return ts
 
 
+@router.patch("/timesheet/{timesheet_id}", response_model=TimesheetOut, tags=["Timesheet"])
+async def update_timesheet_manuale(
+    timesheet_id: uuid.UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import Timesheet, Commessa, CommessaStatus
+    from sqlalchemy import select
+    from datetime import date
+    body = await request.json()
+    
+    result = await db.execute(select(Timesheet).where(Timesheet.id == timesheet_id))
+    ts = result.scalar_one_or_none()
+    if not ts:
+        raise HTTPException(status_code=404, detail="Timesheet non trovato")
+
+    if "durata_minuti" in body:
+        if body["durata_minuti"] <= 0:
+            raise HTTPException(status_code=400, detail="durata_minuti deve essere > 0")
+        ts.durata_minuti = body["durata_minuti"]
+        costo_orario = ts.costo_orario_snapshot or 0
+        ts.costo_lavoro = round((body["durata_minuti"] / 60.0) * float(costo_orario), 2)
+
+    if "data_attivita" in body:
+        data_att = date.fromisoformat(body["data_attivita"])
+        ts.data_attivita = data_att
+        ts.mese_competenza = date(data_att.year, data_att.month, 1)
+
+    if "servizio" in body:
+        ts.servizio = body["servizio"]
+    if "note" in body:
+        ts.note = body["note"]
+
+    if "cliente_id" in body and body["cliente_id"]:
+        mese_comp = ts.mese_competenza
+        cm_result = await db.execute(
+            select(Commessa).where(
+                Commessa.cliente_id == uuid.UUID(body["cliente_id"]),
+                Commessa.mese_competenza == mese_comp
+            )
+        )
+        cm = cm_result.scalar_one_or_none()
+        if cm:
+            ts.commessa_id = cm.id
+        else:
+            new_cm = Commessa(
+                id=uuid.uuid4(),
+                cliente_id=uuid.UUID(body["cliente_id"]),
+                mese_competenza=mese_comp,
+                stato=CommessaStatus.APERTA,
+                costo_manodopera=0
+            )
+            db.add(new_cm)
+            await db.flush()
+            ts.commessa_id = new_cm.id
+
+    await db.commit()
+    await db.refresh(ts)
+    return ts
+
+
 # ═══════════════════════════════════════════════════════
 # TASKS (NATIVI)
 @router.get("/tasks/time-estimate", tags=["Tasks"])

@@ -1,12 +1,27 @@
-import { useMemo, useRef } from "react";
-import { format, addDays, startOfToday, differenceInDays, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, isValid } from "date-fns";
+import { useMemo, useRef, useEffect, useState } from "react";
+import {
+  format,
+  addDays,
+  startOfToday,
+  differenceInDays,
+  isSameDay,
+  startOfWeek,
+  endOfWeek,
+  eachDayOfInterval,
+  parseISO,
+  isValid,
+  isPast,
+  isToday,
+} from "date-fns";
 import { it } from "date-fns/locale";
-import { motion } from "framer-motion";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
-import { useTaskMutations } from "@/hooks/useTasks";
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { AlertTriangle, Clock } from "lucide-react";
 import type { TaskSO } from "@/types/studio";
 
 interface GanttChartProps {
@@ -16,27 +31,63 @@ interface GanttChartProps {
 }
 
 const ROW_HEIGHT = 48;
-const LEFT_PANEL_WIDTH = 300;
+const GROUP_HEADER_H = 32;
+const LEFT_W = 240;
+
+const STATUS_STYLES: Record<string, { bar: string; text: string; label: string }> = {
+  DA_FARE:    { bar: "bg-slate-400",   text: "text-slate-400",   label: "Da Fare" },
+  IN_CORSO:   { bar: "bg-violet-500",  text: "text-violet-400",  label: "In Corso" },
+  COMPLETATO: { bar: "bg-emerald-500", text: "text-emerald-400", label: "Completato" },
+  REVISIONE:  { bar: "bg-amber-400",   text: "text-amber-400",   label: "Revisione" },
+  todo:         { bar: "bg-slate-400",   text: "text-slate-400",   label: "Da Fare" },
+  "in-progress":{ bar: "bg-violet-500",  text: "text-violet-400",  label: "In Corso" },
+  done:         { bar: "bg-emerald-500", text: "text-emerald-400", label: "Completato" },
+  review:       { bar: "bg-amber-400",   text: "text-amber-400",   label: "Revisione" },
+};
+const getFallbackStyle = () => ({ bar: "bg-slate-500", text: "text-slate-400", label: "Sconosciuto" });
+const getStyle = (state: string) => STATUS_STYLES[state] || getFallbackStyle();
+
+function isOverdue(t: TaskSO) {
+  if (!t.due_date) return false;
+  const d = parseISO(t.due_date);
+  if (!isValid(d)) return false;
+  return isPast(d) && !isToday(d) && t.state_id !== "COMPLETATO" && t.state_id !== "done";
+}
+
+function pct(t: TaskSO) {
+  if (t.state_id === "COMPLETATO" || t.state_id === "done") return 100;
+  if (!t.stima_minuti || t.stima_minuti === 0) return 0;
+  return Math.min(100, Math.round(((t.tempo_trascorso_minuti || 0) / t.stima_minuti) * 100));
+}
 
 export function GanttChart({ tasks, period, onTaskClick }: GanttChartProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { updateTask } = useTaskMutations();
+  const outerRef = useRef<HTMLDivElement>(null);
+  const [totalWidth, setTotalWidth] = useState(800);
   const today = startOfToday();
 
-  // 1. Calculate Timeline Range
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    const ob = new ResizeObserver(() => setTotalWidth(el.clientWidth));
+    ob.observe(el);
+    setTotalWidth(el.clientWidth);
+    return () => ob.disconnect();
+  }, []);
+
+  // ── Timeline range ────────────────────────────────────────────────────────
   const { startDate, days } = useMemo(() => {
     let start = today;
-    let end = addDays(today, 30);
+    let end =
+      period === "week"
+        ? endOfWeek(today, { weekStartsOn: 1 })
+        : period === "quarter"
+        ? addDays(today, 89)
+        : addDays(today, 29);
 
-    if (period === "week") {
-      start = startOfWeek(today, { weekStartsOn: 1 });
-      end = endOfWeek(today, { weekStartsOn: 1 });
-    } else if (period === "quarter") {
-      end = addDays(today, 90);
-    }
+    if (period === "week") start = startOfWeek(today, { weekStartsOn: 1 });
 
-    // Expand range to include all tasks
-    tasks.forEach(t => {
+    // Expand to cover task dates
+    tasks.forEach((t) => {
       if (t.data_inizio) {
         const d = parseISO(t.data_inizio);
         if (isValid(d) && d < start) start = d;
@@ -47,234 +98,266 @@ export function GanttChart({ tasks, period, onTaskClick }: GanttChartProps) {
       }
     });
 
-    const interval = eachDayOfInterval({ start, end });
-    return { startDate: start, days: interval };
+    return { startDate: start, days: eachDayOfInterval({ start, end }) };
   }, [tasks, period, today]);
 
-  const dayWidth = 40; 
-  const timelineWidth = days.length * dayWidth;
+  // ── Auto dayWidth: fill exactly the available timeline area ──────────────
+  const timelineW = Math.max(totalWidth - LEFT_W, 1);
+  const dayWidth  = Math.max(4, Math.floor(timelineW / days.length));
+  const showDay   = dayWidth >= 22;
+  const showWday  = dayWidth >= 16;
 
-  // 2. Group Tasks by Project
-  const groupedTasks = useMemo(() => {
-    const groups: Record<string, TaskSO[]> = {};
-    tasks.forEach(t => {
-      const projId = t.progetto_id || "no-project";
-      if (!groups[projId]) groups[projId] = [];
-      groups[projId].push(t);
+  // ── Group by project name ─────────────────────────────────────────────────
+  const grouped = useMemo(() => {
+    const g: Record<string, TaskSO[]> = {};
+    tasks.forEach((t) => {
+      const key = t.progetto?.nome ?? (t.progetto_id ? "Progetto" : "Task Liberi");
+      if (!g[key]) g[key] = [];
+      g[key].push(t);
     });
-    return groups;
+    return g;
   }, [tasks]);
 
-  // 3. Helper to get X and Width
-  const getTaskGeometry = (task: TaskSO) => {
-    const start = task.data_inizio ? parseISO(task.data_inizio) : null;
-    const end = task.due_date ? parseISO(task.due_date) : null;
+  const todayX = differenceInDays(today, startDate) * dayWidth + dayWidth / 2;
 
-    if (!start || !end || !isValid(start) || !isValid(end)) return null;
-
-    const x = differenceInDays(start, startDate) * dayWidth;
-    const width = Math.max((differenceInDays(end, start) + 1) * dayWidth, 20);
-    
-    return { x, width };
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "DA_FARE": return "bg-slate-500/20 border-slate-500/50";
-      case "IN_CORSO": return "bg-purple-500/20 border-purple-500/50";
-      case "COMPLETATO": return "bg-emerald-500/20 border-emerald-500/50";
-      case "REVISIONE": return "bg-yellow-500/20 border-yellow-500/50";
-      default: return "bg-slate-500/20 border-slate-500/50";
-    }
-  };
-
-  const getStatusTextToken = (status: string) => {
-    switch (status) {
-      case "DA_FARE": return "text-slate-400";
-      case "IN_CORSO": return "text-purple-400";
-      case "COMPLETATO": return "text-emerald-400";
-      case "REVISIONE": return "text-yellow-400";
-      default: return "text-slate-400";
-    }
-  };
+  // ── Geometry ──────────────────────────────────────────────────────────────
+  function geom(t: TaskSO) {
+    const s = t.data_inizio ? parseISO(t.data_inizio) : null;
+    const e = t.due_date    ? parseISO(t.due_date)    : null;
+    if (!s || !e || !isValid(s) || !isValid(e)) return null;
+    const x = differenceInDays(s, startDate) * dayWidth;
+    const w = Math.max((differenceInDays(e, s) + 1) * dayWidth, dayWidth);
+    return { x, w };
+  }
 
   return (
-    <div className="flex w-full h-full bg-card shadow-2xl overflow-y-auto overflow-x-hidden border-t border-border/20">
-      
-      {/* Sidebar SINISTRA - FISSA */}
-      <div 
-        style={{ minWidth: LEFT_PANEL_WIDTH, maxWidth: LEFT_PANEL_WIDTH }}
-        className="shrink-0 bg-card border-r border-border/50 sticky left-0 z-30 flex flex-col"
-      >
-        <div className="h-[48px] p-4 flex items-center shrink-0 border-b border-border/50 sticky top-0 bg-card z-40">
-          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Attività / Progetti</span>
+    <div ref={outerRef} className="flex w-full h-full overflow-hidden bg-card border-t border-border/20">
+
+      {/* ── LEFT PANEL ─────────────────────────────────────────────────── */}
+      <div style={{ width: LEFT_W, minWidth: LEFT_W }} className="shrink-0 flex flex-col border-r border-border/50 bg-card z-20">
+        {/* column header */}
+        <div className="h-[48px] flex items-center px-4 border-b border-border/50 bg-muted/20 shrink-0">
+          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Attività</span>
         </div>
-        <div className="relative bg-card">
-          {Object.entries(groupedTasks).map(([projId, projTasks]) => (
-            <div key={projId}>
-              <div className="h-[34px] bg-muted/30 px-4 flex items-center border-y border-border/20 sticky top-[48px] z-30">
-                 <span className="text-[10px] font-black uppercase text-primary tracking-tighter">
-                   {projTasks[0]?.progetto_id ? "Progetto ID: " + projTasks[0].progetto_id.split('-')[0] : "Task Generali"}
-                 </span>
+
+        {/* rows */}
+        <div className="overflow-y-auto flex-1 overflow-x-hidden">
+          {Object.entries(grouped).map(([grp, grpTasks]) => (
+            <div key={grp}>
+              {/* group header */}
+              <div
+                style={{ height: GROUP_HEADER_H }}
+                className="flex items-center justify-between px-3 bg-muted/20 border-b border-border/30 sticky top-0 z-10"
+              >
+                <span className="text-[10px] font-black uppercase tracking-widest text-primary truncate">{grp}</span>
+                <span className="text-[9px] text-muted-foreground font-bold bg-background px-2 py-0.5 rounded-full border border-border shrink-0 ml-1">
+                  {grpTasks.length}
+                </span>
               </div>
-              {(projTasks as TaskSO[]).map((task: TaskSO) => (
-                <div 
-                  key={task.id} 
-                  style={{ height: ROW_HEIGHT }} 
-                  className="px-4 flex items-center border-b border-border/10 hover:bg-muted/50 transition-colors cursor-pointer group bg-card"
-                  onClick={() => onTaskClick(task.id)}
-                >
-                  <span className="text-xs font-bold text-foreground truncate transition-colors group-hover:text-primary">
-                    {task.title}
-                  </span>
-                </div>
-              ))}
+              {/* task rows */}
+              {grpTasks.map((t) => {
+                const overdue = isOverdue(t);
+                const p = pct(t);
+                const st = getStyle(t.state_id);
+                return (
+                  <div
+                    key={t.id}
+                    style={{ height: ROW_HEIGHT }}
+                    className="flex flex-col justify-center px-3 border-b border-border/10 hover:bg-muted/30 cursor-pointer group transition-colors"
+                    onClick={() => onTaskClick(t.id)}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      {overdue && <AlertTriangle className="w-3 h-3 text-red-400 shrink-0" />}
+                      <span className={`text-xs font-bold truncate group-hover:text-primary transition-colors ${overdue ? "text-red-300" : "text-foreground"}`}>
+                        {t.title || "Task senza nome"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <div className="flex-1 h-1 rounded-full bg-border/50 overflow-hidden">
+                        <div className={`h-full rounded-full ${st.bar}`} style={{ width: `${p}%`, transition: "width 0.4s" }} />
+                      </div>
+                      <span className={`text-[9px] font-black shrink-0 ${st.text}`}>{p}%</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ))}
+
+          {tasks.length === 0 && (
+            <div className="flex items-center justify-center h-32 text-sm text-muted-foreground italic">
+              Nessun task trovato
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Timeline DESTRA - SCROLLA Orizzontalmente */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar bg-card relative">
-        <div style={{ width: timelineWidth }} className="flex flex-col min-h-full">
-          {/* Header Date */}
-          <div className="h-[48px] flex shrink-0 border-b border-border/50 bg-card sticky top-0 z-40">
-            {days.map((day: Date, i: number) => (
-              <div 
-                key={i} 
-                style={{ width: dayWidth }} 
-                className={`flex flex-col items-center justify-center border-r border-border/20 shrink-0 ${isSameDay(day, today) ? "bg-primary/10" : ""}`}
-              >
-                <span className="text-[10px] font-black text-muted-foreground uppercase">{format(day, "eee", { locale: it })}</span>
-                <span className={`text-xs font-black ${isSameDay(day, today) ? "text-primary" : "text-foreground"}`}>{format(day, "dd")}</span>
-              </div>
+      {/* ── TIMELINE PANEL ─────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+        {/* date header */}
+        <div className="h-[48px] flex shrink-0 border-b border-border/50 bg-muted/20 overflow-hidden">
+          {days.map((day, i) => (
+            <div
+              key={i}
+              style={{ width: dayWidth, minWidth: dayWidth }}
+              className={`flex flex-col items-center justify-center border-r border-border/10 shrink-0 ${isSameDay(day, today) ? "bg-primary/10" : ""}`}
+            >
+              {showWday && <span className="text-[8px] font-bold text-muted-foreground uppercase">{format(day, "eee", { locale: it })}</span>}
+              {showDay  && <span className={`text-[10px] font-black ${isSameDay(day, today) ? "text-primary" : "text-foreground"}`}>{format(day, "dd")}</span>}
+            </div>
+          ))}
+        </div>
+
+        {/* rows + bars */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden relative">
+
+          {/* bg grid */}
+          <div className="absolute inset-0 flex pointer-events-none z-0">
+            {days.map((day, i) => (
+              <div
+                key={i}
+                style={{ width: dayWidth, minWidth: dayWidth }}
+                className={`border-r border-border/5 shrink-0 h-full ${
+                  isSameDay(day, today) ? "bg-primary/5" :
+                  day.getDay() === 0 || day.getDay() === 6 ? "bg-muted/10" : ""
+                }`}
+              />
             ))}
           </div>
-          
-          {/* Timeline Rows Area */}
-          <div className="relative flex-1" ref={containerRef}>
-            {/* Background Lines */}
-            <div className="absolute top-0 left-0 bottom-0 flex pointer-events-none z-0">
-               {days.map((day: Date, i: number) => (
-                 <div 
-                   key={i} 
-                   style={{ width: dayWidth }} 
-                   className={`border-r border-border/5 shrink-0 ${isSameDay(day, today) ? "bg-primary/5" : ""}`}
-                 />
-               ))}
+
+          {/* TODAY line */}
+          {todayX >= 0 && todayX <= timelineW && (
+            <div style={{ left: todayX }} className="absolute top-0 bottom-0 w-px bg-red-500/70 z-10 pointer-events-none">
+              <div className="absolute -top-1 -left-1.5 w-3 h-3 rounded-full bg-red-500 shadow-lg shadow-red-500/50" />
             </div>
+          )}
 
-            {/* Today Indicator */}
-            <div 
-              style={{ left: differenceInDays(today, startDate) * dayWidth + dayWidth / 2 }}
-              className="absolute top-0 bottom-0 w-px bg-red-500/50 z-10 pointer-events-none"
-            >
-              <div className="absolute top-0 -left-1 w-2 h-2 bg-red-500 rounded-full" />
-            </div>
+          {/* task groups */}
+          <div className="relative z-20">
+            {Object.entries(grouped).map(([grp, grpTasks]) => (
+              <div key={grp}>
+                {/* spacer matching group header */}
+                <div style={{ height: GROUP_HEADER_H }} className="border-b border-border/20" />
 
-            {/* Tasks Geometry */}
-            <div className="relative z-20">
-              {Object.entries(groupedTasks).map(([projId, projTasks]) => (
-                <div key={projId}>
-                  <div className="h-[34px] border-y border-transparent shrink-0" />
-                  {(projTasks as TaskSO[]).map((task: TaskSO) => {
-                    const geom = getTaskGeometry(task);
-                    if (!geom) return <div key={task.id} style={{ height: ROW_HEIGHT }} className="border-b border-border/10" />;
+                {grpTasks.map((t) => {
+                  const g = geom(t);
+                  const overdue = isOverdue(t);
+                  const p = pct(t);
+                  const st = getStyle(t.state_id);
 
-                    return (
-                      <div 
-                        key={task.id} 
-                        style={{ height: ROW_HEIGHT }} 
-                        className="border-b border-border/10 flex items-center relative group/row w-full"
-                      >
-                        <TooltipProvider>
+                  return (
+                    <div
+                      key={t.id}
+                      style={{ height: ROW_HEIGHT }}
+                      className="border-b border-border/10 relative flex items-center"
+                    >
+                      {g ? (
+                        <TooltipProvider delayDuration={200}>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <motion.div
-                                drag="x"
-                                dragMomentum={false}
-                                dragElastic={0}
-                                onDragEnd={(_, info) => {
-                                  const offsetDays = Math.round(info.offset.x / dayWidth);
-                                  if (offsetDays === 0) return;
-                                  
-                                  const currentStart = parseISO(task.data_inizio!);
-                                  const currentEnd = parseISO(task.due_date!);
-                                  const newStart = addDays(currentStart, offsetDays);
-                                  const newEnd = addDays(currentEnd, offsetDays);
-                                  
-                                  updateTask.mutate({
-                                    id: task.id,
-                                    data: {
-                                      data_inizio: format(newStart, "yyyy-MM-dd"),
-                                      data_scadenza: format(newEnd, "yyyy-MM-dd")
-                                    }
-                                  }, {
-                                    onSuccess: () => toast.success("Task spostato"),
-                                    onError: () => toast.error("Errore nello spostamento")
-                                  });
-                                }}
-                                initial={{ opacity: 0, x: geom.x - 20 }}
-                                animate={{ opacity: 1, x: geom.x }}
-                                whileHover={{ scaleY: 1.05 }}
-                                style={{ 
-                                  width: geom.width,
-                                  left: 0 
-                                }}
-                                onClick={() => {
-                                  onTaskClick(task.id);
-                                }}
-                                className={`absolute h-8 rounded-lg border flex items-center justify-between px-3 cursor-pointer shadow-lg transition-all ${getStatusColor(task.state_id)} group hover:shadow-primary/20 backdrop-blur-sm z-30`}
+                              <div
+                                style={{ left: g.x, width: g.w }}
+                                className={`absolute h-7 rounded-lg cursor-pointer flex items-center overflow-hidden shadow transition-all hover:brightness-125 z-30 border ${
+                                  overdue ? "border-red-500/40 bg-red-500/10" : "border-white/8 bg-[#1a1d2e]"
+                                }`}
+                                onClick={() => onTaskClick(t.id)}
                               >
-                                <span className="text-[10px] font-black truncate max-w-full text-foreground tracking-widest drop-shadow-md">
-                                  {task.title}
-                                </span>
-                                {task.stima_minuti && (
-                                  <span className={`text-[8px] font-black opacity-0 group-hover:opacity-100 transition-opacity ${getStatusTextToken(task.state_id)}`}>
-                                    {task.stima_minuti}m
+                                {/* colored accent strip */}
+                                <div className={`h-full w-1 shrink-0 ${st.bar}`} />
+                                {/* completion fill overlay */}
+                                <div
+                                  className={`absolute left-1 top-0 bottom-0 ${st.bar} opacity-15`}
+                                  style={{ width: `calc(${p}% - 4px)` }}
+                                />
+                                {/* title */}
+                                {g.w > 30 && (
+                                  <span className="relative z-10 text-[10px] font-black text-white/80 truncate px-1.5 flex-1 leading-none">
+                                    {t.title}
                                   </span>
                                 )}
-                              </motion.div>
+                                {overdue && g.w > 24 && (
+                                  <AlertTriangle className="w-3 h-3 text-red-400 shrink-0 mr-1" />
+                                )}
+                              </div>
                             </TooltipTrigger>
-                            <TooltipContent className="bg-card border-border p-4 w-64 shadow-2xl rounded-2xl">
-                               <div className="space-y-2">
-                                  <div className="flex justify-between items-start">
-                                     <Badge variant="outline" className={`${getStatusColor(task.state_id)} text-[8px] border-none font-black`}>
-                                        {task.state_id}
-                                     </Badge>
+
+                            <TooltipContent side="bottom" className="p-0 border-border bg-transparent shadow-2xl w-72" avoidCollisions>
+                              <div className="bg-card rounded-2xl border border-border p-4 space-y-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <h4 className="text-sm font-black text-foreground leading-tight">{t.title}</h4>
+                                  <Badge variant="outline" className="text-[9px] font-black shrink-0 border-border">
+                                    {st.label}
+                                  </Badge>
+                                </div>
+
+                                {/* progress */}
+                                <div>
+                                  <div className="flex justify-between text-[10px] font-bold mb-1">
+                                    <span className="text-muted-foreground">Completamento</span>
+                                    <span className={`font-black ${st.text}`}>{p}%</span>
                                   </div>
-                                  <span className={cn(
-                                    "text-[10px] uppercase font-black truncate",
-                                    task.due_date && isSameDay(parseISO(task.due_date), today) ? "text-orange-400" : "text-foreground"
-                                  )}>
-                                    Attività
-                                  </span>
-                                  <h4 className="text-sm font-black text-foreground truncate leading-tight">
-                                    {task.title}
-                                  </h4>
-                                  <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-bold">
-                                     <div className="flex flex-col">
-                                        <span>Inizio</span>
-                                        <span className="text-foreground">{task.data_inizio ? format(parseISO(task.data_inizio), "dd MMM yyyy") : "-"}</span>
-                                     </div>
-                                     <div className="flex flex-col">
-                                        <span>Scadenza</span>
-                                        <span className={task.due_date && isSameDay(parseISO(task.due_date), today) ? "text-orange-400" : "text-foreground"}>
-                                          {task.due_date ? format(parseISO(task.due_date), "dd MMM yyyy") : "-"}
-                                        </span>
-                                     </div>
+                                  <div className="h-1.5 rounded-full bg-border overflow-hidden">
+                                    <div className={`h-full ${st.bar} rounded-full`} style={{ width: `${p}%` }} />
                                   </div>
-                                  {task.desc && <p className="text-[10px] text-muted-foreground italic line-clamp-2">{task.desc}</p>}
-                               </div>
+                                </div>
+
+                                {/* dates */}
+                                <div className="grid grid-cols-2 gap-2 text-[10px]">
+                                  <div>
+                                    <p className="text-muted-foreground font-bold uppercase tracking-widest mb-0.5">Inizio</p>
+                                    <p className="font-black text-foreground">
+                                      {t.data_inizio && isValid(parseISO(t.data_inizio))
+                                        ? format(parseISO(t.data_inizio), "dd MMM yyyy", { locale: it }) : "—"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-muted-foreground font-bold uppercase tracking-widest mb-0.5">Scadenza</p>
+                                    <p className={`font-black ${overdue ? "text-red-400" : "text-foreground"}`}>
+                                      {t.due_date && isValid(parseISO(t.due_date))
+                                        ? format(parseISO(t.due_date), "dd MMM yyyy", { locale: it }) : "—"}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* time */}
+                                {!!t.stima_minuti && (
+                                  <div className="flex items-center gap-2 text-[10px] bg-muted/30 rounded-lg px-3 py-2">
+                                    <Clock className="w-3 h-3 text-muted-foreground shrink-0" />
+                                    <span className="text-muted-foreground">
+                                      <span className="text-foreground font-black">{t.tempo_trascorso_minuti ?? 0}m</span>
+                                      {" / "}{t.stima_minuti}m stimati
+                                    </span>
+                                  </div>
+                                )}
+
+                                {overdue && (
+                                  <div className="flex items-center gap-2 text-[10px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                                    <AlertTriangle className="w-3 h-3 shrink-0" />
+                                    <span className="font-black">Task in Ritardo!</span>
+                                  </div>
+                                )}
+
+                                {t.desc && (
+                                  <p className="text-[10px] text-muted-foreground italic line-clamp-2 border-t border-border pt-2">
+                                    {t.desc}
+                                  </p>
+                                )}
+                              </div>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
+                      ) : (
+                        /* no dates */
+                        <div className="absolute left-2 text-[9px] text-muted-foreground/30 font-bold italic">
+                          nessuna data
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
           </div>
         </div>
       </div>

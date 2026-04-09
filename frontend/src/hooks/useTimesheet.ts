@@ -40,6 +40,40 @@ export function useCreateTimesheetManual() {
   });
 }
 
+export function useUpdateTimesheetManual() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, payload }: { id: string; payload: any }) => {
+      const { data } = await api.patch<Timesheet>(`/timesheet/${id}`, payload);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["timesheets"], exact: false });
+      toast.success("Ore modificate con successo");
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || "Errore nella modifica ore");
+    },
+  });
+}
+
+export function useDeleteTimesheetManual() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data } = await api.delete("/timesheet/bulk", { data: { ids: [id] } });
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["timesheets"], exact: false });
+      toast.success("Timesheet eliminato con successo");
+    },
+    onError: () => {
+      toast.error("Errore nell'eliminazione del timesheet");
+    },
+  });
+}
+
 export function useBulkApproveTimesheets() {
   const queryClient = useQueryClient();
   return useMutation({

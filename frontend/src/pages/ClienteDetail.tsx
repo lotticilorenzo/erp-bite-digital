@@ -11,7 +11,8 @@ import {
   Download,
   FileText,
   Eye,
-  Plus
+  Plus,
+  Pencil
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +25,8 @@ import { it } from "date-fns/locale";
 import { motion } from "framer-motion";
 import { PDFDownloadLink, PDFViewer } from "@react-pdf/renderer";
 import { ClienteReportPDF } from "@/components/reports/ClienteReportPDF";
+import { ClienteDialog } from "@/components/clienti/ClienteDialog";
+import { useProgetti } from "@/hooks/useProgetti";
 import { 
   Dialog,
   DialogContent,
@@ -52,11 +55,13 @@ export default function ClienteDetailPage() {
   const { data: health, isLoading: loadingH } = useClientHealthScore(id);
   const { data: commesse = [] } = useCommesse({ cliente_id: id });
   const { data: preventivi = [] } = usePreventivi({ cliente_id: id });
+  const { data: progetti = [] } = useProgetti(id);
   const { updatePreventivo, deletePreventivo, convertToCommessa } = usePreventivoMutations();
 
   const [periodo, setPeriodo] = useState<"YTD" | "PREV_YEAR" | "6M" | "ALL">("YTD");
   const [isPModalOpen, setIsPModalOpen] = useState(false);
   const [selectedP, setSelectedP] = useState<Preventivo | undefined>();
+  const [isClienteDialogOpen, setIsClienteDialogOpen] = useState(false);
 
   const filteredCommesse = useMemo(() => {
     const now = new Date();
@@ -158,6 +163,13 @@ export default function ClienteDetailPage() {
             </div>
           </div>
         </div>
+        <Button 
+          variant="outline" 
+          onClick={() => setIsClienteDialogOpen(true)}
+          className="bg-card border-border hover:bg-muted"
+        >
+          <Pencil className="w-4 h-4 mr-2 text-primary" /> Modifica Cliente
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -268,7 +280,11 @@ export default function ClienteDetailPage() {
                      {commesse.map((c) => {
                         const creep = c.ore_contratto > 0 ? (c.ore_reali / c.ore_contratto) : 1;
                         return (
-                          <tr key={c.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                          <tr 
+                            key={c.id} 
+                            onClick={() => navigate(`/commesse/${c.id}`)}
+                            className="border-b border-border/50 hover:bg-muted/20 transition-colors cursor-pointer group"
+                          >
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-2">
                                 <Calendar className="w-3 h-3 text-muted-foreground" />
@@ -325,6 +341,53 @@ export default function ClienteDetailPage() {
                 onStatusChange={handleStatusChangeP}
                 onConvert={handleConvertP}
               />
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card border-border">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-lg font-medium flex items-center gap-2 text-white">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" /> {/* Reused icon just keeping it standard */}
+                Progetti & Task
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                 <table className="w-full text-left">
+                   <thead className="bg-muted/50 border-b border-border">
+                     <tr>
+                       <th className="px-6 py-3 text-[10px] font-black uppercase text-muted-foreground tracking-widest">Nome Progetto</th>
+                       <th className="px-6 py-3 text-[10px] font-black uppercase text-muted-foreground tracking-widest text-center">Stato</th>
+                     </tr>
+                   </thead>
+                   <tbody>
+                     {progetti.length === 0 ? (
+                       <tr>
+                         <td colSpan={2} className="px-6 py-4 text-center text-muted-foreground italic text-xs">Nessun progetto trovato</td>
+                       </tr>
+                     ) : (
+                       progetti.map((p) => (
+                         <tr 
+                           key={p.id} 
+                           onClick={() => navigate(`/progetti/${p.id}`)}
+                           className="border-b border-border/50 hover:bg-muted/20 transition-colors cursor-pointer"
+                         >
+                           <td className="px-6 py-4">
+                             <span className="text-sm font-medium text-white group-hover:text-primary transition-colors">{p.nome}</span>
+                           </td>
+                           <td className="px-6 py-4 text-center">
+                             <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                p.stato === 'ATTIVO' ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : "bg-slate-500/10 text-slate-500 border border-slate-500/20"
+                             }`}>
+                               {p.stato}
+                             </div>
+                           </td>
+                         </tr>
+                       ))
+                     )}
+                   </tbody>
+                 </table>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -422,6 +485,12 @@ export default function ClienteDetailPage() {
         isOpen={isPModalOpen} 
         onClose={() => setIsPModalOpen(false)} 
         preventivo={selectedP} 
+      />
+
+      <ClienteDialog 
+        open={isClienteDialogOpen} 
+        onOpenChange={setIsClienteDialogOpen} 
+        cliente={cliente as any} 
       />
     </div>
   );

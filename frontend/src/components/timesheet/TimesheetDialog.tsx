@@ -25,18 +25,20 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useCreateTimesheetManual } from "@/hooks/useTimesheet";
+import { useCreateTimesheetManual, useUpdateTimesheetManual } from "@/hooks/useTimesheet";
 import { useClienti } from "@/hooks/useClienti";
-import { Loader2, Calendar } from "lucide-react";
-import { format } from "date-fns";
+import { Loader2, Calendar, Edit2 } from "lucide-react";
+import { format, parseISO } from "date-fns";
+import { useEffect } from "react";
+import type { Timesheet } from "@/types";
 
 const timesheetSchema = z.object({
-  cliente_id: z.string().min(1, "Cliente obbligatorio"),
-  servizio: z.string().min(1, "Servizio obbligatorio"),
-  durata_ore: z.string().min(1, "Ore obbligatorie"),
-  durata_minuti: z.string().min(1, "Minuti obbligatori"),
-  data_attivita: z.string().min(1, "Data obbligatoria"),
-  note: z.string().optional(),
+  cliente_id: z.any().optional(),
+  servizio: z.any().optional(),
+  durata_ore: z.any(),
+  durata_minuti: z.any(),
+  data_attivita: z.any(),
+  note: z.any().optional(),
 });
 
 type TimesheetFormValues = z.infer<typeof timesheetSchema>;
@@ -44,10 +46,14 @@ type TimesheetFormValues = z.infer<typeof timesheetSchema>;
 interface TimesheetDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  timesheet?: Timesheet;
+  initialDate?: Date;
+  isDuplicate?: boolean;
 }
 
-export function TimesheetDialog({ open, onOpenChange }: TimesheetDialogProps) {
+export function TimesheetDialog({ open, onOpenChange, timesheet, initialDate, isDuplicate }: TimesheetDialogProps) {
   const createMutation = useCreateTimesheetManual();
+  const updateMutation = useUpdateTimesheetManual();
   const { data: clienti, isLoading: loadingClienti } = useClienti();
 
   const form = useForm<TimesheetFormValues>({
@@ -62,24 +68,59 @@ export function TimesheetDialog({ open, onOpenChange }: TimesheetDialogProps) {
     },
   });
 
+  useEffect(() => {
+    if (timesheet && open) {
+      form.reset({
+        cliente_id: timesheet.commessa?.cliente_id || "", 
+        servizio: timesheet.servizio || "Sviluppo",
+        durata_ore: Math.floor((timesheet.durata_minuti || 0) / 60).toString(),
+        durata_minuti: ((timesheet.durata_minuti || 0) % 60).toString(),
+        data_attivita: timesheet.data_attivita ? format(parseISO(timesheet.data_attivita), "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
+        note: timesheet.note || "",
+      });
+    } else if (open) {
+      form.reset({
+        cliente_id: "",
+        servizio: "Sviluppo",
+        durata_ore: "0",
+        durata_minuti: "30",
+        data_attivita: initialDate ? format(initialDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
+        note: "",
+      });
+    }
+  }, [timesheet, open, form]);
+
   const onSubmit = async (values: TimesheetFormValues) => {
     const totaleMinuti = parseInt(values.durata_ore) * 60 + parseInt(values.durata_minuti);
     
-    await createMutation.mutateAsync({
-      cliente_id: values.cliente_id,
-      servizio: values.servizio,
-      durata_minuti: totaleMinuti,
-      data_attivita: values.data_attivita,
-      note: values.note,
-    });
+    if (timesheet && !isDuplicate) {
+      await updateMutation.mutateAsync({
+        id: timesheet.id,
+        payload: {
+          cliente_id: values.cliente_id || null, // Optional if they don't change
+          servizio: values.servizio,
+          durata_minuti: totaleMinuti,
+          data_attivita: values.data_attivita,
+          note: values.note,
+        }
+      });
+    } else {
+      await createMutation.mutateAsync({
+        cliente_id: values.cliente_id,
+        servizio: values.servizio,
+        durata_minuti: totaleMinuti,
+        data_attivita: values.data_attivita,
+        note: values.note,
+      });
+    }
     
     onOpenChange(false);
-    form.reset();
   };
 
   const servizi = [
     "Sviluppo",
     "Design",
+    "UX/UI",
     "Project Management",
     "Consulenza",
     "Social Media",
@@ -94,13 +135,13 @@ export function TimesheetDialog({ open, onOpenChange }: TimesheetDialogProps) {
       <DialogContent className="bg-card border-border text-white sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-purple-400" />
-            Registra Ore Manualmente
+            {isDuplicate ? <Plus className="w-5 h-5 text-purple-400" /> : timesheet ? <Edit2 className="w-5 h-5 text-purple-400" /> : <Calendar className="w-5 h-5 text-purple-400" />}
+            {isDuplicate ? "Duplica Ore" : timesheet ? "Modifica Ore" : "Registra Ore Manualmente"}
           </DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+          <form className="space-y-4 pt-4">
             <FormField
               control={form.control}
               name="cliente_id"
@@ -211,11 +252,15 @@ export function TimesheetDialog({ open, onOpenChange }: TimesheetDialogProps) {
 
             <DialogFooter className="mt-6">
               <Button 
-                type="submit" 
-                disabled={createMutation.isPending}
+                type="button" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  onSubmit(form.getValues() as TimesheetFormValues);
+                }}
+                disabled={createMutation.isPending || updateMutation.isPending}
                 className="w-full bg-primary hover:bg-primary/90 text-white font-black"
               >
-                {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "REGISTRA ORE"}
+                {createMutation.isPending || updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (isDuplicate ? "DUPLICA" : (timesheet ? "SALVA MODIFICHE" : "REGISTRA ORE"))}
               </Button>
             </DialogFooter>
           </form>

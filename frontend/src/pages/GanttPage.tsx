@@ -46,7 +46,7 @@ export default function GanttPage() {
   }, [tasks, filters]);
 
   return (
-    <div className="flex flex-col h-screen bg-[#0a0c10]" style={{ width: "100%", overflowX: "hidden" }}>
+    <div className="flex flex-col w-full h-[calc(100vh-140px)] bg-[#0a0c10] rounded-3xl border border-white/5 overflow-hidden shadow-2xl">
       {/* Premium Header */}
       <div className="shrink-0 p-4 md:p-8 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-gradient-to-b from-[#11141d] to-transparent w-full">
         <div className="space-y-1">

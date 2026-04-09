@@ -1,3 +1,4 @@
+// HMR Verification: Live reload is active!
 import React, { Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "@/pages/Login";

@@ -154,7 +154,7 @@ export function ClienteTable({ clienti, isLoading, onEdit, onNew }: ClienteTable
                 <TableRow 
                   key={cliente.id} 
                   className="group hover:bg-muted/30 border-border transition-colors cursor-pointer"
-                  onClick={() => onEdit(cliente)}
+                  onClick={() => navigate(`/clienti/${cliente.id}`)}
                 >
                   <TableCell className="py-4">
                     <div className="flex items-center gap-3">
