@@ -1,7 +1,8 @@
-import { useParams, useNavigate } from "react-router-dom";
-import { 
-  ChevronLeft, 
-  Layers, 
+import React from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import {
+  ChevronLeft,
+  Layers,
   Clock,
   Euro,
   FileText,
@@ -10,17 +11,40 @@ import {
   Link as LinkIcon,
   Users,
   Briefcase,
-  Target
+  Target,
+  ChevronRight,
+  CheckCircle2,
+  AlertCircle,
+  Lock,
+  Unlock,
+  ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCommessa, useUpdateCommessa } from "@/hooks/useCommesse";
+import { ProgettoDialog } from "@/components/progetti/ProgettoDialog";
+import { useProgetti } from "@/hooks/useProgetti";
 import { format, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger,
+  DialogFooter
+} from "@/components/ui/dialog";
+import { 
+  Plus, 
+  Search, 
+  Check, 
+  Edit2, 
+  Trash2 
+} from "lucide-react";
 import {
   Table,
   TableBody,
@@ -42,9 +66,13 @@ export default function CommessaDetailPage() {
   const { data: commessa, isLoading, error } = useCommessa(id);
   const { data: timesheets = [] } = useTimesheets({ commessa_id: id });
   const { mutate: updateCommessa, isPending: isUpdating } = useUpdateCommessa();
+  const { data: progettiCliente } = useProgetti(commessa?.cliente_id);
   const { user } = useAuth();
   
   const [editOreContratto, setEditOreContratto] = useState<string>("0");
+  const [isAddingProject, setIsAddingProject] = useState(false);
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [searchProject, setSearchProject] = useState("");
 
   useEffect(() => {
     if (commessa) {
@@ -79,6 +107,71 @@ export default function CommessaDetailPage() {
     });
   };
 
+  const handleAddProject = async (progettoId: string) => {
+    if (!commessa || !id) return;
+    
+    // Check if project already associated
+    if (commessa.righe_progetto?.some(r => r.progetto_id === progettoId)) {
+        toast.error("Progetto già associato a questa commessa");
+        return;
+    }
+
+    try {
+        const currentRighe = (commessa.righe_progetto || []).map(r => ({
+            progetto_id: r.progetto_id,
+            importo_fisso: r.importo_fisso,
+            importo_variabile: r.importo_variabile,
+            delivery_attesa: r.delivery_attesa
+        }));
+
+        updateCommessa({
+            id: id,
+            data: {
+                righe_progetto: [...currentRighe, { progetto_id: progettoId }]
+            }
+        }, {
+            onSuccess: () => {
+                toast.success("Progetto associato con successo");
+                setIsAddingProject(false);
+            },
+            onError: () => {
+                toast.error("Errore durante l'associazione");
+            }
+        });
+    } catch (e) {
+        toast.error("Errore imprevisto");
+    }
+  };
+
+  const handleRemoveProject = async (progettoId: string) => {
+    if (!commessa || !id || !confirm("Sicuro di voler rimuovere il progetto da questa commessa?")) return;
+    
+    try {
+        const newRighe = (commessa.righe_progetto || [])
+            .filter(r => r.progetto_id !== progettoId)
+            .map(r => ({
+                progetto_id: r.progetto_id,
+                importo_fisso: r.importo_fisso,
+                importo_variabile: r.importo_variabile,
+                delivery_attesa: r.delivery_attesa
+            }));
+
+        updateCommessa({
+            id: id,
+            data: { righe_progetto: newRighe }
+        }, {
+            onSuccess: () => {
+                toast.success("Progetto rimosso");
+            },
+            onError: () => {
+                toast.error("Errore durante la rimozione");
+            }
+        });
+    } catch (e) {
+        toast.error("Errore imprevisto");
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="p-8 space-y-6">
@@ -107,13 +200,81 @@ export default function CommessaDetailPage() {
     ? ((commessa.valore_fatturabile! - commessa.costo_manodopera) / commessa.costo_manodopera * 100).toFixed(1)
     : "0";
 
+  // Stato machine: sequenza degli stati e transizione successiva
+  const STATI_SEQUENZA = ["APERTA", "PRONTA_CHIUSURA", "CHIUSA", "FATTURATA", "INCASSATA"] as const;
+  type CommessaStato = typeof STATI_SEQUENZA[number];
+
+  const STATO_LABELS: Record<string, string> = {
+    APERTA: "Aperta",
+    PRONTA_CHIUSURA: "Pronta Chiusura",
+    CHIUSA: "Chiusa",
+    FATTURATA: "Fatturata",
+    INCASSATA: "Incassata",
+  };
+
+  const STATO_COLORS: Record<string, string> = {
+    APERTA: "text-blue-400 bg-blue-500/10 border-blue-500/20",
+    PRONTA_CHIUSURA: "text-amber-400 bg-amber-500/10 border-amber-500/20",
+    CHIUSA: "text-slate-400 bg-slate-500/10 border-slate-500/20",
+    FATTURATA: "text-purple-400 bg-purple-500/10 border-purple-500/20",
+    INCASSATA: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+  };
+
+  const currentStateIndex = STATI_SEQUENZA.indexOf(commessa.stato as CommessaStato);
+  const nextState = currentStateIndex < STATI_SEQUENZA.length - 1
+    ? STATI_SEQUENZA[currentStateIndex + 1]
+    : null;
+
+  const handleAvanzaStato = () => {
+    if (!nextState || !id || !canEdit) return;
+    updateCommessa(
+      { id, data: { stato: nextState } },
+      {
+        onSuccess: () => toast.success(`Commessa avanzata a: ${STATO_LABELS[nextState]}`),
+        onError: () => toast.error("Errore nell'aggiornamento dello stato"),
+      }
+    );
+  };
+
+  const handleRegressoStato = () => {
+    const prevState = currentStateIndex > 0 ? STATI_SEQUENZA[currentStateIndex - 1] : null;
+    if (!prevState || !id || !canEdit) return;
+    if (!confirm(`Sei sicuro di voler tornare a: ${STATO_LABELS[prevState]}?`)) return;
+    updateCommessa(
+      { id, data: { stato: prevState } },
+      {
+        onSuccess: () => toast.success(`Commessa retrocessa a: ${STATO_LABELS[prevState]}`),
+        onError: () => toast.error("Errore nell'aggiornamento dello stato"),
+      }
+    );
+  };
+
+  const isLocked = ["CHIUSA", "FATTURATA", "INCASSATA"].includes(commessa.stato);
+
   return (
     <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {/* ── BREADCRUMB ─────────────────────────────────────── */}
+      <nav className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+        <Link to="/commesse" className="hover:text-white transition-colors">Commesse</Link>
+        <ChevronRight className="w-3 h-3" />
+        {commessa.cliente && (
+          <>
+            <Link to={`/clienti/${commessa.cliente_id}`} className="hover:text-white transition-colors">
+              {commessa.cliente.ragione_sociale}
+            </Link>
+            <ChevronRight className="w-3 h-3" />
+          </>
+        )}
+        <span className="text-foreground">
+          {format(parseISO(commessa.mese_competenza), "MMMM yyyy", { locale: it })}
+        </span>
+      </nav>
+
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <Button 
-            variant="ghost" 
-            onClick={() => navigate("/commesse")} 
+          <Button
+            variant="ghost"
+            onClick={() => navigate("/commesse")}
             className="text-muted-foreground hover:text-white hover:bg-muted"
           >
             <ChevronLeft className="w-4 h-4 mr-2" />
@@ -121,16 +282,19 @@ export default function CommessaDetailPage() {
           </Button>
           <div className="h-4 w-px bg-muted" />
           <div className="flex items-center gap-4">
-            <ClientAvatar 
-              name={commessa.cliente?.ragione_sociale || "C"} 
-              logoUrl={commessa.cliente?.logo_url} 
-              size="lg" 
+            <ClientAvatar
+              name={commessa.cliente?.ragione_sociale || "C"}
+              logoUrl={commessa.cliente?.logo_url}
+              size="lg"
               className="rounded-xl border-border"
             />
             <div>
-              <h1 className="text-2xl font-bold text-foreground">
-                Commessa {commessa.cliente?.ragione_sociale}
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-foreground">
+                  Commessa {commessa.cliente?.ragione_sociale}
+                </h1>
+                {isLocked && <Lock className="w-4 h-4 text-muted-foreground" />}
+              </div>
               <p className="text-muted-foreground text-sm">
                 Competenza: {format(parseISO(commessa.mese_competenza), "MMMM yyyy", { locale: it })}
               </p>
@@ -138,21 +302,12 @@ export default function CommessaDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Badge variant="outline" className={`
-            ${commessa.stato === 'FATTURATA' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}
-          `}>
-            {commessa.stato}
-          </Badge>
-          <Button variant="outline" className="bg-muted border-border text-white">
-            <LinkIcon className="w-4 h-4 mr-2" /> Collega Fattura
-          </Button>
-          
-          <PDFDownloadLink 
-            document={<CommessaReportPDF commessa={commessa} timesheets={timesheets} />} 
+          <PDFDownloadLink
+            document={<CommessaReportPDF commessa={commessa} timesheets={timesheets} />}
             fileName={`Report_${commessa.cliente?.ragione_sociale}_${commessa.mese_competenza}.pdf`}
           >
             {({ loading }) => (
-              <Button 
+              <Button
                 disabled={loading}
                 className="bg-primary hover:bg-primary/90 text-white rounded-xl gap-2 font-black uppercase text-[10px] tracking-widest shadow-[0_0_20px_hsl(var(--primary)/0.2)]"
               >
@@ -163,6 +318,80 @@ export default function CommessaDetailPage() {
           </PDFDownloadLink>
         </div>
       </div>
+
+      {/* ── STATE MACHINE ──────────────────────────────────── */}
+      <Card className="bg-card border-border overflow-hidden">
+        <CardContent className="p-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+            {/* Stato attuale */}
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={`p-2 rounded-xl border ${STATO_COLORS[commessa.stato]}`}>
+                {commessa.stato === "INCASSATA" ? (
+                  <CheckCircle2 className="w-5 h-5" />
+                ) : isLocked ? (
+                  <Lock className="w-5 h-5" />
+                ) : (
+                  <Unlock className="w-5 h-5" />
+                )}
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">Stato Corrente</p>
+                <p className={`text-lg font-black ${STATO_COLORS[commessa.stato].split(" ")[0]}`}>
+                  {STATO_LABELS[commessa.stato]}
+                </p>
+              </div>
+            </div>
+
+            {/* Progressione stati */}
+            <div className="flex-1 flex items-center gap-1 overflow-x-auto pb-1">
+              {STATI_SEQUENZA.map((stato, idx) => (
+                <React.Fragment key={stato}>
+                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
+                    idx < currentStateIndex
+                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                      : idx === currentStateIndex
+                        ? `border ${STATO_COLORS[stato]}`
+                        : "bg-muted/30 text-muted-foreground border border-transparent"
+                  }`}>
+                    {idx < currentStateIndex && <CheckCircle2 className="w-3 h-3" />}
+                    {STATO_LABELS[stato]}
+                  </div>
+                  {idx < STATI_SEQUENZA.length - 1 && (
+                    <ArrowRight className={`w-3 h-3 shrink-0 ${idx < currentStateIndex ? "text-emerald-400" : "text-muted-foreground/30"}`} />
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+
+            {/* Azioni stato */}
+            {canEdit && (
+              <div className="flex items-center gap-2 shrink-0">
+                {currentStateIndex > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRegressoStato}
+                    className="text-muted-foreground hover:text-white text-[10px] font-black uppercase tracking-widest h-9"
+                  >
+                    <ChevronLeft className="w-3 h-3 mr-1" /> Indietro
+                  </Button>
+                )}
+                {nextState && (
+                  <Button
+                    size="sm"
+                    onClick={handleAvanzaStato}
+                    disabled={isUpdating}
+                    className="bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 text-[10px] font-black uppercase tracking-widest h-9 gap-2"
+                  >
+                    Avanza a {STATO_LABELS[nextState]}
+                    <ArrowRight className="w-3 h-3" />
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <KPICard 
@@ -197,11 +426,74 @@ export default function CommessaDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
           <Card className="bg-card border-border text-white">
-            <CardHeader className="border-b border-border">
+            <CardHeader className="border-b border-border flex flex-row items-center justify-between py-4">
               <CardTitle className="text-lg font-medium flex items-center gap-2">
                 <Layers className="w-4 h-4 text-purple-400" />
                 Progetti Coinvolti
               </CardTitle>
+              <Dialog open={isAddingProject} onOpenChange={setIsAddingProject}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 rounded-xl bg-white/5 border-white/5 text-[10px] font-black uppercase tracking-widest gap-2">
+                    <Plus className="w-3.5 h-3.5" /> Associa Progetto
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="bg-card/95 border-white/10 backdrop-blur-xl p-0 overflow-hidden max-w-md">
+                  <DialogHeader className="p-6 pb-0">
+                    <DialogTitle className="text-xl font-black italic uppercase italic tracking-tighter">Associa <span className="text-primary not-italic">Progetto</span></DialogTitle>
+                  </DialogHeader>
+                  <div className="p-6 space-y-4">
+                    <div className="relative group">
+                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#475569] group-focus-within:text-primary transition-colors" />
+                       <Input 
+                        placeholder="Cerca progetti del cliente..." 
+                        value={searchProject}
+                        onChange={e => setSearchProject(e.target.value)}
+                        className="pl-10 bg-white/5 border-white/5 h-10 rounded-xl"
+                       />
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                       {progettiCliente?.filter(p => p.nome.toLowerCase().includes(searchProject.toLowerCase())).map(p => {
+                         const isAssociated = commessa.righe_progetto?.some(r => r.progetto_id === p.id);
+                         return (
+                           <div 
+                            key={p.id} 
+                            onClick={() => !isAssociated && handleAddProject(p.id)}
+                            className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
+                              isAssociated ? 'bg-emerald-500/10 border-emerald-500/20 opacity-60' : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-primary/40'
+                            }`}
+                           >
+                             <div className="flex flex-col">
+                               <span className="text-xs font-bold text-white">{p.nome}</span>
+                               <span className="text-[9px] text-[#475569] font-medium uppercase tracking-widest">{p.tipo}</span>
+                             </div>
+                             {isAssociated ? <Check className="w-4 h-4 text-emerald-400" /> : <Plus className="w-4 h-4 text-primary" />}
+                           </div>
+                         );
+                       })}
+                       {progettiCliente?.length === 0 && (
+                         <div className="text-center py-8 text-[#475569] text-xs font-medium italic">Nessun progetto trovato per questo cliente</div>
+                       )}
+                    </div>
+                  </div>
+                  <DialogFooter className="p-6 pt-0 flex items-center justify-between gap-4">
+                    <Button 
+                      onClick={() => {
+                        setIsAddingProject(false);
+                        setIsCreatingProject(true);
+                      }}
+                      className="bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 text-[10px] font-black uppercase tracking-widest px-4 h-10 rounded-xl"
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-2" /> Crea Nuovo Progetto
+                    </Button>
+                    <Button variant="ghost" onClick={() => setIsAddingProject(false)} className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Chiudi</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+              <ProgettoDialog 
+                open={isCreatingProject} 
+                onOpenChange={setIsCreatingProject}
+                onSuccess={(newP) => handleAddProject(newP.id)}
+              />
             </CardHeader>
             <CardContent className="p-0">
               <Table>
@@ -210,19 +502,38 @@ export default function CommessaDetailPage() {
                     <TableHead className="pl-6 font-medium uppercase text-[10px] tracking-wider">Progetto</TableHead>
                     <TableHead className="font-medium uppercase text-[10px] tracking-wider text-right">Budget Fisso</TableHead>
                     <TableHead className="font-medium uppercase text-[10px] tracking-wider text-right">Budget Var.</TableHead>
-                    <TableHead className="pr-6 font-medium uppercase text-[10px] tracking-wider text-right">Delivery (h)</TableHead>
+                    <TableHead className="font-medium uppercase text-[10px] tracking-wider text-right">Delivery (h)</TableHead>
+                    <TableHead className="pr-6 font-medium uppercase text-[10px] tracking-wider text-right">Azioni</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {commessa.righe_progetto?.map((riga: any) => (
-                    <TableRow key={riga.id} className="border-border hover:bg-muted/20">
+                    <TableRow key={riga.id} className="border-border hover:bg-muted/20 group">
                       <TableCell className="pl-6 font-medium text-foreground">
-                        {riga.progetto?.nome || "Progetto Scollegato"}
-                        <div className="text-[10px] text-[#475569]">{riga.progetto?.tipo}</div>
+                        <div 
+                          className="hover:text-primary cursor-pointer transition-colors"
+                          onClick={() => navigate(`/progetti/${riga.progetto_id}`)}
+                        >
+                          {riga.progetto?.nome || "Progetto Scollegato"}
+                        </div>
+                        <div className="text-[10px] text-[#475569] uppercase tracking-widest font-black">{riga.progetto?.tipo}</div>
                       </TableCell>
-                      <TableCell className="text-right text-foreground">€{riga.importo_fisso?.toLocaleString()}</TableCell>
-                      <TableCell className="text-right text-foreground">€{riga.importo_variabile?.toLocaleString()}</TableCell>
-                      <TableCell className="pr-6 text-right text-purple-400 font-semibold">{riga.delivery_consuntiva} / {riga.delivery_attesa}h</TableCell>
+                      <TableCell className="text-right text-foreground font-black tabular-nums">€{Number(riga.importo_fisso).toLocaleString()}</TableCell>
+                      <TableCell className="text-right text-foreground font-medium tabular-nums text-[#475569]">€{Number(riga.importo_variabile).toLocaleString()}</TableCell>
+                      <TableCell className="text-right text-purple-400 font-black tabular-nums">{riga.delivery_consuntiva} / {riga.delivery_attesa}h</TableCell>
+                      <TableCell className="pr-6 text-right">
+                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-white/5 text-[#475569] hover:text-white">
+                               <Edit2 className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button 
+                              onClick={() => handleRemoveProject(riga.progetto_id)}
+                              variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-red-500/10 text-[#475569] hover:text-red-500"
+                            >
+                               <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                         </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {!commessa.righe_progetto?.length && (

@@ -187,6 +187,29 @@ async def create_cliente(db: AsyncSession, data: ClienteCreate) -> Cliente:
     c = Cliente(**data.model_dump())
     db.add(c)
     await db.flush()
+    
+    # Automazione Chat: Crea un canale per il cliente
+    try:
+        from app.models.models import ChatCanale, ChatMembro, User, UserRole
+        chat_id = uuid.uuid4()
+        chat = ChatCanale(
+            id=chat_id,
+            nome=f"Chat: {c.ragione_sociale}",
+            tipo="GROUP",
+            logo_url=c.logo_url
+        )
+        db.add(chat)
+        
+        # Aggiunge tutti gli Admin alla chat automaticamente
+        admin_res = await db.execute(select(User).where(User.ruolo == UserRole.ADMIN))
+        admins = admin_res.scalars().all()
+        for admin in admins:
+            db.add(ChatMembro(canale_id=chat_id, user_id=admin.id, ruolo='ADMIN'))
+            
+        await db.flush()
+    except Exception as e:
+        logger.error(f"Errore creazione chat automatica cliente: {e}")
+        
     return c
 
 async def update_cliente(db: AsyncSession, cliente_id: uuid.UUID, data: ClienteUpdate, by_user_id: uuid.UUID) -> Optional[Cliente]:
@@ -202,9 +225,25 @@ async def update_cliente(db: AsyncSession, cliente_id: uuid.UUID, data: ClienteU
 
 
 async def delete_cliente(db: AsyncSession, cliente_id: uuid.UUID, by_user_id: uuid.UUID) -> bool:
+    from fastapi import HTTPException
     c = await get_cliente(db, cliente_id)
     if not c:
         return False
+
+    # Verifica commesse aperte collegate
+    commesse_res = await db.execute(
+        select(func.count()).where(
+            Commessa.cliente_id == cliente_id,
+            Commessa.stato.in_([CommessaStatus.APERTA, CommessaStatus.PRONTA_CHIUSURA])
+        )
+    )
+    n_commesse = commesse_res.scalar_one()
+    if n_commesse > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Impossibile eliminare: {n_commesse} commesse aperte collegate al cliente"
+        )
+
     await write_audit(db, by_user_id, "clienti", cliente_id, "DELETE", {"ragione_sociale": c.ragione_sociale})
     await db.delete(c)
     await db.flush()
@@ -335,6 +374,34 @@ async def create_progetto(db: AsyncSession, data: ProgettoCreate) -> Progetto:
     p = Progetto(**data.model_dump())
     db.add(p)
     await db.flush()
+    
+    # Automazione Chat: Crea un canale per il progetto
+    try:
+        from app.models.models import ChatCanale, Cliente, ChatMembro, User, UserRole
+        # Recupera logo cliente se possibile
+        c_res = await db.execute(select(Cliente).where(Cliente.id == p.cliente_id))
+        cliente = c_res.scalar_one_or_none()
+        
+        chat_id = uuid.uuid4()
+        chat = ChatCanale(
+            id=chat_id,
+            nome=f"Progetto: {p.nome}",
+            tipo="PROJECT",
+            progetto_id=p.id,
+            logo_url=cliente.logo_url if cliente else None
+        )
+        db.add(chat)
+        
+        # Aggiunge tutti gli Admin alla chat automaticamente
+        admin_res = await db.execute(select(User).where(User.ruolo == UserRole.ADMIN))
+        admins = admin_res.scalars().all()
+        for admin in admins:
+            db.add(ChatMembro(canale_id=chat_id, user_id=admin.id, ruolo='ADMIN'))
+
+        await db.flush()
+    except Exception as e:
+        logger.error(f"Errore creazione chat automatica progetto: {e}")
+        
     return p
 
 async def update_progetto(db: AsyncSession, progetto_id: uuid.UUID, data: ProgettoUpdate, by_user_id: uuid.UUID) -> Optional[Progetto]:
@@ -536,20 +603,24 @@ async def update_commessa(
     if 'fattura_id' in data.model_fields_set:
         c.fattura_id = data.fattura_id
 
-    if data.righe_progetto:
+    if data.righe_progetto is not None:
         from fastapi import HTTPException
 
         progetto_ids = [r.progetto_id for r in data.righe_progetto]
+        
+        # 1. Fetch ALL existing rows for this commessa
         existing_rows_result = await db.execute(
-            select(CommessaProgetto).where(
-                and_(
-                    CommessaProgetto.commessa_id == c.id,
-                    CommessaProgetto.progetto_id.in_(progetto_ids),
-                )
-            )
+            select(CommessaProgetto).where(CommessaProgetto.commessa_id == c.id)
         )
-        existing_rows = {r.progetto_id: r for r in existing_rows_result.scalars().all()}
+        all_existing_rows = {r.progetto_id: r for r in existing_rows_result.scalars().all()}
+        
+        # 2. Delete rows that are not in the new payload
+        for pid, row in list(all_existing_rows.items()):
+            if pid not in progetto_ids:
+                await db.delete(row)
+                del all_existing_rows[pid]
 
+        # 3. Validate and fetch projects for new/updated rows
         projects_result = await db.execute(
             select(Progetto).where(
                 and_(Progetto.id.in_(progetto_ids), Progetto.cliente_id == c.cliente_id)
@@ -562,8 +633,9 @@ async def update_commessa(
                 detail="Una o piu righe progetto non appartengono al cliente della commessa",
             )
 
+        # 4. Update or Add rows
         for riga_patch in data.righe_progetto:
-            row = existing_rows.get(riga_patch.progetto_id)
+            row = all_existing_rows.get(riga_patch.progetto_id)
             if row is None:
                 progetto = project_map[riga_patch.progetto_id]
                 row = CommessaProgetto(
@@ -575,7 +647,6 @@ async def update_commessa(
                     delivery_consuntiva=0,
                 )
                 db.add(row)
-                existing_rows[progetto.id] = row
 
             if riga_patch.importo_fisso is not None:
                 row.importo_fisso = riga_patch.importo_fisso

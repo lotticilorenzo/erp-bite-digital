@@ -1,11 +1,12 @@
 import React, { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { 
-  ChevronLeft, 
-  Calendar, 
-  Building2, 
-  Layers, 
-  Target, 
+import { useParams, useNavigate, Link } from "react-router-dom";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
+  Building2,
+  Layers,
+  Target,
   Clock,
   Euro,
   FileText,
@@ -22,11 +23,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useProgetto } from "@/hooks/useProgetti";
 import { useTasks } from "@/hooks/useTasks";
 import { useStudio } from "@/hooks/useStudio";
-import { format } from "date-fns";
+import { format, startOfMonth } from "date-fns";
 import { it } from "date-fns/locale";
 import { GanttChart } from "@/components/gantt/GanttChart";
 import { StudioTaskModal } from "@/components/studio/StudioTaskModal";
-import { ChatProgetto } from "@/components/chat/ChatProgetto";
+import ChatProgetto from "@/components/chat/ChatProgetto";
+import { useCommesse, useUpdateCommessa, useCreateCommessa } from "@/hooks/useCommesse";
+import { toast } from "sonner";
 
 export default function ProgettoDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -35,6 +38,14 @@ export default function ProgettoDetailPage() {
   const { data: tasks = [], isLoading: isLoadingTasks } = useTasks({ progetto_id: id, parent_only: false });
   const { selectTask } = useStudio();
   const [activeTab, setActiveTab] = useState("overview");
+  const currentMonth = format(startOfMonth(new Date()), "yyyy-MM-dd");
+  const { data: commesseMese } = useCommesse({ 
+    cliente_id: progetto?.cliente_id, 
+    mese: currentMonth 
+  });
+  
+  const updateCommessa = useUpdateCommessa();
+  const createCommessa = useCreateCommessa();
 
   if (isLoadingProj) {
     return (
@@ -62,13 +73,78 @@ export default function ProgettoDetailPage() {
     );
   }
 
+  const commessaAttiva = commesseMese?.[0];
+  const isLinked = commessaAttiva?.righe_progetto?.some(r => r.progetto_id === id);
+
+  const handleLinkToCommessa = async () => {
+    if (!progetto || !id) return;
+    
+    try {
+      if (commessaAttiva) {
+        const currentRows = commessaAttiva.righe_progetto.map(r => ({
+          progetto_id: r.progetto_id,
+          importo_fisso: r.importo_fisso,
+          importo_variabile: r.importo_variabile,
+          delivery_attesa: r.delivery_attesa,
+          delivery_consuntiva: r.delivery_consuntiva
+        }));
+        
+        await updateCommessa.mutateAsync({
+          id: commessaAttiva.id,
+          data: {
+            righe_progetto: [
+              ...currentRows,
+              {
+                progetto_id: id,
+                importo_fisso: progetto.importo_fisso,
+                importo_variabile: progetto.importo_variabile,
+                delivery_attesa: progetto.delivery_attesa,
+                delivery_consuntiva: 0
+              }
+            ]
+          }
+        });
+        toast.success("Progetto aggiunto alla commessa mensile");
+      } else {
+        await createCommessa.mutateAsync({
+          cliente_id: progetto.cliente_id,
+          mese_competenza: currentMonth,
+          righe_progetto: [{
+            progetto_id: id,
+            importo_fisso: progetto.importo_fisso,
+            importo_variabile: progetto.importo_variabile,
+            delivery_attesa: progetto.delivery_attesa
+          }]
+        });
+        toast.success("Nuova commessa mensile creata");
+      }
+    } catch (e) {
+      toast.error("Errore durante il collegamento");
+    }
+  };
+
   return (
     <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 h-screen flex flex-col overflow-hidden">
+      {/* ── BREADCRUMB ─────────────────────────────────────── */}
+      <nav className="flex items-center gap-2 text-xs text-muted-foreground font-medium shrink-0">
+        <Link to="/progetti" className="hover:text-white transition-colors">Progetti</Link>
+        <ChevronRight className="w-3 h-3" />
+        {progetto.cliente && (
+          <>
+            <Link to={`/clienti/${progetto.cliente_id}`} className="hover:text-white transition-colors">
+              {progetto.cliente.ragione_sociale}
+            </Link>
+            <ChevronRight className="w-3 h-3" />
+          </>
+        )}
+        <span className="text-foreground">{progetto.nome}</span>
+      </nav>
+
       <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
-          <Button 
-            variant="ghost" 
-            onClick={() => navigate("/progetti")} 
+          <Button
+            variant="ghost"
+            onClick={() => navigate("/progetti")}
             className="text-muted-foreground hover:text-white hover:bg-muted rounded-xl"
           >
             <ChevronLeft className="w-4 h-4 mr-2" />
@@ -187,9 +263,28 @@ export default function ProgettoDetailPage() {
                     <Layers className="w-4 h-4 text-purple-400" />
                     Commesse Correlate
                   </CardTitle>
-                  <Button size="sm" variant="outline" className="h-8 bg-primary/10 text-purple-400 border-purple-500/20 hover:bg-primary/20 rounded-xl text-[10px] font-black uppercase tracking-widest">
-                    <Plus className="w-3 h-3 mr-1" /> Nuova Commessa
-                  </Button>
+                  {!isLinked && (
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={handleLinkToCommessa}
+                      disabled={updateCommessa.isPending || createCommessa.isPending}
+                      className="h-8 bg-primary/10 text-purple-400 border-purple-500/20 hover:bg-primary/20 rounded-xl text-[10px] font-black uppercase tracking-widest"
+                    >
+                      <Plus className="w-3 h-3 mr-1" /> 
+                      {commessaAttiva ? `Aggiungi a Commessa ${format(new Date(currentMonth), "MMM")}` : `Crea Commessa ${format(new Date(currentMonth), "MMM")}`}
+                    </Button>
+                  )}
+                  {isLinked && (
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={() => commessaAttiva && navigate(`/commesse/${commessaAttiva.id}`)}
+                      className="h-8 text-emerald-400 text-[10px] font-black uppercase tracking-widest"
+                    >
+                      In Commessa Attiva <ExternalLink className="w-3 h-3 ml-1" />
+                    </Button>
+                  )}
                 </CardHeader>
                 <CardContent className="pt-6">
                   <div className="text-center py-16 border-2 border-dashed border-border rounded-2xl bg-muted/5">

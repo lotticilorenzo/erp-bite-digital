@@ -1,5 +1,6 @@
 from __future__ import annotations
 import uuid
+import enum
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, List, Literal
@@ -58,15 +59,112 @@ class UserOut(OrmBase):
     data_inizio: Optional[date]
     created_at: datetime
 
-class RisorsaOut(OrmBase):
+class RisorsaServizioBase(BaseModel):
+    nome_servizio: str
+    costo_orario: Optional[Decimal] = None
+    costo_fisso: Optional[Decimal] = None
+    attivo: bool = True
+
+class RisorsaServizioCreate(RisorsaServizioBase):
+    pass
+
+class RisorsaServizioUpdate(BaseModel):
+    nome_servizio: Optional[str] = None
+    costo_orario: Optional[Decimal] = None
+    costo_fisso: Optional[Decimal] = None
+    attivo: Optional[bool] = None
+
+class RisorsaServizioOut(OrmBase, RisorsaServizioBase):
+    id: uuid.UUID
+    created_at: datetime
+
+class StudioNodeType(str, enum.Enum):
+    FOLDER = "folder"
+    PROJECT = "project"
+    TASK = "task"
+    DASHBOARD = "dashboard"
+
+class StudioNodeBase(BaseModel):
+    nome: str
+    parent_id: Optional[uuid.UUID] = None
+    tipo: StudioNodeType = StudioNodeType.FOLDER
+    icon: Optional[str] = None
+    color: Optional[str] = None
+    linked_progetto_id: Optional[uuid.UUID] = None
+    linked_task_id: Optional[uuid.UUID] = None
+    is_private: bool = False
+    order: int = 0
+
+class StudioNodeCreate(StudioNodeBase):
+    pass
+
+class StudioNodeUpdate(BaseModel):
+    nome: Optional[str] = None
+    parent_id: Optional[uuid.UUID] = None
+    tipo: Optional[StudioNodeType] = None
+    icon: Optional[str] = None
+    color: Optional[str] = None
+    linked_progetto_id: Optional[uuid.UUID] = None
+    linked_task_id: Optional[uuid.UUID] = None
+    is_private: Optional[bool] = None
+    order: Optional[int] = None
+
+class StudioNodeOut(StudioNodeBase):
     id: uuid.UUID
     user_id: Optional[uuid.UUID]
+    created_at: datetime
+    updated_at: datetime
+    children: List["StudioNodeOut"] = []
+
+    class Config:
+        from_attributes = True
+
+class RisorsaBase(BaseModel):
+    user_id: Optional[uuid.UUID] = None
     nome: str
     cognome: str
-    ruolo: Optional[str]
-    tipo_contratto: str
-    ore_settimanali: Decimal
-    attivo: bool
+    ruolo: Optional[str] = None
+    tipo_contratto: str = "DIPENDENTE"
+    ore_settimanali: Decimal = Decimal("40")
+    costo_orario_override: Optional[Decimal] = None
+    attivo: bool = True
+    email: Optional[str] = None
+    telefono: Optional[str] = None
+    piva: Optional[str] = None
+    codice_fiscale: Optional[str] = None
+    indirizzo: Optional[str] = None
+    iban: Optional[str] = None
+    banca: Optional[str] = None
+    bic_swift: Optional[str] = None
+    note: Optional[str] = None
+
+class RisorsaCreate(RisorsaBase):
+    pass
+
+class RisorsaUpdate(BaseModel):
+    user_id: Optional[uuid.UUID] = None
+    nome: Optional[str] = None
+    cognome: Optional[str] = None
+    ruolo: Optional[str] = None
+    tipo_contratto: Optional[str] = None
+    ore_settimanali: Optional[Decimal] = None
+    costo_orario_override: Optional[Decimal] = None
+    attivo: Optional[bool] = None
+    email: Optional[str] = None
+    telefono: Optional[str] = None
+    piva: Optional[str] = None
+    codice_fiscale: Optional[str] = None
+    indirizzo: Optional[str] = None
+    iban: Optional[str] = None
+    banca: Optional[str] = None
+    bic_swift: Optional[str] = None
+    note: Optional[str] = None
+
+class RisorsaOut(OrmBase, RisorsaBase):
+    id: uuid.UUID
+    servizi: List[RisorsaServizioOut] = []
+    created_at: datetime
+    updated_at: datetime
 
 
 # ── AUTH ──────────────────────────────────────────────────
@@ -100,10 +198,8 @@ class ClienteCreate(BaseModel):
     email: Optional[str] = None
     ragione_sociale: str
     piva: Optional[str] = None
-    codice_fiscale: Optional[str] = None
     sdi: Optional[str] = None
     pec: Optional[str] = None
-    indirizzo: Optional[str] = None
     condizioni_pagamento: Optional[str] = None
     drive_files: Optional[list] = None
     logo_url: Optional[str] = None
@@ -292,11 +388,24 @@ class CommessaCreate(BaseModel):
     ore_contratto: Decimal = Decimal("0")
     note: Optional[str] = None
 
+    @field_validator("costi_diretti", "ore_contratto")
+    @classmethod
+    def check_non_negative(cls, v: Decimal) -> Decimal:
+        if v < 0:
+            raise ValueError("Il valore non può essere negativo")
+        return v
+
     @field_validator("mese_competenza")
     @classmethod
     def force_first_of_month(cls, v: date) -> date:
         """Normalizza sempre al primo del mese."""
         return v.replace(day=1)
+
+    @model_validator(mode="after")
+    def validate_date_range(self):
+        if self.data_inizio and self.data_fine and self.data_fine < self.data_inizio:
+            raise ValueError("data_fine deve essere successiva a data_inizio")
+        return self
 
     @model_validator(mode="after")
     def derive_mese_from_data_fine(self):
@@ -317,6 +426,11 @@ class CommessaUpdate(BaseModel):
     data_inizio: Optional[date] = None
     data_fine: Optional[date] = None
 
+    @model_validator(mode="after")
+    def validate_date_range(self):
+        if self.data_inizio and self.data_fine and self.data_fine < self.data_inizio:
+            raise ValueError("data_fine deve essere successiva a data_inizio")
+        return self
 
     @model_validator(mode="after")
     def derive_mese_from_data_fine(self):
@@ -398,6 +512,8 @@ class TimesheetCreate(BaseModel):
     def check_positive(cls, v: int) -> int:
         if v <= 0:
             raise ValueError("La durata deve essere positiva")
+        if v > 1440:
+            raise ValueError("La durata non può superare 24 ore (1440 minuti)")
         return v
 
     @field_validator("mese_competenza")
@@ -432,6 +548,8 @@ class TimesheetOut(OrmBase):
     approvato_da: Optional[uuid.UUID]
     approvato_at: Optional[datetime]
     note: Optional[str]
+    task_display_name: Optional[str] = None
+    clickup_task_id: Optional[str] = None
     created_at: datetime
     user: Optional[UserOut] = None
 
@@ -441,6 +559,7 @@ class TaskCreate(BaseModel):
     progetto_id: Optional[uuid.UUID] = None
     commessa_id: Optional[uuid.UUID] = None
     assegnatario_id: Optional[uuid.UUID] = None
+    revisore_id: Optional[uuid.UUID] = None
     parent_id: Optional[uuid.UUID] = None
     titolo: str
     descrizione: Optional[str] = None
@@ -448,6 +567,12 @@ class TaskCreate(BaseModel):
     data_inizio: Optional[date] = None
     data_scadenza: Optional[date] = None
     stima_minuti: Optional[int] = None
+
+    @model_validator(mode="after")
+    def validate_date_range(self):
+        if self.data_inizio and self.data_scadenza and self.data_scadenza < self.data_inizio:
+            raise ValueError("data_scadenza deve essere successiva a data_inizio")
+        return self
 
 class TaskUpdate(BaseModel):
     progetto_id: Optional[uuid.UUID] = None
@@ -468,6 +593,7 @@ class TaskOut(OrmBase):
     progetto_id: Optional[uuid.UUID] = None
     commessa_id: Optional[uuid.UUID] = None
     assegnatario_id: Optional[uuid.UUID] = None
+    revisore_id: Optional[uuid.UUID] = None
     parent_id: Optional[uuid.UUID] = None
     titolo: str
     descrizione: Optional[str] = None
@@ -479,6 +605,8 @@ class TaskOut(OrmBase):
     clickup_synced_at: Optional[datetime] = None
     created_at: datetime
     subtasks: List[TaskOut] = []
+    assegnatario: Optional[UserOut] = None
+    revisore: Optional[UserOut] = None
 
 
 # ── TIMER SESSION ─────────────────────────────────────────
@@ -519,10 +647,33 @@ class CostoCreate(BaseModel):
     progetto_id: Optional[uuid.UUID] = None
     commessa_id: Optional[uuid.UUID] = None
 
+    @field_validator("importo")
+    @classmethod
+    def check_positive_importo(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("L'importo deve essere positivo")
+        return v
+
     @field_validator("mese_competenza")
     @classmethod
     def force_first_of_month(cls, v: date) -> date:
         return v.replace(day=1)
+
+class CostoUpdate(BaseModel):
+    tipo: Optional[CostoTipo] = None
+    descrizione: Optional[str] = None
+    importo: Optional[Decimal] = None
+    mese_competenza: Optional[date] = None
+    categoria: Optional[str] = None
+    progetto_id: Optional[uuid.UUID] = None
+    commessa_id: Optional[uuid.UUID] = None
+
+    @field_validator("importo")
+    @classmethod
+    def check_positive_importo(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and v <= 0:
+            raise ValueError("L'importo deve essere positivo")
+        return v
 
 class CostoOut(OrmBase):
     id: uuid.UUID
@@ -625,6 +776,18 @@ class FatturaAttivaOut(OrmBase):
     valuta: Optional[str]
     created_at: datetime
     updated_at: datetime
+
+class FatturaAttivaUpdate(BaseModel):
+    cliente_id: Optional[uuid.UUID] = None
+    numero: Optional[str] = None
+    data_emissione: Optional[date] = None
+    data_scadenza: Optional[date] = None
+    importo_totale: Optional[Decimal] = None
+    importo_pagato: Optional[Decimal] = None
+    importo_residuo: Optional[Decimal] = None
+    stato_pagamento: Optional[str] = None
+    valuta: Optional[str] = None
+    data_ultimo_incasso: Optional[date] = None
 
 class FatturaPassivaOut(OrmBase):
     id: uuid.UUID
@@ -873,7 +1036,38 @@ class ChatMessaggioBase(BaseModel):
     risposta_a: Optional[uuid.UUID] = None
 
 class ChatMessaggioCreate(ChatMessaggioBase):
-    progetto_id: uuid.UUID
+    canale_id: uuid.UUID
+    progetto_id: Optional[uuid.UUID] = None
+
+class ChatCanaleOut(OrmBase):
+    id: uuid.UUID
+    nome: str
+    tipo: str
+    progetto_id: Optional[uuid.UUID] = None
+    logo_url: Optional[str] = None
+    descrizione: Optional[str] = None
+    created_at: datetime
+    last_message: Optional[str] = None
+    last_message_at: Optional[datetime] = None
+    unread_count: int = 0
+    membri: List['ChatMembroOut'] = []
+
+class ChatUserBasic(OrmBase):
+    id: uuid.UUID
+    nome: str
+    cognome: str
+    ruolo: str
+    avatar_url: Optional[str] = None
+
+class ChatMembroOut(OrmBase):
+    id: uuid.UUID
+    canale_id: uuid.UUID
+    user_id: uuid.UUID
+    ruolo: str
+    user: Optional[ChatUserBasic] = None
+
+# Resolve forward reference
+ChatCanaleOut.model_rebuild()
 
 class ChatMessaggioUpdate(BaseModel):
     contenuto: Optional[str] = None
@@ -881,7 +1075,8 @@ class ChatMessaggioUpdate(BaseModel):
 
 class ChatMessaggioRead(ChatMessaggioBase):
     id: uuid.UUID
-    progetto_id: uuid.UUID
+    canale_id: uuid.UUID
+    progetto_id: Optional[uuid.UUID] = None
     autore_id: uuid.UUID
     autore_nome: Optional[str] = None
     created_at: datetime
@@ -908,6 +1103,7 @@ class CRMStageOut(BaseModel):
 class CRMActivityBase(BaseModel):
     tipo: str # Nota, Chiamata, Email, Meeting
     descrizione: Optional[str] = None
+    activity_metadata: Optional[dict] = None
     data_attivita: datetime = Field(default_factory=datetime.now)
 
 class CRMActivityCreate(CRMActivityBase):
@@ -928,8 +1124,12 @@ class CRMLeadBase(BaseModel):
     nome_contatto: Optional[str] = None
     email: Optional[str] = None
     telefono: Optional[str] = None
+    sito_web: Optional[str] = None
+    settore: Optional[str] = None
+    dimensione_azienda: Optional[str] = None
     valore_stimato: Decimal = Decimal("0")
     probabilita_chiusura: int = 0
+    lead_score: int = 0
     data_prossimo_followup: Optional[date] = None
     assegnato_a_id: Optional[uuid.UUID] = None
     note: Optional[str] = None
@@ -943,9 +1143,13 @@ class CRMLeadUpdate(BaseModel):
     nome_contatto: Optional[str] = None
     email: Optional[str] = None
     telefono: Optional[str] = None
+    sito_web: Optional[str] = None
+    settore: Optional[str] = None
+    dimensione_azienda: Optional[str] = None
     stadio_id: Optional[uuid.UUID] = None
     valore_stimato: Optional[Decimal] = None
     probabilita_chiusura: Optional[int] = None
+    lead_score: Optional[int] = None
     data_prossimo_followup: Optional[date] = None
     assegnato_a_id: Optional[uuid.UUID] = None
     note: Optional[str] = None

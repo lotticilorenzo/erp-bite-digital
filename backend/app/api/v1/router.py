@@ -31,7 +31,7 @@ from app.schemas.schemas import (
     CommessaCreate, CommessaUpdate, CommessaOut,
     TimesheetCreate, TimesheetOut, TimesheetApprova,
     FornitoreOut, FornitoreCreate, FornitoreUpdate,
-    FatturaAttivaOut, FatturaPassivaOut, FatturaPassivaUpdate, FatturaIncassaRequest,
+    FatturaAttivaOut, FatturaAttivaUpdate, FatturaPassivaOut, FatturaPassivaUpdate, FatturaIncassaRequest,
     FicSyncStatusOut, TaskCreate, TaskUpdate, TaskOut,
     CategoriaFornitoreCreate, CategoriaFornitoreOut, CategoriaFornitoreUpdate,
     PreventivoCreate, PreventivoUpdate, PreventivoOut,
@@ -45,8 +45,8 @@ import httpx
 from app.services.services import (
     list_tasks, get_task, create_task, update_task, delete_task,
     list_users, get_user_by_email, create_user, update_user,
-    list_clienti, get_cliente, create_cliente, update_cliente, delete_cliente,
-    list_progetti, get_progetto, create_progetto, update_progetto, get_progetto_with_servizi,
+    get_cliente, create_cliente, update_cliente, delete_cliente,
+    get_progetto, create_progetto, update_progetto, get_progetto_with_servizi,
     list_commesse, get_commessa, create_commessa, update_commessa, calcola_metriche_commessa,
     list_timesheet, create_timesheet, approva_timesheet,
     get_dashboard_kpi, get_marginalita_clienti,
@@ -62,11 +62,21 @@ from app.api.v1 import ai
 from app.api.v1 import planning
 from app.api.v1 import notifications
 from app.api.v1 import assenze
+from app.api.v1 import risorse_servizi
+from app.api.v1 import risorse
+from app.api.v1 import studio
+from app.api.v1 import chat
+from app.api.v1 import uploads
 
 router = APIRouter()
 router.include_router(timer.router)
 router.include_router(ai.router)
 router.include_router(planning.router)
+router.include_router(risorse.router)
+router.include_router(risorse_servizi.router)
+router.include_router(studio.router)
+router.include_router(chat.router, prefix="/chat", tags=["Chat"])
+router.include_router(uploads.router, prefix="/uploads", tags=["Uploads"])
 router.include_router(notifications.router, prefix="/notifications", tags=["Notifiche"])
 router.include_router(assenze.router, prefix="/assenze", tags=["Assenze"])
 
@@ -563,10 +573,21 @@ async def remove_categoria_fornitore(
 @router.get("/clienti", response_model=List[ClienteOut], tags=["Clienti"])
 async def get_clienti(
     attivo: Optional[bool] = Query(None),
+    search: Optional[str] = Query(None, description="Ricerca per ragione sociale"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(1000, ge=1, le=5000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
 ):
-    return await list_clienti(db, attivo)
+    from app.models.models import Cliente as ClienteModel
+    q = select(ClienteModel)
+    if attivo is not None:
+        q = q.where(ClienteModel.attivo == attivo)
+    if search:
+        q = q.where(ClienteModel.ragione_sociale.ilike(f"%{search}%"))
+    q = q.order_by(ClienteModel.ragione_sociale).offset(skip).limit(limit)
+    result = await db.execute(q)
+    return result.scalars().all()
 
 @router.get("/clienti/{cliente_id}", response_model=ClienteOut, tags=["Clienti"])
 async def get_single_cliente(
@@ -698,10 +719,28 @@ async def remove_cliente(
 async def get_progetti(
     cliente_id: Optional[uuid.UUID] = Query(None),
     stato: Optional[str] = Query(None),
+    search: Optional[str] = Query(None, description="Ricerca per nome progetto"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(1000, ge=1, le=5000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
 ):
-    return await list_progetti(db, cliente_id, stato)
+    from app.models.models import Progetto as ProgettoModel
+    from sqlalchemy.orm import selectinload
+    q = select(ProgettoModel).options(
+        selectinload(ProgettoModel.cliente),
+        selectinload(ProgettoModel.servizi),
+        selectinload(ProgettoModel.team),
+    )
+    if cliente_id:
+        q = q.where(ProgettoModel.cliente_id == cliente_id)
+    if stato:
+        q = q.where(ProgettoModel.stato == stato)
+    if search:
+        q = q.where(ProgettoModel.nome.ilike(f"%{search}%"))
+    q = q.order_by(ProgettoModel.nome).offset(skip).limit(limit)
+    result = await db.execute(q)
+    return result.scalars().all()
 
 @router.get("/progetti/{progetto_id}", response_model=ProgettoWithCliente, tags=["Progetti"])
 async def get_single_progetto(
@@ -721,6 +760,8 @@ async def add_progetto(
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
 ):
     p = await create_progetto(db, data)
+    await db.commit()
+    await db.refresh(p)
     return await get_progetto_with_servizi(db, p.id)
 
 @router.patch("/progetti/{progetto_id}", response_model=ProgettoOut, tags=["Progetti"])
@@ -935,6 +976,46 @@ async def patch_incassa_fattura(
     return fattura
 
 
+@router.patch("/fatture-attive/{fattura_id}", response_model=FatturaAttivaOut, tags=["FIC"])
+async def patch_fattura_attiva(
+    fattura_id: uuid.UUID,
+    body: FatturaAttivaUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    from app.models.models import FatturaAttiva
+    from sqlalchemy import select
+    result = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == fattura_id))
+    fattura = result.scalar_one_or_none()
+    if not fattura:
+        raise HTTPException(status_code=404, detail="Fattura non trovata")
+    
+    update_data = body.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(fattura, key, value)
+    
+    await db.commit()
+    await db.refresh(fattura)
+    return fattura
+
+
+@router.delete("/fatture-attive/{fattura_id}", status_code=204, tags=["FIC"])
+async def delete_fattura_attiva(
+    fattura_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN))
+):
+    from app.models.models import FatturaAttiva
+    from sqlalchemy import select
+    result = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == fattura_id))
+    fattura = result.scalar_one_or_none()
+    if not fattura:
+        raise HTTPException(status_code=404, detail="Fattura non trovata")
+    
+    await db.delete(fattura)
+    await db.commit()
+
+
 @router.get("/fornitori-full", tags=["Fornitori"])
 async def get_fornitori_full(
     db: AsyncSession = Depends(get_db),
@@ -989,6 +1070,23 @@ async def patch_fattura_passiva(
     if not fattura:
         raise HTTPException(status_code=404, detail="Fattura non trovata")
     return fattura
+
+
+@router.delete("/fatture-passive/{fattura_id}", status_code=204, tags=["FIC"])
+async def delete_fattura_passive(
+    fattura_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN))
+):
+    from app.models.models import FatturaPassiva
+    from sqlalchemy import select
+    result = await db.execute(select(FatturaPassiva).where(FatturaPassiva.id == fattura_id))
+    fattura = result.scalar_one_or_none()
+    if not fattura:
+        raise HTTPException(status_code=404, detail="Fattura non trovata")
+    
+    await db.delete(fattura)
+    await db.commit()
 
 @router.get("/fornitori", response_model=List[FornitoreOut], tags=["FIC"])
 async def get_fornitori(
@@ -1741,6 +1839,29 @@ async def update_timesheet_manuale(
     return ts
 
 
+@router.delete("/timesheet/{timesheet_id}", status_code=204, tags=["Timesheet"])
+async def delete_timesheet_singolo(
+    timesheet_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Elimina un singolo timesheet. ADMIN/PM possono eliminare qualsiasi; DIPENDENTE solo i propri PENDING."""
+    from app.models.models import Timesheet as TimesheetModel, TimesheetStatus
+    result = await db.execute(select(TimesheetModel).where(TimesheetModel.id == timesheet_id))
+    ts = result.scalar_one_or_none()
+    if not ts:
+        raise HTTPException(status_code=404, detail="Timesheet non trovato")
+
+    if current_user.ruolo in (UserRole.DIPENDENTE, UserRole.FREELANCER):
+        if ts.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Non autorizzato")
+        if ts.stato != TimesheetStatus.PENDING:
+            raise HTTPException(status_code=400, detail="Solo i timesheet in stato PENDING possono essere eliminati")
+
+    await db.delete(ts)
+    await db.commit()
+
+
 # ═══════════════════════════════════════════════════════
 # TASKS (NATIVI)
 @router.get("/tasks/time-estimate", tags=["Tasks"])
@@ -2247,8 +2368,6 @@ async def list_wiki_articles_endpoint(
         stmt = stmt.where(WikiArticolo.categoria_id == categoria_id)
     result = await db.execute(stmt.order_by(WikiArticolo.ultimo_aggiornamento.desc()))
     articles = result.scalars().all()
-    
-    # Map autore_nome
     for a in articles:
         a.autore_nome = f"{a.autore.nome} {a.autore.cognome}" if a.autore else "Anonimo"
     
@@ -2352,193 +2471,9 @@ async def search_wiki_articles_endpoint(
     return articles
 
 
-# ── CHAT ──────────────────────────────────────────────────
-
-@router.get("/chat/{progetto_id}/messaggi", response_model=List[ChatMessaggioRead])
-async def get_chat_messages(
-    progetto_id: uuid.UUID,
-    limite: int = 50,
-    prima_di: Optional[datetime] = None,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    from app.models.models import ChatMessaggio, ChatReazione, User
-    from sqlalchemy.orm import joinedload, selectinload
-    
-    stmt = select(ChatMessaggio).options(
-        joinedload(ChatMessaggio.autore),
-        selectinload(ChatMessaggio.reazioni).joinedload(ChatReazione.user)
-    ).where(ChatMessaggio.progetto_id == progetto_id)
-    
-    if prima_di:
-        stmt = stmt.where(ChatMessaggio.created_at < prima_di)
-    
-    stmt = stmt.order_by(ChatMessaggio.created_at.desc()).limit(limite)
-    
-    result = await db.execute(stmt)
-    messages = result.scalars().all()
-    
-    # Formatta autore_nome e user_nome nelle reazioni
-    for m in messages:
-        m.autore_nome = f"{m.autore.nome} {m.autore.cognome}" if m.autore else "Anonimo"
-        for r in m.reazioni:
-            r.user_nome = f"{r.user.nome} {r.user.cognome}" if r.user else "Anonimo"
-            
-    return sorted(messages, key=lambda x: x.created_at)
-
-@router.post("/chat/{progetto_id}/messaggi", response_model=ChatMessaggioRead)
-async def create_chat_message(
-    progetto_id: uuid.UUID,
-    message_in: ChatMessaggioCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    from app.models.models import ChatMessaggio, Progetto, User
-    from app.services.notification_service import create_notification
-    from sqlalchemy import func
-    import re
-    
-    # Verifica progetto
-    progetto_res = await db.execute(select(Progetto).where(Progetto.id == progetto_id))
-    progetto = progetto_res.scalar_one_or_none()
-    if not progetto:
-        raise HTTPException(status_code=404, detail="Progetto non trovato")
-        
-    new_message = ChatMessaggio(
-        progetto_id=progetto_id,
-        autore_id=current_user.id,
-        contenuto=message_in.contenuto,
-        tipo=message_in.tipo,
-        risposta_a=message_in.risposta_a
-    )
-    db.add(new_message)
-    await db.commit()
-    await db.refresh(new_message)
-    
-    # Autore nome per risposta
-    new_message.autore_nome = f"{current_user.nome} {current_user.cognome}"
-    new_message.reazioni = []
-    
-    # Gestione Menzioni e Notifiche
-    mentions = re.findall(r"@([^ \n\r\t]+ [^ \n\r\t]+)", message_in.contenuto)
-    for mention_name in mentions:
-        user_stmt = select(User).where(
-            func.concat(User.nome, " ", User.cognome).ilike(mention_name.strip()),
-            User.attivo == True
-        )
-        u_res = await db.execute(user_stmt)
-        u_tagged = u_res.scalar_one_or_none()
-        if u_tagged and u_tagged.id != current_user.id:
-            await create_notification(
-                db,
-                user_id=u_tagged.id,
-                title=f"Menzionato in {progetto.nome}",
-                message=f"{current_user.nome} ti ha menzionato.",
-                type="MESSAGGIO",
-                link=f"/progetti/{progetto_id}?tab=chat"
-            )
-            
-    return new_message
-
-@router.patch("/chat/messaggi/{id}", response_model=ChatMessaggioRead)
-async def update_chat_message(
-    id: uuid.UUID,
-    message_in: ChatMessaggioUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    from app.models.models import ChatMessaggio
-    from sqlalchemy.orm import joinedload
-    
-    stmt = select(ChatMessaggio).options(joinedload(ChatMessaggio.autore)).where(ChatMessaggio.id == id)
-    res = await db.execute(stmt)
-    message = res.scalar_one_or_none()
-    
-    if not message:
-        raise HTTPException(status_code=404, detail="Messaggio non trovato")
-    if message.autore_id != current_user.id and current_user.ruolo != "ADMIN":
-        raise HTTPException(status_code=403, detail="Non autorizzato")
-        
-    if message_in.contenuto is not None:
-        message.contenuto = message_in.contenuto
-        message.modificato = True
-        
-    await db.commit()
-    await db.refresh(message)
-    message.autore_nome = f"{message.autore.nome} {message.autore.cognome}" if message.autore else "Anonimo"
-    return message
-
-@router.delete("/chat/messaggi/{id}")
-async def delete_chat_message(
-    id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    from app.models.models import ChatMessaggio
-    res = await db.execute(select(ChatMessaggio).where(ChatMessaggio.id == id))
-    message = res.scalar_one_or_none()
-    
-    if not message:
-        raise HTTPException(status_code=404, detail="Messaggio non trovato")
-    if message.autore_id != current_user.id and current_user.ruolo != "ADMIN":
-        raise HTTPException(status_code=403, detail="Non autorizzato")
-        
-    await db.delete(message)
-    await db.commit()
-    return {"status": "ok"}
-
-@router.post("/chat/messaggi/{id}/reazione", response_model=ChatReazioneRead)
-async def add_chat_reazione(
-    id: uuid.UUID,
-    reaction_in: ChatReazioneBase,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    from app.models.models import ChatReazione
-    from sqlalchemy.exc import IntegrityError
-    
-    new_reaction = ChatReazione(
-        messaggio_id=id,
-        user_id=current_user.id,
-        emoji=reaction_in.emoji
-    )
-    db.add(new_reaction)
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        res = await db.execute(select(ChatReazione).where(
-            ChatReazione.messaggio_id == id,
-            ChatReazione.user_id == current_user.id,
-            ChatReazione.emoji == reaction_in.emoji
-        ))
-        return res.scalar_one()
-        
-    await db.refresh(new_reaction)
-    new_reaction.user_nome = f"{current_user.nome} {current_user.cognome}"
-    return new_reaction
-
-@router.delete("/chat/messaggi/{id}/reazione")
-async def remove_chat_reazione(
-    id: uuid.UUID,
-    emoji: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    from app.models.models import ChatReazione
-    stmt = select(ChatReazione).where(
-        ChatReazione.messaggio_id == id,
-        ChatReazione.user_id == current_user.id,
-        ChatReazione.emoji == emoji
-    )
-    res = await db.execute(stmt)
-    reaction = res.scalar_one_or_none()
-    
-    if reaction:
-        await db.delete(reaction)
-        await db.commit()
-        
-    return {"status": "ok"}
+# ═══════════════════════════════════════════════════════
+# CRM
+# ═══════════════════════════════════════════════════════
 
 
 # ── CRM ───────────────────────────────────────────────────
@@ -2552,10 +2487,11 @@ async def get_crm_stages(db: AsyncSession = Depends(get_db)):
 @router.get("/crm/lead", response_model=List[CRMLeadOut], tags=["CRM"])
 async def get_crm_leads(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select
-    from sqlalchemy.orm import joinedload
+    from sqlalchemy.orm import joinedload, selectinload
     stmt = select(CRMLead).options(
         joinedload(CRMLead.stadio),
-        joinedload(CRMLead.assegnato_a)
+        joinedload(CRMLead.assegnato_a),
+        selectinload(CRMLead.attivita)
     ).order_by(CRMLead.created_at.desc())
     res = await db.execute(stmt)
     leads = res.scalars().all()
@@ -2578,11 +2514,11 @@ async def add_crm_lead(data: CRMLeadCreate, db: AsyncSession = Depends(get_db)):
 @router.get("/crm/lead/{lead_id}", response_model=CRMLeadOut, tags=["CRM"])
 async def get_single_crm_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select
-    from sqlalchemy.orm import joinedload
+    from sqlalchemy.orm import joinedload, selectinload
     stmt = select(CRMLead).where(CRMLead.id == lead_id).options(
         joinedload(CRMLead.stadio),
         joinedload(CRMLead.assegnato_a),
-        joinedload(CRMLead.attivita)
+        selectinload(CRMLead.attivita)
     )
     res = await db.execute(stmt)
     lead = res.scalar_one_or_none()
@@ -2590,7 +2526,7 @@ async def get_single_crm_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get
         raise HTTPException(status_code=404, detail="Lead non trovato")
         
     if lead.assegnato_a:
-        lead.assegnato_a_nome = f"{lead.assegnato_a.nome} {lead.assegnatario.cognome}"
+        lead.assegnato_a_nome = f"{lead.assegnato_a.nome} {lead.assegnato_a.cognome}"
         
     # Add author names to activities
     for act in lead.attivita:

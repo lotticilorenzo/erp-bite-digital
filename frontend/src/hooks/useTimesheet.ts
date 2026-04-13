@@ -61,15 +61,15 @@ export function useDeleteTimesheetManual() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { data } = await api.delete("/timesheet/bulk", { data: { ids: [id] } });
-      return data;
+      await api.delete(`/timesheet/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["timesheets"], exact: false });
       toast.success("Timesheet eliminato con successo");
     },
-    onError: () => {
-      toast.error("Errore nell'eliminazione del timesheet");
+    onError: (error: any) => {
+      const msg = error?.response?.data?.detail || "Errore nell'eliminazione del timesheet";
+      toast.error(msg);
     },
   });
 }

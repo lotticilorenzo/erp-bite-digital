@@ -16,6 +16,7 @@ import {
   ShoppingCart,
   Target,
   BookOpen,
+  FolderOpen,
 } from "lucide-react";
 
 // ... (other imports)
@@ -52,25 +53,25 @@ const navItems = [
     items: [
       { title: "Dashboard", url: "/", icon: LayoutDashboard },
       { title: "Analytics", url: "/analytics", icon: PieChart },
-      { title: "Timesheet", url: "/timesheet", icon: Timer },
     ],
   },
   {
     title: "Gestione",
     items: [
       { title: "Clienti", url: "/clienti", icon: Users },
-      { title: "Gantt", url: "/gantt", icon: LayoutDashboard },
-      { title: "Preventivi", url: "/preventivi", icon: FileText },
+      { title: "Progetti", url: "/progetti", icon: FolderOpen },
       { title: "Commesse", url: "/commesse", icon: Briefcase },
-      { title: "Planning", url: "/planning", icon: ClipboardList },
+      { title: "Preventivi", url: "/preventivi", icon: FileText },
       { title: "CRM", url: "/crm", icon: Target },
     ],
   },
   {
-    title: "Documenti",
+    title: "Operativo",
     items: [
-      { title: "Report Mensili", url: "/report", icon: FileText },
-      { title: "Wiki", url: "/wiki", icon: BookOpen },
+      { title: "Timesheet", url: "/timesheet", icon: Timer },
+      { title: "Planning", url: "/planning", icon: ClipboardList },
+      { title: "Gantt", url: "/gantt", icon: LayoutDashboard },
+      { title: "Collaboratori", url: "/collaboratori", icon: Users },
     ],
   },
   {
@@ -83,11 +84,10 @@ const navItems = [
     ],
   },
   {
-    title: "Economia",
+    title: "Documenti",
     items: [
-      { title: "Riconnetti API", url: "/settings/api-recon", icon: Zap },
-      { title: "Disconnetti API", url: "/settings/api-disc", icon: Zap },
-      { title: "Configura alert", url: "/settings/alerts", icon: Settings },
+      { title: "Report Mensili", url: "/report", icon: BarChart3 },
+      { title: "Wiki", url: "/wiki", icon: BookOpen },
     ],
   },
 ];
@@ -151,23 +151,23 @@ export function AppSidebar() {
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
                         asChild
-                        isActive={location.pathname === item.url}
+                        isActive={item.url === "/" ? location.pathname === "/" : location.pathname.startsWith(item.url)}
                         tooltip={item.title}
                         className={`
                           transition-all duration-300 h-10 rounded-xl px-3 mb-1.5 group/btn
-                          ${location.pathname === item.url 
-                            ? "bg-muted text-white border border-border shadow-lg" 
+                          ${(item.url === "/" ? location.pathname === "/" : location.pathname.startsWith(item.url))
+                            ? "bg-muted text-white border border-border shadow-lg"
                             : "text-muted-foreground hover:text-white hover:bg-muted/40"
                           }
                         `}
                       >
                         <Link to={item.url} className="flex items-center gap-3">
                           <item.icon className={`h-4.5 w-4.5 transition-all duration-300 ${
-                            location.pathname === item.url 
-                              ? "text-primary scale-110" 
+                            (item.url === "/" ? location.pathname === "/" : location.pathname.startsWith(item.url))
+                              ? "text-primary scale-110"
                               : "opacity-70 group-hover/btn:opacity-100 group-hover/btn:scale-110"
                           }`} />
-                          <span className={`text-sm tracking-wide ${location.pathname === item.url ? "font-black" : "font-bold"}`}>
+                          <span className={`text-sm tracking-wide ${(item.url === "/" ? location.pathname === "/" : location.pathname.startsWith(item.url)) ? "font-black" : "font-bold"}`}>
                             {item.title}
                           </span>
                         </Link>

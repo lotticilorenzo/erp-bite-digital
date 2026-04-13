@@ -1,9 +1,11 @@
-import { useParams, useNavigate } from "react-router-dom";
-import { 
-  ChevronLeft, 
-  ShieldCheck, 
-  TrendingUp, 
-  CreditCard, 
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ShieldCheck,
+  TrendingUp,
+  CreditCard,
   History,
   AlertTriangle,
   CheckCircle2,
@@ -12,21 +14,25 @@ import {
   FileText,
   Eye,
   Plus,
-  Pencil
+  Pencil,
+  Clock,
+  Receipt,
+  ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useCliente, useClientHealthScore } from "@/hooks/useClienti";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useCommesse } from "@/hooks/useCommesse";
 import { ClientAvatar } from "@/components/common/ClientAvatar";
-import { format, parseISO, startOfYear, endOfYear, subMonths, subYears } from "date-fns";
+import { format, parseISO, startOfYear, endOfYear, subMonths, subYears, differenceInDays, addMonths } from "date-fns";
 import { it } from "date-fns/locale";
 import { motion } from "framer-motion";
 import { PDFDownloadLink, PDFViewer } from "@react-pdf/renderer";
 import { ClienteReportPDF } from "@/components/reports/ClienteReportPDF";
 import { ClienteDialog } from "@/components/clienti/ClienteDialog";
 import { useProgetti } from "@/hooks/useProgetti";
+import { useFattureAttive } from "@/hooks/useFatture";
 import { 
   Dialog,
   DialogContent,
@@ -56,6 +62,7 @@ export default function ClienteDetailPage() {
   const { data: commesse = [] } = useCommesse({ cliente_id: id });
   const { data: preventivi = [] } = usePreventivi({ cliente_id: id });
   const { data: progetti = [] } = useProgetti(id);
+  const { data: fatture = [] } = useFattureAttive();
   const { updatePreventivo, deletePreventivo, convertToCommessa } = usePreventivoMutations();
 
   const [periodo, setPeriodo] = useState<"YTD" | "PREV_YEAR" | "6M" | "ALL">("YTD");
@@ -88,6 +95,44 @@ export default function ClienteDetailPage() {
       return d >= start && d <= end;
     });
   }, [commesse, periodo]);
+
+  const clientFatture = useMemo(() => fatture.filter(f => f.cliente_id === id), [fatture, id]);
+
+  const clientStats = useMemo(() => {
+    const clientFatture = fatture.filter(f => f.cliente_id === id);
+    const ltv = commesse.reduce((acc, c) => acc + (c.valore_fatturabile || 0), 0);
+    
+    const paidFatture = clientFatture.filter(f => 
+      (f.stato_pagamento.toLowerCase() === 'pagata' || f.stato_pagamento.toLowerCase() === 'incassata') && 
+      f.data_emissione && f.data_incasso // Assuming we have data_incasso or we use a fallback
+    );
+
+    let avgCollectionDays = 0;
+    if (paidFatture.length > 0) {
+      const totalDays = paidFatture.reduce((acc, f) => {
+        const emissione = parseISO(f.data_emissione!);
+        const incasso = parseISO(f.data_incasso || new Date().toISOString());
+        return acc + differenceInDays(incasso, emissione);
+      }, 0);
+      avgCollectionDays = Math.round(totalDays / paidFatture.length);
+    }
+
+    return { ltv, avgCollectionDays };
+  }, [commesse, fatture, id]);
+
+  const projectionData = useMemo(() => {
+    const retainers = progetti.filter(p => p.tipo === "RETAINER" && p.stato === "ATTIVO");
+    const monthlyRetainerTotal = retainers.reduce((acc, p) => acc + (p.importo_fisso || 0), 0);
+    
+    return Array.from({ length: 12 }, (_, i) => {
+      const d = addMonths(new Date(), i);
+      return {
+        month: format(d, "MMM yy", { locale: it }).toUpperCase(),
+        projected: monthlyRetainerTotal,
+        iso: format(d, "yyyy-MM-01")
+      };
+    });
+  }, [progetti]);
 
   const handleEditP = (p: Preventivo) => {
     setSelectedP(p);
@@ -140,11 +185,18 @@ export default function ClienteDetailPage() {
 
   return (
     <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {/* ── BREADCRUMB ─────────────────────────────────────── */}
+      <nav className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+        <Link to="/clienti" className="hover:text-white transition-colors">Clienti</Link>
+        <ChevronRight className="w-3 h-3" />
+        <span className="text-foreground">{cliente.ragione_sociale}</span>
+      </nav>
+
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <Button 
-            variant="ghost" 
-            onClick={() => navigate("/clienti")} 
+          <Button
+            variant="ghost"
+            onClick={() => navigate("/clienti")}
             className="text-muted-foreground hover:text-white"
           >
             <ChevronLeft className="w-4 h-4 mr-2" /> Indietro
@@ -241,6 +293,76 @@ export default function ClienteDetailPage() {
           />
         </div>
       </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard 
+          title="Lifetime Value (LTV)"
+          value={`€${clientStats.ltv.toLocaleString()}`}
+          detail="Fatturato totale storico"
+          icon={<Euro className="w-4 h-4 text-emerald-400" />}
+        />
+        <StatCard 
+          title="Tempo Incasso Medio"
+          value={`${clientStats.avgCollectionDays} Giorni`}
+          detail="Media giorni emissione -> incasso"
+          icon={<Clock className="w-4 h-4 text-amber-400" />}
+        />
+        <StatCard 
+          title="Project Load"
+          value={`${commesse.filter(c => c.stato === 'APERTA').length}`}
+          detail="Commesse attive questo mese"
+          icon={<TrendingUp className="w-4 h-4 text-blue-400" />}
+        />
+        <StatCard 
+          title="Salute Cliente"
+          value={`${score}%`}
+          detail="Health Score calcolato"
+          icon={<ShieldCheck className="w-4 h-4 text-purple-400" />}
+        />
+      </div>
+
+      <Card className="bg-card border-border overflow-hidden rounded-[32px] border-border/50 shadow-2xl">
+        <CardHeader className="border-b border-border/30 bg-muted/5 pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-sm font-black uppercase tracking-widest text-primary">Proiezione Fatturato 12 Mesi</CardTitle>
+              <CardDescription className="text-[10px] uppercase font-bold text-muted-foreground mt-1">Stima basata su contratti retainer attivi</CardDescription>
+            </div>
+            <div className="p-2 rounded-xl bg-primary/10 border border-primary/20">
+              <TrendingUp className="h-4 w-4 text-primary" />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-8 h-[300px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={projectionData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+              <XAxis 
+                dataKey="month" 
+                stroke="hsl(var(--muted-foreground))" 
+                fontSize={10} 
+                fontWeight="bold" 
+                tickLine={false} 
+                axisLine={false} 
+              />
+              <YAxis 
+                stroke="hsl(var(--muted-foreground))" 
+                fontSize={10} 
+                fontWeight="bold" 
+                tickLine={false} 
+                axisLine={false}
+                tickFormatter={(val) => `€${val/1000}k`}
+              />
+              <Tooltip 
+                contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "16px", fontSize: "12px", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)" }}
+                itemStyle={{ fontWeight: "black", color: "hsl(var(--primary))" }}
+                cursor={{ fill: "hsl(var(--primary)/0.05)" }}
+              />
+              <Bar dataKey="projected" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} barSize={24} />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
@@ -344,10 +466,81 @@ export default function ClienteDetailPage() {
             </CardContent>
           </Card>
 
+          {/* ── FATTURE ────────────────────────────────────────── */}
           <Card className="bg-card border-border">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-lg font-medium flex items-center gap-2 text-white">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" /> {/* Reused icon just keeping it standard */}
+                <Receipt className="w-4 h-4 text-emerald-400" />
+                Fatture Attive
+              </CardTitle>
+              <button
+                onClick={() => navigate("/fatture")}
+                className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-primary transition-colors"
+              >
+                Tutte <ArrowRight className="w-3 h-3" />
+              </button>
+            </CardHeader>
+            <CardContent className="p-0">
+              {clientFatture.length === 0 ? (
+                <div className="px-6 py-8 text-center text-muted-foreground text-xs italic">
+                  Nessuna fattura trovata per questo cliente
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-muted/50 border-b border-border">
+                      <tr>
+                        <th className="px-6 py-3 text-[10px] font-black uppercase text-muted-foreground tracking-widest">Numero</th>
+                        <th className="px-6 py-3 text-[10px] font-black uppercase text-muted-foreground tracking-widest">Data</th>
+                        <th className="px-6 py-3 text-[10px] font-black uppercase text-muted-foreground tracking-widest text-right">Importo</th>
+                        <th className="px-6 py-3 text-[10px] font-black uppercase text-muted-foreground tracking-widest text-center">Stato</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clientFatture.slice(0, 10).map((f) => {
+                        const isPaid = f.stato_pagamento?.toLowerCase() === "pagata" || f.stato_pagamento?.toLowerCase() === "incassata";
+                        const isOverdue = !isPaid && f.data_scadenza && new Date(f.data_scadenza) < new Date();
+                        return (
+                          <tr key={f.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                            <td className="px-6 py-3 text-sm font-medium text-white">{f.numero || "—"}</td>
+                            <td className="px-6 py-3 text-xs text-muted-foreground">
+                              {f.data_emissione ? format(new Date(f.data_emissione), "dd/MM/yyyy") : "—"}
+                            </td>
+                            <td className="px-6 py-3 text-right text-sm font-black text-white tabular-nums">
+                              €{Number(f.importo_totale).toLocaleString("it-IT", { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-6 py-3 text-center">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                isPaid
+                                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                  : isOverdue
+                                    ? "bg-red-500/10 text-red-400 border border-red-500/20"
+                                    : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                              }`}>
+                                {f.stato_pagamento || "ATTESA"}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {clientFatture.length > 10 && (
+                    <div className="px-6 py-3 text-center text-xs text-muted-foreground border-t border-border">
+                      + altri {clientFatture.length - 10} documenti —{" "}
+                      <button onClick={() => navigate("/fatture")} className="text-primary underline">vedi tutte</button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── PROGETTI ───────────────────────────────────────── */}
+          <Card className="bg-card border-border">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-lg font-medium flex items-center gap-2 text-white">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
                 Progetti & Task
               </CardTitle>
             </CardHeader>
@@ -518,3 +711,25 @@ function FactorCard({ title, score, detail, icon }: { title: string, score: numb
     </Card>
   );
 }
+
+function StatCard({ title, value, detail, icon }: { title: string, value: string, detail: string, icon: React.ReactNode }) {
+  return (
+    <Card className="bg-card/40 border-border/50 hover:border-primary/30 transition-all rounded-2xl overflow-hidden relative group">
+      <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-primary/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+      <CardContent className="p-6">
+        <div className="flex items-center gap-4 mb-4">
+          <div className="p-2 bg-background/50 rounded-xl border border-border group-hover:border-primary/30 transition-colors">
+            {icon}
+          </div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-[#475569]">{title}</p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-2xl font-black text-white tracking-tighter">{value}</p>
+          <p className="text-[10px] text-muted-foreground font-medium italic">{detail}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+const Euro = ({ className }: { className?: string }) => <span className={className}>€</span>;
