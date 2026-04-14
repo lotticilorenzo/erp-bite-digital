@@ -65,7 +65,8 @@ export function AppTopbar() {
   const getBreadcrumbLabel = (path: string) => {
     switch (path) {
       case "clienti": return "Clienti";
-      case "progetti": return "Progetti";
+      case "projects": return "Progetti";
+      case "planning": return "Execution Hub";
       case "commesse": return "Commesse";
       case "timesheet": return "Timesheet";
       case "studio-os": return "Studio OS";

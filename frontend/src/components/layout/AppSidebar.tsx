@@ -66,7 +66,7 @@ const navItems = [
     ],
   },
   {
-    title: "Operativo",
+    title: "Execution Hub",
     items: [
       { title: "Timesheet", url: "/timesheet", icon: Timer },
       { title: "Planning", url: "/planning", icon: ClipboardList },
@@ -75,7 +75,7 @@ const navItems = [
     ],
   },
   {
-    title: "Amministrazione",
+    title: "Management Console",
     items: [
       { title: "Fatture", url: "/fatture", icon: FileText },
       { title: "Fornitori", url: "/fornitori", icon: ShoppingCart },
@@ -100,7 +100,11 @@ export function AppSidebar() {
   const isStudioOS = location.pathname.startsWith("/studio-os");
 
   return (
-    <Sidebar variant="sidebar" collapsible="icon" className="border-r border-sidebar-border bg-sidebar h-full shadow-2xl">
+    <Sidebar 
+      variant="sidebar" 
+      collapsible="icon" 
+      className="border-r border-sidebar-border/40 bg-sidebar/80 backdrop-blur-2xl h-full shadow-[20px_0_40px_-15px_rgba(0,0,0,0.5)] transition-all duration-700"
+    >
       <SidebarHeader className="pt-6 px-4 pb-4">
         <Link to="/" className="flex items-center gap-3 group cursor-pointer lg:px-1">
           {state === "collapsed" ? (
@@ -156,8 +160,8 @@ export function AppSidebar() {
                         className={`
                           transition-all duration-300 h-10 rounded-xl px-3 mb-1.5 group/btn
                           ${(item.url === "/" ? location.pathname === "/" : location.pathname.startsWith(item.url))
-                            ? "bg-muted text-white border border-border shadow-lg"
-                            : "text-muted-foreground hover:text-white hover:bg-muted/40"
+                            ? "bg-primary/10 text-white border border-primary/20 shadow-[0_0_15px_rgba(124,58,237,0.15)] ring-1 ring-primary/20"
+                            : "text-[#94a3b8] hover:text-white hover:bg-white/5"
                           }
                         `}
                       >
@@ -229,26 +233,26 @@ export function AppSidebar() {
         )}
       </div>
 
-      <SidebarFooter className="p-4 bg-sidebar border-t border-sidebar-border">
+      <SidebarFooter className="p-4 bg-transparent border-t border-sidebar-border/30">
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <SidebarMenuButton size="lg" className="hover:bg-muted transition-colors px-1 h-12 rounded-xl border border-transparent hover:border-border">
+                <SidebarMenuButton size="lg" className="hover:bg-white/5 transition-all px-1 h-12 rounded-xl border border-transparent hover:border-white/10 group/user">
                   <UserAvatar 
                     user={user} 
                     size="md" 
-                    className="h-9 w-9 rounded-lg border border-border shadow-xl" 
+                    className="h-9 w-9 rounded-lg border border-white/10 shadow-2xl group-hover/user:scale-105 transition-transform" 
                   />
                   <div className="flex flex-col items-start gap-0.5 truncate flex-1 min-w-0 ml-2">
-                    <span className="text-sm font-bold truncate leading-none text-white">
+                    <span className="text-sm font-black truncate leading-none text-white group-hover:text-primary transition-colors">
                       {user?.nome} {user?.cognome}
                     </span>
-                    <span className="text-[10px] text-muted-foreground truncate uppercase tracking-[0.1em] font-black">
+                    <span className="text-[10px] text-slate-500 truncate uppercase tracking-[0.2em] font-black group-hover:text-slate-300 transition-colors">
                       {user?.ruolo}
                     </span>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-[#475569] ml-auto mr-1" />
+                  <ChevronRight className="h-4 w-4 text-slate-600 ml-auto mr-1 group-hover/user:translate-x-1 transition-transform" />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="right" align="end" className="w-[220px] bg-card border-border p-2 shadow-2xl rounded-xl">

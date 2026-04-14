@@ -42,7 +42,8 @@ export function useTasks(filters?: {
         parent_id: t.parent_id,
         stima_minuti: t.stima_minuti,
         tempo_trascorso_minuti: t.tempo_trascorso_minuti || 0,
-        assegnatario_id: t.assegnatario_id
+        assegnatario_id: t.assegnatario_id,
+        priorita: t.priorita || "media",
       });
 
       return data.map(mapTask);
@@ -77,32 +78,43 @@ export function useTask(id: string | null) {
   });
 }
 
-export function useTaskMutations() {
+export function useCreateTask() {
   const queryClient = useQueryClient();
-
-  const createTask = useMutation({
+  return useMutation({
     mutationFn: (data: any) => api.post("/tasks", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["studio-tasks"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["tasks"], exact: false });
     },
   });
+}
 
-  const updateTask = useMutation({
+export function useUpdateTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) => api.patch(`/tasks/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["studio-tasks"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["tasks"], exact: false });
     },
   });
+}
 
-  const deleteTask = useMutation({
+export function useDeleteTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
     mutationFn: (id: string) => api.delete(`/tasks/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["studio-tasks"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["tasks"], exact: false });
     },
   });
+}
+
+export function useTaskMutations() {
+  const createTask = useCreateTask();
+  const updateTask = useUpdateTask();
+  const deleteTask = useDeleteTask();
 
   return { createTask, updateTask, deleteTask };
 }

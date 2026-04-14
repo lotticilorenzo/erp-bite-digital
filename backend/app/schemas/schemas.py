@@ -182,81 +182,95 @@ class TokenResponse(BaseModel):
 
 # ── CLIENTE ───────────────────────────────────────────────
 class ClienteCreate(BaseModel):
+    ragione_sociale: str
     codice_cliente: Optional[str] = None
     numero_progressivo: Optional[int] = None
-    paese: Optional[str] = None
     tipologia: Optional[str] = None
+    referente: Optional[str] = None
+    piva: Optional[str] = None
+    codice_fiscale: Optional[str] = None
+    sdi: Optional[str] = None
+    pec: Optional[str] = None
+    email: Optional[str] = None
+    telefono: Optional[str] = None
+    cellulare: Optional[str] = None
+    sito_web: Optional[str] = None
+    settore: Optional[str] = None
+    categoria: Optional[str] = None
     indirizzo: Optional[str] = None
     comune: Optional[str] = None
     cap: Optional[str] = None
     provincia: Optional[str] = None
-    codice_fiscale: Optional[str] = None
-    telefono: Optional[str] = None
-    referente: Optional[str] = None
-    note: Optional[str] = None
+    paese: Optional[str] = "Italia"
     note_indirizzo: Optional[str] = None
-    email: Optional[str] = None
-    ragione_sociale: str
-    piva: Optional[str] = None
-    sdi: Optional[str] = None
-    pec: Optional[str] = None
     condizioni_pagamento: Optional[str] = None
+    note: Optional[str] = None
+    attivo: bool = True
+    affidabilita: Optional[ClienteAffidabilita] = "MEDIA"
     drive_files: Optional[list] = None
     logo_url: Optional[str] = None
-    affidabilita: Optional[ClienteAffidabilita] = None
 
 class ClienteUpdate(BaseModel):
+    ragione_sociale: Optional[str] = None
     codice_cliente: Optional[str] = None
     numero_progressivo: Optional[int] = None
-    ragione_sociale: Optional[str] = None
+    tipologia: Optional[str] = None
+    referente: Optional[str] = None
     piva: Optional[str] = None
     codice_fiscale: Optional[str] = None
     sdi: Optional[str] = None
     pec: Optional[str] = None
     email: Optional[str] = None
     telefono: Optional[str] = None
-    referente: Optional[str] = None
+    cellulare: Optional[str] = None
+    sito_web: Optional[str] = None
+    settore: Optional[str] = None
+    categoria: Optional[str] = None
     indirizzo: Optional[str] = None
     comune: Optional[str] = None
     cap: Optional[str] = None
     provincia: Optional[str] = None
     paese: Optional[str] = None
-    tipologia: Optional[str] = None
-    note: Optional[str] = None
     note_indirizzo: Optional[str] = None
     condizioni_pagamento: Optional[str] = None
+    note: Optional[str] = None
     attivo: Optional[bool] = None
+    affidabilita: Optional[ClienteAffidabilita] = None
     drive_files: Optional[list] = None
     logo_url: Optional[str] = None
-    affidabilita: Optional[ClienteAffidabilita] = None
 
 class ClienteOut(OrmBase):
     id: uuid.UUID
+    ragione_sociale: str = ''
     codice_cliente: Optional[str] = None
     numero_progressivo: Optional[int] = None
-    ragione_sociale: str = ''
+    tipologia: Optional[str] = None
+    referente: Optional[str] = None
     piva: Optional[str] = None
     codice_fiscale: Optional[str] = None
     sdi: Optional[str] = None
     pec: Optional[str] = None
     email: Optional[str] = None
     telefono: Optional[str] = None
-    referente: Optional[str] = None
+    cellulare: Optional[str] = None
+    sito_web: Optional[str] = None
+    settore: Optional[str] = None
+    categoria: Optional[str] = None
     indirizzo: Optional[str] = None
     comune: Optional[str] = None
     cap: Optional[str] = None
     provincia: Optional[str] = None
     paese: Optional[str] = None
-    tipologia: Optional[str] = None
-    note: Optional[str] = None
     note_indirizzo: Optional[str] = None
     condizioni_pagamento: Optional[str] = None
-    fic_cliente_id: Optional[str] = None
+    note: Optional[str] = None
     attivo: bool = True
+    affidabilita: Optional[ClienteAffidabilita] = "MEDIA"
+    fic_cliente_id: Optional[str] = None
     drive_files: Optional[list] = None
     logo_url: Optional[str] = None
-    affidabilita: Optional[ClienteAffidabilita] = None
     created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 # ── PROGETTO ──────────────────────────────────────────────
@@ -586,6 +600,7 @@ class TaskUpdate(BaseModel):
     data_inizio: Optional[date] = None
     data_scadenza: Optional[date] = None
     stima_minuti: Optional[int] = None
+    priorita: Optional[str] = None
 
 class TaskOut(OrmBase):
     id: uuid.UUID
@@ -601,6 +616,7 @@ class TaskOut(OrmBase):
     data_inizio: Optional[date] = None
     data_scadenza: Optional[date] = None
     stima_minuti: Optional[int] = None
+    priorita: Optional[str] = "media"
     tempo_trascorso_minuti: int = 0
     clickup_synced_at: Optional[datetime] = None
     created_at: datetime
@@ -1172,3 +1188,38 @@ class CRMStatsOut(BaseModel):
     numero_lead_attivi: int
     tasso_conversione: float
     previsione_ricavi: Decimal
+
+
+# ── DOCUMENT SCHEMAS ──────────────────────────────────────
+
+class DocumentNodeCreate(BaseModel):
+    nome: str
+    tipo: str = "FILE"  # FOLDER | FILE
+    parent_id: Optional[uuid.UUID] = None
+    icona: Optional[str] = None
+    colore: Optional[str] = None
+
+class DocumentNodeUpdate(BaseModel):
+    nome: Optional[str] = None
+    contenuto: Optional[str] = None
+    parent_id: Optional[uuid.UUID] = None
+    ordine: Optional[int] = None
+    icona: Optional[str] = None
+    colore: Optional[str] = None
+
+class DocumentNodeOut(OrmBase):
+    id: uuid.UUID
+    nome: str
+    tipo: str
+    icona: Optional[str] = None
+    colore: Optional[str] = None
+    contenuto: Optional[str] = None
+    parent_id: Optional[uuid.UUID] = None
+    ordine: int = 0
+    created_by: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+    children: List['DocumentNodeOut'] = []
+
+DocumentNodeOut.model_rebuild()
+

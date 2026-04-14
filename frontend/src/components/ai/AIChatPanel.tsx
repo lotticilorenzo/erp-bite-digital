@@ -73,11 +73,11 @@ export function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
 
   return (
     <div className={`
-      fixed top-0 right-0 h-full w-[400px] bg-card border-l border-border 
-      shadow-2xl z-[100] flex flex-col animate-in slide-in-from-right duration-300
+      fixed top-4 right-4 h-[calc(100vh-2rem)] w-[400px] bg-card/80 backdrop-blur-xl border border-white/5 
+      shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-[100] flex flex-col rounded-3xl animate-in slide-in-from-right duration-500 ease-out
     `}>
       {/* Header */}
-      <div className="p-4 border-b border-border flex items-center justify-between bg-card/80 backdrop-blur-md sticky top-0 z-10">
+      <div className="p-6 border-b border-border/30 flex items-center justify-between bg-white/5 backdrop-blur-md sticky top-0 z-10 rounded-t-3xl">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-[0_0_20px_hsl(var(--primary)/0.2)]">
             <Sparkles className="h-6 w-6 text-white" />

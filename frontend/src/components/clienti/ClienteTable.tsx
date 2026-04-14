@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { motion } from "framer-motion";
 import { 
   MoreHorizontal, 
   Pencil, 
@@ -60,6 +61,7 @@ function HealthIndicator({ id }: { id: string }) {
 
 // ... existing ClienteTable component
 import { ClientAvatar } from "../common/ClientAvatar";
+import { EmptyState } from "../common/EmptyState";
 import {
   Dialog,
   DialogContent,
@@ -95,6 +97,21 @@ export function ClienteTable({ clienti, isLoading, onEdit, onNew }: ClienteTable
     }
   };
 
+  const container = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.05
+      }
+    }
+  };
+
+  const item = {
+    hidden: { opacity: 0, x: -10 },
+    show: { opacity: 1, x: 0 }
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -123,7 +140,10 @@ export function ClienteTable({ clienti, isLoading, onEdit, onNew }: ClienteTable
             className="pl-10 bg-muted border-border text-foreground focus:ring-primary w-full"
           />
         </div>
-        <Button onClick={onNew} className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-[0_0_20px_hsl(var(--primary)/0.2)] w-full md:w-auto">
+        <Button 
+          onClick={onNew} 
+          className="bg-primary hover:bg-primary/90 text-[10px] font-black uppercase italic tracking-widest text-primary-foreground shadow-xl shadow-[0_0_20px_hsl(var(--primary)/0.2)] w-full md:w-auto h-10 px-6 rounded-xl"
+        >
           <UserPlus className="mr-2 h-4 w-4" /> Nuovo Cliente
         </Button>
       </div>
@@ -139,14 +159,21 @@ export function ClienteTable({ clienti, isLoading, onEdit, onNew }: ClienteTable
               <TableHead className="text-right text-muted-foreground font-bold pr-6 font-black uppercase text-[10px] tracking-widest">Azioni</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody>
+          <motion.tbody
+            variants={container}
+            initial="hidden"
+            animate="show"
+          >
             {filteredClienti.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="h-32 text-center text-muted-foreground">
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <Building2 className="h-8 w-8 opacity-20" />
-                    <p>Nessun cliente trovato</p>
-                  </div>
+                <TableCell colSpan={5} className="py-20">
+                  <EmptyState 
+                    icon={Building2}
+                    title="Nessun Cliente"
+                    description="Inizia a popolare il tuo database aggiungendo il tuo primo cliente aziendale."
+                    actionLabel="Aggiungi Cliente"
+                    onAction={onNew}
+                  />
                 </TableCell>
               </TableRow>
             ) : (
@@ -224,10 +251,10 @@ export function ClienteTable({ clienti, isLoading, onEdit, onNew }: ClienteTable
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
-                </TableRow>
+                </motion.tr>
               ))
             )}
-          </TableBody>
+          </motion.tbody>
         </Table>
       </div>
 

@@ -3,8 +3,15 @@ import {
   Users, 
   Calendar, 
   CheckCircle2, 
-  ChevronDown,
   ChevronUp,
+  ChevronDown,
+  UserPlus,
+  Edit2,
+  Mail,
+  Phone,
+  Euro,
+  MapPin,
+  CreditCard
 } from "lucide-react";
 import { useUsers } from "@/hooks/useUsers";
 import { useTasks } from "@/hooks/useTasks";
@@ -19,11 +26,15 @@ import { format, isBefore, startOfDay, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 import type { User, Progetto } from "@/types";
 import type { TaskSO } from "@/types/studio";
+import { CollaboratorForm } from "@/components/collaboratori/CollaboratorForm";
+import { Button } from "@/components/ui/button";
 
 export function StudioTeamView() {
   const { data: users = [], isLoading: isLoadingUsers } = useUsers(true);
   const { data: progetti = [] } = useProgetti();
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+  const [isCollaboratorFormOpen, setIsCollaboratorFormOpen] = useState(false);
+  const [selectedCollaborator, setSelectedCollaborator] = useState<User | null>(null);
 
   if (isLoadingUsers) {
     return (
@@ -57,10 +68,22 @@ export function StudioTeamView() {
               <h1 className="text-2xl font-black tracking-tighter text-white uppercase italic">Team Overview</h1>
               <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest">Monitoring capacità e task odierni</p>
             </div>
-            <Badge variant="outline" className="bg-primary/5 border-primary/20 text-primary py-1 px-3">
-              <Users className="h-3 w-3 mr-2" />
-              {users.length} MEMBRI ATTIVI
-            </Badge>
+            <div className="flex items-center gap-3">
+              <Badge variant="outline" className="bg-primary/5 border-primary/20 text-primary py-1 px-3">
+                <Users className="h-3 w-3 mr-2" />
+                {users.length} MEMBRI ATTIVI
+              </Badge>
+              <Button 
+                onClick={() => {
+                  setSelectedCollaborator(null);
+                  setIsCollaboratorFormOpen(true);
+                }}
+                className="font-black uppercase tracking-widest text-[10px] gap-2 h-9 px-4 bg-primary hover:bg-primary/90 text-white shadow-[0_0_20px_rgba(var(--primary-rgb),0.3)]"
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                Nuovo Membro
+              </Button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
@@ -71,25 +94,37 @@ export function StudioTeamView() {
                 progetti={progetti}
                 isExpanded={expandedUserId === user.id}
                 onToggle={() => setExpandedUserId(expandedUserId === user.id ? null : user.id)}
+                onEdit={() => {
+                  setSelectedCollaborator(user);
+                  setIsCollaboratorFormOpen(true);
+                }}
               />
             ))}
           </div>
         </div>
       </div>
+      
+      <CollaboratorForm 
+        open={isCollaboratorFormOpen}
+        onOpenChange={setIsCollaboratorFormOpen}
+        collaborator={selectedCollaborator}
+      />
     </ScrollArea>
   );
 }
 
 function TeamMemberCard({ 
-  user, 
+  user,
   progetti,
   isExpanded, 
-  onToggle 
+  onToggle,
+  onEdit
 }: { 
   user: User; 
   progetti: Progetto[];
   isExpanded: boolean; 
   onToggle: () => void;
+  onEdit: () => void;
 }) {
   const { selectTask } = useStudio();
   const { data: capacity } = useUserCapacity(user.id);
@@ -188,7 +223,19 @@ function TeamMemberCard({
           </div>
         </div>
         
-        <div className="mt-4 flex items-center justify-center">
+        <div className="mt-4 flex items-center justify-between border-t border-border/10 pt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              className="h-7 text-[9px] font-black uppercase tracking-widest text-primary hover:text-white hover:bg-primary/20"
+            >
+              <Edit2 className="h-3 w-3 mr-1.5" />
+              Modifica
+            </Button>
             {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground/30" /> : <ChevronDown className="h-4 w-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />}
         </div>
       </div>
@@ -210,6 +257,39 @@ function TeamMemberCard({
                       {overdueCount} SCADUTI
                    </Badge>
                 )}
+              </div>
+
+              {/* Rich Professional Info */}
+              <div className="grid grid-cols-2 gap-4 pb-4 border-b border-border/10">
+                <div className="space-y-3">
+                   <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                      <Mail className="h-3 w-3 text-primary/60" />
+                      {user.email || "—"}
+                   </div>
+                   <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                      <Phone className="h-3 w-3 text-primary/60" />
+                      {user.telefono || "—"}
+                   </div>
+                   <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                      <Euro className="h-3 w-3 text-primary/60" />
+                      P.IVA: {user.piva || "—"}
+                   </div>
+                </div>
+                <div className="space-y-3">
+                   <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                      <CreditCard className="h-3 w-3 text-primary/60" />
+                      IBAN: {user.iban ? `****${user.iban.slice(-4)}` : "—"}
+                   </div>
+                   <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                      <MapPin className="h-3 w-3 text-primary/60" />
+                      <span className="truncate">{user.indirizzo || "—"}</span>
+                   </div>
+                   {user.codice_fiscale && (
+                     <div className="text-[9px] font-black text-primary/40 uppercase tracking-widest">
+                       CF: {user.codice_fiscale}
+                     </div>
+                   )}
+                </div>
               </div>
 
               <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">

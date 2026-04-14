@@ -11,7 +11,7 @@ import {
   Briefcase
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useStudio } from "@/context/StudioContext";
+import { useStudio } from "@/hooks/useStudio";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { format, parseISO } from "date-fns";

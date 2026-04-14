@@ -30,6 +30,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAnalytics } from "@/hooks/useAnalytics";
+import { QuickCalculator } from "@/components/analytics/QuickCalculator";
+
 import { Skeleton } from "@/components/ui/skeleton";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import { AnalyticsReportPDF } from "@/components/analytics/AnalyticsReportPDF";
@@ -482,6 +484,7 @@ export default function Analytics() {
     
     // 1. Core KPIs
     const totalPaid = allInvoices.reduce((acc, f) => acc + Number(f.importo_pagato || 0), 0);
+    // totalOpen represents the ENTIRE unpaid amount (whether due or overdue)
     const totalOpen = allInvoices.reduce((acc, f) => acc + Number(f.importo_residuo || 0), 0);
     const overdueInvoices = allInvoices.filter(f => f.importo_residuo > 0 && f.data_scadenza && isBefore(parseISO(f.data_scadenza), now));
     const totalOverdue = overdueInvoices.reduce((acc, f) => acc + Number(f.importo_residuo || 0), 0);
@@ -710,7 +713,8 @@ export default function Analytics() {
       const totalRevenue = pipelineValue + discountedRecurrent;
       
       // D. Margin Calculation
-      const pipelineMargin = pipelineCommesse.reduce((acc, c) => acc + ((c as any).marginEuro || 0), 0);
+      // Se marginEuro non è pre-calcolato, usiamo l'avgMarginPct storico come stima sicura per la pipeline
+      const pipelineMargin = pipelineCommesse.reduce((acc, c) => acc + ((c as any).marginEuro || (Number(c.valore_fatturabile || 0) * (profitabilityData.current.avgMarginPct / 100))), 0);
       const recurrentMargin = recurringClients
         .filter(rc => !pipelineIds.has(rc.id))
         .reduce((acc, rc) => acc + (rc.avgMonthlyRevenue * rc.avgMarginPct * (1 - discount)), 0);
@@ -1143,85 +1147,8 @@ export default function Analytics() {
           }}
         />
       </div>
-      
-      {/* Previsioni Business (Forecast) */}
-      <div className="space-y-6 pt-6">
-        <div className="flex items-center gap-3 px-1">
-          <div className="h-8 w-1.5 bg-primary rounded-full" />
-          <h2 className="text-xl font-black uppercase tracking-tighter italic text-foreground">Forecast Business <span className="text-primary not-italic">(30/60/90g)</span></h2>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {forecastData?.map((f) => {
-            const relColor = f.reliability === "ALTA" ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20"
-                           : f.reliability === "MEDIA" ? "text-amber-500 bg-amber-500/10 border-amber-500/20"
-                           : "text-rose-500 bg-rose-500/10 border-rose-500/20";
-            
-            return (
-                   <Card 
-                     key={f.days} 
-                     className="bg-card border-border/50 shadow-2xl rounded-3xl p-6 relative overflow-hidden group hover:border-primary/30 transition-all cursor-pointer"
-                     onClick={() => {
-                        const targetMonth = startOfMonth(addMonths(today, f.days / 30));
-                        navigate(`/commesse?mese=${format(targetMonth, "yyyy-MM-01")}&status=APERTA`);
-                     }}
-                   >
-                <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.1] transition-all">
-                  <TrendingUp size={80} />
-                </div>
-                
-                <div className="relative z-10 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px] font-black uppercase">
-                      {f.days} Giorni
-                    </Badge>
-                    <Badge className={`${relColor} text-[9px] font-black uppercase border`}>
-                      {f.reliability}
-                    </Badge>
-                  </div>
-
-                  <div>
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">Fatturato Previsto</p>
-                    <p className="text-2xl font-black text-foreground tracking-tighter">{formatEuro(f.revenue)}</p>
-                    
-                    <div className="flex items-center gap-2 mt-2">
-                       <div className={`flex items-center gap-0.5 text-[10px] font-black ${f.trend >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
-                          {f.trend >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                          {Math.abs(f.trend).toFixed(0)}%
-                       </div>
-                       <span className="text-[10px] text-muted-foreground font-bold">vs media storica</span>
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-border/30">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] uppercase font-bold text-muted-foreground">Margine Stimato</span>
-                      <span className="text-sm font-black text-emerald-400">{formatEuro(f.margin)}</span>
-                    </div>
-                    <p className="text-[10px] font-bold text-muted-foreground leading-tight italic">
-                      "{f.reason}"
-                    </p>
-                  </div>
-
-                  <div className="space-y-1.5 pt-2">
-                    <div className="flex items-center justify-between text-[9px] font-black uppercase text-muted-foreground">
-                      <span>Copertura Pipeline</span>
-                      <span>{(f.coverage * 100).toFixed(0)}%</span>
-                    </div>
-                    <div className="h-1 w-full bg-muted/20 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-primary transition-all duration-1000" 
-                        style={{ width: `${f.coverage * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
       </div>
-
+      
       {/* Cash Flow & Liquidità */}
       <div className="lg:col-span-3 mt-12 bg-card/40 border border-border/50 rounded-[2.5rem] p-10 shadow-xl">
         <div className="flex items-center justify-between mb-10">
@@ -1230,51 +1157,48 @@ export default function Analytics() {
             <h2 className="text-xl font-black uppercase tracking-tighter italic text-foreground">Cash Flow <span className="text-emerald-500 not-italic">& Liquidità</span></h2>
           </div>
           <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 px-3 py-1 font-black uppercase text-[10px]">
-            Tempo Medio Incasso: {cashFlowData?.dso ? `${Math.round(cashFlowData.dso)} Giorni` : "Dati insufficienti"}
+            Tempo Incasso: {cashFlowData?.dso ? `${Math.round(cashFlowData.dso)} gg` : "N/D"}
           </Badge>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-           <div className="bg-card border border-border/50 rounded-3xl p-5">
+           <div className="bg-card border border-border/50 rounded-3xl p-5 group hover:border-emerald-500/30 transition-all">
              <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">Incassato Totale</p>
              <p className="text-2xl font-black text-emerald-400">{formatEuro(cashFlowData?.totalPaid || 0)}</p>
            </div>
-           <div className="bg-card border border-border/50 rounded-3xl p-5">
-             <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">Da Incassare (Residuo)</p>
+           <div className="bg-card border border-border/50 rounded-3xl p-5 group hover:border-primary/30 transition-all">
+             <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">Esposizione Aperta</p>
              <p className="text-2xl font-black text-foreground">{formatEuro(cashFlowData?.totalOpen || 0)}</p>
            </div>
-           <div className="bg-card border border-border/50 rounded-3xl p-5 relative overflow-hidden cursor-pointer hover:border-rose-500/50 transition-all" onClick={() => navigate("/fatture?status=SCADUTO")}>
+           <div className="bg-card border border-border/50 rounded-3xl p-5 group hover:border-amber-500/30 transition-all">
+             <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">Di cui a Scadere</p>
+             <p className="text-xl font-black text-amber-500">{formatEuro(Math.max(0, (cashFlowData?.totalOpen || 0) - (cashFlowData?.totalOverdue || 0)))}</p>
+           </div>
+           <div className="bg-card border border-border/50 rounded-3xl p-5 relative overflow-hidden cursor-pointer hover:border-rose-500/50 transition-all group" onClick={() => navigate("/fatture?status=SCADUTO")}>
              <p className="text-[10px] uppercase font-black text-rose-400 mb-1 flex items-center gap-1.5">
-               <AlertTriangle size={12} />
-               Scaduto Reale
+               <AlertTriangle size={12} className="group-hover:scale-110 transition-transform" />
+               Di cui Scaduto
              </p>
              <p className="text-2xl font-black text-rose-500">{formatEuro(cashFlowData?.totalOverdue || 0)}</p>
              {cashFlowData?.totalOverdue && cashFlowData.totalOverdue > 0 && (
                 <div className="absolute bottom-0 left-0 h-1 bg-rose-500 w-full opacity-30" />
              )}
            </div>
-           <div className="bg-card border border-border/50 rounded-3xl p-5">
-             <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">Esposizione Aperta</p>
-             <p className="text-xl font-black text-foreground">{formatEuro((cashFlowData?.totalOpen || 0) + (cashFlowData?.totalOverdue || 0))}</p>
-           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Classifica Rischio Crediti */}
-          <div className="lg:col-span-2 space-y-4">
+          <div className="space-y-4">
             <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground px-2 flex items-center justify-between">
-              <span>Monitoraggio Rischio Crediti</span>
-              <span className="text-[9px] lowercase italic font-normal">ordinato per gravità scaduto</span>
+              <span>Rischio Crediti (Top 5)</span>
             </h3>
             <div className="bg-card border border-border/50 rounded-[2rem] overflow-hidden shadow-lg">
               <Table>
                 <TableHeader className="bg-muted/30">
                   <TableRow className="border-border/50 hover:bg-transparent">
-                    <TableHead className="py-4 pl-8 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">Cliente</TableHead>
-                    <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">In Sospeso</TableHead>
+                    <TableHead className="py-4 pl-6 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">Cliente</TableHead>
                     <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">Scaduto</TableHead>
-                    <TableHead className="py-4 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">Ritardo Max</TableHead>
-                    <TableHead className="py-4 pr-8 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">Stato</TableHead>
+                    <TableHead className="py-4 pr-6 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">Stato</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1284,17 +1208,11 @@ export default function Analytics() {
                       className="border-border/10 hover:bg-muted/30 transition-all cursor-pointer group/row"
                       onClick={() => navigate(`/clienti/${cl.id}`)}
                     >
-                      <TableCell className="py-5 pl-8">
-                        <div className="flex flex-col">
-                          <span className="text-foreground font-black group-hover:text-primary transition-colors">{cl.name}</span>
-                        </div>
+                      <TableCell className="py-5 pl-6">
+                        <span className="text-foreground font-black group-hover:text-primary transition-colors truncate max-w-[150px] inline-block">{cl.name}</span>
                       </TableCell>
-                      <TableCell className="py-5 text-right font-black text-muted-foreground/70">{formatEuro(cl.totalOpen)}</TableCell>
                       <TableCell className="py-5 text-right font-black text-rose-600 dark:text-rose-400">{formatEuro(cl.totalOverdue)}</TableCell>
-                      <TableCell className="py-5 text-center text-[10px] font-black uppercase text-muted-foreground/80 tracking-tighter">
-                        {cl.maxDelay > 0 ? `${cl.maxDelay} gg` : "-"}
-                      </TableCell>
-                      <TableCell className="py-5 pr-8 text-center">
+                      <TableCell className="py-5 pr-6 text-center">
                          <Badge className={cn(
                            "text-[9px] font-black uppercase border",
                            cl.status === "CRITICO" ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
@@ -1308,7 +1226,7 @@ export default function Analytics() {
                   ))}
                   {(!cashFlowData || cashFlowData.clientRiskRanking.length === 0) && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-xs font-bold text-muted-foreground uppercase italic">
+                      <TableCell colSpan={3} className="text-center py-8 text-[10px] font-bold text-muted-foreground uppercase italic">
                         Nessuno scoperto identificato
                       </TableCell>
                     </TableRow>
@@ -1321,45 +1239,43 @@ export default function Analytics() {
           {/* Proiezione Liquidità Breve */}
           <div className="space-y-4">
             <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground px-2 flex items-center justify-between">
-              <span>Proiezione Liquidità</span>
-              <span className="text-[9px] lowercase italic font-normal">cassa prevista</span>
+              <span>Proiezione Cassa Netta</span>
             </h3>
             <div className="space-y-4">
               {cashFlowData?.projection.map((p) => (
-                <div key={p.days} className="bg-card border border-border/50 rounded-3xl p-5 group hover:border-primary/40 transition-all">
+                <div key={p.days} className="bg-card border border-border/50 rounded-[1.5rem] p-5 group hover:border-primary/40 transition-all">
                   <div className="flex items-center justify-between mb-3">
-                     <Badge className="bg-muted text-muted-foreground text-[9px] font-black uppercase tracking-tighter">
-                       Prossimi {p.days} Giorni
+                     <Badge className="bg-muted text-muted-foreground border-border/50 text-[9px] font-black uppercase tracking-tighter">
+                       A {p.days} Giorni
                      </Badge>
-                     <span className={`text-[8px] font-black uppercase tracking-widest ${p.reliability === 'ALTA' ? 'text-emerald-500' : 'text-amber-500'}`}>
-                       Reliability {p.reliability}
-                     </span>
                   </div>
                   <div className="flex items-end justify-between">
                      <div>
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Saldo Netto Stimato</p>
-                        <p className={`text-xl font-black tracking-tighter ${p.net >= 0 ? 'text-foreground' : 'text-rose-400'}`}>
+                        <p className={`text-2xl font-black tracking-tighter ${p.net >= 0 ? 'text-foreground' : 'text-rose-400'}`}>
                           {formatEuro(p.net)}
                         </p>
                      </div>
-                     <div className="text-right opacity-60 group-hover:opacity-100 transition-opacity">
-                        <p className="text-[9px] font-bold text-muted-foreground uppercase">In/Out: {formatEuro(p.inflow)} / {formatEuro(p.outflow)}</p>
+                     <div className="text-right">
+                        <p className="text-[9px] font-bold text-emerald-500 uppercase">In: {formatEuro(p.inflow)}</p>
+                        <p className="text-[9px] font-bold text-rose-400 uppercase">Out: {formatEuro(p.outflow)}</p>
                      </div>
                   </div>
                 </div>
               ))}
-              {!cashFlowData?.hasPassiveData && (
-                <p className="text-[9px] text-muted-foreground font-bold italic text-center px-4">
-                  * Proiezione uscite basata solo su costi fissi (dati fatture passive non rilevati o parziali).
-                </p>
-              )}
             </div>
           </div>
         </div>
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Revenue Trend Chart */}
+      
+        {/* Andamento Fatturato */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-6">
+        <div className="flex items-center gap-3 px-1">
+          <div className="h-8 w-1.5 bg-primary rounded-full" />
+          <h2 className="text-xl font-black uppercase tracking-tighter italic text-foreground">Trend <span className="text-primary not-italic">Storici e Performance</span></h2>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-12">
         <Card className="bg-card border-border/50 shadow-2xl rounded-3xl overflow-hidden hover:border-primary/20 transition-all group">
           <CardHeader className="border-b border-border/30 pb-4">
             <div className="flex items-center justify-between">
@@ -1378,7 +1294,10 @@ export default function Analytics() {
                 data={trendData}
                 onClick={(event: any) => {
                   const isoMonth = event?.activePayload?.[0]?.payload?.isoMonth;
-                  if (isoMonth) setSelectedMonthKey(isoMonth);
+                  if (isoMonth) {
+                    setSelectedMonthKey(isoMonth);
+                    navigate(`/fatture?mese=${isoMonth}`);
+                  }
                 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
@@ -1430,7 +1349,10 @@ export default function Analytics() {
                 data={trendData}
                 onClick={(event: any) => {
                   const isoMonth = event?.activePayload?.[0]?.payload?.isoMonth;
-                  if (isoMonth) setSelectedMonthKey(isoMonth);
+                  if (isoMonth) {
+                    setSelectedMonthKey(isoMonth);
+                    navigate(`/commesse?mese=${isoMonth}`);
+                  }
                 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
@@ -1690,11 +1612,20 @@ export default function Analytics() {
         </Card>
       </div>
 
-      {/* Alerts & Critical Items */}
+      {/* Tools & Simulators */}
       <div className="space-y-6 pt-10">
         <div className="flex items-center gap-3 px-1">
+          <div className="h-8 w-1.5 bg-primary rounded-full" />
+          <h2 className="text-xl font-black italic uppercase tracking-tighter text-white">Simulation <span className="text-primary not-italic">Tools</span></h2>
+        </div>
+        <QuickCalculator />
+      </div>
+
+      {/* Alerts & Critical Items */}
+      <div className="space-y-6 pt-10 pb-20">
+        <div className="flex items-center gap-3 px-1">
           <div className="h-8 w-1.5 bg-rose-500 rounded-full" />
-          <h2 className="text-xl font-black italic uppercase tracking-tighter text-foreground">Critical <span className="text-rose-500 not-italic">Insights</span></h2>
+          <h2 className="text-xl font-black italic uppercase tracking-tighter text-white">Critical <span className="text-rose-500 not-italic">Insights</span></h2>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1735,107 +1666,83 @@ export default function Analytics() {
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-
-function BenchmarkSection({ data }: { data: any }) {
-  const navigate = useNavigate();
-  if (!data) return null;
-
-  return (
-    <div className="space-y-6 mt-12">
-      <div className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-3">
-          <div className="h-8 w-1.5 bg-amber-500 rounded-full" />
-          <h2 className="text-xl font-black uppercase tracking-tighter italic text-foreground">Benchmark <span className="text-amber-500 not-italic">& Trend</span></h2>
+      {/* Previsioni Business (Forecast) */}
+      <div className="space-y-6 pt-12">
+        <div className="flex items-center gap-3 px-1">
+          <div className="h-8 w-1.5 bg-primary rounded-full" />
+          <h2 className="text-xl font-black uppercase tracking-tighter italic text-foreground">Forecast Business <span className="text-primary not-italic">(30/60/90g)</span></h2>
         </div>
-        <div className="flex items-center gap-3">
-           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted/30 border border-border/50 shadow-sm">
-              <span className="text-[9px] font-black uppercase text-muted-foreground/80 tracking-widest">Fatturato Medio</span>
-              <span className="text-[10px] font-black text-foreground tracking-tight">{formatEuro(data.avgRevenue)}</span>
-           </div>
-           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted/30 border border-border/50 shadow-sm">
-              <span className="text-[9px] font-black uppercase text-muted-foreground/80 tracking-widest">Margine Medio</span>
-              <span className="text-[10px] font-black text-foreground">{data.avgMargin.toFixed(1)}%</span>
-           </div>
-        </div>
-      </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {forecastData?.map((f) => {
+            const relColor = f.reliability === "ALTA" ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20"
+                           : f.reliability === "MEDIA" ? "text-amber-500 bg-amber-500/10 border-amber-500/20"
+                           : "text-rose-500 bg-rose-500/10 border-rose-500/20";
+            
+            return (
+                   <Card 
+                     key={f.days} 
+                     className="bg-card border-border/50 shadow-2xl rounded-[2rem] p-6 relative overflow-hidden group hover:border-primary/30 transition-all cursor-pointer"
+                     onClick={() => {
+                        const targetMonth = startOfMonth(addMonths(today, f.days / 30));
+                        navigate(`/commesse?mese=${format(targetMonth, "yyyy-MM-01")}&status=APERTA`);
+                     }}
+                   >
+                <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.08] transition-all">
+                  <TrendingUp size={100} />
+                </div>
+                
+                <div className="relative z-10 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px] font-black uppercase">
+                      {f.days} Giorni
+                    </Badge>
+                    <Badge className={`${relColor} text-[9px] font-black uppercase border`}>
+                      {f.reliability}
+                    </Badge>
+                  </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="bg-card border-border/50 shadow-2xl rounded-3xl overflow-hidden">
-          <CardHeader className="border-b border-border/30">
-            <CardTitle className="text-sm font-black uppercase tracking-widest text-foreground">Top & Bottom Performers</CardTitle>
-            <CardDescription className="text-[10px] uppercase font-bold text-[#475569]">Scostamento rispetto alla media del portafoglio</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-             <Table>
-                <TableHeader>
-                  <TableRow className="border-border/30 hover:bg-transparent">
-                    <TableHead className="text-[9px] font-black uppercase text-[#475569] h-10 px-6">Cliente</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-[#475569] h-10 text-right">Margine</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-[#475569] h-10 text-right px-6">Status vs Media</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.clientPerformance.slice(0, 3).concat(data.clientPerformance.slice(-2)).map((cl: any) => {
-                    const isPositive = cl.marginDeviation >= 0;
-                    return (
-                      <TableRow 
-                        key={cl.id} 
-                        className="border-border/10 hover:bg-primary/5 transition-colors cursor-pointer group/row"
-                        onClick={() => navigate(`/clienti/${cl.id}`)}
-                      >
-                        <TableCell className="py-3 px-6">
-                           <div className="flex items-center gap-3">
-                              <ClientAvatar name={cl.name} logoUrl={cl.logo_url} size="xs" />
-                              <span className="text-xs font-bold text-foreground uppercase group-hover/row:text-primary transition-colors">{cl.name}</span>
-                           </div>
-                        </TableCell>
-                        <TableCell className="text-right py-3 font-black text-foreground text-xs">{cl.marginPct.toFixed(1)}%</TableCell>
-                        <TableCell className="text-right py-3 px-6">
-                           <Badge className={`${isPositive ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"} text-[9px] font-black uppercase border-0 cursor-pointer`}>
-                              {isPositive ? "+" : ""}{cl.marginDeviation.toFixed(1)}% {isPositive ? "Sopra" : "Sotto"}
-                           </Badge>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-             </Table>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-card border-border/50 shadow-2xl rounded-3xl overflow-hidden">
-          <CardHeader className="border-b border-border/30">
-            <CardTitle className="text-sm font-black uppercase tracking-widest text-foreground">Redditività per Servizio</CardTitle>
-            <CardDescription className="text-[10px] uppercase font-bold text-[#475569]">Analisi aggregata basata sui timesheet</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6">
-             <div className="space-y-4">
-                {data.servicePerformance.slice(0, 5).map((s: any) => (
-                  <div key={s.name} className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[10px] uppercase font-black">
-                      <span className="text-foreground">{s.name}</span>
-                      <span className="text-[#475569]">{s.marginPct.toFixed(1)}% Margin</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-muted/30 rounded-full overflow-hidden flex">
-                      <div 
-                        className={`h-full ${s.marginPct > 30 ? "bg-emerald-500" : s.marginPct > 15 ? "bg-amber-500" : "bg-rose-500"} transition-all duration-1000`} 
-                        style={{ width: `${Math.min(100, (s.revenue / data.avgRevenue) * 50)}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between text-[8px] font-bold text-[#475569] uppercase">
-                       <span>{Math.round(s.hours)} Ore</span>
-                       <span>{formatEuro(s.revenue)}</span>
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">Fatturato Previsto</p>
+                    <p className="text-3xl font-black text-foreground tracking-tighter">{formatEuro(f.revenue)}</p>
+                    
+                    <div className="flex items-center gap-2 mt-2">
+                       <div className={`flex items-center gap-0.5 text-[10px] font-black ${f.trend >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                          {f.trend >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                          {Math.abs(f.trend).toFixed(0)}%
+                       </div>
+                       <span className="text-[10px] text-muted-foreground font-bold">vs media</span>
                     </div>
                   </div>
-                ))}
-             </div>
-          </CardContent>
-        </Card>
+
+                  <div className="pt-4 border-t border-border/30">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground">Margine Stimato</span>
+                      <span className="text-md font-black text-emerald-400">{formatEuro(f.margin)}</span>
+                    </div>
+                    <p className="text-[10px] font-bold text-muted-foreground leading-tight italic">
+                      "{f.reason}"
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5 pt-4">
+                    <div className="flex items-center justify-between text-[9px] font-black uppercase text-muted-foreground">
+                      <span>Copertura Pipeline (Lavori Ceri)</span>
+                      <span>{(f.coverage * 100).toFixed(0)}%</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-muted/30 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-primary transition-all duration-1000" 
+                        style={{ width: `${f.coverage * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            );
+        </div>
       </div>
+
     </div>
   );
 }

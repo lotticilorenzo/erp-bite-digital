@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, parseISO, addWeeks, subWeeks } from "date-fns";
 import { it } from "date-fns/locale";
 import { Plus, Briefcase, CheckCircle2, User as UserIcon, ChevronLeft, ChevronRight, LayoutGrid, LayoutList } from "lucide-react";

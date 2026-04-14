@@ -18,6 +18,7 @@ import {
   Clock,
   Receipt,
   ArrowRight,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -586,6 +587,130 @@ export default function ClienteDetailPage() {
         </div>
 
         <div className="space-y-8">
+          {/* ── SCHEDA CLIENTE ─────────────────────────────────────── */}
+          <Card className="bg-card border-border shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-blue-500" />
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                  <Building2 className="w-4 h-4" />
+                  Scheda Cliente
+                </CardTitle>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setIsClienteDialogOpen(true)}
+                  className="h-7 px-2 text-[10px] font-black uppercase tracking-wider text-muted-foreground/50 hover:text-primary"
+                >
+                  <Pencil className="w-3 h-3 mr-1" /> Modifica
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-5 text-sm">
+
+              {/* Identificativo */}
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                <ClientAvatar name={cliente.ragione_sociale} logoUrl={cliente.logo_url} size="md" className="rounded-xl shrink-0" />
+                <div>
+                  <p className="font-black text-white leading-tight">{cliente.ragione_sociale}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {cliente.codice_cliente && (
+                      <span className="text-[9px] font-black uppercase tracking-widest bg-primary/10 text-primary px-1.5 py-0.5 rounded-md">
+                        {cliente.codice_cliente}
+                      </span>
+                    )}
+                    {cliente.tipologia && (
+                      <span className="text-[9px] text-muted-foreground/60">{cliente.tipologia}</span>
+                    )}
+                    <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${cliente.attivo ? "bg-emerald-500/10 text-emerald-400" : "bg-slate-500/10 text-slate-400"}`}>
+                      {cliente.attivo ? "Attivo" : "Inattivo"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dati fiscali */}
+              {(cliente.piva || cliente.codice_fiscale || cliente.sdi || cliente.pec) && (
+                <div className="space-y-2">
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40">Dati Fiscali</p>
+                  <div className="space-y-1.5">
+                    {cliente.piva && <InfoRow label="P.IVA" value={cliente.piva} />}
+                    {cliente.codice_fiscale && <InfoRow label="Cod. Fiscale" value={cliente.codice_fiscale} />}
+                    {cliente.sdi && <InfoRow label="SDI" value={cliente.sdi} />}
+                    {cliente.pec && <InfoRow label="PEC" value={cliente.pec} isLink={`mailto:${cliente.pec}`} />}
+                  </div>
+                </div>
+              )}
+
+              {/* Contatti */}
+              {(cliente.referente || cliente.email || cliente.telefono || cliente.cellulare || cliente.sito_web) && (
+                <div className="space-y-2">
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40">Contatti</p>
+                  <div className="space-y-1.5">
+                    {cliente.referente && <InfoRow label="Referente" value={cliente.referente} />}
+                    {cliente.email && <InfoRow label="Email" value={cliente.email} isLink={`mailto:${cliente.email}`} />}
+                    {cliente.telefono && <InfoRow label="Tel" value={cliente.telefono} isLink={`tel:${cliente.telefono}`} />}
+                    {cliente.cellulare && <InfoRow label="Cell" value={cliente.cellulare} isLink={`tel:${cliente.cellulare}`} />}
+                    {cliente.sito_web && <InfoRow label="Web" value={cliente.sito_web} isLink={cliente.sito_web} />}
+                  </div>
+                </div>
+              )}
+
+              {/* Indirizzo */}
+              {(cliente.indirizzo || cliente.comune) && (
+                <div className="space-y-2">
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40">Indirizzo</p>
+                  <div className="text-xs text-white/70 leading-relaxed bg-white/[0.03] rounded-xl p-3 border border-white/5">
+                    {cliente.indirizzo && <p>{cliente.indirizzo}</p>}
+                    <p>
+                      {[cliente.cap, cliente.comune, cliente.provincia].filter(Boolean).join(" ")}
+                      {cliente.paese && cliente.paese !== "Italia" && ` (${cliente.paese})`}
+                    </p>
+                    {cliente.note_indirizzo && <p className="text-muted-foreground/50 italic text-[10px] mt-1">{cliente.note_indirizzo}</p>}
+                  </div>
+                </div>
+              )}
+
+              {/* Commerciale */}
+              {(cliente.condizioni_pagamento || cliente.affidabilita || cliente.settore || cliente.categoria) && (
+                <div className="space-y-2">
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40">Commerciale</p>
+                  <div className="space-y-1.5">
+                    {cliente.condizioni_pagamento && <InfoRow label="Pagamento" value={cliente.condizioni_pagamento} />}
+                    {cliente.settore && <InfoRow label="Settore" value={cliente.settore} />}
+                    {cliente.categoria && <InfoRow label="Categoria" value={`Livello ${cliente.categoria}`} />}
+                    {cliente.affidabilita && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground/50">Affidabilità</span>
+                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                          cliente.affidabilita === "ALTA" ? "bg-emerald-500/10 text-emerald-400"
+                          : cliente.affidabilita === "BASSA" ? "bg-red-500/10 text-red-400"
+                          : "bg-yellow-500/10 text-yellow-400"
+                        }`}>
+                          {cliente.affidabilita === "ALTA" ? "🟢" : cliente.affidabilita === "BASSA" ? "🔴" : "🟡"} {cliente.affidabilita}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Note */}
+              {cliente.note && (
+                <div className="space-y-1.5">
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40">Note</p>
+                  <p className="text-xs text-muted-foreground/70 italic bg-white/[0.03] rounded-xl p-3 border border-white/5 leading-relaxed">{cliente.note}</p>
+                </div>
+              )}
+
+              {cliente.created_at && (
+                <p className="text-[9px] text-muted-foreground/20 text-right">
+                  Cliente dal {format(new Date(cliente.created_at), "d MMM yyyy", { locale: it })}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
           <Card className="bg-card border-border shadow-2xl relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-blue-500" />
             <CardHeader>
@@ -733,3 +858,23 @@ function StatCard({ title, value, detail, icon }: { title: string, value: string
 }
 
 const Euro = ({ className }: { className?: string }) => <span className={className}>€</span>;
+
+function InfoRow({ label, value, isLink }: { label: string; value: string; isLink?: string }) {
+  return (
+    <div className="flex justify-between items-center gap-3">
+      <span className="text-muted-foreground/50 text-[11px] shrink-0">{label}</span>
+      {isLink ? (
+        <a
+          href={isLink}
+          target={isLink.startsWith("http") ? "_blank" : undefined}
+          rel="noopener noreferrer"
+          className="text-[11px] font-bold text-primary/80 hover:text-primary truncate max-w-[60%] text-right transition-colors"
+        >
+          {value}
+        </a>
+      ) : (
+        <span className="text-[11px] font-bold text-white/80 truncate max-w-[60%] text-right">{value}</span>
+      )}
+    </div>
+  );
+}

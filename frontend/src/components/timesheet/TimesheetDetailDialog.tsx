@@ -3,7 +3,6 @@ import { it } from "date-fns/locale";
 import { 
   Dialog, 
   DialogContent, 
-  DialogHeader, 
   DialogTitle,
   DialogFooter
 } from "@/components/ui/dialog";

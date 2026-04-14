@@ -5,7 +5,7 @@ import { CommessaTable } from "@/components/commesse/CommessaTable";
 import { CommessaDialog } from "@/components/commesse/CommessaDialog";
 import { useCommesse, useDeleteCommessa } from "@/hooks/useCommesse";
 import { useCliente } from "@/hooks/useClienti";
-import type { Commessa } from "@/types";
+import type { Commessa, CommessaStatus } from "@/types";
 import { useSearchParams } from "react-router-dom";
 import { format, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
@@ -23,10 +23,12 @@ export default function CommessePage() {
   const clienteIdFilter = searchParams.get("cliente_id") || undefined;
   const clienteNomeFilter = searchParams.get("cliente_nome") || undefined;
   const meseFilter = searchParams.get("mese") || undefined;
+  const statoFilter = searchParams.get("stato") as CommessaStatus | undefined;
 
   const { data: commesse = [], isLoading } = useCommesse({
     cliente_id: clienteIdFilter,
     mese: meseFilter,
+    stato: statoFilter,
   });
   const { data: clienteFiltro } = useCliente(clienteIdFilter);
   const deleteCommessa = useDeleteCommessa();
@@ -71,6 +73,7 @@ export default function CommessePage() {
   const activeFilters = [
     clienteIdFilter ? `cliente ${clienteFiltro?.ragione_sociale || clienteNomeFilter || "selezionato"}` : null,
     meseLabel ? `mese ${meseLabel}` : null,
+    statoFilter ? `stato ${statoFilter.replace("_", " ")}` : null,
   ].filter(Boolean);
 
   const handleDeleteConfirm = async () => {

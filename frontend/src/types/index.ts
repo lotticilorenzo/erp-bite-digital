@@ -20,6 +20,11 @@ export interface User {
   preferences: Record<string, any> | null;
   avatar_url?: string | null;
   attivo: boolean;
+  telefono?: string;
+  piva?: string;
+  iban?: string;
+  indirizzo?: string;
+  codice_fiscale?: string;
   data_inizio: string | null;
   created_at: string;
 }
@@ -29,28 +34,33 @@ export interface Cliente {
   codice_cliente?: string;
   numero_progressivo?: number;
   ragione_sociale: string;
+  tipologia?: string;
+  referente?: string;
   piva?: string;
   codice_fiscale?: string;
   sdi?: string;
   pec?: string;
   email?: string;
   telefono?: string;
-  referente?: string;
+  cellulare?: string;
+  sito_web?: string;
+  settore?: string;
+  categoria?: string;
   indirizzo?: string;
   comune?: string;
   cap?: string;
   provincia?: string;
   paese?: string;
-  tipologia?: string;
-  note?: string;
   note_indirizzo?: string;
   condizioni_pagamento?: string;
+  note?: string;
   fic_cliente_id?: string;
   attivo: boolean;
   logo_url?: string | null;
   drive_files?: any[];
   affidabilita?: ClienteAffidabilita | null;
   created_at?: string;
+  updated_at?: string;
   health_score?: number; // Computed score
 }
 
@@ -162,6 +172,7 @@ export interface FatturaAttiva {
   importo_pagato: number;
   importo_residuo: number;
   stato_pagamento: string;
+  data_incasso?: string;
   valuta?: string;
   created_at: string;
 }

@@ -67,6 +67,7 @@ from app.api.v1 import risorse
 from app.api.v1 import studio
 from app.api.v1 import chat
 from app.api.v1 import uploads
+from app.api.v1 import documents
 
 router = APIRouter()
 router.include_router(timer.router)
@@ -79,6 +80,7 @@ router.include_router(chat.router, prefix="/chat", tags=["Chat"])
 router.include_router(uploads.router, prefix="/uploads", tags=["Uploads"])
 router.include_router(notifications.router, prefix="/notifications", tags=["Notifiche"])
 router.include_router(assenze.router, prefix="/assenze", tags=["Assenze"])
+router.include_router(documents.router, prefix="/documents", tags=["Documents"])
 
 
 # ═══════════════════════════════════════════════════════
@@ -781,52 +783,52 @@ async def patch_progetto(
 # COMMESSE
 # ═══════════════════════════════════════════════════════
 async def _enrich_commessa(db: AsyncSession, c, coeff_cache: Optional[dict[date, Decimal]] = None) -> dict:
-    """Aggiunge i campi calcolati alla commessa prima della serializzazione."""
-    from sqlalchemy import text as _text
-    from sqlalchemy import select as _sel2
-    row = await db.execute(
-        _text("""
-            SELECT fa.id, fa.numero, fa.data_emissione, fa.importo_netto, fa.stato_pagamento
-            FROM commesse cm
-            LEFT JOIN fatture_attive fa ON fa.id = cm.fattura_id
-            WHERE cm.id = :cid
-        """),
-        {"cid": str(c.id)}
-    )
-    fa = row.fetchone()
-
-    # Calcolo ore reali
-    from app.models.models import Timesheet as _TS
-    ts_res = await db.execute(_sel2(func.sum(_TS.durata_minuti)).where(_TS.commessa_id == c.id))
-    minuti_totali = ts_res.scalar_one() or 0
-    ore_reali = minuti_totali / 60
+    """Aggiunge i campi calcolati alla commessa prima della serializzazione senza chiamate SQL addizionali."""
+    # Calcolo costo manodopera e ore reali iterando sui timesheet gia caricati in memoria (niente chiamate N+1 DB)
+    minuti_totali = 0
+    costo_manodopera_calc = Decimal("0")
+    if hasattr(c, "timesheet"):
+        for t in c.timesheet:
+            minuti_totali += (t.durata_minuti or 0)
+            costo_manodopera_calc += (t.costo_lavoro or Decimal("0"))
+    
+    ore_reali = minuti_totali / 60.0
 
     # Escludi campi computed che richiedono lazy load
     d = CommessaOut.model_validate(c, from_attributes=True, strict=False).model_dump(warnings=False)
     d["ore_reali"] = float(ore_reali)
+    
+    # Sovrascrivo costo_manodopera con il costo REALE al momento calcolato da tutti i timesheet
+    d["costo_manodopera"] = float(costo_manodopera_calc)
+    
     # Calcola margine manualmente dalle righe già caricate
     try:
         fattCalc = sum(r.valore_fatturabile_calc for r in c.righe_progetto)
         for ag in (c.aggiustamenti or []):
             from decimal import Decimal as _D
             fattCalc += _D(str(ag.get('importo', 0)))
-        d['margine_euro'] = float(fattCalc - (c.costo_manodopera or 0) - (c.costi_diretti or 0))
+        d['margine_euro'] = float(fattCalc - costo_manodopera_calc - (c.costi_diretti or Decimal("0")))
         d['margine_percentuale'] = round(d['margine_euro'] / float(fattCalc) * 100, 1) if fattCalc > 0 else None
     except Exception:
         d['margine_euro'] = None
         d['margine_percentuale'] = None
+        
     metriche = await calcola_metriche_commessa(db, c, coeff_cache)
+    # Aggiorna metriche con il valore costo elaborato al volo
     d.update(metriche)
-    # Override espliciti per campi che potrebbero non essere serializzati correttamente
+    
     d["aggiustamenti"] = c.aggiustamenti or []
     d["data_inizio"] = str(c.data_inizio) if c.data_inizio else None
     d["data_fine"] = str(c.data_fine) if c.data_fine else None
-    if fa and fa[0] is not None:
-        d["fattura_id"] = fa[0]
-        d["fattura_numero"] = fa[1]
-        d["fattura_data"] = str(fa[2]) if fa[2] else None
-        d["fattura_importo"] = float(fa[3]) if fa[3] else None
-        d["fattura_stato"] = fa[4]
+    
+    # Utilizza la relazione .fattura se pre-caricata anziche' eseguire un'altra query SQL
+    if hasattr(c, "fattura") and c.fattura:
+        d["fattura_id"] = c.fattura.id
+        d["fattura_numero"] = c.fattura.numero
+        d["fattura_data"] = str(c.fattura.data_emissione) if c.fattura.data_emissione else None
+        d["fattura_importo"] = float(c.fattura.importo_netto) if hasattr(c.fattura, "importo_netto") and c.fattura.importo_netto else None
+        d["fattura_stato"] = c.fattura.stato_pagamento if hasattr(c.fattura, "stato_pagamento") else None
+    
     return d
 
 @router.get("/commesse", tags=["Commesse"])
@@ -1099,7 +1101,7 @@ async def get_fornitori(
 @router.get("/movimenti-cassa", tags=["Cassa"])
 async def get_movimenti_cassa(
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
     movimenti = await list_movimenti_cassa(db)
     return {"movimenti_cassa": movimenti}
@@ -1110,7 +1112,7 @@ async def riconcilia_movimento(
     movimento_id: uuid.UUID,
     payload: dict,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
     from app.models.models import MovimentoCassa
     from sqlalchemy import select
@@ -1129,7 +1131,7 @@ async def patch_movimento_cassa(
     movimento_id: uuid.UUID,
     payload: dict,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
     from app.models.models import MovimentoCassa, FatturaAttiva, FatturaPassiva
     from sqlalchemy import select
@@ -1191,12 +1193,19 @@ async def patch_movimento_cassa(
 
 
 @router.get("/costi-fissi", tags=["CostiFissi"])
-async def get_costi_fissi(db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def get_costi_fissi(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN))
+):
     return {"costi_fissi": await list_costi_fissi(db)}
 
 
 @router.post("/costi-fissi", tags=["CostiFissi"])
-async def post_costo_fisso(payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def post_costo_fisso(
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN))
+):
     return await create_costo_fisso(db, payload)
 
 
@@ -1246,13 +1255,20 @@ async def delete_costo_fisso_endpoint(costo_id: uuid.UUID, db: AsyncSession = De
 
 # ── REGOLE RICONCILIAZIONE ────────────────────────────────
 @router.get("/regole-riconciliazione", tags=["Regole"])
-async def get_regole(db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def get_regole(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN))
+):
     from app.services.services import list_regole
     return {"regole": await list_regole(db)}
 
 
 @router.post("/regole-riconciliazione", tags=["Regole"])
-async def post_regola(payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def post_regola(
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN))
+):
     from app.services.services import create_regola
     return await create_regola(db, payload)
 
@@ -1276,7 +1292,10 @@ async def delete_regola_endpoint(regola_id: uuid.UUID, db: AsyncSession = Depend
 
 
 @router.post("/regole-riconciliazione/applica", tags=["Regole"])
-async def applica_regole(db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def applica_regole(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN))
+):
     from app.services.services import applica_regole_automatiche
     return await applica_regole_automatiche(db)
 
@@ -1289,7 +1308,11 @@ async def suggest_mov(movimento_id: uuid.UUID, db: AsyncSession = Depends(get_db
 
 # ── IMPUTAZIONI FATTURE PASSIVE ───────────────────────────
 @router.get("/fatture-passive/{fattura_id}/imputazioni", tags=["Imputazioni"])
-async def get_imputazioni_fattura(fattura_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def get_imputazioni_fattura(
+    fattura_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN))
+):
     from app.services.services import get_imputazioni
     return await get_imputazioni(db, fattura_id)
 
@@ -1376,7 +1399,10 @@ async def delete_commessa(commessa_id: uuid.UUID, db: AsyncSession = Depends(get
 
 # ── RISORSE (HR) ──────────────────────────────────────────
 @router.get("/risorse", tags=["HR"])
-async def get_risorse(db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def get_risorse(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN))
+):
     from app.services.services import list_risorse
     return await list_risorse(db)
 
@@ -1408,7 +1434,10 @@ async def del_risorsa(risorsa_id: uuid.UUID, db: AsyncSession = Depends(get_db),
 
 # ── PIANIFICAZIONE COMMESSA ──────────────────────────────
 @router.get("/piani", tags=["Pianificazione"])
-async def list_piani(db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def list_piani(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
     from sqlalchemy import text
     rows = await db.execute(text("""
         SELECT p.*, cl.ragione_sociale as cliente_nome, cl.codice_cliente
@@ -1419,7 +1448,11 @@ async def list_piani(db: AsyncSession = Depends(get_db), current_user=Depends(ge
     return [dict(r) for r in rows.mappings().fetchall()]
 
 @router.get("/piani/{piano_id}", tags=["Pianificazione"])
-async def get_piano(piano_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def get_piano(
+    piano_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
     from sqlalchemy import text
     row = await db.execute(text("SELECT p.*, cl.ragione_sociale as cliente_nome, cl.codice_cliente FROM piano_commessa p JOIN clienti cl ON cl.id=p.cliente_id WHERE p.id=:pid"), {"pid": str(piano_id)})
     piano = row.mappings().fetchone()
@@ -1429,7 +1462,11 @@ async def get_piano(piano_id: uuid.UUID, db: AsyncSession = Depends(get_db), cur
     return {**dict(piano), "righe": [dict(r) for r in righe.mappings().fetchall()]}
 
 @router.post("/piani", tags=["Pianificazione"])
-async def create_piano(payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def create_piano(
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
     from sqlalchemy import text
     from datetime import date
     from datetime import date as _date
@@ -1457,7 +1494,12 @@ async def create_piano(payload: dict, db: AsyncSession = Depends(get_db), curren
     return await get_piano(uuid.UUID(piano_id), db, current_user)
 
 @router.patch("/piani/{piano_id}", tags=["Pianificazione"])
-async def update_piano(piano_id: uuid.UUID, payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def update_piano(
+    piano_id: uuid.UUID,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
     from sqlalchemy import text
     await db.execute(text("""
         UPDATE piano_commessa SET preventivo=:prev, margine_target_pct=:marg, budget_produttivo=:budg,
@@ -1722,31 +1764,39 @@ async def add_timesheet_manuale(
     data_att = date.fromisoformat(data_str)
     mese_comp = date(data_att.year, data_att.month, 1)
 
-    # Risolvi commessa_id se cliente_id fornito
+    # Risolvi commessa_id
     commessa_id = None
-    cliente_id = body.get("cliente_id")
-    if cliente_id:
-        cm_result = await db.execute(
-            select(Commessa).where(
-                Commessa.cliente_id == uuid.UUID(cliente_id),
-                Commessa.mese_competenza == mese_comp
+    if body.get("commessa_id"):
+        commessa_id = uuid.UUID(body["commessa_id"])
+    else:
+        cliente_id = body.get("cliente_id")
+        if cliente_id:
+            cm_result = await db.execute(
+                select(Commessa).where(
+                    Commessa.cliente_id == uuid.UUID(cliente_id),
+                    Commessa.mese_competenza == mese_comp
+                )
             )
-        )
-        cm = cm_result.scalar_one_or_none()
-        if cm:
-            commessa_id = cm.id
-        else:
-            # Crea commessa APERTA per il mese corrente se non esiste
-            new_cm = Commessa(
-                id=uuid.uuid4(),
-                cliente_id=uuid.UUID(cliente_id),
-                mese_competenza=mese_comp,
-                stato=CommessaStatus.APERTA,
-                costo_manodopera=0
-            )
-            db.add(new_cm)
-            await db.flush()
-            commessa_id = new_cm.id
+            cm = cm_result.scalar_one_or_none()
+            if cm:
+                commessa_id = cm.id
+            else:
+                # Crea commessa APERTA per il mese corrente se non esiste
+                new_cm = Commessa(
+                    id=uuid.uuid4(),
+                    cliente_id=uuid.UUID(cliente_id),
+                    mese_competenza=mese_comp,
+                    stato=CommessaStatus.APERTA,
+                    costo_manodopera=0
+                )
+                db.add(new_cm)
+                await db.flush()
+                commessa_id = new_cm.id
+
+    # Risolvi task_id
+    task_id = None
+    if body.get("task_id"):
+        task_id = uuid.UUID(body["task_id"])
 
     # Crea timesheet
     from sqlalchemy import select as sa_select
@@ -1759,6 +1809,7 @@ async def add_timesheet_manuale(
         id=uuid.uuid4(),
         user_id=current_user.id,
         commessa_id=commessa_id,
+        task_id=task_id,
         data_attivita=data_att,
         mese_competenza=mese_comp,
         servizio=body.get("servizio"),
@@ -1811,7 +1862,9 @@ async def update_timesheet_manuale(
     if "note" in body:
         ts.note = body["note"]
 
-    if "cliente_id" in body and body["cliente_id"]:
+    if "commessa_id" in body and body["commessa_id"]:
+        ts.commessa_id = uuid.UUID(body["commessa_id"])
+    elif "cliente_id" in body and body["cliente_id"]:
         mese_comp = ts.mese_competenza
         cm_result = await db.execute(
             select(Commessa).where(
@@ -1833,6 +1886,9 @@ async def update_timesheet_manuale(
             db.add(new_cm)
             await db.flush()
             ts.commessa_id = new_cm.id
+
+    if "task_id" in body:
+        ts.task_id = uuid.UUID(body["task_id"]) if body["task_id"] else None
 
     await db.commit()
     await db.refresh(ts)
@@ -2485,14 +2541,25 @@ async def get_crm_stages(db: AsyncSession = Depends(get_db)):
     return res.scalars().all()
 
 @router.get("/crm/lead", response_model=List[CRMLeadOut], tags=["CRM"])
-async def get_crm_leads(db: AsyncSession = Depends(get_db)):
-    from sqlalchemy import select
+async def get_crm_leads(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from sqlalchemy import select, or_
     from sqlalchemy.orm import joinedload, selectinload
+    
     stmt = select(CRMLead).options(
         joinedload(CRMLead.stadio),
         joinedload(CRMLead.assegnato_a),
         selectinload(CRMLead.attivita)
-    ).order_by(CRMLead.created_at.desc())
+    )
+    
+    # Security: Se non è ADMIN, vedi solo i tuoi lead o quelli non assegnati? 
+    # Di solito in un ERP vedi solo i tuoi.
+    if current_user.ruolo != UserRole.ADMIN:
+        stmt = stmt.where(or_(CRMLead.assegnato_a_id == current_user.id, CRMLead.assegnato_a_id == None))
+        
+    stmt = stmt.order_by(CRMLead.created_at.desc())
     res = await db.execute(stmt)
     leads = res.scalars().all()
     
@@ -2504,15 +2571,26 @@ async def get_crm_leads(db: AsyncSession = Depends(get_db)):
     return leads
 
 @router.post("/crm/lead", response_model=CRMLeadOut, status_code=201, tags=["CRM"])
-async def add_crm_lead(data: CRMLeadCreate, db: AsyncSession = Depends(get_db)):
+async def add_crm_lead(
+    data: CRMLeadCreate, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     lead = CRMLead(**data.model_dump())
+    # Di default assegna a chi lo crea se non specificato
+    if not lead.assegnato_a_id:
+        lead.assegnato_a_id = current_user.id
     db.add(lead)
     await db.commit()
     await db.refresh(lead)
     return lead
 
 @router.get("/crm/lead/{lead_id}", response_model=CRMLeadOut, tags=["CRM"])
-async def get_single_crm_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_single_crm_lead(
+    lead_id: uuid.UUID, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     from sqlalchemy import select
     from sqlalchemy.orm import joinedload, selectinload
     stmt = select(CRMLead).where(CRMLead.id == lead_id).options(
@@ -2524,6 +2602,10 @@ async def get_single_crm_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get
     lead = res.scalar_one_or_none()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead non trovato")
+        
+    # Security check
+    if current_user.ruolo != UserRole.ADMIN and lead.assegnato_a_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Non hai i permessi per visualizzare questo lead")
         
     if lead.assegnato_a:
         lead.assegnato_a_nome = f"{lead.assegnato_a.nome} {lead.assegnato_a.cognome}"
@@ -2537,10 +2619,19 @@ async def get_single_crm_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get
     return lead
 
 @router.patch("/crm/lead/{lead_id}", response_model=CRMLeadOut, tags=["CRM"])
-async def patch_crm_lead(lead_id: uuid.UUID, data: CRMLeadUpdate, db: AsyncSession = Depends(get_db)):
+async def patch_crm_lead(
+    lead_id: uuid.UUID, 
+    data: CRMLeadUpdate, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     lead = await db.get(CRMLead, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead non trovato")
+        
+    # Security check
+    if current_user.ruolo != UserRole.ADMIN and lead.assegnato_a_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Non hai i permessi per modificare questo lead")
         
     update_data = data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -2551,18 +2642,35 @@ async def patch_crm_lead(lead_id: uuid.UUID, data: CRMLeadUpdate, db: AsyncSessi
     return lead
 
 @router.delete("/crm/lead/{lead_id}", status_code=204, tags=["CRM"])
-async def remove_crm_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def remove_crm_lead(
+    lead_id: uuid.UUID, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     lead = await db.get(CRMLead, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead non trovato")
+        
+    # Security check
+    if current_user.ruolo != UserRole.ADMIN and lead.assegnato_a_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Non hai i permessi per eliminare questo lead")
     await db.delete(lead)
     await db.commit()
 
 @router.patch("/crm/lead/{lead_id}/stadio", tags=["CRM"])
-async def update_lead_stage(lead_id: uuid.UUID, stadio_id: uuid.UUID = Body(..., embed=True), db: AsyncSession = Depends(get_db)):
+async def update_lead_stage(
+    lead_id: uuid.UUID, 
+    stadio_id: uuid.UUID = Body(..., embed=True), 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     lead = await db.get(CRMLead, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead non trovato")
+        
+    # Security check
+    if current_user.ruolo != UserRole.ADMIN and lead.assegnato_a_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Non hai i permessi per modificare questo lead")
     
     stage = await db.get(CRMStage, stadio_id)
     if not stage:
@@ -2588,11 +2696,19 @@ async def add_crm_activity(lead_id: uuid.UUID, data: CRMActivityCreate, db: Asyn
     return act
 
 @router.post("/crm/lead/{lead_id}/converti", tags=["CRM"])
-async def convert_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def convert_lead(
+    lead_id: uuid.UUID, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     from sqlalchemy import select
     lead = await db.get(CRMLead, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead non trovato")
+        
+    # Security check
+    if current_user.ruolo != UserRole.ADMIN and lead.assegnato_a_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Non hai i permessi per convertire questo lead")
         
     # 1. Crea Cliente
     new_client = Cliente(
@@ -2615,7 +2731,10 @@ async def convert_lead(lead_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     return {"message": "Lead convertito in cliente con successo", "cliente_id": new_client.id}
 
 @router.get("/crm/statistiche", response_model=CRMStatsOut, tags=["CRM"])
-async def get_crm_stats(db: AsyncSession = Depends(get_db)):
+async def get_crm_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
     from sqlalchemy import select, func
     
     # Valore totale e numero lead

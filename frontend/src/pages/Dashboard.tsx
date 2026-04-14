@@ -19,9 +19,16 @@ import {
   TrendingUp,
   Zap,
 } from "lucide-react";
+import { 
+  Tooltip, 
+  TooltipContent, 
+  TooltipProvider, 
+  TooltipTrigger 
+} from "@/components/ui/tooltip";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useUpdateClienteAffidabilita } from "@/hooks/useClienti";
 import { DashboardKpiCard } from "@/components/analytics/DashboardKpiCard";
+import { PageTransition } from "@/components/common/PageTransition";
 import { ForecastTable } from "@/components/analytics/ForecastTable";
 import { CommessaDialog } from "@/components/commesse/CommessaDialog";
 import { Button } from "@/components/ui/button";
@@ -237,7 +244,8 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="w-full px-8 animate-in space-y-12 fade-in pt-8 pb-20 duration-700">
+    <PageTransition>
+      <div className="w-full px-8 space-y-12 pt-8 pb-20">
       <header className="flex items-center justify-between px-1">
         <div className="flex flex-col gap-1">
           <h1 className="flex items-center gap-3 text-4xl font-black tracking-tighter text-foreground uppercase italic underline decoration-primary/30 decoration-8 underline-offset-[12px]">
@@ -294,9 +302,18 @@ export default function DashboardPage() {
             </Select>
           </div>
 
-          <button className="rounded-xl p-2 transition-colors hover:bg-muted">
-            <Info className="h-5 w-5 text-muted-foreground" />
-          </button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button className="rounded-xl p-2 transition-all hover:bg-white/5 group">
+                  <Info className="h-5 w-5 text-slate-500 group-hover:text-primary transition-colors" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="bg-card border-border text-white text-[10px] font-bold uppercase tracking-widest px-3 py-2">
+                Aiuto & Informazioni Dashboard
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </header>
 
@@ -331,9 +348,9 @@ export default function DashboardPage() {
               <Button
                 type="button"
                 onClick={handleNewCommessa}
-                className="h-9 rounded-xl bg-primary px-4 text-[10px] font-black uppercase tracking-widest text-primary-foreground shadow-[0_0_15px_hsl(var(--primary)/0.2)] hover:bg-primary/90"
+                className="h-9 rounded-xl bg-primary px-4 text-[10px] font-black uppercase italic tracking-widest text-primary-foreground shadow-[0_0_20px_hsl(var(--primary)/0.2)] hover:bg-primary/90 active:scale-[0.98] transition-all"
               >
-                <Plus className="h-3.5 w-3.5" />
+                <Plus className="h-3.5 w-3.5 mr-1" />
                 Nuova commessa
               </Button>
               <button
@@ -373,11 +390,16 @@ export default function DashboardPage() {
 
               <TableBody>
                 {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="py-10 text-center opacity-50">
-                      Caricamento in corso...
-                    </TableCell>
-                  </TableRow>
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i} className="border-border/20">
+                      <TableCell className="py-4 pl-6"><div className="h-4 w-32 animate-pulse rounded bg-muted/40" /></TableCell>
+                      <TableCell className="py-4"><div className="h-4 w-24 animate-pulse rounded bg-muted/30" /></TableCell>
+                      <TableCell className="py-4 text-right"><div className="h-4 w-16 ml-auto animate-pulse rounded bg-muted/20" /></TableCell>
+                      <TableCell className="py-4 text-right"><div className="h-4 w-12 ml-auto animate-pulse rounded bg-muted/20" /></TableCell>
+                      <TableCell className="py-4 text-right"><div className="h-4 w-20 ml-auto animate-pulse rounded bg-muted/10" /></TableCell>
+                      <TableCell className="py-4 pr-6 text-right"><div className="h-8 w-8 ml-auto animate-pulse rounded-full bg-muted/10" /></TableCell>
+                    </TableRow>
+                  ))
                 ) : currentCommesse.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="py-10 text-center opacity-50">
@@ -565,10 +587,11 @@ export default function DashboardPage() {
         <div className="space-y-6 lg:col-span-4">
           <Card className="group relative overflow-hidden border-rose-500/30 bg-card shadow-2xl transition-all hover:border-rose-500/50">
             <div className="absolute top-0 right-0 p-3 opacity-50 group-hover:opacity-100 transition-opacity">
-              <AlertTriangle className="h-4 w-4 text-rose-500" />
+              <AlertTriangle className={cn("h-4 w-4 text-rose-500", (analytics?.kpis.timesheetPendingCount || 0) > 0 && "animate-pulse")} />
             </div>
             <CardHeader className="pb-2">
-              <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-500">
+              <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-500 flex items-center gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping" />
                 Attenzione
               </CardTitle>
             </CardHeader>
@@ -581,7 +604,10 @@ export default function DashboardPage() {
                   <span className="text-[11px] font-bold text-muted-foreground uppercase">
                     Timesheet da approvare
                   </span>
-                  <span className="text-lg font-black text-rose-600 dark:text-rose-500">
+                  <span className={cn(
+                    "text-lg font-black transition-all",
+                    (analytics?.kpis.timesheetPendingCount || 0) > 0 ? "text-rose-500 scale-110" : "text-slate-500"
+                  )}>
                     {analytics?.kpis.timesheetPendingCount || 0}
                   </span>
                 </div>
@@ -674,6 +700,6 @@ export default function DashboardPage() {
         commessa={selectedCommessa}
         defaultMeseCompetenza={selectedMonthQuery}
       />
-    </div>
+    </PageTransition>
   );
 }

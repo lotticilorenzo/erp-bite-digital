@@ -20,13 +20,47 @@ import {
   Plus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useFattureAttive, useFatturePassive } from "@/hooks/useFatture";
+import { useFattureAttive, useFatturePassive, useDeleteFattura } from "@/hooks/useFatture";
 import { FattureTable } from "@/components/finance/FattureTable";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FatturaDetailDialog } from "@/components/finance/FatturaDetailDialog";
+import { FatturaModal } from "@/components/finance/FatturaModal";
+import { toast } from "sonner";
 
 export default function Fatture() {
   const { data: attive, isLoading: loadingA } = useFattureAttive();
   const { data: passive, isLoading: loadingP } = useFatturePassive();
+  const deleteFattura = useDeleteFattura();
+
+  const [selectedFattura, setSelectedFattura] = React.useState<any>(null);
+  const [detailOpen, setDetailOpen] = React.useState(false);
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState<"attive" | "passive">("attive");
+
+  const handleAction = async (fattura: any, action: "view" | "edit" | "delete", type: "attive" | "passive") => {
+    switch (action) {
+      case "view":
+        setSelectedFattura(fattura);
+        setActiveTab(type);
+        setDetailOpen(true);
+        break;
+      case "edit":
+        setSelectedFattura(fattura);
+        setActiveTab(type);
+        setEditOpen(true);
+        break;
+      case "delete":
+        if (confirm(`Sei sicuro di voler eliminare la fattura ${fattura.numero}? L'operazione non può essere annullata.`)) {
+          try {
+            await deleteFattura.mutateAsync({ id: fattura.id, type });
+            toast.success("Fattura eliminata con successo");
+          } catch (e) {
+            toast.error("Errore durante l'eliminazione");
+          }
+        }
+        break;
+    }
+  };
 
   const stats = React.useMemo(() => {
     const totalA = attive?.reduce((acc, f) => acc + Number(f.importo_totale), 0) || 0;
@@ -66,7 +100,13 @@ export default function Fatture() {
             <Download className="h-4 w-4" />
             Esporta
           </Button>
-          <Button className="h-10 bg-primary hover:bg-primary/90 text-white rounded-xl gap-2 font-black uppercase text-[10px] tracking-widest shadow-[0_0_20px_hsl(var(--primary)/0.2)]">
+          <Button 
+            className="h-10 bg-primary hover:bg-primary/90 text-white rounded-xl gap-2 font-black uppercase text-[10px] tracking-widest shadow-[0_0_20px_hsl(var(--primary)/0.2)]"
+            onClick={() => {
+              setSelectedFattura(null);
+              setEditOpen(true);
+            }}
+          >
             <Plus className="h-4 w-4" />
             Nuova Fattura
           </Button>
@@ -151,14 +191,27 @@ export default function Fatture() {
 
           <CardContent className="p-0">
             <TabsContent value="attive" className="m-0 focus-visible:ring-0">
-              <FattureTable data={attive || []} type="attive" />
+              <FattureTable data={attive || []} type="attive" onAction={(f, a) => handleAction(f, a, "attive")} />
             </TabsContent>
             <TabsContent value="passive" className="m-0 focus-visible:ring-0">
-              <FattureTable data={passive || []} type="passive" />
+              <FattureTable data={passive || []} type="passive" onAction={(f, a) => handleAction(f, a, "passive")} />
             </TabsContent>
           </CardContent>
         </Tabs>
       </Card>
+
+      <FatturaDetailDialog 
+        fattura={selectedFattura}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        type={activeTab}
+      />
+      <FatturaModal 
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        type={activeTab}
+        fattura={selectedFattura}
+      />
     </div>
   );
 }

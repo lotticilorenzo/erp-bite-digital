@@ -13,15 +13,26 @@ import {
   ExternalLink,
   CheckCircle2, 
   Clock, 
-  AlertCircle
+  AlertCircle,
+  MoreHorizontal,
+  Eye,
+  Edit3,
+  Trash2
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
 
 interface FattureTableProps {
   data: any[];
   type: "attive" | "passive";
-  onAction?: (fattura: any) => void;
+  onAction?: (fattura: any, action: "view" | "edit" | "delete") => void;
 }
 
 export function FattureTable({ data, type, onAction }: FattureTableProps) {
@@ -122,12 +133,39 @@ export function FattureTable({ data, type, onAction }: FattureTableProps) {
                 {getStatusBadge(item.stato_pagamento)}
               </TableCell>
               <TableCell className="text-right">
-                <button 
-                  onClick={() => onAction?.(item)}
-                  className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center text-[#475569] hover:text-white hover:bg-primary transition-all duration-300 shadow-lg group-hover:scale-110"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </button>
+                <div className="flex items-center justify-end gap-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center text-[#475569] hover:text-white hover:bg-primary transition-all duration-300 shadow-lg outline-none">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48 bg-card/95 backdrop-blur-xl border-border/50 rounded-xl p-2 shadow-2xl">
+                      <DropdownMenuItem 
+                        onClick={() => onAction?.(item, "view")}
+                        className="flex items-center gap-2 rounded-lg py-2 cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+                      >
+                        <Eye className="h-4 w-4" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Visualizza</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => onAction?.(item, "edit")}
+                        className="flex items-center gap-2 rounded-lg py-2 cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+                      >
+                        <Edit3 className="h-4 w-4" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Modifica</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator className="bg-border/50 my-1" />
+                      <DropdownMenuItem 
+                        onClick={() => onAction?.(item, "delete")}
+                        className="flex items-center gap-2 rounded-lg py-2 cursor-pointer text-rose-500 focus:bg-rose-500/10 focus:text-rose-500 transition-colors"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Elimina</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </TableCell>
             </TableRow>
           ))}

@@ -5,6 +5,8 @@ import { AppTopbar } from "./AppTopbar";
 import { AIAssistant } from "../ai/AIAssistant";
 import { TimerBar } from "./TimerBar";
 import { StudioTaskModal } from "../studio/StudioTaskModal";
+import { SmartIndicatorBar } from "../shared/SmartIndicatorBar";
+import { cn } from "@/lib/utils";
 
 export function DashboardLayout() {
   return (
@@ -13,13 +15,22 @@ export function DashboardLayout() {
         <AppSidebar />
         <SidebarInset className="flex flex-col bg-background relative max-w-full min-w-0 overflow-hidden">
           <AppTopbar />
-          <main className="flex-1 p-6 md:p-8 overflow-y-auto overflow-x-hidden pb-20 min-w-0">
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out fill-mode-both">
+          <main className={cn(
+            "flex-1 min-w-0 relative",
+            window.location.pathname.startsWith('/studio-os') 
+              ? "overflow-hidden pb-[130px]" 
+              : "p-6 md:p-8 overflow-y-auto overflow-x-hidden pb-32"
+          )}>
+            <div className={cn(
+              "animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out fill-mode-both",
+              window.location.pathname.startsWith('/studio-os') ? "h-full" : ""
+            )}>
               <Outlet />
             </div>
           </main>
           <AIAssistant />
           <TimerBar />
+          <SmartIndicatorBar />
           <StudioTaskModal />
         </SidebarInset>
       </div>

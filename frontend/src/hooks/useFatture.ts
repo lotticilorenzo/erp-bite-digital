@@ -48,3 +48,44 @@ export function useUpdateFatturaPassiva() {
     },
   });
 }
+
+export function useCreateFattura() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ type, data }: { type: "attive" | "passive"; data: any }) => {
+      const endpoint = type === "attive" ? "/fatture-attive" : "/fatture-passive";
+      const { data: response } = await api.post(endpoint, data);
+      return response;
+    },
+    onSuccess: (_, { type }) => {
+      queryClient.invalidateQueries({ queryKey: [type === "attive" ? "fatture-attive" : "fatture-passive"], exact: false });
+    },
+  });
+}
+
+export function useUpdateFattura() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, type, data }: { id: string; type: "attive" | "passive"; data: any }) => {
+      const endpoint = type === "attive" ? `/fatture-attive/${id}` : `/fatture-passive/${id}`;
+      const { data: response } = await api.patch(endpoint, data);
+      return response;
+    },
+    onSuccess: (_, { type }) => {
+      queryClient.invalidateQueries({ queryKey: [type === "attive" ? "fatture-attive" : "fatture-passive"], exact: false });
+    },
+  });
+}
+
+export function useDeleteFattura() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, type }: { id: string; type: "attive" | "passive" }) => {
+      const endpoint = type === "attive" ? `/fatture-attive/${id}` : `/fatture-passive/${id}`;
+      await api.delete(endpoint);
+    },
+    onSuccess: (_, { type }) => {
+      queryClient.invalidateQueries({ queryKey: [type === "attive" ? "fatture-attive" : "fatture-passive"], exact: false });
+    },
+  });
+}

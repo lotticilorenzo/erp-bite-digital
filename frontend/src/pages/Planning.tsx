@@ -45,6 +45,17 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { TaskPlanningDialog } from '@/components/planning/TaskPlanningDialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
+import { PageTransition } from '@/components/common/PageTransition';
 
 // Types
 interface Risorsa {
@@ -71,6 +82,10 @@ const PlanningPage: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<'week' | 'month'>('week');
+  const [backlogSearch, setBacklogSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('ALL');
+  const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<any>(null);
   
   // Sensors for DND
   const sensors = useSensors(
@@ -99,6 +114,27 @@ const PlanningPage: React.FC = () => {
       const res = await api.get('/planning/tasks');
       return res.data;
     }
+  });
+
+  // Calculate costs for assigned tasks
+  const { data: costs = {} } = useQuery({
+    queryKey: ['tasks-costs', tasks.filter(t => t.assegnatario_id).map(t => t.id)],
+    queryFn: async () => {
+      const assigned = tasks.filter(t => t.assegnatario_id);
+      const results: Record<string, any> = {};
+      
+      // Fetch costs in parallel (simple version)
+      await Promise.all(assigned.map(async (t) => {
+        try {
+          const res = await api.get(`/planning/estimate-cost?task_id=${t.id}&user_id=${t.assegnatario_id}`);
+          results[t.id] = res.data;
+        } catch (e) {
+          console.error("Cost fetch error", e);
+        }
+      }));
+      return results;
+    },
+    enabled: tasks.length > 0
   });
 
   const { assenze = [] } = useAssenze();
@@ -137,6 +173,52 @@ const PlanningPage: React.FC = () => {
         userId: overUserId,
         date: overValue // format: YYYY-MM-DD
       });
+    }
+  };
+  
+  // Backlog Filtering
+  const backlogTasks = tasks.filter(t => 
+    !t.assegnatario_id && 
+    (t.titolo.toLowerCase().includes(backlogSearch.toLowerCase()))
+  );
+
+  // Risorse Filtering
+  const filteredRisorse = risorse.filter(r => 
+    roleFilter === 'ALL' || r.ruolo === roleFilter
+  );
+
+  const roles = Array.from(new Set(risorse.map(r => r.ruolo).filter(Boolean)));
+
+  // Smart Allocation Logic
+  const handleAutoAllocation = async () => {
+    const unassigned = tasks.filter(t => !t.assegnatario_id);
+    if (unassigned.length === 0) {
+      toast.info("Nessuna task nel backlog da assegnare.");
+      return;
+    }
+
+    try {
+      let count = 0;
+      for (const task of unassigned) {
+        // Find best resource (least loaded this week)
+        const candidates = filteredRisorse.map(r => ({
+          ...r,
+          ...getUserWeeklyLoad(r.id)
+        })).sort((a, b) => (a.load - a.capacity) - (b.load - b.capacity));
+
+        const best = candidates[0];
+        if (best && best.load < best.capacity + 8) { // Only if not severely overloaded
+          await assignMutation.mutateAsync({
+            taskId: task.id,
+            userId: best.id,
+            date: format(monday, 'yyyy-MM-dd') // Assign to Monday by default
+          });
+          count++;
+        }
+      }
+      toast.success(`Assegnate automaticamente ${count} task.`);
+    } catch (error) {
+      toast.error("Errore durante l'assegnazione automatica.");
     }
   };
 
@@ -198,16 +280,19 @@ const PlanningPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 space-y-6 bg-background min-h-screen text-slate-200">
+    <PageTransition>
+      <div className="p-8 space-y-8 pb-20">
       {/* Header & Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-3">
+        <header className="flex flex-col gap-1 px-1">
+          <h1 className="text-4xl font-black tracking-tighter text-foreground uppercase italic underline decoration-primary/30 decoration-8 underline-offset-[12px] mb-4 flex items-center gap-3">
             <Users className="h-8 w-8 text-primary" />
-            Planning Risorse
+            Execution Hub
           </h1>
-          <p className="text-slate-400 font-medium">Gestione carichi di lavoro e allocazione team</p>
-        </div>
+          <p className="text-slate-500 text-xs font-black uppercase tracking-[0.2em] mt-2">
+            Gestione carichi di lavoro, allocazione dinamica e analisi team.
+          </p>
+        </header>
 
         <div className="flex items-center gap-4">
           {/* View Toggle */}
@@ -229,6 +314,17 @@ const PlanningPage: React.FC = () => {
               Previsione
             </Button>
           </div>
+
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleAutoAllocation}
+            disabled={assignMutation.isPending}
+            className="hidden md:flex items-center gap-2 border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-black uppercase italic tracking-widest text-[10px] h-9 px-4 rounded-xl shadow-lg active:scale-95 transition-all"
+          >
+            <Sparkles className="h-3.5 w-3.5 fill-primary mr-1" />
+            Bilancia Carico
+          </Button>
 
           <div className="flex items-center gap-3 bg-card p-1 rounded-xl border border-border">
             <Button 
@@ -274,8 +370,19 @@ const PlanningPage: React.FC = () => {
                   <div className="min-w-[800px]">
                     {/* Calendar Header */}
                     <div className="grid grid-cols-[200px_repeat(5,1fr)] border-b border-border">
-                      <div className="p-4 border-r border-border bg-background/50 flex items-center gap-2">
+                      <div className="p-4 border-r border-border bg-background/50 flex flex-col gap-2">
                         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#475569]">Membro Team</span>
+                        <Select value={roleFilter} onValueChange={setRoleFilter}>
+                          <SelectTrigger className="h-6 bg-transparent border-none p-0 text-[9px] font-black uppercase text-primary focus:ring-0">
+                            <SelectValue placeholder="Tutti" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-card border-border text-white">
+                            <SelectItem value="ALL">Tutti i ruoli</SelectItem>
+                            {roles.map(role => (
+                              <SelectItem key={role} value={role || ""}>{role}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       {weekDays.map(day => (
                         <div key={day.toString()} className="p-4 text-center bg-background/30">
@@ -291,7 +398,7 @@ const PlanningPage: React.FC = () => {
 
                     {/* Calendar Body */}
                     <div className="divide-y divide-[#1e293b]">
-                      {risorse.map(risorsa => (
+                      {filteredRisorse.map(risorsa => (
                         <div key={risorsa.id} className="grid grid-cols-[200px_repeat(5,1fr)] group">
                           {/* User Info & Capacity */}
                           <div className="p-4 border-r border-border bg-background/20 flex flex-col justify-between overflow-hidden">
@@ -343,6 +450,11 @@ const PlanningPage: React.FC = () => {
                                 isAbsent={isAbsent}
                                 absenceType={absenceInfo?.tipo}
                                 getProjectColor={getProjectColor}
+                                costs={costs}
+                                onEditTask={(task) => {
+                                  setSelectedTask(task);
+                                  setIsTaskDialogOpen(true);
+                                }}
                               />
                             );
                           })}
@@ -355,7 +467,7 @@ const PlanningPage: React.FC = () => {
             ) : (
               /* Month Forecast View */
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {risorse.map(risorsa => (
+                {filteredRisorse.map(risorsa => (
                   <Card key={risorsa.id} className="bg-card/50 border-border p-6 space-y-6 backdrop-blur-xl">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
@@ -421,13 +533,21 @@ const PlanningPage: React.FC = () => {
             <Card className="bg-card/50 border-border backdrop-blur-xl shadow-2xl h-[calc(100vh-160px)] flex flex-col sticky top-6">
               <div className="p-4 border-b border-border flex items-center justify-between">
                 <h3 className="text-sm font-black uppercase tracking-widest text-white flex items-center gap-2">
-                  <div className="p-1 rounded bg-primary/20">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6 p-1 rounded bg-primary/20 hover:bg-primary/30"
+                    onClick={() => {
+                      setSelectedTask(null);
+                      setIsTaskDialogOpen(true);
+                    }}
+                  >
                     <Plus className="h-3.5 w-3.5 text-primary" />
-                  </div>
+                  </Button>
                   Backlog
                 </h3>
                 <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-black">
-                  {tasks.filter(t => !t.assegnatario_id).length}
+                  {backlogTasks.length}
                 </Badge>
               </div>
               
@@ -436,6 +556,8 @@ const PlanningPage: React.FC = () => {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
                   <Input 
                     placeholder="Filtra per titolo o progetto..." 
+                    value={backlogSearch}
+                    onChange={(e) => setBacklogSearch(e.target.value)}
                     className="pl-9 h-9 bg-background/50 border-border text-xs focus-visible:ring-primary/30"
                   />
                 </div>
@@ -443,10 +565,17 @@ const PlanningPage: React.FC = () => {
 
               <ScrollArea className="flex-1 px-3 pb-4">
                 <div className="space-y-3 pt-1">
-                  {tasks.filter(t => !t.assegnatario_id).map(task => (
-                    <DraggableTask key={task.id} task={task} />
+                  {backlogTasks.map(task => (
+                    <DraggableTask 
+                      key={task.id} 
+                      task={task} 
+                      onEdit={() => {
+                        setSelectedTask(task);
+                        setIsTaskDialogOpen(true);
+                      }}
+                    />
                   ))}
-                  {tasks.filter(t => !t.assegnatario_id).length === 0 && (
+                  {backlogTasks.length === 0 && (
                     <div className="text-center py-20 opacity-30 space-y-4">
                       <div className="mx-auto h-16 w-16 rounded-full border-2 border-dashed border-slate-700 flex items-center justify-center">
                         <Users className="h-8 w-8" />
@@ -480,7 +609,14 @@ const PlanningPage: React.FC = () => {
           ) : null}
         </DragOverlay>
       </DndContext>
-    </div>
+
+        <TaskPlanningDialog 
+          open={isTaskDialogOpen} 
+          onOpenChange={setIsTaskDialogOpen} 
+          task={selectedTask}
+        />
+      </div>
+    </PageTransition>
   );
 };
 
@@ -491,8 +627,10 @@ const CalendarCell: React.FC<{
   tasks: Task[]; 
   isAbsent?: boolean;
   absenceType?: string;
-  getProjectColor: (id?: string) => string 
-}> = ({ id, tasks, isAbsent, absenceType, getProjectColor }) => {
+  getProjectColor: (id?: string) => string;
+  costs?: Record<string, any>;
+  onEditTask: (task: Task) => void;
+}> = ({ id, tasks, isAbsent, absenceType, getProjectColor, costs, onEditTask }) => {
   const { isOver, setNodeRef } = useDroppable({ id, disabled: isAbsent });
 
   return (
@@ -513,8 +651,15 @@ const CalendarCell: React.FC<{
         </div>
       ) : (
         <div className="space-y-2">
-          {tasks.map(task => (
-            <DraggableTask key={task.id} task={task} isMini getProjectColor={getProjectColor} />
+           {tasks.map(task => (
+            <DraggableTask 
+              key={task.id} 
+              task={task} 
+              isMini 
+              getProjectColor={getProjectColor} 
+              onEdit={() => onEditTask(task)}
+              cost={costs?.[task.id]}
+            />
           ))}
         </div>
       )}
@@ -522,7 +667,13 @@ const CalendarCell: React.FC<{
   );
 };
 
-const DraggableTask: React.FC<{ task: Task; isMini?: boolean; getProjectColor?: (id?: string) => string }> = ({ task, isMini, getProjectColor }) => {
+const DraggableTask: React.FC<{ 
+  task: Task; 
+  isMini?: boolean; 
+  getProjectColor?: (id?: string) => string;
+  onEdit?: () => void;
+  cost?: any;
+}> = ({ task, isMini, getProjectColor, onEdit, cost }) => {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
   });
@@ -551,13 +702,24 @@ const DraggableTask: React.FC<{ task: Task; isMini?: boolean; getProjectColor?: 
     >
       <div className="flex flex-col gap-2">
         <div className="flex items-start justify-between gap-3">
-          <p className={`${isMini ? 'text-[10px]' : 'text-xs'} font-black text-white leading-tight uppercase tracking-wide group-hover:text-primary transition-colors line-clamp-3`}>
-            {task.titolo}
-          </p>
-          {!isMini && task.stima_minuti && (
-             <Badge variant="outline" className="h-5 text-[9px] font-black bg-primary/10 border-primary/20 text-primary py-0 px-1.5 uppercase">
-               {Math.round(task.stima_minuti / 60)}h
-             </Badge>
+          <div className="flex-1 min-w-0" onClick={onEdit}>
+            <p className={`${isMini ? 'text-[10px]' : 'text-xs'} font-black text-white leading-tight uppercase tracking-wide group-hover:text-primary transition-colors line-clamp-3 cursor-pointer`}>
+              {task.titolo}
+            </p>
+          </div>
+          {(task.stima_minuti || cost) && (
+             <div className="flex flex-col items-end gap-1">
+               {task.stima_minuti && (
+                 <Badge variant="outline" className={`h-4 text-[8px] font-black bg-primary/10 border-primary/20 text-primary py-0 px-1.5 uppercase ${isMini ? 'scale-75 origin-right' : ''}`}>
+                   {Math.round(task.stima_minuti / 60)}h
+                 </Badge>
+               )}
+               {cost && (
+                 <Badge variant="outline" className={`h-4 text-[8px] font-black bg-emerald-500/10 border-emerald-500/20 text-emerald-500 py-0 px-1.5 uppercase ${isMini ? 'scale-75 origin-right' : ''}`}>
+                   €{Number(cost.estimated_cost).toFixed(0)}
+                 </Badge>
+               )}
+             </div>
           )}
         </div>
         

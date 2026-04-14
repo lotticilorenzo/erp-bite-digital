@@ -48,7 +48,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { useStudio } from "@/context/StudioContext";
+import { useStudio } from "@/hooks/useStudio";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 

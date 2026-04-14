@@ -32,6 +32,22 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, _jwt_secret(), algorithm=settings.ALGORITHM)
 
 
+async def get_user_from_token(db: AsyncSession, token: str):
+    try:
+        payload = jwt.decode(token, _jwt_secret(), algorithms=[settings.ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            return None
+    except JWTError:
+        return None
+
+    from app.services.services import get_user_by_id
+    user = await get_user_by_id(db, user_id)
+    if user is None or not user.attivo:
+        return None
+    return user
+
+
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db)

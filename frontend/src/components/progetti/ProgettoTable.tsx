@@ -14,8 +14,11 @@ import {
   Building2,
   MoreHorizontal,
   ExternalLink,
-  Filter
+  Filter,
+  FolderOpen
 } from "lucide-react";
+import { motion } from "framer-motion";
+import { EmptyState } from "../common/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -75,30 +78,41 @@ export function ProgettoTable({ progetti, onEdit, onDelete, isLoading }: Progett
         </Button>
       </div>
 
-      <div className="rounded-md border border-border bg-card overflow-hidden">
+      <div className="rounded-xl border border-border bg-card shadow-2xl overflow-hidden">
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow className="border-border hover:bg-transparent">
-              <TableHead className="text-muted-foreground font-medium py-4 pl-6">PROGETTO</TableHead>
-              <TableHead className="text-muted-foreground font-medium">CLIENTE</TableHead>
-              <TableHead className="text-muted-foreground font-medium">TIPO</TableHead>
-              <TableHead className="text-muted-foreground font-medium">STATO</TableHead>
-              <TableHead className="text-muted-foreground font-medium">BUDGET</TableHead>
+              <TableHead className="text-muted-foreground font-black uppercase tracking-widest text-[10px] py-4 pl-6">PROGETTO</TableHead>
+              <TableHead className="text-muted-foreground font-black uppercase tracking-widest text-[10px]">CLIENTE</TableHead>
+              <TableHead className="text-muted-foreground font-black uppercase tracking-widest text-[10px]">TIPO</TableHead>
+              <TableHead className="text-muted-foreground font-black uppercase tracking-widest text-[10px]">STATO</TableHead>
+              <TableHead className="text-muted-foreground font-black uppercase tracking-widest text-[10px]">BUDGET</TableHead>
               <TableHead className="text-right pr-6"></TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody>
+          <motion.tbody 
+            variants={container}
+            initial="hidden"
+            animate="show"
+          >
             {filteredProgetti.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
-                  Nessun progetto trovato.
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={6} className="py-20">
+                  <EmptyState 
+                    icon={FolderOpen}
+                    title="Nessun Progetto"
+                    description="Non hai ancora creato progetti attivi. Inizia ora aggiungendo il tuo primo progetto per un cliente."
+                    actionLabel="Nuovo Progetto"
+                    onAction={() => window.location.href = '/progetti?action=new'}
+                  />
                 </TableCell>
               </TableRow>
             ) : (
               filteredProgetti.map((progetto) => (
-                <TableRow 
+                <motion.tr 
+                  variants={item}
                   key={progetto.id} 
-                  className="border-border hover:bg-muted/30 cursor-pointer group transition-colors"
+                  className="border-border hover:bg-white/[0.02] cursor-pointer group transition-colors border-b"
                 >
                   <TableCell className="py-4 pl-6" onClick={() => window.location.href = `/progetti/${progetto.id}`}>
                     <div className="flex flex-col">

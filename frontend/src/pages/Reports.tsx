@@ -377,7 +377,7 @@ export default function Reports() {
 
   return (
     <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-6">
+      <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-8">
         <div className="space-y-2">
           <div className="flex items-center gap-3">
             <Badge className="rounded-full border border-primary/20 bg-primary/10 text-primary uppercase tracking-[0.22em] text-[10px] font-black px-3 py-1">
@@ -402,7 +402,7 @@ export default function Reports() {
           </div>
         </div>
 
-        <Card className="bg-card/40 border-border/50 rounded-3xl min-w-[320px]">
+        <Card className="bg-card/40 border-border/50 rounded-[2rem] min-w-[320px]">
           <CardContent className="p-5 space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -461,7 +461,7 @@ export default function Reports() {
         </Card>
       </div>
 
-      <Card className="bg-card border-border shadow-2xl rounded-3xl overflow-hidden">
+      <Card className="bg-card border-border/50 shadow-2xl hover:border-primary/20 transition-all duration-300 rounded-[2rem] overflow-hidden">
         <CardHeader className="border-b border-border/50">
           <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
             <Filter className="h-4 w-4 text-primary" />
@@ -577,7 +577,7 @@ export default function Reports() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
         <ReportKpiCard
           title="Fatturato"
           value={formatEuro(kpis.fatturato)}
@@ -610,7 +610,7 @@ export default function Reports() {
       </div>
 
       {isClientReport && selectedClient && (
-        <Card className="bg-card border-border shadow-2xl rounded-3xl overflow-hidden">
+        <Card className="bg-card border-border/50 shadow-2xl hover:border-primary/20 transition-all duration-300 rounded-[2rem] overflow-hidden">
           <CardHeader className="border-b border-border/50">
             <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
               <Building2 className="h-4 w-4 text-primary" />
@@ -661,7 +661,7 @@ export default function Reports() {
       )}
 
       {!isClientReport && (
-        <Card className="bg-card border-border shadow-2xl rounded-3xl overflow-hidden">
+        <Card className="bg-card border-border/50 shadow-2xl hover:border-primary/20 transition-all duration-300 rounded-[2rem] overflow-hidden">
           <CardHeader className="border-b border-border/50">
             <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
               <CalendarRange className="h-4 w-4 text-primary" />
@@ -739,7 +739,7 @@ export default function Reports() {
         </Card>
       )}
 
-      <Card className="bg-card border-border shadow-2xl rounded-3xl overflow-hidden">
+      <Card className="bg-card border-border/50 shadow-2xl hover:border-primary/20 transition-all duration-300 rounded-[2rem] overflow-hidden">
         <CardHeader className="border-b border-border/50">
           <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
             <FileText className="h-4 w-4 text-primary" />
@@ -853,7 +853,7 @@ export default function Reports() {
       </Card>
 
       <Dialog open={!!previewCommessa} onOpenChange={() => setPreviewCommessa(null)}>
-        <DialogContent className="max-w-5xl h-[90vh] bg-card border-border p-0 flex flex-col overflow-hidden rounded-3xl">
+        <DialogContent className="max-w-5xl h-[90vh] bg-card border-border p-0 flex flex-col overflow-hidden rounded-[2rem]">
           <DialogHeader className="p-6 border-b border-border/50">
             <DialogTitle className="text-xl font-black text-white uppercase italic">
               Anteprima <span className="text-primary not-italic">Report</span>
@@ -904,11 +904,11 @@ function ReportKpiCard({
   accentClass?: string;
 }) {
   return (
-    <Card className="bg-card border-border shadow-2xl rounded-3xl overflow-hidden">
+    <Card className="bg-card border-border/50 shadow-2xl hover:border-primary/20 transition-all duration-300 rounded-[2rem] overflow-hidden">
       <CardContent className="p-6 space-y-5">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground group-hover:text-primary transition-colors">
               {title}
             </p>
           </div>

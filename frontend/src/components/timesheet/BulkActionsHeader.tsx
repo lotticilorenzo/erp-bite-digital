@@ -34,13 +34,11 @@ export function BulkActionsHeader({ selectedIds, onClearSelection }: BulkActions
   if (selectedIds.length === 0) return null;
 
   const handleApprove = async () => {
-    console.log("BulkActionsHeader: handleApprove called for ids:", selectedIds);
     await approveMutation.mutateAsync({ ids: selectedIds, azione: "APPROVA" });
     onClearSelection();
   };
 
   const handleDelete = async () => {
-    console.log("BulkActionsHeader: handleDelete called for ids:", selectedIds);
     // Removed confirm for automated testing stability
     await deleteMutation.mutateAsync(selectedIds);
     onClearSelection();

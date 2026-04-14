@@ -438,6 +438,8 @@ async def list_commesse(
     q = select(Commessa).options(
         selectinload(Commessa.cliente),
         selectinload(Commessa.righe_progetto).selectinload(CommessaProgetto.progetto),
+        selectinload(Commessa.timesheet),
+        selectinload(Commessa.fattura)
     )
     if mese:
         q = q.where(Commessa.mese_competenza == mese.replace(day=1))
@@ -458,7 +460,8 @@ async def get_commessa(db: AsyncSession, commessa_id: uuid.UUID) -> Optional[Com
         .options(
             selectinload(Commessa.cliente),
             selectinload(Commessa.righe_progetto).selectinload(CommessaProgetto.progetto),
-            selectinload(Commessa.timesheet)
+            selectinload(Commessa.timesheet),
+            selectinload(Commessa.fattura)
         )
         .where(Commessa.id == commessa_id)
     )
@@ -823,9 +826,9 @@ async def get_dashboard_kpi(db: AsyncSession, mese: date) -> dict:
 
 async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None) -> List[dict]:
     from sqlalchemy import text
-    where = "WHERE c.mese_competenza = :mese" if mese else ""
-    params = {"mese": mese.replace(day=1)} if mese else {}
-    r = await db.execute(text(f"""
+    
+    # Costruiamo la query in modo che i parametri siano sempre gestiti da SQLAlchemy
+    query_str = """
         WITH commessa_valori AS (
             SELECT
                 cp.commessa_id,
@@ -855,31 +858,36 @@ async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None)
             ), 0) AS margine_euro,
             COUNT(c.id) AS num_commesse
         FROM clienti cl
-        JOIN commesse c ON c.cliente_id = cl.id
-        LEFT JOIN commessa_valori cv ON cv.commessa_id = c.id
-        LEFT JOIN coefficienti_allocazione ca ON ca.mese_competenza = c.mese_competenza
-        {where}
+        JOIN commesse c ON cl.id = c.cliente_id
+        LEFT JOIN commessa_valori cv ON c.id = cv.commessa_id
+        LEFT JOIN collaboratore_anagrafica ca ON c.responsabile_id = ca.user_id
+        WHERE (:mese IS NULL OR c.mese_competenza = :mese)
         GROUP BY cl.id, cl.ragione_sociale
         ORDER BY margine_euro DESC
-    """), {**params, "default_coeff": DEFAULT_COEFFICIENTE_ALLOCAZIONE})
-    rows = r.fetchall()
-    result = []
-    for row in rows:
-        pct = None
-        if row.fatturato and row.fatturato > 0:
-            pct = round(float(row.margine_euro / row.fatturato * 100), 1)
-        result.append({
+    """
+    
+    params = {
+        "mese": mese.replace(day=1) if mese else None,
+        "default_coeff": 0.2
+    }
+    
+    r = await db.execute(text(query_str), params)
+    rows = r.all()
+    
+    return [
+        {
             "cliente_id": row.cliente_id,
             "ragione_sociale": row.ragione_sociale,
-            "fatturato": row.fatturato,
-            "costo_manodopera": row.costo_manodopera,
-            "costi_diretti": row.costi_diretti,
-            "costi_indiretti_allocati": row.costi_indiretti_allocati,
-            "margine_euro": row.margine_euro,
-            "margine_percentuale": pct,
+            "fatturato": float(row.fatturato),
+            "costo_manodopera": float(row.costo_manodopera),
+            "costi_diretti": float(row.costi_diretti),
+            "costi_indiretti_allocati": float(row.costi_indiretti_allocati),
+            "margine_euro": float(row.margine_euro),
             "num_commesse": row.num_commesse,
-        })
-    return result
+            "margine_percentuale": (float(row.margine_euro) / float(row.fatturato) * 100) if row.fatturato > 0 else 0
+        }
+        for row in rows
+    ]
 
 
 # ── TASK SERVICE ──────────────────────────────────────────
@@ -896,6 +904,7 @@ async def list_tasks(
     q = select(Task).options(
         selectinload(Task.subtasks).selectinload(Task.timer_sessions),
         selectinload(Task.assegnatario),
+        selectinload(Task.revisore),
         selectinload(Task.timer_sessions)
     )
     if progetto_id:
@@ -991,6 +1000,7 @@ async def get_task(db: AsyncSession, task_id: uuid.UUID) -> Optional[Task]:
         select(Task).options(
             selectinload(Task.subtasks).selectinload(Task.timer_sessions),
             selectinload(Task.assegnatario),
+            selectinload(Task.revisore),
             selectinload(Task.timer_sessions)
         ).where(Task.id == task_id)
     )

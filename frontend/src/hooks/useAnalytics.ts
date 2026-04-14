@@ -42,7 +42,7 @@ export function useAnalytics(referenceDate?: Date) {
   const { data: fatture = [], isLoading: loadingF } = useFattureAttive();
   const { data: fatturePassive = [], isLoading: loadingFp } = useFatturePassive();
   const { data: timesheetsCurrentMonth = [], isLoading: loadingTs } = useTimesheets({ mese: currentMonthStr });
-  const { data: allTimesheets = [], isLoading: loadingAllTs } = useTimesheets();
+  const { data: pendingTs = [], isLoading: loadingPendingTs } = useTimesheets({ stato: "PENDING" });
   const { data: costiFissi = [], isLoading: loadingCf } = useCostiFissi();
   const { data: progetti = [], isLoading: loadingP } = useProgetti();
 
@@ -50,21 +50,19 @@ export function useAnalytics(referenceDate?: Date) {
     const prevMonth = subMonths(now, 1);
     
     // Defensive check: ensure data sources are arrays
+    // Protective array casting
     const clientiArr = Array.isArray(clienti) ? clienti : [];
-    const allTimesheetsArr = Array.isArray(allTimesheets) ? allTimesheets : [];
+    const pendingTsArr = Array.isArray(pendingTs) ? pendingTs : [];
     const costiFissiArr = Array.isArray(costiFissi) ? costiFissi : [];
     const progettiArr = Array.isArray(progetti) ? progetti : [];
     
-    // Enrich commesse with real labor cost from timesheets
-    const enrichedCommesse = (Array.isArray(commesse) ? commesse : []).map(c => {
-      const commessaTimesheets = allTimesheetsArr.filter(t => t.commessa_id === c.id);
-      const manualLaborCost = commessaTimesheets.reduce((acc, t) => acc + (t.costo_lavoro || 0), 0);
-      return {
-        ...c,
-        costo_manodopera_reale: manualLaborCost,
-        ore_reali_timesheet: commessaTimesheets.reduce((acc, t) => acc + (t.durata_minuti || 0), 0) / 60
-      };
-    });
+    // Leverage the heavily optimized backend properties directly
+    // `costo_manodopera` and `ore_reali` are now calculated natively with zero latency in router.py
+    const enrichedCommesse = (Array.isArray(commesse) ? commesse : []).map(c => ({
+      ...c,
+      costo_manodopera_reale: c.costo_manodopera || 0,
+      ore_reali_timesheet: c.ore_reali || 0
+    }));
 
     const commesseArr = hydrateCommesseWithClienti(
       enrichedCommesse,
@@ -75,6 +73,22 @@ export function useAnalytics(referenceDate?: Date) {
     const fatturePassiveArr = Array.isArray(fatturePassive) ? fatturePassive : [];
     const timesheetsCurrentMonthArr = Array.isArray(timesheetsCurrentMonth) ? timesheetsCurrentMonth : [];
 
+    // Pre-calculate Maps for O(1) lookups instead of O(N) filters
+    const commesseByMonth = new Map<string, Commessa[]>();
+    const commesseByClient = new Map<string, Commessa[]>();
+    
+    commesseArr.forEach(c => {
+      if (c.mese_competenza) {
+        const monthKey = c.mese_competenza.substring(0, 7); // yyyy-MM
+        if (!commesseByMonth.has(monthKey)) commesseByMonth.set(monthKey, []);
+        commesseByMonth.get(monthKey)!.push(c);
+      }
+      if (c.cliente_id) {
+        if (!commesseByClient.has(c.cliente_id)) commesseByClient.set(c.cliente_id, []);
+        commesseByClient.get(c.cliente_id)!.push(c);
+      }
+    });
+
     const last12Months = Array.from({ length: 12 }, (_, i) => {
       const d = subMonths(startOfMonth(now), 11 - i);
       return format(d, "yyyy-MM-dd");
@@ -84,51 +98,35 @@ export function useAnalytics(referenceDate?: Date) {
       format(parseISO(m), "MMM yy", { locale: it }).toUpperCase()
     );
 
-    // 1. GRAFICO FATTURATO (Bar Chart)
+    // 1. GRAFICO FATTURATO (Bar Chart) - Now O(1) lookup
     const revenueTrend = last12Months.map((m, i) => {
-      const monthStart = parseISO(m);
-      const total = commesseArr
-        .filter((c: Commessa) => {
-          if (!c.mese_competenza) return false;
-          const cDate = parseISO(c.mese_competenza);
-          return cDate.getMonth() === monthStart.getMonth() && cDate.getFullYear() === monthStart.getFullYear();
-        })
+      const monthKey = m.substring(0, 7);
+      const total = (commesseByMonth.get(monthKey) || [])
         .reduce((acc: number, c: Commessa) => acc + (c.valore_fatturabile || 0), 0);
       
-      return { month: monthLabels[i], revenue: total };
+      return { month: monthLabels[i], revenue: total, isoMonth: m };
     });
 
-    // 2. GRAFICO MARGINI (Line Chart)
+    // 2. GRAFICO MARGINI (Line Chart) - Now O(1) lookup
     const marginTrend = last12Months.map((m, i) => {
-      const monthStart = parseISO(m);
-      const monthCommesse = commesseArr.filter((c: Commessa) => {
-        if (!c.mese_competenza) return false;
-        const cDate = parseISO(c.mese_competenza);
-        return cDate.getMonth() === monthStart.getMonth() && cDate.getFullYear() === monthStart.getFullYear();
-      });
+      const monthKey = m.substring(0, 7);
+      const monthCommesse = commesseByMonth.get(monthKey) || [];
 
       const totalRev = monthCommesse.reduce((acc: number, c: Commessa) => acc + (c.valore_fatturabile || 0), 0);
       const totalMargin = monthCommesse.reduce((acc: number, c: Commessa) => acc + (c.margine_euro || 0), 0);
       const avgMarginPercent = totalRev > 0 ? (totalMargin / totalRev) * 100 : 0;
 
-      return { month: monthLabels[i], margin: parseFloat(avgMarginPercent.toFixed(1)) };
+      return { month: monthLabels[i], margin: parseFloat(avgMarginPercent.toFixed(1)), isoMonth: m };
     });
 
-    // 3. TOP CLIENTI
+    // 3. TOP CLIENTI - Now using O(1) lookup
     const clientStats = clientiArr.map((cl: Cliente) => {
-      const totalRev = commesseArr
-        .filter((c: Commessa) => c.cliente_id === cl.id)
-        .reduce((acc: number, c: Commessa) => acc + (c.valore_fatturabile || 0), 0);
+      const clientCommesse = commesseByClient.get(cl.id) || [];
+      const totalRev = clientCommesse.reduce((acc: number, c: Commessa) => acc + (c.valore_fatturabile || 0), 0);
       
-      const prevMonthRev = commesseArr
-        .filter((c: Commessa) => {
-            if (!c.cliente_id || c.cliente_id !== cl.id || !c.mese_competenza) return false;
-            const cDate = parseISO(c.mese_competenza);
-            return isWithinInterval(cDate, {
-                start: subMonths(startOfMonth(now), 1),
-                end: subMonths(startOfMonth(now), 1)
-            });
-        })
+      const prevMonthStr = format(subMonths(now, 1), "yyyy-MM");
+      const prevMonthRev = (commesseByMonth.get(prevMonthStr) || [])
+        .filter(c => c.cliente_id === cl.id)
         .reduce((acc: number, c: Commessa) => acc + (c.valore_fatturabile || 0), 0);
 
       return { 
@@ -140,9 +138,9 @@ export function useAnalytics(referenceDate?: Date) {
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 5);
 
-    // 4. ORE vs FATTURATO (Scatter)
+    // 4. ORE vs FATTURATO (Scatter) - Now using Map lookup
     const scatterData = clientiArr.map((cl: Cliente) => {
-      const clientCommesse = commesseArr.filter((c: Commessa) => c.cliente_id === cl.id);
+      const clientCommesse = commesseByClient.get(cl.id) || [];
       const totalRev = clientCommesse.reduce((acc: number, c: Commessa) => acc + (c.valore_fatturabile || 0), 0);
       const totalHours = clientCommesse.reduce((acc: number, c: Commessa) => acc + (c.costo_manodopera || 0) / 40, 0); 
 
@@ -245,7 +243,7 @@ export function useAnalytics(referenceDate?: Date) {
           .reduce((acc, c) => acc + (c.valore_fatturabile || 0), 0),
         costoStruttura: costiFissiArr.filter(cf => cf.attivo).reduce((acc, cf) => acc + Number(cf.importo || 0), 0),
         marginiSottoSoglia: selectedMonthCommesse.filter((c: Commessa) => (c.margine_percentuale || 0) < 30).length,
-        timesheetPendingCount: allTimesheetsArr.filter(t => t.stato === "PENDING").length
+        timesheetPendingCount: pendingTsArr.length
       },
       
       // V3 FORECAST
@@ -285,12 +283,12 @@ export function useAnalytics(referenceDate?: Date) {
       fatturePassive: fatturePassiveArr,
       costiFissi: costiFissiArr,
       last12Months,
-      allTimesheets: allTimesheetsArr
+      pendingTs: pendingTsArr
     };
-  }, [commesse, clienti, tasks, fatture, timesheetsCurrentMonth, allTimesheets, costiFissi, progetti, now]);
+  }, [commesse, clienti, tasks, fatture, timesheetsCurrentMonth, pendingTs, costiFissi, progetti, now]);
 
   return {
     data: analytics,
-    isLoading: loadingC || loadingCl || loadingT || loadingF || loadingFp || loadingTs || loadingAllTs || loadingCf || loadingP
+    isLoading: loadingC || loadingCl || loadingT || loadingF || loadingFp || loadingTs || loadingPendingTs || loadingCf || loadingP
   };
 }

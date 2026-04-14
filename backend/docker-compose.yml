@@ -34,9 +34,11 @@ services:
       - .env
     ports:
       - "8000:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - ./app:/app/app
       - ./static:/app/static
+      - uploads_data:/app/static/uploads
     networks:
       - bite_network
 
@@ -80,3 +82,4 @@ networks:
 volumes:
   postgres_data:
   frontend_node_modules:
+  uploads_data:

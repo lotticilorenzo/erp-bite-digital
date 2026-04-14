@@ -48,9 +48,10 @@ interface ProgettoDialogProps {
   progetto?: Progetto | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSuccess?: (progetto: Progetto) => void;
 }
 
-export function ProgettoDialog({ progetto, open, onOpenChange }: ProgettoDialogProps) {
+export function ProgettoDialog({ progetto, open, onOpenChange, onSuccess }: ProgettoDialogProps) {
   const { data: clienti } = useClienti();
   const createProgetto = useCreateProgetto();
   const updateProgetto = useUpdateProgetto();
@@ -98,11 +99,13 @@ export function ProgettoDialog({ progetto, open, onOpenChange }: ProgettoDialogP
 
   const onSubmit = async (values: ProgettoFormValues) => {
     try {
+      let result;
       if (isEditing && progetto) {
-        await updateProgetto.mutateAsync({ id: progetto.id, data: values });
+        result = await updateProgetto.mutateAsync({ id: progetto.id, data: values });
       } else {
-        await createProgetto.mutateAsync(values);
+        result = await createProgetto.mutateAsync(values);
       }
+      if (onSuccess) onSuccess(result);
       onOpenChange(false);
     } catch (error) {
       console.error("Errore durante il salvataggio del progetto:", error);

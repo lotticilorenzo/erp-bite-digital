@@ -12,6 +12,7 @@ export interface CRMActivity {
   lead_id: string;
   tipo: 'Nota' | 'Chiamata' | 'Email' | 'Meeting' | string;
   descrizione?: string;
+  note?: string; 
   data_attivita: string;
   autore_id: string;
   autore_nome?: string;
@@ -24,9 +25,13 @@ export interface CRMLead {
   nome_contatto?: string;
   email?: string;
   telefono?: string;
+  sito_web?: string;
+  settore?: string;
+  dimensione_azienda?: string;
   stadio_id: string;
   valore_stimato: number;
   probabilita_chiusura: number;
+  lead_score?: number;
   data_prossimo_followup?: string;
   assegnato_a_id?: string;
   assegnato_a_nome?: string;

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useStudio } from "@/context/StudioContext";
+import { useStudio } from "@/hooks/useStudio";
 import { useTask } from "@/hooks/useTasks";
 import { useSaveTimerToTimesheet } from "@/hooks/useTimer";
 
@@ -105,42 +105,42 @@ export function TimerWidget() {
       </div>
 
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
-        <DialogContent className="bg-card border-border text-white">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-emerald-400">
+        <DialogContent className="bg-card border-border shadow-2xl text-white sm:max-w-[400px] rounded-[2rem] overflow-hidden p-0">
+          <DialogHeader className="p-5 border-b border-border/50">
+            <DialogTitle className="flex items-center gap-2 text-emerald-400 font-black uppercase tracking-widest text-lg">
               <CheckCircle2 className="w-5 h-5" />
               Sessione Completata
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-center">
-              <p className="text-sm text-muted-foreground uppercase tracking-widest font-black">Tempo Totale</p>
-              <p className="text-4xl font-black text-white mt-1">{formatTime(seconds)}</p>
+          <div className="space-y-6 p-6">
+            <div className="p-6 rounded-[1.5rem] bg-emerald-500/10 border border-emerald-500/20 text-center shadow-inner">
+              <p className="text-xs text-emerald-400/80 uppercase tracking-[0.2em] font-black">Tempo Registrato</p>
+              <p className="text-5xl font-black text-emerald-400 mt-2 tracking-tighter drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]">{formatTime(seconds)}</p>
             </div>
-            <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Cosa hai fatto?</Label>
+            <div className="space-y-3">
+              <Label className="text-xs font-black uppercase tracking-widest text-[#475569] flex items-center gap-1.5 opacity-80">Note Rapide Lavoro</Label>
               <Input 
                 value={note} 
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Note brevi sull'attività..."
-                className="bg-muted border-border text-white"
+                placeholder="Es. Sviluppo UI componenti..."
+                className="bg-muted/50 border-border/50 text-white h-12 rounded-xl shadow-inner placeholder:italic focus:ring-emerald-500"
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="p-5 border-t border-border/40 bg-card/40 flex-row justify-end space-x-3">
             <Button 
               variant="ghost" 
               onClick={() => { setShowSaveDialog(false); setLastStoppedSessionId(null); }}
-              className="text-muted-foreground hover:text-white"
+              className="text-muted-foreground hover:text-white rounded-xl h-12 px-6 font-bold uppercase text-[10px] tracking-widest"
             >
               Annulla
             </Button>
             <Button 
               onClick={handleSave}
               disabled={saveMutation.isPending}
-              className="bg-primary hover:bg-primary/90 text-white font-black"
+              className="flex-1 bg-emerald-500 hover:bg-emerald-400 hover:scale-[1.02] shadow-[0_0_20px_rgba(52,211,153,0.3)] active:scale-95 transition-all text-white font-black h-12 rounded-[1rem] uppercase tracking-widest text-xs"
             >
-              {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "SALVA NEL TIMESHEET"}
+              {saveMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "SALVA NEL TIMESHEET"}
             </Button>
           </DialogFooter>
         </DialogContent>

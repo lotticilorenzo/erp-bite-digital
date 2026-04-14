@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { format } from "date-fns";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { ChatMessage, ChatReaction } from "@/types/chat";
@@ -7,7 +8,11 @@ import {
   Smile, 
   MoreHorizontal, 
   Trash2, 
-  CornerDownRight
+  CornerDownRight,
+  Edit3,
+  FileIcon,
+  Download,
+  ExternalLink
 } from "lucide-react";
 import { 
   DropdownMenu, 
@@ -22,26 +27,108 @@ interface ChatMessageBubbleProps {
   isMe: boolean;
   isFirstInGroup: boolean;
   replyTo?: ChatMessage;
+  currentUserId?: string;
   onReply: (message: ChatMessage) => void;
   onDelete: (id: string) => void;
   onReact: (messageId: string, emoji: string) => void;
   onRemoveReact: (messageId: string, emoji: string) => void;
+  onEdit: (messageId: string, contenuto: string) => void;
+  seenBy?: { id: string; nome: string; avatar?: string }[];
+  isOnline?: boolean;
 }
 
 const EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "✅"];
 
-export function ChatMessageBubble({ 
-  message, 
-  isMe, 
-  isFirstInGroup, 
+export function ChatMessageBubble({
+  message,
+  isMe,
+  isFirstInGroup,
   replyTo,
+  currentUserId,
   onReply,
   onDelete,
   onReact,
-  onRemoveReact
+  onRemoveReact,
+  onEdit,
+  seenBy,
+  isOnline
 }: ChatMessageBubbleProps) {
-  // Formatta contenuto con menzioni
-  const renderContent = (text: string) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(message.contenuto);
+  // Formatta contenuto con menzioni e file
+  const renderContent = (text: string, _isMe: boolean = isMe) => {
+    // Rilevamento file caricati
+    if (text.startsWith("/static/uploads/")) {
+      const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(text);
+      if (isImage) {
+        return (
+          <div className="relative group/img overflow-hidden rounded-2xl border border-white/10 shadow-lg mt-1 max-w-full">
+            <img 
+              src={text} 
+              alt="Immagine inviata" 
+              className="max-h-[350px] w-auto object-contain cursor-zoom-in hover:scale-[1.02] transition-transform duration-500" 
+              onClick={() => window.open(text, '_blank')}
+            />
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+               <ExternalLink className="text-white w-6 h-6" />
+            </div>
+          </div>
+        );
+      }
+
+      // ── Audio / Voice message ──────────────────────────────────
+      const isAudio = /\.(webm|ogg|mp3|wav|m4a|aac)$/i.test(text);
+      if (isAudio) {
+        return (
+          <div className="mt-1 min-w-[240px]">
+            <div className={cn(
+              "flex items-center gap-3 px-4 py-3 rounded-2xl",
+              isMe
+                ? "bg-white/10 border border-white/20"
+                : "bg-background/50 border border-border/50"
+            )}>
+              {/* Mic icon */}
+              <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                <svg viewBox="0 0 24 24" className="w-4 h-4 text-primary fill-current">
+                  <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4Zm6 10a6 6 0 0 1-12 0H4a8 8 0 0 0 16 0h-2Zm-6 8a2 2 0 0 1-2-2h4a2 2 0 0 1-2 2Z" />
+                </svg>
+              </div>
+
+              {/* Native audio player styled */}
+              <audio
+                controls
+                className="flex-1 h-8 min-w-0"
+                style={{ colorScheme: "dark", accentColor: "hsl(var(--primary))" }}
+              >
+                <source src={text} />
+                Il tuo browser non supporta l'audio.
+              </audio>
+            </div>
+          </div>
+        );
+      }
+      // ──────────────────────────────────────────────────────────
+
+      const filename = text.split("/").pop() || "File";
+      return (
+        <a 
+          href={text} 
+          download 
+          className="flex items-center gap-4 p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl transition-all group/file mt-1 min-w-[200px]"
+        >
+          <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center group-hover/file:scale-110 transition-transform">
+            <FileIcon className="text-primary w-5 h-5" />
+          </div>
+          <div className="flex-1 truncate">
+            <p className="text-xs font-bold truncate pr-2">{filename}</p>
+            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest flex items-center gap-1">
+              Download <Download size={8} />
+            </p>
+          </div>
+        </a>
+      );
+    }
+
     const parts = text.split(/(@[^ \n\r\t]+ [^ \n\r\t]+)/g);
     return parts.map((part, i) => {
       if (part.startsWith("@")) {
@@ -50,6 +137,7 @@ export function ChatMessageBubble({
       return part;
     });
   };
+
 
   const reactionGroups = message.reazioni.reduce((acc, r) => {
     acc[r.emoji] = acc[r.emoji] || [];
@@ -65,11 +153,16 @@ export function ChatMessageBubble({
     )}>
       
       {!isMe && isFirstInGroup && (
-        <Avatar className="w-10 h-10 mr-3 border-2 border-border shadow-sm ring-2 ring-primary/5">
-          <AvatarFallback className="bg-primary/10 text-primary font-black uppercase text-xs">
-            {message.autore_nome?.substring(0, 2)}
-          </AvatarFallback>
-        </Avatar>
+        <div className="relative">
+          <Avatar className="w-10 h-10 mr-3 border-2 border-border shadow-sm ring-2 ring-primary/5">
+            <AvatarFallback className="bg-primary/10 text-primary font-black uppercase text-xs">
+              {message.autore_nome?.substring(0, 2)}
+            </AvatarFallback>
+          </Avatar>
+          {isOnline && (
+            <span className="absolute bottom-0 right-3 w-3 h-3 bg-green-500 border-2 border-background rounded-full animate-pulse shadow-lg" />
+          )}
+        </div>
       )}
       
       {!isMe && !isFirstInGroup && <div className="w-10 mr-3" />}
@@ -113,6 +206,9 @@ export function ChatMessageBubble({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="bg-card border-border rounded-xl">
+                  <DropdownMenuItem className="font-bold cursor-pointer" onClick={() => setIsEditing(true)}>
+                    <Edit3 size={14} className="mr-2" /> Modifica
+                  </DropdownMenuItem>
                   <DropdownMenuItem className="text-destructive font-bold cursor-pointer" onClick={() => onDelete(message.id)}>
                     <Trash2 size={14} className="mr-2" /> Elimina
                   </DropdownMenuItem>
@@ -122,14 +218,39 @@ export function ChatMessageBubble({
           )}
 
           <div className={cn(
-            "px-4 py-3 rounded-3xl shadow-xl text-sm leading-relaxed max-w-full break-words",
+            "px-4 py-3 rounded-3xl shadow-xl text-sm leading-relaxed max-w-full break-words relative",
             isMe 
               ? "bg-primary text-white rounded-tr-none font-medium shadow-primary/10" 
               : "bg-card/80 border border-border/50 text-white rounded-tl-none backdrop-blur-sm shadow-black/10"
           )}>
-            {renderContent(message.contenuto)}
-            {message.modificato && (
-              <span className="text-[9px] font-bold opacity-50 ml-2 uppercase tracking-widest">(modificato)</span>
+            {isEditing ? (
+              <div className="flex flex-col gap-2 min-w-[200px]">
+                <textarea
+                  className="w-full bg-white/10 border border-white/20 rounded-xl p-2 text-xs focus:ring-1 focus:ring-white/50 focus:outline-none resize-none"
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      onEdit(message.id, editContent);
+                      setIsEditing(false);
+                    }
+                    if (e.key === 'Escape') setIsEditing(false);
+                  }}
+                />
+                <div className="flex justify-end gap-2">
+                  <button className="text-[10px] uppercase font-black tracking-widest opacity-50 hover:opacity-100" onClick={() => { setIsEditing(false); setEditContent(message.contenuto); }}>Annulla</button>
+                  <button className="text-[10px] uppercase font-black tracking-widest text-white hover:text-white/80" onClick={() => { onEdit(message.id, editContent); setIsEditing(false); }}>Salva</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {renderContent(message.contenuto)}
+                {message.updated_at && (
+                  <span className="text-[9px] font-bold opacity-50 ml-2 uppercase tracking-widest">(modificato)</span>
+                )}
+              </>
             )}
           </div>
 
@@ -163,7 +284,7 @@ export function ChatMessageBubble({
             isMe ? "justify-end" : "justify-start"
           )}>
             {Object.entries(reactionGroups).map(([emoji, reacts]) => {
-              const hasReacted = reacts.some(r => r.user_id === "current_user_id"); // Placeholder
+              const hasReacted = !!currentUserId && reacts.some(r => r.user_id === currentUserId);
               return (
                 <button
                   key={emoji}
@@ -180,6 +301,24 @@ export function ChatMessageBubble({
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {/* Seen By Avatars */}
+        {seenBy && seenBy.length > 0 && (
+          <div className={cn(
+            "flex -space-x-1.5 mt-1 opacity-70 hover:opacity-100 transition-opacity",
+            isMe ? "justify-end pr-1" : "justify-start pl-1"
+          )}>
+            {seenBy.map(u => (
+              <div key={u.id} className="w-4 h-4 rounded-full border border-background bg-primary/20 flex items-center justify-center text-[6px] font-black text-primary overflow-hidden shadow-sm" title={`Visto da ${u.nome}`}>
+                {u.avatar ? (
+                  <img src={u.avatar} alt={u.nome} className="w-full h-full object-cover" />
+                ) : (
+                  u.nome.substring(0, 1)
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>

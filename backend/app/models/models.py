@@ -136,6 +136,10 @@ class Cliente(Base):
     cap: Mapped[Optional[str]] = mapped_column(String(10))
     provincia: Mapped[Optional[str]] = mapped_column(String(5))
     telefono: Mapped[Optional[str]] = mapped_column(String(50))
+    cellulare: Mapped[Optional[str]] = mapped_column(String(50))
+    sito_web: Mapped[Optional[str]] = mapped_column(String(255))
+    settore: Mapped[Optional[str]] = mapped_column(String(100))
+    categoria: Mapped[Optional[str]] = mapped_column(String(20))
     referente: Mapped[Optional[str]] = mapped_column(String(100))
     note: Mapped[Optional[str]] = mapped_column(String(1000))
     note_indirizzo: Mapped[Optional[str]] = mapped_column(String(500))
@@ -327,19 +331,20 @@ class Task(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     clickup_task_id: Mapped[Optional[str]] = mapped_column(String(100), unique=True)
-    progetto_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id"))
-    commessa_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("commesse.id"))
-    assegnatario_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
-    revisore_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
-    parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=True)
+    progetto_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id"), index=True)
+    commessa_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("commesse.id"), index=True)
+    assegnatario_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    revisore_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=True, index=True)
     titolo: Mapped[str] = mapped_column(String(500))
     descrizione: Mapped[Optional[str]] = mapped_column(Text)
-    stato: Mapped[TaskStatus] = mapped_column(SAEnum(TaskStatus, name="task_status"), default=TaskStatus.DA_FARE)
+    stato: Mapped[TaskStatus] = mapped_column(SAEnum(TaskStatus, name="task_status"), default=TaskStatus.DA_FARE, index=True)
     data_inizio: Mapped[Optional[date]] = mapped_column(Date)
     data_scadenza: Mapped[Optional[date]] = mapped_column(Date)
     stima_minuti: Mapped[Optional[int]] = mapped_column(Integer)
+    priorita: Mapped[Optional[str]] = mapped_column(String(10), default="media")
     clickup_synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     assegnatario: Mapped[Optional["User"]] = relationship(foreign_keys=[assegnatario_id], back_populates="tasks_assegnati")
@@ -354,31 +359,46 @@ class Task(Base):
         remote_side=[id],
     )
     timer_sessions: Mapped[List["TimerSession"]] = relationship("TimerSession", back_populates="task", cascade="all, delete-orphan")
+    commenti: Mapped[List["TaskComment"]] = relationship("TaskComment", back_populates="task", cascade="all, delete-orphan", order_by="TaskComment.created_at")
 
     @property
     def tempo_trascorso_minuti(self) -> int:
         return sum(s.durata_minuti for s in self.timer_sessions if s.durata_minuti)
 
 
+# ── TASK COMMENTS ─────────────────────────────────────────────
+class TaskComment(Base):
+    __tablename__ = "task_comments"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"))
+    autore_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    contenuto: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    task: Mapped["Task"] = relationship("Task", back_populates="commenti")
+    autore: Mapped["User"] = relationship("User", foreign_keys=[autore_id])
+
 # ── STUDIO NODE (WORKSPACE HIERARCHY) ────────────────────
 class StudioNode(Base):
     __tablename__ = "studio_nodes"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("studio_nodes.id", ondelete="CASCADE"), nullable=True)
-    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("studio_nodes.id", ondelete="CASCADE"), nullable=True, index=True)
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
     tipo: Mapped[StudioNodeType] = mapped_column(SAEnum(StudioNodeType, name="studio_node_type"), default=StudioNodeType.FOLDER)
     nome: Mapped[str] = mapped_column(String(255))
     icon: Mapped[Optional[str]] = mapped_column(String(50))
     color: Mapped[Optional[str]] = mapped_column(String(50))
     
     # Links to actual entities
-    linked_progetto_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id"), nullable=True)
-    linked_task_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=True)
+    linked_progetto_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id"), nullable=True, index=True)
+    linked_task_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=True, index=True)
     
     is_private: Mapped[bool] = mapped_column(Boolean, default=False)
     order: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     parent: Mapped[Optional["StudioNode"]] = relationship("StudioNode", remote_side=[id], back_populates="children")
@@ -411,11 +431,11 @@ class Timesheet(Base):
     __tablename__ = "timesheet"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
-    task_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id"))
-    commessa_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("commesse.id"))
-    data_attivita: Mapped[date] = mapped_column(Date)
-    mese_competenza: Mapped[date] = mapped_column(Date)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    task_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id"), index=True)
+    commessa_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("commesse.id"), index=True)
+    data_attivita: Mapped[date] = mapped_column(Date, index=True)
+    mese_competenza: Mapped[date] = mapped_column(Date, index=True)
     servizio: Mapped[Optional[str]] = mapped_column(String(255))
     durata_minuti: Mapped[int] = mapped_column(Integer)
     # Snapshot del costo orario al momento dell'approvazione: evita ricalcoli retroattivi.
@@ -622,13 +642,13 @@ class AuditLog(Base):
     __tablename__ = "audit_log"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
-    tabella: Mapped[str] = mapped_column(String(100))
-    record_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    tabella: Mapped[str] = mapped_column(String(100), index=True)
+    record_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     azione: Mapped[str] = mapped_column(String(50))
     dati_prima: Mapped[Optional[dict]] = mapped_column(JSON)
     dati_dopo: Mapped[Optional[dict]] = mapped_column(JSON)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 
 # ── MOVIMENTI CASSA ───────────────────────────────────────
@@ -779,13 +799,13 @@ class Notification(Base):
     __tablename__ = "notifications"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     type: Mapped[str] = mapped_column(String(50), default="INFO") # INFO, SUCCESS, WARNING, ERROR
     link: Mapped[Optional[str]] = mapped_column(String(255))
-    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     user: Mapped["User"] = relationship()
 
@@ -932,14 +952,14 @@ class ChatMessaggio(Base):
     __tablename__ = "chat_messaggi"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    canale_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("chat_canali.id", ondelete="CASCADE"), nullable=True)
-    progetto_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id", ondelete="CASCADE"), nullable=True)
-    autore_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    canale_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("chat_canali.id", ondelete="CASCADE"), nullable=True, index=True)
+    progetto_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id", ondelete="CASCADE"), nullable=True, index=True)
+    autore_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
     contenuto: Mapped[str] = mapped_column(Text, nullable=False)
     tipo: Mapped[str] = mapped_column(String(20), default='testo')
-    risposta_a: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("chat_messaggi.id", ondelete="SET NULL"))
+    risposta_a: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("chat_messaggi.id", ondelete="SET NULL"), index=True)
     modificato: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     progetto: Mapped[Optional["Progetto"]] = relationship(back_populates="messaggi_chat")
@@ -962,6 +982,36 @@ class ChatReazione(Base):
     user: Mapped["User"] = relationship()
 
 
+# ── DOCUMENTI ─────────────────────────────────────────────
+
+class DocumentNode(Base):
+    __tablename__ = "document_nodes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    nome: Mapped[str] = mapped_column(String(255), nullable=False)
+    tipo: Mapped[str] = mapped_column(String(20), default='FILE')  # FOLDER | FILE
+    icona: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    colore: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    contenuto: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("document_nodes.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    ordine: Mapped[int] = mapped_column(Integer, default=0)
+    is_private: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    parent: Mapped[Optional["DocumentNode"]] = relationship(
+        "DocumentNode", remote_side="DocumentNode.id", back_populates="children"
+    )
+    children: Mapped[List["DocumentNode"]] = relationship(
+        "DocumentNode", back_populates="parent", cascade="all, delete-orphan",
+        order_by="DocumentNode.ordine, DocumentNode.nome"
+    )
+    autore: Mapped["User"] = relationship(foreign_keys=[created_by])
+
+
 # ── CRM ───────────────────────────────────────────────────
 
 class CRMStage(Base):
@@ -980,22 +1030,22 @@ class CRMLead(Base):
     __tablename__ = "crm_lead"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    nome_azienda: Mapped[str] = mapped_column(String(255))
+    nome_azienda: Mapped[str] = mapped_column(String(255), index=True)
     nome_contatto: Mapped[Optional[str]] = mapped_column(String(255))
     email: Mapped[Optional[str]] = mapped_column(String(255))
     telefono: Mapped[Optional[str]] = mapped_column(String(50))
     sito_web: Mapped[Optional[str]] = mapped_column(String(255))
     settore: Mapped[Optional[str]] = mapped_column(String(100))
     dimensione_azienda: Mapped[Optional[str]] = mapped_column(String(50))
-    stadio_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("crm_stadi.id"))
+    stadio_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("crm_stadi.id"), index=True)
     valore_stimato: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     probabilita_chiusura: Mapped[int] = mapped_column(Integer, default=0)
     lead_score: Mapped[int] = mapped_column(Integer, default=0)
-    data_prossimo_followup: Mapped[Optional[date]] = mapped_column(Date)
-    assegnato_a_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    data_prossimo_followup: Mapped[Optional[date]] = mapped_column(Date, index=True)
+    assegnato_a_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
     note: Mapped[Optional[str]] = mapped_column(Text)
     fonte: Mapped[Optional[str]] = mapped_column(String(100))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     stadio: Mapped[Optional["CRMStage"]] = relationship(back_populates="leads")
@@ -1007,13 +1057,13 @@ class CRMActivity(Base):
     __tablename__ = "crm_attivita"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    lead_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("crm_lead.id", ondelete="CASCADE"))
+    lead_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("crm_lead.id", ondelete="CASCADE"), index=True)
     tipo: Mapped[str] = mapped_column(String(50)) # Nota, Chiamata, Email, Meeting
     descrizione: Mapped[Optional[str]] = mapped_column(Text)
     activity_metadata: Mapped[Optional[dict]] = mapped_column(JSON)
-    data_attivita: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    autore_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    data_attivita: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    autore_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     lead: Mapped["CRMLead"] = relationship(back_populates="attivita")
     autore: Mapped["User"] = relationship()
