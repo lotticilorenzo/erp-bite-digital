@@ -1,19 +1,25 @@
-fastapi==0.111.0
-uvicorn[standard]==0.29.0
-sqlalchemy==2.0.30
-asyncpg==0.29.0
-alembic==1.13.1
-pydantic==2.7.1
-pydantic-settings==2.2.1
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+sqlalchemy==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+pydantic==2.10.3
+pydantic-settings==2.7.0
+# NOTA: python-jose 3.3.0 ha CVE-2024-33664 (algorithm confusion).
+# Mitigato: usiamo solo HS256 con algorithms=["HS256"] in jwt.decode.
+# Upgrade non disponibile — valutare migrazione a PyJWT in futuro.
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-bcrypt==4.0.1
-python-multipart==0.0.9
-httpx==0.27.0
+# bcrypt 4.2.1: bug fix release, compat con passlib 1.7.4
+bcrypt==4.2.1
+# python-multipart: CVE-2024-53498 colpisce versioni <0.0.18
+python-multipart==0.0.18
+httpx==0.28.1
 python-dateutil==2.9.0
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.10
 apscheduler==3.10.4
-Pillow==10.3.0
+# Pillow 10.4.0: security patch release
+Pillow==10.4.0
 fastapi-mail==1.4.1
-email-validator==2.1.1
-aiofiles==23.2.1
+email-validator==2.2.0
+aiofiles==24.1.0

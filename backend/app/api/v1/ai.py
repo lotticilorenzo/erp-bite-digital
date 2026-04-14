@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.core.security import get_current_user
 from app.models.models import User
@@ -5,6 +7,8 @@ from app.schemas.schemas import AIChatRequest, AIChatResponse
 import httpx
 import os
 import json
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ai", tags=["AI"])
 
@@ -63,16 +67,19 @@ async def ai_chat(
             )
             
             if response.status_code != 200:
-                error_detail = response.text
+                # Logghiamo internamente il dettaglio, mai esposto al client
                 try:
-                    error_json = response.json()
-                    error_detail = error_json.get("error", {}).get("message", error_detail)
-                except:
-                    pass
-                
+                    error_msg = response.json().get("error", {}).get("message", response.text)
+                except Exception:
+                    error_msg = response.text
+                logger.error(
+                    "Claude API error %s: %s",
+                    response.status_code,
+                    error_msg,
+                )
                 raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"Claude API Error: {error_detail}"
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="AI Service temporarily unavailable"
                 )
             
             data = response.json()
@@ -83,10 +90,13 @@ async def ai_chat(
     except httpx.ConnectError:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Impossibile connettersi ai server di Anthropic."
+            detail="AI Service temporarily unavailable"
         )
+    except HTTPException:
+        raise  # re-raise senza alterare il messaggio già sicuro
     except Exception as e:
+        logger.exception("Unhandled error in AI chat endpoint")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Errore interno AI: {str(e)}"
+            detail="AI Service temporarily unavailable"
         )

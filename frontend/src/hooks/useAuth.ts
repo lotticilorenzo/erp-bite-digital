@@ -11,7 +11,7 @@ export function useAuth() {
       return data;
     },
     onSuccess: (data) => {
-      localStorage.setItem("BITE_ERP_TOKEN", data.access_token);
+      sessionStorage.setItem("BITE_ERP_TOKEN", data.access_token);
       queryClient.setQueryData(["user"], data.user);
     },
   });
@@ -19,17 +19,17 @@ export function useAuth() {
   const { data: user, isLoading } = useQuery({
     queryKey: ["user"],
     queryFn: async () => {
-      const token = localStorage.getItem("BITE_ERP_TOKEN");
+      const token = sessionStorage.getItem("BITE_ERP_TOKEN");
       if (!token) return null;
       const { data } = await api.get<User>("/auth/me");
       return data;
     },
     retry: false,
-    staleTime: Infinity,
+    staleTime: 5 * 60 * 1000, // 5 minuti — evita dati utente stale dopo refresh
   });
 
   const logout = () => {
-    localStorage.removeItem("BITE_ERP_TOKEN");
+    sessionStorage.removeItem("BITE_ERP_TOKEN");
     queryClient.setQueryData(["user"], null);
     window.location.href = "/login";
   };

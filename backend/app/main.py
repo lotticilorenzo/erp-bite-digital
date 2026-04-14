@@ -28,8 +28,11 @@ from app.services.notification_service import check_and_create_notifications, ch
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    docs_url="/docs",
+    # Swagger UI e OpenAPI schema disabilitati in produzione (DEBUG=false).
+    # Esporre la documentazione pubblica rivela struttura API, tipi e route.
+    docs_url="/docs" if settings.DEBUG else None,
     redoc_url=None,
+    openapi_url="/openapi.json" if settings.DEBUG else None,
 )
 
 # Mount static files
@@ -52,8 +55,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_parse_cors_origins(settings.CORS_ORIGINS),
     allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # Whitelist esplicita — niente wildcard che espone TRACE/CONNECT
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With"],
+    max_age=3600,
 )
 
 # ── SECURITY HEADERS MIDDLEWARE ──────────────────────────
@@ -101,7 +106,8 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": settings.APP_VERSION}
+    # Non esporre la versione: darebbe info utili per attacchi mirati
+    return {"status": "ok"}
 
 app.include_router(router, prefix="/api/v1")
 
@@ -153,7 +159,62 @@ async def ensure_schema_tables_on_startup():
                 # Nuovi campi Pianificazione
                 await conn.execute(text("ALTER TABLE clienti ADD COLUMN IF NOT EXISTS start_day_type client_start_day_type DEFAULT 'STANDARD_1'"))
                 await conn.execute(text("ALTER TABLE commesse ADD COLUMN IF NOT EXISTS pianificazione_id UUID REFERENCES pianificazioni(id)"))
-                
+
+                # ── Tabelle piano_commessa (non hanno ORM model) ─────────
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS piano_commessa (
+                        id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                        cliente_id            UUID NOT NULL REFERENCES clienti(id),
+                        commessa_id           UUID REFERENCES commesse(id) ON DELETE SET NULL,
+                        preventivo            NUMERIC(10,2) DEFAULT 0,
+                        margine_target_pct    NUMERIC(5,2) DEFAULT 40,
+                        budget_produttivo     NUMERIC(10,2),
+                        ore_budget            NUMERIC(8,2),
+                        costo_orario_snapshot NUMERIC(10,2),
+                        mese_competenza       DATE,
+                        note                  TEXT,
+                        created_at            TIMESTAMPTZ DEFAULT NOW(),
+                        updated_at            TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """))
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS piano_commessa_righe (
+                        id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                        piano_id        UUID NOT NULL REFERENCES piano_commessa(id) ON DELETE CASCADE,
+                        risorsa_id      UUID REFERENCES risorse(id) ON DELETE SET NULL,
+                        lavorazione     VARCHAR(255) DEFAULT '',
+                        ore_pianificate NUMERIC(8,2) DEFAULT 0,
+                        note            TEXT,
+                        created_at      TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """))
+                await conn.execute(text("ALTER TABLE commesse ADD COLUMN IF NOT EXISTS piano_id UUID REFERENCES piano_commessa(id) ON DELETE SET NULL"))
+                await conn.execute(text("ALTER TABLE commesse ADD COLUMN IF NOT EXISTS preventivo NUMERIC(10,2) DEFAULT 0"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_piano_commessa_cliente  ON piano_commessa(cliente_id)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_piano_commessa_commessa ON piano_commessa(commessa_id)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_piano_righe_piano       ON piano_commessa_righe(piano_id)"))
+
+                # ── Tabella password_reset_tokens (non ha un ORM model) ──
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                        id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                        user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        token       VARCHAR(255) UNIQUE NOT NULL,
+                        expires_at  TIMESTAMPTZ NOT NULL,
+                        used        BOOLEAN DEFAULT FALSE,
+                        created_at  TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """))
+
+                # ── Indici di performance (idempotenti) ──────────────────
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_timesheet_user_stato     ON timesheet(user_id, stato)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_timesheet_commessa_stato ON timesheet(commessa_id, stato)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_timesheet_user_mese      ON timesheet(user_id, mese_competenza)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_chat_msg_canale_created  ON chat_messaggi(canale_id, created_at DESC)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_chat_msg_autore          ON chat_messaggi(autore_id)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_password_reset_token     ON password_reset_tokens(token)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_password_reset_expires   ON password_reset_tokens(expires_at)"))
+
             logger.info("Schema database garantito.")
             break
         except Exception as e:
@@ -177,10 +238,16 @@ async def migrate_userrole_enum():
                         {"role": role}
                     )
                     if not check.scalar():
+                        # ALTER TYPE non supporta bind parameters — usiamo
+                        # un allowlist esplicito per evitare SQL injection.
+                        _allowed = {"DEVELOPER", "COLLABORATORE"}
+                        if role not in _allowed:
+                            logger.error("Ruolo '%s' non consentito nella migrazione enum.", role)
+                            continue
                         await session.execute(
-                            text(f"ALTER TYPE user_role ADD VALUE '{role}'")
+                            text(f"ALTER TYPE user_role ADD VALUE '{role}'")  # noqa: S608 — valore da allowlist
                         )
-                        logger.info(f"Migrazione DB: aggiunto ruolo '{role}' all'enum user_role.")
+                        logger.info("Migrazione DB: aggiunto ruolo '%s' all'enum user_role.", role)
         except Exception as e:
             logger.warning(f"Migrazione enum user_role saltata (potrebbe già esistere): {e}")
 

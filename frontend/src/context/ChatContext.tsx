@@ -31,7 +31,7 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const { isLoading: isAuthLoading } = useAuth();
-  const token = localStorage.getItem("BITE_ERP_TOKEN");
+  const token = sessionStorage.getItem("BITE_ERP_TOKEN");
   const queryClient = useQueryClient();
 
   const [activeChannelId, setActiveChannelId] = useState<string | null>(() => {
@@ -108,7 +108,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     if (!token || isUnmountedRef.current) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/v1/chat/ws/${token}`;
+    // token come query param (non nel path) per ridurre esposizione nei log proxy/CDN
+    const wsUrl = `${protocol}//${window.location.host}/api/v1/chat/ws?token=${token}`;
     const socket = new WebSocket(wsUrl);
     ws.current = socket;
 

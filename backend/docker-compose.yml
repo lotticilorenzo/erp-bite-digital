@@ -1,4 +1,12 @@
-version: "3.9"
+# ─────────────────────────────────────────────────────────────────────────────
+# Bite ERP — Docker Compose Production
+#
+# Credenziali DB: definite in .env come POSTGRES_USER / POSTGRES_PASSWORD.
+# ATTENZIONE se stai aggiornando da una versione con credenziali hardcoded:
+#   docker exec bite_erp_db psql -U bite -c \
+#     "ALTER USER bite PASSWORD 'nuova_password';"
+# poi aggiorna POSTGRES_PASSWORD in .env e riavvia.
+# ─────────────────────────────────────────────────────────────────────────────
 
 services:
 
@@ -7,14 +15,14 @@ services:
     container_name: bite_erp_db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: bite
-      POSTGRES_PASSWORD: bite_secret
-      POSTGRES_DB: bite_erp
+      POSTGRES_USER:     ${POSTGRES_USER:-bite}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bite_secret}
+      POSTGRES_DB:       ${POSTGRES_DB:-bite_erp}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U bite -d bite_erp"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bite} -d ${POSTGRES_DB:-bite_erp}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -34,10 +42,9 @@ services:
       - .env
     ports:
       - "8000:8000"
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    # PRODUZIONE: --reload rimosso (era solo per dev), workers gestiti da Dockerfile CMD
     volumes:
       - ./app:/app/app
-      - ./static:/app/static
       - uploads_data:/app/static/uploads
     networks:
       - bite_network
@@ -69,11 +76,60 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf
-      - ../frontend/dist:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../frontend/dist:/usr/share/nginx/html:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
+      - nginx_ssl:/etc/nginx/ssl
+    # Genera certificato self-signed al primo avvio se non esiste.
+    # Per Let's Encrypt: montare i cert LE e aggiornare nginx.conf.
+    command: |
+      sh -c "if [ ! -f /etc/nginx/ssl/nginx.crt ]; then echo 'Generazione certificato SSL...'; apk add --no-cache openssl >/dev/null 2>&1 && openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout /etc/nginx/ssl/nginx.key -out /etc/nginx/ssl/nginx.crt -subj '/C=IT/ST=Italy/L=Milano/O=BiteDigital/CN=localhost' 2>/dev/null && echo 'Certificato SSL generato.'; fi && nginx -g 'daemon off;'"
     networks:
       - bite_network
+
+  # ── BACKUP AUTOMATICO DATABASE ────────────────────────────────────────────
+  # Esegue pg_dump ogni giorno alle 03:00 e mantiene gli ultimi 7 giorni.
+  # I backup sono salvati nel volume db_backups (/backups dentro il container).
+  # Per recuperare: docker exec bite_erp_backup sh -c "ls /backups"
+  # Per restore:    docker exec -i bite_erp_db psql -U bite bite_erp < /backups/backup_YYYY-MM-DD.sql
+  db_backup:
+    image: postgres:16-alpine
+    container_name: bite_erp_backup
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD:    ${POSTGRES_PASSWORD:-bite_secret}
+      POSTGRES_USER: ${POSTGRES_USER:-bite}
+      POSTGRES_DB:   ${POSTGRES_DB:-bite_erp}
+      BACKUP_RETAIN_DAYS: ${BACKUP_RETAIN_DAYS:-7}
+    volumes:
+      - db_backups:/backups
+    networks:
+      - bite_network
+    # Loop: ogni 24h (86400s) esegue dump + pulizia backup vecchi
+    command: >
+      sh -c "
+        echo 'Backup service avviato. Primo backup tra 60 secondi.';
+        sleep 60;
+        while true; do
+          TIMESTAMP=$$(date +%Y-%m-%d_%H-%M);
+          OUTFILE=\"/backups/backup_$${TIMESTAMP}.sql\";
+          echo \"[$$(date)] Avvio backup: $$OUTFILE\";
+          pg_dump -h db -U $$POSTGRES_USER $$POSTGRES_DB > \"$$OUTFILE\" 2>&1;
+          if [ $$? -eq 0 ]; then
+            gzip \"$$OUTFILE\";
+            echo \"[$$(date)] Backup completato: $${OUTFILE}.gz\";
+          else
+            echo \"[$$(date)] ERRORE backup — vedi output sopra\";
+            rm -f \"$$OUTFILE\";
+          fi;
+          find /backups -name 'backup_*.sql.gz' -mtime +$$BACKUP_RETAIN_DAYS -delete;
+          echo \"[$$(date)] Prossimo backup tra 24h.\";
+          sleep 86400;
+        done
+      "
 
 networks:
   bite_network:
@@ -83,3 +139,5 @@ volumes:
   postgres_data:
   frontend_node_modules:
   uploads_data:
+  db_backups:
+  nginx_ssl:

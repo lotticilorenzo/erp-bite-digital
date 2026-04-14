@@ -346,6 +346,66 @@ CREATE INDEX idx_fatture_passive_fornitore ON fatture_passive(fornitore_id);
 CREATE INDEX idx_commesse_fattura ON commesse(fattura_id);
 CREATE INDEX idx_fic_sync_runs_started_at ON fic_sync_runs(started_at DESC);
 
+-- ── PIANO COMMESSA ────────────────────────────────────────
+-- Strumento di pianificazione budget/costi per commessa
+CREATE TABLE IF NOT EXISTS piano_commessa (
+    id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    cliente_id            UUID NOT NULL REFERENCES clienti(id),
+    commessa_id           UUID REFERENCES commesse(id) ON DELETE SET NULL,
+    preventivo            NUMERIC(10,2) DEFAULT 0,
+    margine_target_pct    NUMERIC(5,2) DEFAULT 40,
+    budget_produttivo     NUMERIC(10,2),
+    ore_budget            NUMERIC(8,2),
+    costo_orario_snapshot NUMERIC(10,2),
+    mese_competenza       DATE,
+    note                  TEXT,
+    created_at            TIMESTAMPTZ DEFAULT NOW(),
+    updated_at            TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS piano_commessa_righe (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    piano_id        UUID NOT NULL REFERENCES piano_commessa(id) ON DELETE CASCADE,
+    risorsa_id      UUID REFERENCES risorse(id) ON DELETE SET NULL,
+    lavorazione     VARCHAR(255) DEFAULT '',
+    ore_pianificate NUMERIC(8,2) DEFAULT 0,
+    note            TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- colonna piano_id su commesse (collegamento piano → commessa)
+ALTER TABLE commesse ADD COLUMN IF NOT EXISTS piano_id UUID REFERENCES piano_commessa(id) ON DELETE SET NULL;
+ALTER TABLE commesse ADD COLUMN IF NOT EXISTS preventivo NUMERIC(10,2) DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS idx_piano_commessa_cliente  ON piano_commessa(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_piano_commessa_commessa ON piano_commessa(commessa_id);
+CREATE INDEX IF NOT EXISTS idx_piano_righe_piano       ON piano_commessa_righe(piano_id);
+
+-- Indici compositi timesheet (query frequenti per filtri combinati)
+CREATE INDEX idx_timesheet_user_stato       ON timesheet(user_id, stato);
+CREATE INDEX idx_timesheet_commessa_stato   ON timesheet(commessa_id, stato);
+CREATE INDEX idx_timesheet_user_mese        ON timesheet(user_id, mese_competenza);
+
+-- Chat: lookup messaggi per canale (ordinati per data, come nella GET messages)
+CREATE INDEX idx_chat_msg_canale_created    ON chat_messaggi(canale_id, created_at DESC);
+CREATE INDEX idx_chat_msg_autore            ON chat_messaggi(autore_id);
+
+-- ── PASSWORD RESET TOKENS ─────────────────────────────────
+-- Tabella usata da /auth/forgot-password e /auth/reset-password.
+-- Usa raw SQL nel router (nessun ORM model) — deve essere creata esplicitamente.
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token       VARCHAR(255) UNIQUE NOT NULL,
+    expires_at  TIMESTAMPTZ NOT NULL,
+    used        BOOLEAN DEFAULT FALSE,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Password reset tokens: lookup per token (eseguita ad ogni reset, deve essere veloce)
+CREATE INDEX IF NOT EXISTS idx_password_reset_token     ON password_reset_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_password_reset_expires   ON password_reset_tokens(expires_at);
+
 -- ── TRIGGER: aggiorna costo_manodopera su approvazione ────
 CREATE OR REPLACE FUNCTION aggiorna_costo_manodopera()
 RETURNS TRIGGER AS $$

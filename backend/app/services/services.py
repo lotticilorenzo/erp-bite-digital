@@ -8,26 +8,25 @@ from decimal import Decimal
 from typing import Any, Optional, List
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, text
+from sqlalchemy import select, func, and_, text
 from sqlalchemy.orm import selectinload
 
 from app.models.models import (
     User, Cliente, Progetto, Commessa, CommessaProgetto, Timesheet, Task,
-    Costo, AuditLog, CoefficienteAllocazione,
+    AuditLog, CoefficienteAllocazione,
     Fornitore, FatturaAttiva, FatturaPassiva, FicSyncRun, CategoriaFornitore,
     Preventivo, PreventivoVoce,
     UserRole, CommessaStatus, TaskStatus, TimesheetStatus, TimerSession, PreventivoStatus,
-    ProjectType, ProjectStatus, ServiceType, ServiceCadenza,
+    ProjectType,
     ProgettoTeam, ServizioProgetto, MovimentoCassa,
-    BudgetCategory, BudgetMensile, WikiCategoria, WikiArticolo,
-    ChatMessaggio, ChatReazione, CRMStage, CRMLead, CRMActivity,
-    Notification, Pianificazione, PianificazioneLavorazione
+    BudgetCategory, WikiCategoria,
+    Notification, Pianificazione,
 )
 from app.schemas.schemas import (
     UserCreate, UserUpdate, ClienteCreate, ClienteUpdate,
     ProgettoCreate, ProgettoUpdate, CommessaCreate, CommessaUpdate,
-    TimesheetCreate, CostoCreate, CoefficienteCreate, TimesheetApprova,
-    FornitoreOut, FatturaAttivaOut, FatturaPassivaOut, FicSyncStatusOut,
+    TimesheetCreate, TimesheetApprova,
+    FornitoreOut,
     PreventivoCreate, PreventivoUpdate
 )
 from app.core.config import settings
@@ -1538,7 +1537,7 @@ async def _next_numero_passiva(db: AsyncSession, anno: int) -> str:
     for n in numeri:
         try:
             max_n = max(max_n, int(n.split("/")[1]))
-        except:
+        except (ValueError, IndexError):
             pass
     return f"{anno}/{str(max_n + 1).zfill(4)}"
 
@@ -2038,7 +2037,7 @@ async def applica_regole_automatiche(db: AsyncSession):
             elif regola.tipo_match == 'regex':
                 try:
                     hit = bool(re_module.search(pattern, desc))
-                except:
+                except re_module.error:
                     pass
             if hit:
                 if regola.categoria:
@@ -2080,7 +2079,7 @@ async def suggest_riconciliazione(db: AsyncSession, movimento_id: uuid.UUID):
         elif r.tipo_match == 'startswith': hit = desc.startswith(pattern)
         elif r.tipo_match == 'regex':
             try: hit = bool(re_module.search(pattern, desc))
-            except: pass
+            except re_module.error: pass
         if hit:
             regola_match = {c.name: getattr(r, c.name) for c in r.__table__.columns}
             break
@@ -2301,7 +2300,7 @@ async def create_risorsa(db: AsyncSession, payload: dict):
         if not v: return None
         if isinstance(v, date_type): return v
         try: return date_type.fromisoformat(str(v))
-        except: return None
+        except (ValueError, TypeError): return None
 
     r = Risorsa(
         nome=payload['nome'],
@@ -2340,7 +2339,7 @@ async def update_risorsa(db: AsyncSession, risorsa_id: uuid.UUID, payload: dict)
         if not v: return None
         if isinstance(v, date_type): return v
         try: return date_type.fromisoformat(str(v))
-        except: return None
+        except (ValueError, TypeError): return None
 
     date_fields = {'data_inizio', 'data_fine'}
     skip_fields = {'id', 'created_at', 'updated_at', 'costo_orario_calcolato'}

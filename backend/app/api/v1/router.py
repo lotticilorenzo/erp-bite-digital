@@ -1,10 +1,14 @@
+import logging
 import uuid
 from collections import defaultdict
 from datetime import datetime, date, timedelta
 from decimal import Decimal
+from pathlib import Path
 from typing import Optional, List
 import secrets
 import time
+
+logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, Query, Body, File, UploadFile
 from fastapi_mail import FastMail, ConnectionConfig, MessageSchema, MessageType
 import os
@@ -15,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, select, func, and_, or_
 
 from app.db.session import get_db
+from app.core.config import settings
 from app.core.security import (
     verify_password, create_access_token,
     get_current_user, require_roles
@@ -259,7 +264,7 @@ async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depend
         VALIDATE_CERTS=True
     )
     
-    reset_link = f"http://localhost/reset-password?token={token}"
+    reset_link = f"{settings.FRONTEND_BASE_URL}/reset-password?token={token}"
     
     html = f"""
     <html>
@@ -303,7 +308,7 @@ async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depend
     try:
         await fm.send_message(message)
     except Exception as e:
-        print(f"ERRORE INVIO EMAIL: {e}")
+        logger.error("Errore invio email reset password: %s", e)
         # In produzione loggheresti l'errore ma all'utente diciamo comunque successo per non dare info
     
     return {"message": "Se l'email esiste, riceverai un link di reset."}
@@ -322,28 +327,32 @@ async def reset_password(data: ResetPasswordRequest, db: AsyncSession = Depends(
     
     if not row:
         raise HTTPException(status_code=400, detail="Token non valido")
-    
+
     user_id, expires_at, used = row
-    
-    if used:
-        raise HTTPException(status_code=400, detail="Token già utilizzato")
-    
+
     if now > expires_at:
         raise HTTPException(status_code=400, detail="Token scaduto")
-    
-    # 2. Aggiorna password
+
+    # 2. Marca token come usato in modo ATOMICO (anti-race-condition).
+    #    Se il token è già stato usato da una richiesta concorrente, RETURNING
+    #    non restituisce righe e blocchiamo l'operazione prima di toccare la password.
+    mark_result = await db.execute(
+        text(
+            "UPDATE password_reset_tokens SET used = true "
+            "WHERE token = :t AND used = false RETURNING user_id"
+        ),
+        {"t": data.token}
+    )
+    if not mark_result.fetchone():
+        raise HTTPException(status_code=400, detail="Token già utilizzato")
+
+    # 3. Aggiorna password solo dopo aver acquisito il lock sul token
     hashed_pwd = hash_password(data.new_password)
     await db.execute(
         text("UPDATE users SET password_hash = :h WHERE id = :u"),
         {"h": hashed_pwd, "u": user_id}
     )
-    
-    # 3. Marca token come usato
-    await db.execute(
-        text("UPDATE password_reset_tokens SET used = true WHERE token = :t"),
-        {"t": data.token}
-    )
-    
+
     await db.commit()
     
     return {"message": "Password aggiornata con successo", "success": True}
@@ -535,10 +544,13 @@ async def delete_user_avatar(
     current_user: User = Depends(get_current_user)
 ):
     if current_user.avatar_url and current_user.avatar_url.startswith("/static/avatars/"):
-        path = current_user.avatar_url.lstrip("/")
-        if os.path.exists(path):
-            try: os.remove(path)
-            except: pass
+        _avatars_root = Path("static/avatars").resolve()
+        _av = (_avatars_root / Path(current_user.avatar_url).name).resolve()
+        if str(_av).startswith(str(_avatars_root)) and _av.exists():
+            try:
+                _av.unlink()
+            except OSError:
+                pass
     
     current_user.avatar_url = None
     await db.commit()
@@ -608,7 +620,7 @@ async def get_clienti(
     attivo: Optional[bool] = Query(None),
     search: Optional[str] = Query(None, description="Ricerca per ragione sociale"),
     skip: int = Query(0, ge=0),
-    limit: int = Query(1000, ge=1, le=5000),
+    limit: int = Query(200, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
@@ -701,10 +713,14 @@ async def upload_cliente_logo(
     
     # Cancella vecchio logo se presente e se diverso
     if c.logo_url and c.logo_url.startswith("/static/logos/"):
-        old_path = c.logo_url.lstrip("/")
-        if os.path.exists(old_path) and old_path != filepath:
-            try: os.remove(old_path)
-            except: pass
+        _logos_root = Path("static/logos").resolve()
+        _old = (_logos_root / Path(c.logo_url).name).resolve()
+        # Controllo anti-path-traversal: il file deve stare dentro static/logos/
+        if str(_old).startswith(str(_logos_root)) and _old.exists() and _old != Path(filepath).resolve():
+            try:
+                _old.unlink()
+            except OSError:
+                pass
 
     c.logo_url = f"/static/logos/{filename}"
     await db.commit()
@@ -725,11 +741,14 @@ async def delete_cliente_logo(
         raise HTTPException(status_code=404, detail="Cliente non trovato")
     
     if c.logo_url and c.logo_url.startswith("/static/logos/"):
-        path = c.logo_url.lstrip("/")
-        if os.path.exists(path):
-            try: os.remove(path)
-            except: pass
-    
+        _logos_root = Path("static/logos").resolve()
+        _lp = (_logos_root / Path(c.logo_url).name).resolve()
+        if str(_lp).startswith(str(_logos_root)) and _lp.exists():
+            try:
+                _lp.unlink()
+            except OSError:
+                pass
+
     c.logo_url = None
     await db.commit()
     return {"success": True}
@@ -754,7 +773,7 @@ async def get_progetti(
     stato: Optional[str] = Query(None),
     search: Optional[str] = Query(None, description="Ricerca per nome progetto"),
     skip: int = Query(0, ge=0),
-    limit: int = Query(1000, ge=1, le=5000),
+    limit: int = Query(200, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
@@ -1503,7 +1522,6 @@ async def create_piano(
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     from sqlalchemy import text
-    from datetime import date
     from datetime import date as _date
     mese_str = payload.get("mese_competenza")
     mese = None
@@ -1511,7 +1529,8 @@ async def create_piano(
         try:
             parts = str(mese_str).split("-")
             mese = _date(int(parts[0]), int(parts[1]), 1)
-        except: mese = None
+        except (ValueError, IndexError, TypeError):
+            mese = None
     res = await db.execute(text("""
         INSERT INTO piano_commessa (cliente_id, preventivo, margine_target_pct, budget_produttivo, ore_budget, costo_orario_snapshot, mese_competenza, note)
         VALUES (:cid, :prev, :marg, :budg, :ore, :co, :mese, :note) RETURNING id

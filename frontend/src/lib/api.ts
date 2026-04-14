@@ -8,7 +8,7 @@ const api = axios.create({
 
 // ── REQUEST INTERCEPTOR: inietta JWT ──────────────────────
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("BITE_ERP_TOKEN");
+  const token = sessionStorage.getItem("BITE_ERP_TOKEN");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -27,7 +27,7 @@ api.interceptors.response.use(
     if (status === 401 && !window.location.pathname.startsWith("/login")) {
       if (!_isRedirectingToLogin) {
         _isRedirectingToLogin = true;
-        localStorage.removeItem("BITE_ERP_TOKEN");
+        sessionStorage.removeItem("BITE_ERP_TOKEN");
         // Reset flag after navigation so future logins work
         setTimeout(() => { _isRedirectingToLogin = false; }, 3000);
         window.location.href = "/login";

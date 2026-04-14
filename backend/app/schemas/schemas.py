@@ -286,8 +286,8 @@ class ClienteOut(OrmBase):
 class ServizioProgettoCreate(BaseModel):
     tipo: str
     nome: Optional[str] = None
-    valore_fisso: float = 0
-    valore_variabile: float = 0
+    valore_fisso: Decimal = Decimal("0")
+    valore_variabile: Decimal = Decimal("0")
     contenuti_previsti: Optional[int] = None
     cadenza: str = "MENSILE"
     mese_inizio: Optional[date] = None
@@ -297,8 +297,8 @@ class ServizioProgettoCreate(BaseModel):
 class ServizioProgettoUpdate(BaseModel):
     tipo: Optional[str] = None
     nome: Optional[str] = None
-    valore_fisso: Optional[float] = None
-    valore_variabile: Optional[float] = None
+    valore_fisso: Optional[Decimal] = None
+    valore_variabile: Optional[Decimal] = None
     contenuti_previsti: Optional[int] = None
     cadenza: Optional[str] = None
     mese_inizio: Optional[date] = None
@@ -310,8 +310,8 @@ class ServizioProgettoOut(OrmBase):
     progetto_id: uuid.UUID
     tipo: str
     nome: Optional[str] = None
-    valore_fisso: float = 0
-    valore_variabile: float = 0
+    valore_fisso: Decimal = Decimal("0")
+    valore_variabile: Decimal = Decimal("0")
     contenuti_previsti: Optional[int] = None
     cadenza: str = "MENSILE"
     mese_inizio: Optional[date] = None

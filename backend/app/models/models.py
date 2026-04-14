@@ -251,6 +251,8 @@ class Commessa(Base):
     fattura_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey('fatture_attive.id'), nullable=True)
     costi_diretti: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     pianificazione_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("pianificazioni.id"), nullable=True)
+    piano_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("piano_commessa.id"), nullable=True)
+    preventivo: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     data_inizio: Mapped[Optional[date]] = mapped_column(Date)
     data_fine: Mapped[Optional[date]] = mapped_column(Date)
     data_chiusura: Mapped[Optional[date]] = mapped_column(Date)

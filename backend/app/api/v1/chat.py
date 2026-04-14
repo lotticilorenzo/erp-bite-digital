@@ -1,17 +1,23 @@
+import logging
 import uuid
 import json
 import re
 from datetime import datetime
-from typing import List, Dict, Optional, Set
+from typing import List, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, Body, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc, or_, and_, text
+from sqlalchemy import select, func, and_, text
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.db.session import get_db
 from app.core.security import get_current_user, get_user_from_token
-from app.models.models import ChatMessaggio, ChatReazione, User, Progetto, ChatCanale, ChatMembro, UserRole
-from app.schemas.schemas import ChatMessaggioRead, ChatMessaggioCreate, ChatMessaggioUpdate, ChatReazioneRead, ChatCanaleOut, ChatMembroOut, UserOut
+from app.models.models import ChatMessaggio, ChatReazione, User, ChatCanale, ChatMembro, UserRole
+from app.schemas.schemas import ChatMessaggioRead, ChatMessaggioCreate, ChatCanaleOut, UserOut
+
+logger = logging.getLogger(__name__)
+
+# Limiti di sicurezza per i messaggi chat
+_MSG_MAX_LEN = 10_000  # caratteri massimi per messaggio
 
 router = APIRouter()
 
@@ -57,7 +63,8 @@ class ConnectionManager:
             for connection in connections:
                 try:
                     await connection.send_text(payload)
-                except:
+                except Exception:
+                    # Connessione già chiusa — ignorata intenzionalmente
                     pass
 
     async def broadcast_to_channel(self, db: AsyncSession, canal_id: uuid.UUID, message: dict, skip_user: Optional[uuid.UUID] = None):
@@ -80,8 +87,8 @@ class ConnectionManager:
                 for connection in connections:
                     try:
                         await connection.send_text(payload)
-                    except:
-                        # La connessione potrebbe essere chiusa ma non ancora rimossa dal manager
+                    except Exception:
+                        # Connessione chiusa ma non ancora rimossa dal manager — ignorata
                         pass
 
 manager = ConnectionManager()
@@ -296,11 +303,15 @@ async def manage_members(
 # WEBSOCKET ENDPOINT
 # ═══════════════════════════════════════════════════════
 
-@router.websocket("/ws/{token}")
-async def websocket_endpoint(websocket: WebSocket, token: str, db: AsyncSession = Depends(get_db)):
-    # Accettiamo subito la connessione per stabilità Handshake con Proxy
+@router.websocket("/ws")
+async def websocket_endpoint(
+    websocket: WebSocket,
+    token: str = Query(...),  # query param: /ws?token=xxx (mai nel path per ridurre esposizione nei log)
+    db: AsyncSession = Depends(get_db)
+):
+    # Accettiamo subito la connessione per stabilità Handshake con Proxy/Nginx
     await websocket.accept()
-    
+
     user = await get_user_from_token(db, token)
     if not user:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
@@ -309,7 +320,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str, db: AsyncSession 
     try:
         await manager.connect(user.id, websocket)
     except Exception as e:
-        print(f"WS Manager Error: {e}")
+        logger.error("WS Manager Error: %s", e)
         await websocket.close()
         return
 
@@ -341,7 +352,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str, db: AsyncSession 
         if manager.disconnect(user.id, websocket):
             await manager.broadcast_presence(user.id, "offline")
     except Exception as e:
-        print(f"WS Error: {e}")
+        logger.error("WS Error: %s", e)
         manager.disconnect(user.id, websocket)
 
 # ═══════════════════════════════════════════════════════
@@ -392,6 +403,15 @@ async def send_message(
     res_member = await db.execute(stmt_member)
     if not res_member.scalar_one_or_none() and current_user.ruolo != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Non hai accesso a questo canale")
+
+    # Validazione lunghezza — evita payload giganti che appesantiscono DB e broadcast
+    if not message_in.contenuto or not message_in.contenuto.strip():
+        raise HTTPException(status_code=400, detail="Il messaggio non può essere vuoto")
+    if len(message_in.contenuto) > _MSG_MAX_LEN:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Messaggio troppo lungo (max {_MSG_MAX_LEN} caratteri)"
+        )
 
     new_message = ChatMessaggio(
         canale_id=message_in.canale_id,

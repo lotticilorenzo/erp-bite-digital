@@ -24,7 +24,10 @@ class Settings(BaseSettings):
     JWT_SECRET: str = ""
     SECRET_KEY: str = "CAMBIA_QUESTA_CHIAVE_IN_PRODUZIONE"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 ore
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60  # 1 ora (ridotto da 8h per sicurezza)
+
+    # Frontend
+    FRONTEND_BASE_URL: str = "http://localhost"  # Override in .env in produzione
 
     # Fatture in Cloud
     FIC_API_KEY: str = ""
