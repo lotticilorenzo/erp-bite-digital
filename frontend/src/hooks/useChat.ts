@@ -252,10 +252,10 @@ export function useChat() {
   }, [token, connectWS]);
 
   // ═══════════════════════════════════════════════════════
-  // ACTIONS
+  // ACTIONS (Memoized to prevent infinite loops in effects)
   // ═══════════════════════════════════════════════════════
 
-  const sendMessage = async (content: string, type: string = 'testo', replyToId?: string) => {
+  const sendMessage = useCallback(async (content: string, type: string = 'testo', replyToId?: string) => {
     if (!activeChannelId) return;
     const activeChannel = channels?.find((c: any) => c.id === activeChannelId);
     await axios.post('/chat/messages', {
@@ -265,34 +265,34 @@ export function useChat() {
       tipo: type,
       risposta_a: replyToId
     });
-  };
+  }, [activeChannelId, channels]);
 
-  const uploadFile = async (file: File) => {
+  const uploadFile = useCallback(async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
     const res = await axios.post('/uploads', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
     return res.data;
-  };
+  }, []);
 
-  const editMessage = async (id: string, content: string) => {
+  const editMessage = useCallback(async (id: string, content: string) => {
     await axios.patch(`/chat/messages/${id}`, { contenuto: content });
-  };
+  }, []);
 
-  const deleteMessage = async (id: string) => {
+  const deleteMessage = useCallback(async (id: string) => {
     await axios.delete(`/chat/messages/${id}`);
-  };
+  }, []);
 
-  const addReaction = async (messageId: string, emoji: string) => {
+  const addReaction = useCallback(async (messageId: string, emoji: string) => {
     await axios.post(`/chat/messages/${messageId}/reactions`, { emoji });
-  };
+  }, []);
 
-  const removeReaction = async (messageId: string, emoji: string) => {
+  const removeReaction = useCallback(async (messageId: string, emoji: string) => {
     await axios.delete(`/chat/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`);
-  };
+  }, []);
 
-  const setTypingStatus = (isTyping: boolean) => {
+  const setTypingStatus = useCallback((isTyping: boolean) => {
     if (ws.current?.readyState === WebSocket.OPEN && activeChannelId) {
       ws.current.send(JSON.stringify({
         type: 'typing',
@@ -300,20 +300,23 @@ export function useChat() {
         is_typing: isTyping
       }));
     }
-  };
+  }, [activeChannelId]);
 
-  const markAsSeen = (channelId: string) => {
+  const markAsSeen = useCallback((channelId: string) => {
     // Reset unread count for this channel
-    setUnreadCounts(prev => ({ ...prev, [channelId]: 0 }));
+    setUnreadCounts(prev => {
+      if (prev[channelId] === 0) return prev;
+      return { ...prev, [channelId]: 0 };
+    });
     if (ws.current?.readyState === WebSocket.OPEN) {
       ws.current.send(JSON.stringify({
         type: 'message_seen',
         channel_id: channelId
       }));
     }
-  };
+  }, []);
 
-  const startDirectChat = async (userId: string) => {
+  const startDirectChat = useCallback(async (userId: string) => {
     try {
       const res = await axios.post('/chat/channels/direct', { other_user_id: userId });
       const newChannel = res.data;
@@ -328,7 +331,7 @@ export function useChat() {
     } catch (err) {
       console.error("Failed to start DM", err);
     }
-  };
+  }, [queryClient]);
 
   return {
     channels,

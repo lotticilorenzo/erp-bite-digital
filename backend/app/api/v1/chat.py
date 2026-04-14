@@ -27,7 +27,6 @@ class ConnectionManager:
         self.user_status: Dict[uuid.UUID, str] = {}
 
     async def connect(self, user_id: uuid.UUID, websocket: WebSocket):
-        await websocket.accept()
         if user_id not in self.active_connections:
             self.active_connections[user_id] = []
         self.active_connections[user_id].append(websocket)
@@ -147,8 +146,15 @@ async def get_channels(
         c_dict["unread_count"] = 0
         out.append(c_dict)
     
-    # Ordina per attività recente
-    return sorted(out, key=lambda x: x.get("last_message_at") or x.get("created_at"), reverse=True)
+    # Ordina per attività recente (Safe timezone comparison)
+    def get_sort_key(x):
+        dt = x.get("last_message_at") or x.get("created_at")
+        # Assicuriamoci che sia naive per il confronto sicuro (Postgres TIMESTAMPTZ vs TIMESTAMP)
+        if dt and dt.tzinfo:
+            return dt.replace(tzinfo=None)
+        return dt
+
+    return sorted(out, key=get_sort_key, reverse=True)
 
 @router.get("/users", response_model=List[UserOut])
 async def get_chat_users(
@@ -251,12 +257,21 @@ async def manage_members(
 
 @router.websocket("/ws/{token}")
 async def websocket_endpoint(websocket: WebSocket, token: str, db: AsyncSession = Depends(get_db)):
+    # Accettiamo subito la connessione per stabilità Handshake con Proxy
+    await websocket.accept()
+    
     user = await get_user_from_token(db, token)
     if not user:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    await manager.connect(user.id, websocket)
+    try:
+        await manager.connect(user.id, websocket)
+    except Exception as e:
+        print(f"WS Manager Error: {e}")
+        await websocket.close()
+        return
+
     try:
         while True:
             data = await websocket.receive_text()
