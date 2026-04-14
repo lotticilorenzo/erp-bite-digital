@@ -5,8 +5,7 @@ import {
   Home,
   BarChart3,
   MessageSquare,
-  Files,
-  X,
+  MoreVertical,
 } from "lucide-react";
 import {
   SidebarMenu,
@@ -57,6 +56,20 @@ export function StudioSidebar() {
   const queryClient = useQueryClient();
   const [search, setSearch] = React.useState("");
   const [isProgettoModalOpen, setIsProgettoModalOpen] = React.useState(false);
+
+  const createWorkspaceMutation = useMutation({
+    mutationFn: async (nome: string) => {
+      return api.post("/studio/nodes", { nome, tipo: "folder", parent_id: null });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["studio-hierarchy"] });
+    },
+  });
+
+  const handleCreateWorkspace = () => {
+    const nome = prompt("Nome del nuovo workspace:");
+    if (nome) createWorkspaceMutation.mutate(nome);
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -128,22 +141,30 @@ export function StudioSidebar() {
           {navItem("home", Home, "Home")}
           {navItem("carico-lavoro", BarChart3, "Carico Lavoro")}
           {navItem("chat", MessageSquare, "Chat")}
-          {navItem("files", Files, "File")}
         </SidebarMenu>
       </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
         <ScrollArea className="flex-1 px-3 pb-4">
           <div className="space-y-4">
-            <div className="flex items-center justify-between px-2 mb-2">
-              <h4 className="text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground/60">
-                {search ? `Risultati (${filteredHierarchy.length})` : "Progetti Attivi"}
-              </h4>
+            <div className="flex items-center justify-between px-2 mb-2 group/header">
+              <div>
+                <h4 className="text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground/40 group-hover:text-primary/60 transition-colors">
+                  {search ? `Risultati (${filteredHierarchy.length})` : "Clienti"}
+                </h4>
+              </div>
               <div className="flex items-center gap-1">
+                <button 
+                  onClick={handleCreateWorkspace}
+                  className="p-1.5 text-muted-foreground hover:text-primary transition-all hover:bg-white/5 rounded-lg border border-transparent hover:border-white/10" 
+                  title="Nuova Sezione / Workspace"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="p-1 hover:text-primary transition-colors hover:bg-white/5 rounded-md" title="Aggiungi">
-                      <Plus className="h-4 w-4" />
+                    <button className="p-1.5 text-muted-foreground hover:text-primary transition-all hover:bg-white/5 rounded-lg border border-transparent hover:border-white/10" title="Altro">
+                      <MoreVertical className="h-3.5 w-3.5" />
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="w-48 bg-card border-border rounded-xl shadow-2xl" side="bottom" align="end">
@@ -154,11 +175,6 @@ export function StudioSidebar() {
                     <DropdownMenuItem className="cursor-pointer text-xs font-bold" onClick={() => openNewTask()}>
                       <Zap className="h-3.5 w-3.5 mr-2 text-primary" />
                       Nuova Task
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator className="bg-border/30" />
-                    <DropdownMenuItem className="cursor-pointer text-xs font-bold" onClick={() => { import('sonner').then(m => m.toast.info("Integrazione Drive in arrivo!")); }}>
-                      <Files className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
-                      Collega File / Drive
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -183,6 +199,19 @@ export function StudioSidebar() {
                   <FolderNode key={node.id} node={node} />
                 ))
               )}
+            </div>
+
+            {/* Nuovo Workspace Button */}
+            <div className="px-1 pt-4">
+              <button
+                onClick={handleCreateWorkspace}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-dashed border-white/10 text-muted-foreground/60 hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-all group"
+              >
+                <div className="flex h-5 w-5 items-center justify-center rounded-md bg-white/5 border border-white/10 group-hover:border-primary/30 group-hover:bg-primary/10 transition-all">
+                  <Plus className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-[11px] font-bold tracking-wide">Nuovo workspace</span>
+              </button>
             </div>
           </div>
         </ScrollArea>

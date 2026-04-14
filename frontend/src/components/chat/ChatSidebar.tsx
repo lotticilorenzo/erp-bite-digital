@@ -14,6 +14,8 @@ interface ChatSidebarProps {
   onStartDirectChat: (userId: string) => void;
   onlineUsers?: Set<string>;
   unreadCounts?: Record<string, number>;
+  category: 'all' | 'projects' | 'team';
+  onCategoryChange: (cat: 'all' | 'projects' | 'team') => void;
   className?: string;
 }
 
@@ -25,9 +27,10 @@ export function ChatSidebar({
   onStartDirectChat,
   onlineUsers = new Set(),
   unreadCounts = {},
+  category,
+  onCategoryChange,
   className
 }: ChatSidebarProps) {
-  const [category, setCategory] = useState<'all' | 'projects' | 'team'>('all');
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredChannels = useMemo(() => {
@@ -52,7 +55,7 @@ export function ChatSidebar({
   }, [users, searchQuery]);
 
   return (
-    <div className={cn("flex flex-col h-full bg-card/10 border-l border-border/10 pb-20 md:pb-0", className)}>
+    <div className={cn("flex flex-col h-full bg-card/10 border-l border-border/10", className)}>
       {/* Header */}
       <div className="p-4 border-b border-border/10 bg-muted/5 shrink-0">
         <div className="flex items-center justify-between mb-4">
@@ -96,7 +99,7 @@ export function ChatSidebar({
             <button
               key={tab.id}
               type="button"
-              onClick={e => { e.preventDefault(); e.stopPropagation(); setCategory(tab.id as any); }}
+              onClick={e => { e.preventDefault(); e.stopPropagation(); onCategoryChange(tab.id as any); }}
               className={cn(
                 "flex-1 py-2 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer relative",
                 category === tab.id
@@ -116,7 +119,7 @@ export function ChatSidebar({
       </div>
 
       {/* List Area */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar pb-32">
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
         {category === 'team' ? (
           /* Collaborators list */
           <div className="animate-in fade-in duration-300">
@@ -129,12 +132,20 @@ export function ChatSidebar({
               </p>
             ) : (
               filteredUsers.map((user: any) => {
+                // Check if this user has an active direct chat
+                const activeChan = channels?.find(c => c.id === activeChannelId);
+                const isUserActive = activeChan?.tipo === 'DIRECT' && 
+                  activeChan.membri?.some((m: any) => m.user_id === user.id);
                 const isOnline = onlineUsers.has(user.id);
+
                 return (
                   <button
                     key={user.id}
                     onClick={() => onStartDirectChat(user.id)}
-                    className="w-full flex items-center gap-3 p-4 hover:bg-white/[0.02] border-b border-border/5 transition-all group"
+                    className={cn(
+                      "w-full flex items-center gap-3 p-4 border-b border-border/5 transition-all group relative",
+                      isUserActive ? "bg-primary/5 border-r-2 border-r-primary" : "hover:bg-white/[0.02]"
+                    )}
                   >
                     <div className="relative">
                       <Avatar className="h-10 w-10 rounded-xl border border-border/20 group-hover:scale-105 transition-transform">
@@ -189,8 +200,8 @@ export function ChatSidebar({
                   key={channel.id}
                   onClick={() => onSelectChannel(channel.id)}
                   className={cn(
-                    "w-full flex items-center gap-3 p-4 transition-all border-b border-border/5 relative group",
-                    isActive ? "bg-primary/5 border-r-2 border-r-primary" : "hover:bg-white/[0.02]"
+                    "w-full flex items-center gap-3 p-4 transition-all duration-300 border-b border-border/5 relative group",
+                    isActive ? "bg-primary/5 border-r-2 border-r-primary shadow-inner" : "hover:bg-white/[0.02]"
                   )}
                 >
                   <Avatar className="h-10 w-10 rounded-xl border border-border/20 shadow-sm group-hover:scale-105 transition-transform shrink-0">
@@ -236,7 +247,7 @@ export function ChatSidebar({
       </div>
 
       {/* Footer */}
-      <div className="p-4 border-t border-border/10 bg-muted/10 shrink-0 sticky bottom-16 md:bottom-20 z-10 backdrop-blur-md">
+      <div className="p-4 border-t border-border/10 bg-muted/10 shrink-0 sticky bottom-0 z-10 backdrop-blur-md">
         <Button className="w-full h-10 bg-primary/90 text-white rounded-xl shadow-lg shadow-primary/30 font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-primary hover:scale-[1.02] active:scale-95 transition-all">
           <Plus size={16} />
           <span>Nuovo Gruppo</span>

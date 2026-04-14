@@ -140,3 +140,63 @@ async def get_clickup_users(
             "email": u.get("email"),
         })
     return {"members": members}
+    
+@router.get("/progress/{cliente_nome}")
+async def get_cliente_progress(
+    cliente_nome: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Calcola progresso % basato sul numero di task chiuse vs totali in ClickUp"""
+    token = get_token()
+    
+    # 1. Trova il folder con il nome del cliente
+    # Carichiamo gli spazi (limitandoci ad alcuni per performance se necessario, qui iteriamo)
+    spaces_data = await cu_get(f"/team/{TEAM_ID}/space?archived=false", token)
+    
+    target_folder = None
+    for space in spaces_data.get("spaces", []):
+        folders_data = await cu_get(f"/space/{space['id']}/folder?archived=false", token)
+        for folder in folders_data.get("folders", []):
+            if folder["name"].lower().strip() == cliente_nome.lower().strip():
+                target_folder = folder
+                break
+        if target_folder:
+            break
+            
+    if not target_folder:
+        return {
+            "folder_found": False,
+            "percentage": 0,
+            "tasks_closed": 0,
+            "tasks_total": 0,
+            "message": f"Folder '{cliente_nome}' non trovato"
+        }
+    
+    # 2. Conta le task (incluse quelle chiuse)
+    # ClickUp non da un contatore aggregato facile per folder senza iterare le liste
+    lists_data = await cu_get(f"/folder/{target_folder['id']}/list?archived=false", token)
+    
+    total_tasks = 0
+    closed_tasks = 0
+    
+    for lst in lists_data.get("lists", []):
+        # Prendiamo un sample delle task o usiamo l'endpoint di conteggio se disponibile 
+        # (v2 ha un endpoint task count)
+        tasks_data = await cu_get(
+            f"/list/{lst['id']}/task?subtasks=true&include_closed=true", 
+            token
+        )
+        for task in tasks_data.get("tasks", []):
+            total_tasks += 1
+            if task.get("status", {}).get("type") == "closed":
+                closed_tasks += 1
+                
+    percentage = round((closed_tasks / total_tasks * 100)) if total_tasks > 0 else 0
+    
+    return {
+        "folder_found": True,
+        "folder_id": target_folder["id"],
+        "percentage": percentage,
+        "tasks_closed": closed_tasks,
+        "tasks_total": total_tasks
+    }

@@ -43,6 +43,7 @@ const ResetPasswordPage = React.lazy(() => import("./pages/ResetPassword"));
 const PopoutPage = React.lazy(() => import("./pages/PopoutPage"));
 
 import { ThemeProvider } from "@/context/ThemeContext";
+import { ChatProvider } from "@/context/ChatContext";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 
 // Ruoli con accesso limitato al solo Studio OS
@@ -64,81 +65,83 @@ function App() {
 
   return (
     <ThemeProvider>
-      <ErrorBoundary>
-      <Suspense fallback={
-        <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
-          <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-        </div>
-      }>
-      <AnimatePresence mode="wait">
-        <Routes location={location} key={location.pathname}>
-          <Route path="/login" element={!user ? <LoginPage /> : <Navigate to={isStudioOnlyUser ? "/studio-os" : "/"} />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          
-          <Route
-            path="/"
-            element={
-              user ? (
-                // Redirect automatico: utenti solo-studio vanno a Studio OS
-                isStudioOnlyUser ? (
-                  <Navigate to="/studio-os" replace />
-                ) : (
-                  <StudioProvider>
-                    <DashboardLayout />
-                  </StudioProvider>
-                )
-              ) : (
-                <Navigate to="/login" />
-              )
-            }
-          >
-            <Route index element={<DashboardPage />} />
-            <Route path="/clienti" element={<ClientiPage />} />
-            <Route path="/clienti/:id" element={<ClienteDetailPage />} />
-            <Route path="/progetti" element={<ProgettiPage />} />
-            <Route path="/progetti/:id" element={<ProgettoDetailPage />} />
-            <Route path="/commesse" element={<CommessePage />} />
-            <Route path="/commesse/:id" element={<CommessaDetailPage />} />
-            <Route path="/preventivi" element={<PreventiviPage />} />
-            <Route path="/timesheet" element={<TimesheetPage />} />
-            <Route path="/fatture" element={<FatturePage />} />
-            <Route path="/cassa" element={<CassaPage />} />
-            <Route path="/analytics" element={<AnalyticsPage />} />
-            <Route path="/report" element={<ReportsPage />} />
-            <Route path="/planning" element={<PlanningPage />} />
-            <Route path="/collaboratori" element={<CollaboratoriPage />} />
-            <Route path="/fornitori" element={<Fornitori />} />
-            <Route path="/gantt" element={<GanttPage />} />
-            <Route path="/budget" element={<BudgetPage />} />
-            <Route path="/wiki" element={<WikiPage />} />
-            <Route path="/crm" element={<CRMPage />} />
-            <Route path="/crm/:id" element={<LeadDetailPage />} />
-            <Route path="/admin/categorie-fornitori" element={<SupplierCategoryManager />} />
+      <ChatProvider>
+        <ErrorBoundary>
+        <Suspense fallback={
+          <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
+            <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+          </div>
+        }>
+        <AnimatePresence mode="wait">
+          <Routes location={location} key={location.pathname}>
+            <Route path="/login" element={!user ? <LoginPage /> : <Navigate to={isStudioOnlyUser ? "/studio-os" : "/"} />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             
-            <Route 
-              path="/studio-os/*" 
-              element={<StudioPage />} 
-            />
-
-            <Route path="/settings" element={<SettingsLayout />}>
-              <Route path="profile" element={<ProfileSettings />} />
-              <Route path="account" element={<AccountSettings />} />
-              <Route path="appearance" element={<AppearanceSettings />} />
-              <Route path="notifications" element={<NotificationSettings />} />
-              <Route path="privacy" element={<PrivacySettings />} />
+            <Route
+              path="/"
+              element={
+                user ? (
+                  // Redirect automatico: utenti solo-studio vanno a Studio OS
+                  isStudioOnlyUser ? (
+                    <Navigate to="/studio-os" replace />
+                  ) : (
+                    <StudioProvider>
+                      <DashboardLayout />
+                    </StudioProvider>
+                  )
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            >
+              <Route index element={<DashboardPage />} />
+              <Route path="/clienti" element={<ClientiPage />} />
+              <Route path="/clienti/:id" element={<ClienteDetailPage />} />
+              <Route path="/progetti" element={<ProgettiPage />} />
+              <Route path="/progetti/:id" element={<ProgettoDetailPage />} />
+              <Route path="/commesse" element={<CommessePage />} />
+              <Route path="/commesse/:id" element={<CommessaDetailPage />} />
+              <Route path="/preventivi" element={<PreventiviPage />} />
+              <Route path="/timesheet" element={<TimesheetPage />} />
+              <Route path="/fatture" element={<FatturePage />} />
+              <Route path="/cassa" element={<CassaPage />} />
+              <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/report" element={<ReportsPage />} />
+              <Route path="/planning" element={<PlanningPage />} />
+              <Route path="/collaboratori" element={<CollaboratoriPage />} />
+              <Route path="/fornitori" element={<Fornitori />} />
+              <Route path="/gantt" element={<GanttPage />} />
+              <Route path="/budget" element={<BudgetPage />} />
+              <Route path="/wiki" element={<WikiPage />} />
+              <Route path="/crm" element={<CRMPage />} />
+              <Route path="/crm/:id" element={<LeadDetailPage />} />
+              <Route path="/admin/categorie-fornitori" element={<SupplierCategoryManager />} />
+              
+              <Route 
+                path="/studio-os/*" 
+                element={<StudioPage />} 
+              />
+  
+              <Route path="/settings" element={<SettingsLayout />}>
+                <Route path="profile" element={<ProfileSettings />} />
+                <Route path="account" element={<AccountSettings />} />
+                <Route path="appearance" element={<AppearanceSettings />} />
+                <Route path="notifications" element={<NotificationSettings />} />
+                <Route path="privacy" element={<PrivacySettings />} />
+              </Route>
             </Route>
-          </Route>
-
-          {/* ── Standalone popout window ── */}
-          <Route path="/popout" element={user ? <PopoutPage /> : <Navigate to="/login" />} />
-
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
-      </AnimatePresence>
-      </Suspense>
-      </ErrorBoundary>
-      <Toaster position="top-right" richColors closeButton />
+  
+            {/* ── Standalone popout window ── */}
+            <Route path="/popout" element={user ? <PopoutPage /> : <Navigate to="/login" />} />
+  
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </AnimatePresence>
+        </Suspense>
+        </ErrorBoundary>
+        <Toaster position="top-right" richColors closeButton />
+      </ChatProvider>
     </ThemeProvider>
   );
 }

@@ -1,6 +1,6 @@
 import type { Cliente } from "./index";
 
-export type StudioView = "home" | "dash" | "list" | "kanban" | "cal" | "team" | "carico-lavoro" | "overview" | "chat" | "files";
+export type StudioView = "home" | "dash" | "list" | "kanban" | "cal" | "team" | "carico-lavoro" | "overview" | "chat";
 
 export interface TabItem {
   id: string;

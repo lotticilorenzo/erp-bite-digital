@@ -21,7 +21,7 @@ from app.models.models import (
     ProgettoTeam, ServizioProgetto, MovimentoCassa,
     BudgetCategory, BudgetMensile, WikiCategoria, WikiArticolo,
     ChatMessaggio, ChatReazione, CRMStage, CRMLead, CRMActivity,
-    Notification
+    Notification, Pianificazione, PianificazioneLavorazione
 )
 from app.schemas.schemas import (
     UserCreate, UserUpdate, ClienteCreate, ClienteUpdate,
@@ -445,7 +445,8 @@ async def list_commesse(
         selectinload(Commessa.cliente),
         selectinload(Commessa.righe_progetto).selectinload(CommessaProgetto.progetto),
         selectinload(Commessa.timesheet),
-        selectinload(Commessa.fattura)
+        selectinload(Commessa.fattura),
+        selectinload(Commessa.pianificazione).selectinload(Pianificazione.lavorazioni)
     )
     if mese:
         q = q.where(Commessa.mese_competenza == mese.replace(day=1))
@@ -467,7 +468,8 @@ async def get_commessa(db: AsyncSession, commessa_id: uuid.UUID) -> Optional[Com
             selectinload(Commessa.cliente),
             selectinload(Commessa.righe_progetto).selectinload(CommessaProgetto.progetto),
             selectinload(Commessa.timesheet),
-            selectinload(Commessa.fattura)
+            selectinload(Commessa.fattura),
+            selectinload(Commessa.pianificazione).selectinload(Pianificazione.lavorazioni)
         )
         .where(Commessa.id == commessa_id)
     )

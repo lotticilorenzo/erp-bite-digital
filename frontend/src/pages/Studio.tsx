@@ -8,7 +8,6 @@ import { StudioCalendarView } from "@/components/studio/StudioCalendarView";
 import { StudioTeamView } from "@/components/studio/StudioTeamView";
 import CaricoLavoroPage from "@/pages/studio/CaricoLavoroPage";
 import StudioOverviewPage from "@/pages/studio/StudioOverviewPage";
-import StudioDocumentsPage from "@/pages/studio/StudioDocumentsPage";
 import { WorkspaceTabs } from "@/components/studio/WorkspaceTabs";
 import { TaskDetailView } from "@/components/studio/TaskDetailView";
 import ChatHub from "@/components/chat/ChatHub";
@@ -23,7 +22,6 @@ function PanelContent({ tab, view }: { tab: TabItem | null; view: string }) {
       case "home":          return <StudioHome />;
       case "carico-lavoro": return <CaricoLavoroPage />;
       case "chat":          return <ChatHub />;
-      case "files":         return <StudioDocumentsPage />;
       case "overview":      return <StudioOverviewPage />;
       case "cal":           return <StudioCalendarView />;
       case "team":          return <StudioTeamView />;
@@ -97,7 +95,7 @@ export default function StudioPage() {
 
   return (
     <PageTransition>
-      <div className="flex h-screen w-full flex-col overflow-hidden bg-background relative selection:bg-primary/30">
+      <div className="flex h-full w-full flex-col overflow-hidden bg-background relative selection:bg-primary/30">
         <StudioTopbar />
         <WorkspaceTabs />
 

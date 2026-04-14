@@ -299,43 +299,44 @@ export default function CaricoLavoroPage() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="min-h-[550px] p-8 relative overflow-visible">
-                <ResponsiveContainer width="100%" height={500} debounce={50}>
-                  <BarChart 
-                    data={chartData} 
-                    layout="vertical" 
-                    margin={{ left: 100, right: 30, top: 10, bottom: 10 }}
-                    barCategoryGap={20}
-                  >
-                    <CartesianGrid strokeDasharray="4 4" stroke="#ffffff05" horizontal={false} />
-                    <XAxis type="number" hide={true} />
-                    <YAxis 
-                      dataKey="fullName" 
-                      type="category" 
-                      width={100}
-                      tick={(props: any) => {
-                        const { x, y, payload } = props;
-                        const user = chartData.find(u => u.fullName === payload.value);
-                        if (!user) return null;
-                        return (
-                          <g transform={`translate(${x - 90},${y - 20})`}>
-                            <foreignObject width="100" height="60">
-                              <div className="flex flex-col items-center justify-center space-y-1 pr-4">
-                                <div className={cn(
-                                  "h-10 w-10 rounded-full flex items-center justify-center text-[10px] font-[900] text-white border-2 border-background shadow-lg",
-                                  getAvatarColor(user.fullName)
-                                )}>
-                                  {getInitials(user.name, user.lastName)}
+              <CardContent className="p-8 relative overflow-visible">
+                <div style={{ height: Math.max(500, chartData.length * 70) }}>
+                  <ResponsiveContainer width="100%" height="100%" debounce={50}>
+                    <BarChart 
+                      data={chartData} 
+                      layout="vertical" 
+                      margin={{ left: 100, right: 30, top: 20, bottom: 20 }}
+                      barCategoryGap={25}
+                    >
+                      <CartesianGrid strokeDasharray="4 4" stroke="#ffffff05" horizontal={false} />
+                      <XAxis type="number" hide={true} />
+                      <YAxis 
+                        dataKey="fullName" 
+                        type="category" 
+                        width={100}
+                        tick={(props: any) => {
+                          const { x, y, payload } = props;
+                          const user = chartData.find(u => u.fullName === payload.value);
+                          if (!user) return null;
+                          return (
+                            <g transform={`translate(${x - 90},${y - 20})`}>
+                              <foreignObject width="100" height="50">
+                                <div className="flex flex-col items-center justify-center space-y-1 pr-4">
+                                  <div className={cn(
+                                    "h-8 w-8 rounded-full flex items-center justify-center text-[8px] font-[900] text-white border-2 border-background shadow-lg",
+                                    getAvatarColor(user.fullName)
+                                  )}>
+                                    {getInitials(user.name, user.lastName)}
+                                  </div>
+                                  <span className="text-[9px] font-black text-muted-foreground/80 uppercase text-center w-full truncate px-1">
+                                    {user.name}
+                                  </span>
                                 </div>
-                                <span className="text-[10px] font-black text-muted-foreground uppercase text-center w-full truncate">
-                                  {user.name}
-                                </span>
-                              </div>
-                            </foreignObject>
-                          </g>
-                        );
-                      }}
-                    />
+                              </foreignObject>
+                            </g>
+                          );
+                        }}
+                      />
                     <Tooltip 
                       cursor={{ fill: 'rgba(255,255,255,0.02)', radius: 12 }}
                       content={({ active, payload }) => {
@@ -383,8 +384,9 @@ export default function CaricoLavoroPage() {
                     </Bar>
                     <Bar dataKey="free" stackId="a" fill="hsl(var(--chart-2))" radius={[0, 10, 10, 0]} barSize={32} fillOpacity={0.15} stroke="hsl(var(--chart-2))" strokeWidth={1} strokeDasharray="2 2" />
                     <Bar dataKey="excess" stackId="a" fill="hsl(var(--destructive))" radius={[0, 10, 10, 0]} barSize={32} />
-                  </BarChart>
-                </ResponsiveContainer>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </CardContent>
             </Card>
 
@@ -444,7 +446,7 @@ export default function CaricoLavoroPage() {
 
                 <div className="space-y-6">
                   <p className="text-[10px] font-[900] uppercase text-muted-foreground tracking-[0.3em] pl-1">Performance Membri</p>
-                  <ScrollArea className="h-[200px] pr-4">
+                  <ScrollArea className="h-[450px] pr-4">
                      <div className="space-y-7">
                       {chartData.map((u) => (
                         <div key={u.id} className="space-y-2.5">

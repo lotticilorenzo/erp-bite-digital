@@ -91,6 +91,17 @@ class PreventivoStatus(str, enum.Enum):
     SCADUTO = "SCADUTO"
 
 
+class ClientStartDayType(str, enum.Enum):
+    STANDARD_1 = "STANDARD_1"  # Inizio il 1° del mese
+    CROSS_15 = "CROSS_15"      # Inizio il 15 del mese (cross-mensile)
+
+
+class PianificazioneStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    CONVERTED = "CONVERTED"
+
+
 # ── USER ──────────────────────────────────────────────────
 class User(Base):
     __tablename__ = "users"
@@ -158,6 +169,7 @@ class Cliente(Base):
     fic_cliente_id: Mapped[Optional[str]] = mapped_column(String(100))
     logo_url: Mapped[Optional[str]] = mapped_column(String(500))
     affidabilita: Mapped[Optional[str]] = mapped_column(String(10), default="MEDIA", server_default="MEDIA")
+    start_day_type: Mapped[ClientStartDayType] = mapped_column(SAEnum(ClientStartDayType, name="client_start_day_type"), default=ClientStartDayType.STANDARD_1, server_default="STANDARD_1")
     attivo: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -165,6 +177,7 @@ class Cliente(Base):
     progetti: Mapped[List["Progetto"]] = relationship(back_populates="cliente")
     commesse: Mapped[List["Commessa"]] = relationship(back_populates="cliente")
     preventivi: Mapped[List["Preventivo"]] = relationship(back_populates="cliente")
+    pianificazioni: Mapped[List["Pianificazione"]] = relationship(back_populates="cliente")
 
 
 # ── PROGETTO ──────────────────────────────────────────────
@@ -237,6 +250,7 @@ class Commessa(Base):
     costo_manodopera: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     fattura_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey('fatture_attive.id'), nullable=True)
     costi_diretti: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    pianificazione_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("pianificazioni.id"), nullable=True)
     data_inizio: Mapped[Optional[date]] = mapped_column(Date)
     data_fine: Mapped[Optional[date]] = mapped_column(Date)
     data_chiusura: Mapped[Optional[date]] = mapped_column(Date)
@@ -248,6 +262,7 @@ class Commessa(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     cliente: Mapped["Cliente"] = relationship(back_populates="commesse")
+    pianificazione: Mapped[Optional["Pianificazione"]] = relationship(back_populates="commessa")
     righe_progetto: Mapped[List["CommessaProgetto"]] = relationship(
         back_populates="commessa",
         cascade="all, delete-orphan"
@@ -398,6 +413,7 @@ class StudioNode(Base):
     
     # Links to actual entities
     linked_progetto_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id"), nullable=True, index=True)
+    linked_cliente_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("clienti.id"), nullable=True, index=True)
     linked_task_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=True, index=True)
     
     is_private: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -409,6 +425,7 @@ class StudioNode(Base):
     children: Mapped[List["StudioNode"]] = relationship("StudioNode", back_populates="parent", cascade="all, delete-orphan", order_by="StudioNode.order")
     user: Mapped[Optional["User"]] = relationship()
     progetto: Mapped[Optional["Progetto"]] = relationship()
+    cliente: Mapped[Optional["Cliente"]] = relationship()
     task: Mapped[Optional["Task"]] = relationship()
 
 
@@ -864,6 +881,37 @@ class PreventivoVoce(Base):
     ordine: Mapped[int] = mapped_column(Integer, default=0)
 
     preventivo: Mapped["Preventivo"] = relationship(back_populates="voci")
+
+
+# ── PIANIFICAZIONE ────────────────────────────────────────
+class Pianificazione(Base):
+    __tablename__ = "pianificazioni"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cliente_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("clienti.id"))
+    budget: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    stato: Mapped[PianificazioneStatus] = mapped_column(SAEnum(PianificazioneStatus, name="pianificazione_status"), default=PianificazioneStatus.PENDING)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    cliente: Mapped["Cliente"] = relationship(back_populates="pianificazioni")
+    commessa: Mapped[Optional["Commessa"]] = relationship(back_populates="pianificazione")
+    lavorazioni: Mapped[List["PianificazioneLavorazione"]] = relationship(back_populates="pianificazione", cascade="all, delete-orphan")
+
+
+class PianificazioneLavorazione(Base):
+    __tablename__ = "pianificazione_lavorazioni"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    pianificazione_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("pianificazioni.id", ondelete="CASCADE"))
+    tipo_lavorazione: Mapped[str] = mapped_column(String(255))
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    ore_previste: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
+    costo_orario_snapshot: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+
+    pianificazione: Mapped["Pianificazione"] = relationship(back_populates="lavorazioni")
+    user: Mapped["User"] = relationship()
 
 
 # ── BUDGET ────────────────────────────────────────────────

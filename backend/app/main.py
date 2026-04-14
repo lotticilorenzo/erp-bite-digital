@@ -131,9 +131,29 @@ async def ensure_schema_tables_on_startup():
     while retries > 0:
         try:
             async with engine.begin() as conn:
+                # Ensure Enums for Pianificazione & Client Start Day Type
+                await conn.execute(text("""
+                    DO $$ 
+                    BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'client_start_day_type') THEN
+                            CREATE TYPE client_start_day_type AS ENUM ('STANDARD_1', 'CROSS_15');
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'pianificazione_status') THEN
+                            CREATE TYPE pianificazione_status AS ENUM ('PENDING', 'ACCEPTED', 'CONVERTED');
+                        END IF;
+                    END $$;
+                """))
+                
                 await conn.run_sync(Base.metadata.create_all)
+                
+                # Migrations per tabelle esistenti
                 await conn.execute(text("ALTER TABLE clienti ADD COLUMN IF NOT EXISTS affidabilita VARCHAR(10) DEFAULT 'MEDIA'"))
                 await conn.execute(text("UPDATE clienti SET affidabilita = 'MEDIA' WHERE affidabilita IS NULL"))
+                
+                # Nuovi campi Pianificazione
+                await conn.execute(text("ALTER TABLE clienti ADD COLUMN IF NOT EXISTS start_day_type client_start_day_type DEFAULT 'STANDARD_1'"))
+                await conn.execute(text("ALTER TABLE commesse ADD COLUMN IF NOT EXISTS pianificazione_id UUID REFERENCES pianificazioni(id)"))
+                
             logger.info("Schema database garantito.")
             break
         except Exception as e:

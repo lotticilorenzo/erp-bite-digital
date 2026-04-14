@@ -2,6 +2,8 @@ export type UserRole = "ADMIN" | "PM" | "DIPENDENTE" | "FREELANCER";
 export type ProjectType = "RETAINER" | "ONE_OFF";
 export type ProjectStatus = "ATTIVO" | "CHIUSO";
 export type CommessaStatus = "APERTA" | "PRONTA_CHIUSURA" | "CHIUSA" | "FATTURATA" | "INCASSATA";
+export type ClientStartDayType = "STANDARD_1" | "CROSS_15";
+export type PianificazioneStatus = "PENDING" | "ACCEPTED" | "CONVERTED";
 export type ClienteAffidabilita = "ALTA" | "MEDIA" | "BASSA";
 export type TaskStatus = "DA_FARE" | "BOZZE_IDEE" | "DA_CORREGGERE" | "IN_REVIEW" | "PRONTO" | "PROGRAMMATO" | "PUBBLICATO";
 export type TimesheetStatus = "PENDING" | "APPROVATO" | "RIFIUTATO";
@@ -57,6 +59,7 @@ export interface Cliente {
   fic_cliente_id?: string;
   attivo: boolean;
   logo_url?: string | null;
+  start_day_type?: ClientStartDayType;
   drive_files?: any[];
   affidabilita?: ClienteAffidabilita | null;
   created_at?: string;
@@ -132,6 +135,8 @@ export interface Commessa {
   fattura_data?: string;
   fattura_importo?: number;
   fattura_stato?: string;
+  pianificazione_id?: string;
+  pianificazione?: Pianificazione;
   cliente?: Cliente;
 }
 
@@ -272,4 +277,30 @@ export interface HealthScore {
     avg_scope_creep: string;
     days_with_us: number;
   };
+}
+
+export interface PianificazioneLavorazione {
+  id: string;
+  pianificazione_id: string;
+  tipo_lavorazione: string;
+  user_id: string;
+  ore_previste: number;
+  costo_orario_snapshot: number;
+  user?: User;
+}
+
+export interface Pianificazione {
+  id: string;
+  cliente_id: string;
+  budget: number;
+  note?: string;
+  stato: PianificazioneStatus;
+  created_at: string;
+  updated_at: string;
+  cliente?: Cliente;
+  lavorazioni: PianificazioneLavorazione[];
+  // Calculated fields
+  costo_totale: number;
+  margine_euro: number;
+  margine_percentuale: number;
 }

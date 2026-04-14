@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ChatSidebar } from "./ChatSidebar";
 import { ChatConversation } from "./ChatConversation";
 import { useChat } from "@/hooks/useChat";
@@ -20,19 +20,27 @@ export function ChatHub() {
   } = useChat();
   const { setView } = useStudio();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [category, setCategory] = useState<'all' | 'projects' | 'team'>('all');
   
   // Set global view to 'chat' for breadcrumbs
   useEffect(() => {
     setView("chat");
   }, [setView]);
 
-  // Sync URL with active channel
+  // Sync URL with global active channel state
   useEffect(() => {
     const channelFromUrl = searchParams.get("channel");
+    
+    // Priority 1: URL has a channel -> update global state
     if (channelFromUrl && channelFromUrl !== activeChannelId) {
       setActiveChannelId(channelFromUrl);
-    } else if (!channelFromUrl && channels && channels.length > 0 && !activeChannelId) {
-      // Auto-select first channel (usually General)
+    } 
+    // Priority 2: Global state has a channel but URL doesn't -> update URL
+    else if (!channelFromUrl && activeChannelId) {
+      setSearchParams({ channel: activeChannelId }, { replace: true });
+    }
+    // Priority 3: Neither has a channel -> default to General
+    else if (!channelFromUrl && !activeChannelId && channels && channels.length > 0) {
       const general = channels.find((c: any) => c.tipo === 'GENERAL') || channels[0];
       setActiveChannelId(general.id);
       setSearchParams({ channel: general.id }, { replace: true });
@@ -74,11 +82,13 @@ export function ChatHub() {
         onStartDirectChat={handleStartDirectChat}
         onlineUsers={onlineUsers}
         unreadCounts={unreadCounts}
+        category={category}
+        onCategoryChange={setCategory}
         className="w-80 shrink-0 border-r border-border/10"
       />
 
       {/* Main Conversation Area (RIGHT) */}
-      <div className="flex-1 flex flex-col min-w-0 relative pb-20 md:pb-0">
+      <div className="flex-1 flex flex-col min-w-0 relative">
         <ChatConversation 
           channelId={activeChannelId} 
           className="h-full"

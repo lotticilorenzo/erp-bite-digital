@@ -11,6 +11,8 @@ import {
   Trash2,
   FolderPlus,
   Lock,
+  Plus,
+  Circle,
 } from "lucide-react";
 import type { StudioNode } from "@/types/studio";
 import { useStudio } from "@/hooks/useStudio";
@@ -151,12 +153,12 @@ export function FolderNode({ node, depth = 0 }: FolderNodeProps) {
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
           {/* Expand chevron for folders */}
           {isFolder && (
-            <div className="w-3.5 flex items-center justify-center shrink-0">
+            <div className="w-4 flex items-center justify-center shrink-0">
               {node.children.length > 0
                 ? isOpen
-                  ? <ChevronDown className="h-3 w-3" />
-                  : <ChevronRight className="h-3 w-3" />
-                : null
+                  ? <ChevronDown className="h-3 w-3 text-muted-foreground/40" />
+                  : <ChevronRight className="h-3 w-3 text-muted-foreground/40" />
+                : <Circle className="h-1 w-1 text-muted-foreground/20" />
               }
             </div>
           )}
@@ -181,54 +183,92 @@ export function FolderNode({ node, depth = 0 }: FolderNodeProps) {
           ) : (
             <span
               onDoubleClick={e => { e.stopPropagation(); setIsRenaming(true); }}
-              className={`truncate ${
+              className={`truncate transition-all duration-300 ${
                 isFolder
-                  ? "text-[10px] font-black uppercase tracking-widest text-muted-foreground group-hover/node:text-primary"
-                  : "text-[11px]"
-              } transition-colors`}
+                  ? "text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground/80 group-hover/node:text-primary"
+                  : "text-[11.5px] font-medium text-slate-300 group-hover/node:text-white"
+              }`}
             >
               {node.nome}
             </span>
           )}
         </div>
 
+        {/* Count Badge (only if children > 0) */}
+        {isFolder && node.children.length > 0 && !isOpen && (
+          <div className="flex items-center justify-center h-4.5 min-w-[18px] px-1 rounded-md bg-white/5 border border-white/5 text-[9px] font-black text-muted-foreground/60 mr-1 animate-in fade-in zoom-in duration-300">
+            {node.children.length}
+          </div>
+        )}
+
         {node.is_private && <Lock className="h-2.5 w-2.5 text-amber-500/50 mr-1 shrink-0" />}
 
-        {/* Context menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
-            <button className="opacity-0 group-hover/node:opacity-100 p-1 hover:bg-white/10 rounded-md transition-all shrink-0">
-              <MoreVertical className="h-3 w-3" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-card border-border text-white w-44">
-            <DropdownMenuItem
-              className="gap-2 text-[11px] font-bold cursor-pointer"
-              onClick={e => { e.stopPropagation(); setIsRenaming(true); setRenameValue(node.nome); }}
-            >
-              <Edit2 className="h-3 w-3" /> Rinomina
-            </DropdownMenuItem>
-            {isFolder && (
+        <div className="flex items-center gap-0.5 opacity-0 group-hover/node:opacity-100 transition-all duration-300 translate-x-1 group-hover/node:translate-x-0">
+          {/* Quick Add Button for Folders */}
+          {isFolder && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
+                <button className="p-1 hover:text-primary hover:bg-white/5 rounded-md transition-all">
+                  <Plus className="h-3 w-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-card border-border text-white w-48 shadow-2xl rounded-xl">
+                <DropdownMenuItem
+                  className="gap-2 text-xs font-bold cursor-pointer"
+                  onClick={e => {
+                    e.stopPropagation();
+                    setIsCreatingChild(true);
+                    setIsOpen(true);
+                  }}
+                >
+                  <FolderPlus className="h-3.5 w-3.5" /> Nuova Sottocartella
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="gap-2 text-xs font-bold cursor-pointer"
+                  onClick={e => {
+                    e.stopPropagation();
+                    toast.info("Aggiunta progetto in arrivo...");
+                  }}
+                >
+                  <Hash className="h-3.5 w-3.5 text-blue-400" /> Collega Progetto
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="gap-2 text-xs font-bold cursor-pointer"
+                  onClick={e => {
+                    e.stopPropagation();
+                    toast.info("Aggiunta cliente in arrivo...");
+                  }}
+                >
+                  <Folder className="h-3.5 w-3.5 text-primary" /> Collega Cliente
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {/* Context menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
+              <button className="p-1 hover:text-white hover:bg-white/5 rounded-md transition-all">
+                <MoreVertical className="h-3 w-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-card border-border text-white w-44 shadow-2xl rounded-xl">
               <DropdownMenuItem
                 className="gap-2 text-[11px] font-bold cursor-pointer"
-                onClick={e => {
-                  e.stopPropagation();
-                  setIsCreatingChild(true);
-                  setIsOpen(true);
-                }}
+                onClick={e => { e.stopPropagation(); setIsRenaming(true); setRenameValue(node.nome); }}
               >
-                <FolderPlus className="h-3 w-3" /> Nuova Sottocartella
+                <Edit2 className="h-3 w-3 text-muted-foreground" /> Rinomina
               </DropdownMenuItem>
-            )}
-            <DropdownMenuSeparator className="bg-border/30" />
-            <DropdownMenuItem
-              className="gap-2 text-[11px] font-bold text-destructive cursor-pointer focus:text-destructive"
-              onClick={e => { e.stopPropagation(); handleDelete(); }}
-            >
-              <Trash2 className="h-3 w-3" /> Elimina
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <DropdownMenuSeparator className="bg-border/30" />
+              <DropdownMenuItem
+                className="gap-2 text-[11px] font-bold text-destructive cursor-pointer focus:text-destructive"
+                onClick={e => { e.stopPropagation(); handleDelete(); }}
+              >
+                <Trash2 className="h-3 w-3" /> Elimina
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* Children */}

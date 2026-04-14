@@ -92,6 +92,7 @@ const emptyForm = (): Partial<Cliente> => ({
   note: "",
   attivo: true,
   affidabilita: "MEDIA",
+  start_day_type: "STANDARD_1",
 });
 
 export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProps) {
@@ -507,6 +508,20 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
                 <option value="ALTA">🟢 Alta</option>
                 <option value="MEDIA">🟡 Media</option>
                 <option value="BASSA">🔴 Bassa</option>
+              </select>
+            </Field>
+
+            {/* ═══ PREFERENZE FATTURAZIONE ════════════════════════ */}
+            <SectionTitle label="Pianificazione & Fatturazione" />
+
+            <Field label="Inizio Commessa Mensile" hint="Determina le date di competenza">
+              <select
+                className={SELECT_CLS}
+                value={form.start_day_type ?? "STANDARD_1"}
+                onChange={(e) => set("start_day_type", e.target.value as any)}
+              >
+                <option value="STANDARD_1">Standard (1° del mese)</option>
+                <option value="CROSS_15">Mezzo mese (Dal 15 al 14)</option>
               </select>
             </Field>
 

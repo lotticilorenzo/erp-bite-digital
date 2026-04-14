@@ -96,7 +96,48 @@ async def get_channels(
     current_user: User = Depends(get_current_user)
 ):
     """Recupera tutti i canali dell'utente con l'anteprima dell'ultimo messaggio (Ottimizzato)."""
-    # 1. Recupera i canali
+    # ── ENSURE GENERAL CHANNEL EXISTS & USER IS MEMBER ────────────────
+    # Cerca il canale GENERAL
+    stmt_gen = select(ChatCanale).where(ChatCanale.tipo == 'GENERAL')
+    res_gen = await db.execute(stmt_gen)
+    general_channel = res_gen.scalar_one_or_none()
+    
+    if not general_channel:
+        # Crea il canale generale se non esiste
+        general_channel = ChatCanale(
+            id=uuid.uuid4(),
+            nome="Chat Generale",
+            tipo="GENERAL",
+            logo_url="https://api.dicebear.com/7.x/shapes/svg?seed=general"
+        )
+        db.add(general_channel)
+        await db.flush()
+        
+        # Aggiungi un messaggio di benvenuto
+        welcome_msg = ChatMessaggio(
+            id=uuid.uuid4(),
+            canale_id=general_channel.id,
+            autore_id=current_user.id,
+            contenuto="Benvenuti nella Chat Generale di Bite! Qui possiamo collaborare e scambiare aggiornamenti veloci con tutto il team. 🚀",
+            tipo="testo"
+        )
+        db.add(welcome_msg)
+        
+        # Aggiungi tutti gli utenti attivi (inizializzazione)
+        from app.services.services import list_users
+        all_users = await list_users(db, attivo=True)
+        for u in all_users:
+            db.add(ChatMembro(canale_id=general_channel.id, user_id=u.id, ruolo='MEMBER'))
+        await db.commit()
+    else:
+        # Verifica se l'utente corrente è membro (Lazy membership)
+        stmt_m = select(ChatMembro).where(ChatMembro.canale_id == general_channel.id, ChatMembro.user_id == current_user.id)
+        res_m = await db.execute(stmt_m)
+        if not res_m.scalar_one_or_none():
+            db.add(ChatMembro(canale_id=general_channel.id, user_id=current_user.id, ruolo='MEMBER'))
+            await db.commit()
+
+    # 1. Recupera i canali (inclusi quelli appena aggiunti/creati)
     stmt = select(ChatCanale).join(ChatMembro).where(ChatMembro.user_id == current_user.id)\
         .options(selectinload(ChatCanale.membri).joinedload(ChatMembro.user))
     res = await db.execute(stmt)

@@ -181,6 +181,7 @@ async def get_studio_hierarchy(
             "icon": node.icon,
             "color": node.color,
             "linked_progetto_id": node.linked_progetto_id,
+            "linked_cliente_id": node.linked_cliente_id,
             "linked_task_id": node.linked_task_id,
             "is_private": node.is_private,
             "order": node.order,

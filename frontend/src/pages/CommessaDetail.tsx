@@ -18,6 +18,7 @@ import {
   Lock,
   Unlock,
   ArrowRight,
+  Calculator,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,8 @@ import { useProgetti } from "@/hooks/useProgetti";
 import { format, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 import { useState, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import api from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { 
   Dialog, 
@@ -58,6 +61,7 @@ import { CommessaReportPDF } from "@/components/commesse/CommessaReportPDF";
 import { useTimesheets } from "@/hooks/useTimesheet";
 import { Download } from "lucide-react";
 import { ClientAvatar } from "@/components/common/ClientAvatar";
+import { PlanningDialog } from "@/components/planning/PlanningDialog";
 import { toast } from "sonner";
 
 export default function CommessaDetailPage() {
@@ -68,6 +72,19 @@ export default function CommessaDetailPage() {
   const { mutate: updateCommessa, isPending: isUpdating } = useUpdateCommessa();
   const { data: progettiCliente } = useProgetti(commessa?.cliente_id);
   const { user } = useAuth();
+
+  // REAL CLICKUP SYNC Logic
+  const { data: clickupData, isLoading: isClickupLoading } = useQuery({
+    queryKey: ['clickup-progress', commessa?.cliente?.ragione_sociale],
+    queryFn: async () => {
+      if (!commessa?.cliente?.ragione_sociale) return null;
+      const res = await api.get(`/clickup/progress/${encodeURIComponent(commessa.cliente.ragione_sociale)}`);
+      return res.data;
+    },
+    enabled: !!commessa?.cliente?.ragione_sociale
+  });
+
+  const [isPlanningDialogOpen, setIsPlanningDialogOpen] = useState(false);
   
   const [editOreContratto, setEditOreContratto] = useState<string>("0");
   const [isAddingProject, setIsAddingProject] = useState(false);
@@ -624,6 +641,107 @@ export default function CommessaDetailPage() {
             </CardContent>
           </Card>
 
+          {/* ═══ ANALISI VS PIANIFICAZIONE ══════════════════════ */}
+          {commessa.pianificazione && (
+            <Card className="bg-card border-border text-white overflow-hidden shadow-[0_0_30px_rgba(139,92,246,0.1)]">
+              <div className="h-1 bg-gradient-to-r from-purple-500 to-indigo-500" />
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                  <Target className="w-4 h-4 text-purple-400" />
+                  Analisi vs Pianificazione
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <ComparisonItem 
+                    label="Budget" 
+                    planned={Number(commessa.pianificazione.budget)} 
+                    actual={Number(commessa.valore_fatturabile)} 
+                    symbol="€"
+                  />
+                  <ComparisonItem 
+                    label="Costi Personale" 
+                    planned={Number(commessa.pianificazione.costo_totale)} 
+                    actual={Number(commessa.costo_manodopera)} 
+                    symbol="€"
+                    invert
+                  />
+                  <ComparisonItem 
+                    label="Margine" 
+                    planned={commessa.pianificazione.margine_percentuale} 
+                    actual={commessa.margine_percentuale || 0} 
+                    symbol="%"
+                  />
+                  <ComparisonItem 
+                    label="Ore" 
+                    planned={Number(commessa.pianificazione.lavorazioni.reduce((acc: any, l: any) => acc + Number(l.ore_previste), 0))} 
+                    actual={oreReali} 
+                    symbol="h"
+                    invert
+                  />
+                </div>
+
+                <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[9px] font-black uppercase tracking-widest">
+                    Target Margine: {commessa.pianificazione.margine_percentuale.toFixed(1)}%
+                  </Badge>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setIsPlanningDialogOpen(true)}
+                    className="h-6 text-[9px] font-black uppercase tracking-widest text-purple-400 hover:text-white hover:bg-purple-500/10"
+                  >
+                    Dettaglio Piano
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ═══ CLICKUP PROGRESS ══════════════════════════════ */}
+          <Card className="bg-card border-border text-white overflow-hidden">
+            <CardHeader className="pb-3 uppercase">
+              <CardTitle className="text-[11px] font-black flex items-center gap-2 text-slate-500">
+                <div className={`w-2 h-2 rounded-full ${isClickupLoading ? 'bg-slate-500 animate-pulse' : 'bg-[#7b68ee]'}`} />
+                Progresso ClickUp
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isClickupLoading ? (
+                <div className="space-y-4 animate-pulse">
+                   <div className="h-4 w-3/4 bg-muted rounded" />
+                   <div className="h-2 w-full bg-muted rounded" />
+                </div>
+              ) : clickupData?.folder_found ? (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-end mb-1">
+                    <div>
+                      <p className="text-xs font-bold text-white">Project Pipeline</p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Sync con ClickUp Folder "{commessa.cliente?.ragione_sociale}"</p>
+                    </div>
+                    <span className="text-lg font-black text-purple-400">{clickupData.percentage}%</span>
+                  </div>
+                  <div className="h-2 w-full bg-slate-800/50 rounded-full overflow-hidden p-[1px] border border-white/5">
+                    <div 
+                      className="h-full bg-[#7b68ee] rounded-full shadow-[0_0_10px_rgba(123,104,238,0.4)] transition-all duration-1000" 
+                      style={{ width: `${clickupData.percentage}%` }} 
+                    />
+                  </div>
+                  <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-[#475569]">
+                    <span>{clickupData.tasks_closed} Task Chiuse</span>
+                    <span>{clickupData.tasks_total - clickupData.tasks_closed} Task Aperte</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-4 text-center border border-dashed border-border rounded-xl">
+                  <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    Folder ClickUp non trovato
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card className="bg-card border-border text-white">
             <CardHeader>
               <CardTitle className="text-lg font-medium flex items-center gap-2">
@@ -699,6 +817,33 @@ export default function CommessaDetailPage() {
             </CardContent>
           </Card>
         </div>
+      </div>
+      <PlanningDialog
+        open={isPlanningDialogOpen}
+        onOpenChange={setIsPlanningDialogOpen}
+        plan={commessa?.pianificazione}
+      />
+    </div>
+  );
+}
+
+function ComparisonItem({ label, planned, actual, symbol, invert = false }: any) {
+  const diff = actual - planned;
+  const isPositiveStatus = invert ? diff <= 0 : diff >= 0;
+  
+  return (
+    <div className="space-y-1.5 p-3 rounded-xl bg-white/5 border border-white/5">
+      <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{label}</p>
+      <div className="flex flex-col">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-sm font-black text-white">
+            {symbol}{actual.toLocaleString()}
+          </span>
+          <span className={`text-[10px] font-bold ${isPositiveStatus ? 'text-emerald-400' : 'text-red-400'}`}>
+            {diff > 0 ? '+' : ''}{symbol === '%' ? diff.toFixed(1) : diff.toLocaleString()}{symbol}
+          </span>
+        </div>
+        <p className="text-[9px] text-[#475569] font-medium">Previsto: {symbol}{planned.toLocaleString()}</p>
       </div>
     </div>
   );

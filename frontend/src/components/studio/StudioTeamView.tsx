@@ -11,12 +11,14 @@ import {
   Phone,
   Euro,
   MapPin,
-  CreditCard
+  CreditCard,
+  MessageSquare
 } from "lucide-react";
 import { useUsers } from "@/hooks/useUsers";
 import { useTasks } from "@/hooks/useTasks";
 import { useUserCapacity } from "@/hooks/useML";
 import { useStudio } from "@/hooks/useStudio";
+import { useChat } from "@/hooks/useChat";
 import { useProgetti } from "@/hooks/useProgetti";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -126,7 +128,8 @@ function TeamMemberCard({
   onToggle: () => void;
   onEdit: () => void;
 }) {
-  const { selectTask } = useStudio();
+  const { selectTask, setView } = useStudio();
+  const { startDirectChat } = useChat();
   const { data: capacity } = useUserCapacity(user.id);
   const { data: allTasks = [] } = useTasks({ assegnatario_id: user.id, parent_only: false });
 
@@ -235,6 +238,23 @@ function TeamMemberCard({
             >
               <Edit2 className="h-3 w-3 mr-1.5" />
               Modifica
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={async (e) => {
+                e.stopPropagation();
+                const channel = await startDirectChat(user.id);
+                if (channel) {
+                  setView("chat");
+                  // The URL sync will happen in ChatHub OR we can do it here if needed
+                  // but ChatHub's effect should handle it if activeChannelId is global.
+                }
+              }}
+              className="h-7 text-[9px] font-black uppercase tracking-widest text-[#10b981] hover:text-white hover:bg-[#10b981]/20"
+            >
+              <MessageSquare className="h-3 w-3 mr-1.5" />
+              Messaggio
             </Button>
             {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground/30" /> : <ChevronDown className="h-4 w-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />}
         </div>

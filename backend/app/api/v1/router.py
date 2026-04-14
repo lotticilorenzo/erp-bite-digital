@@ -62,6 +62,7 @@ from app.services.services import (
 from app.api.v1 import timer
 from app.api.v1 import ai
 from app.api.v1 import planning
+from app.api.v1 import pianificazioni
 from app.api.v1 import notifications
 from app.api.v1 import assenze
 from app.api.v1 import risorse_servizi
@@ -95,6 +96,7 @@ router = APIRouter()
 router.include_router(timer.router)
 router.include_router(ai.router)
 router.include_router(planning.router)
+router.include_router(pianificazioni.router)
 router.include_router(risorse.router)
 router.include_router(risorse_servizi.router)
 router.include_router(studio.router)

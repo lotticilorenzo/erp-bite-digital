@@ -7,7 +7,8 @@ from typing import Optional, List, Literal
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from app.models.models import (
     UserRole, ProjectType, ProjectStatus, CommessaStatus,
-    TaskStatus, TimesheetStatus, CostoTipo, PreventivoStatus
+    TaskStatus, TimesheetStatus, CostoTipo, PreventivoStatus,
+    ClientStartDayType, PianificazioneStatus
 )
 
 
@@ -91,6 +92,7 @@ class StudioNodeBase(BaseModel):
     icon: Optional[str] = None
     color: Optional[str] = None
     linked_progetto_id: Optional[uuid.UUID] = None
+    linked_cliente_id: Optional[uuid.UUID] = None
     linked_task_id: Optional[uuid.UUID] = None
     is_private: bool = False
     order: int = 0
@@ -105,6 +107,7 @@ class StudioNodeUpdate(BaseModel):
     icon: Optional[str] = None
     color: Optional[str] = None
     linked_progetto_id: Optional[uuid.UUID] = None
+    linked_cliente_id: Optional[uuid.UUID] = None
     linked_task_id: Optional[uuid.UUID] = None
     is_private: Optional[bool] = None
     order: Optional[int] = None
@@ -114,6 +117,7 @@ class StudioNodeOut(StudioNodeBase):
     user_id: Optional[uuid.UUID]
     created_at: datetime
     updated_at: datetime
+    linked_cliente_id: Optional[uuid.UUID] = None
     children: List["StudioNodeOut"] = []
 
     class Config:
@@ -209,6 +213,7 @@ class ClienteCreate(BaseModel):
     affidabilita: Optional[ClienteAffidabilita] = "MEDIA"
     drive_files: Optional[list] = None
     logo_url: Optional[str] = Field(None, max_length=500)
+    start_day_type: ClientStartDayType = ClientStartDayType.STANDARD_1
 
 class ClienteUpdate(BaseModel):
     ragione_sociale: Optional[str] = None
@@ -238,6 +243,7 @@ class ClienteUpdate(BaseModel):
     affidabilita: Optional[ClienteAffidabilita] = None
     drive_files: Optional[list] = None
     logo_url: Optional[str] = None
+    start_day_type: Optional[ClientStartDayType] = None
 
 class ClienteOut(OrmBase):
     id: uuid.UUID
@@ -269,6 +275,7 @@ class ClienteOut(OrmBase):
     fic_cliente_id: Optional[str] = None
     drive_files: Optional[list] = None
     logo_url: Optional[str] = None
+    start_day_type: ClientStartDayType = ClientStartDayType.STANDARD_1
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -401,6 +408,7 @@ class CommessaCreate(BaseModel):
     costi_diretti: Decimal = Decimal("0")
     ore_contratto: Decimal = Decimal("0")
     note: Optional[str] = None
+    pianificazione_id: Optional[uuid.UUID] = None
 
     @field_validator("costi_diretti", "ore_contratto")
     @classmethod
@@ -439,6 +447,7 @@ class CommessaUpdate(BaseModel):
     fattura_id: Optional[uuid.UUID] = None
     data_inizio: Optional[date] = None
     data_fine: Optional[date] = None
+    pianificazione_id: Optional[uuid.UUID] = None
 
     @model_validator(mode="after")
     def validate_date_range(self):
@@ -482,8 +491,9 @@ class CommessaOut(OrmBase):
     fattura_data: Optional[date] = None
     fattura_importo: Optional[Decimal] = None
     fattura_stato: Optional[str] = None
-    piano_id: Optional[uuid.UUID] = None
     preventivo: Optional[Decimal] = None
+    pianificazione_id: Optional[uuid.UUID] = None
+    pianificazione: Optional['PianificazioneOut'] = None
 
 class CommessaWithCliente(CommessaOut):
     cliente: ClienteOut
@@ -938,6 +948,49 @@ class PreventivoOut(OrmBase):
     cliente: Optional[ClienteOut] = None
 
 
+# ── PIANIFICAZIONE ────────────────────────────────────────
+class PianificazioneLavorazioneBase(BaseModel):
+    tipo_lavorazione: str
+    user_id: uuid.UUID
+    ore_previste: Decimal = Decimal("0")
+    costo_orario_snapshot: Decimal = Decimal("0")
+
+class PianificazioneLavorazioneCreate(PianificazioneLavorazioneBase):
+    pass
+
+class PianificazioneLavorazioneOut(OrmBase, PianificazioneLavorazioneBase):
+    id: uuid.UUID
+    user: Optional[UserOut] = None
+
+class PianificazioneBase(BaseModel):
+    cliente_id: uuid.UUID
+    budget: Decimal = Decimal("0")
+    note: Optional[str] = None
+    stato: PianificazioneStatus = PianificazioneStatus.PENDING
+
+class PianificazioneCreate(PianificazioneBase):
+    lavorazioni: List[PianificazioneLavorazioneCreate] = []
+
+class PianificazioneUpdate(BaseModel):
+    cliente_id: Optional[uuid.UUID] = None
+    budget: Optional[Decimal] = None
+    note: Optional[str] = None
+    stato: Optional[PianificazioneStatus] = None
+    lavorazioni: Optional[List[PianificazioneLavorazioneCreate]] = None
+
+class PianificazioneOut(OrmBase, PianificazioneBase):
+    id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+    cliente: Optional[ClienteOut] = None
+    lavorazioni: List[PianificazioneLavorazioneOut] = []
+    
+    # Calcolati
+    costo_totale: Decimal = Decimal("0")
+    margine_euro: Decimal = Decimal("0")
+    margine_percentuale: float = 0
+
+
 # ── BUDGET SCHEMAS ────────────────────────────────────────
 class BudgetCategoryBase(BaseModel):
     nome: str
@@ -1222,4 +1275,40 @@ class DocumentNodeOut(OrmBase):
     children: List['DocumentNodeOut'] = []
 
 DocumentNodeOut.model_rebuild()
+
+# ── PIANIFICAZIONE ────────────────────────────────────────
+class PianificazioneLavorazioneBase(BaseModel):
+    tipo_lavorazione: str
+    user_id: Optional[uuid.UUID] = None
+    ore_previste: Decimal = Decimal("0")
+    costo_orario_snapshot: Decimal = Decimal("0")
+    note: Optional[str] = None
+
+class PianificazioneLavorazioneCreate(PianificazioneLavorazioneBase):
+    pass
+
+class PianificazioneLavorazioneOut(OrmBase, PianificazioneLavorazioneBase):
+    id: uuid.UUID
+    pianificazione_id: uuid.UUID
+    user: Optional[UserOut] = None
+
+class PianificazioneBase(BaseModel):
+    cliente_id: uuid.UUID
+    budget: Decimal = Decimal("0")
+    note: Optional[str] = None
+    stato: PianificazioneStatus = PianificazioneStatus.PENDING
+
+class PianificazioneCreate(PianificazioneBase):
+    lavorazioni: List[PianificazioneLavorazioneCreate] = []
+
+class PianificazioneOut(OrmBase, PianificazioneBase):
+    id: uuid.UUID
+    lavorazioni: List[PianificazioneLavorazioneOut] = []
+    created_at: datetime
+    updated_at: datetime
+
+# ── Update Forward Refs ──
+CommessaOut.model_rebuild()
+PianificazioneOut.model_rebuild()
+PianificazioneLavorazioneOut.model_rebuild()
 
