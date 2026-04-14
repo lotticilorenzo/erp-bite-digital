@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 import type { WikiCategory, WikiArticle } from "@/types/wiki";
 
 export function useWiki() {
@@ -39,6 +40,9 @@ export function useWiki() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["wiki-articles"], exact: false });
     },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nella creazione dell'articolo");
+    },
   });
 
   const updateArticle = useMutation({
@@ -50,6 +54,9 @@ export function useWiki() {
       queryClient.invalidateQueries({ queryKey: ["wiki-articles"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["wiki-article", data.id], exact: false });
     },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nel salvataggio dell'articolo");
+    },
   });
 
   const deleteArticle = useMutation({
@@ -58,6 +65,9 @@ export function useWiki() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["wiki-articles"], exact: false });
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nell'eliminazione dell'articolo");
     },
   });
 

@@ -29,8 +29,8 @@ const BudgetPage = React.lazy(() => import("./components/budget/BudgetPage"));
 const WikiPage = React.lazy(() => import("./components/wiki/WikiPage"));
 const CRMPage = React.lazy(() => import("./pages/CRM"));
 const LeadDetailPage = React.lazy(() => import("./pages/LeadDetail"));
-import Fornitori from "./pages/Fornitori";
-import SupplierCategoryManager from "./pages/admin/SupplierCategoryManager";
+const Fornitori = React.lazy(() => import("./pages/Fornitori"));
+const SupplierCategoryManager = React.lazy(() => import("./pages/admin/SupplierCategoryManager"));
 
 const SettingsLayout = React.lazy(() => import("./pages/Settings"));
 const ProfileSettings = React.lazy(() => import("./pages/settings/ProfileSettings"));
@@ -43,10 +43,16 @@ const ResetPasswordPage = React.lazy(() => import("./pages/ResetPassword"));
 const PopoutPage = React.lazy(() => import("./pages/PopoutPage"));
 
 import { ThemeProvider } from "@/context/ThemeContext";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
+
+// Ruoli con accesso limitato al solo Studio OS
+const STUDIO_ONLY_ROLES = ["COLLABORATORE", "DIPENDENTE", "FREELANCER"];
 
 function App() {
   const { user, isLoading } = useAuth();
   const location = useLocation();
+
+  const isStudioOnlyUser = user ? STUDIO_ONLY_ROLES.includes(user.ruolo?.toUpperCase() ?? "") : false;
   
   if (isLoading) {
     return (
@@ -58,6 +64,7 @@ function App() {
 
   return (
     <ThemeProvider>
+      <ErrorBoundary>
       <Suspense fallback={
         <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
           <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
@@ -65,7 +72,7 @@ function App() {
       }>
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
-          <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" />} />
+          <Route path="/login" element={!user ? <LoginPage /> : <Navigate to={isStudioOnlyUser ? "/studio-os" : "/"} />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           
@@ -73,9 +80,14 @@ function App() {
             path="/"
             element={
               user ? (
-                <StudioProvider>
-                  <DashboardLayout />
-                </StudioProvider>
+                // Redirect automatico: utenti solo-studio vanno a Studio OS
+                isStudioOnlyUser ? (
+                  <Navigate to="/studio-os" replace />
+                ) : (
+                  <StudioProvider>
+                    <DashboardLayout />
+                  </StudioProvider>
+                )
               ) : (
                 <Navigate to="/login" />
               )
@@ -125,6 +137,7 @@ function App() {
         </Routes>
       </AnimatePresence>
       </Suspense>
+      </ErrorBoundary>
       <Toaster position="top-right" richColors closeButton />
     </ThemeProvider>
   );

@@ -60,7 +60,7 @@ function useTimerDisplay() {
 }
 
 export function StudioTopbar() {
-  const { nav, setView, currentFolder, currentList } = useStudio();
+  const { nav, setView, currentFolder, currentList, selectList } = useStudio();
   const timerInfo = useTimerDisplay();
 
   return (
@@ -136,7 +136,7 @@ export function StudioTopbar() {
             size="sm"
             onClick={() => setView("overview")}
             className={`h-7 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-300 ${
-              nav.view === "overview" ? "bg-primary text-white shadow-lg" : "text-[#475569] hover:text-muted-foreground"
+              nav.view === "overview" ? "bg-primary text-white shadow-lg" : "text-muted-foreground/60 hover:text-muted-foreground"
             }`}
           >
             <LayoutDashboard className="h-3.5 w-3.5 mr-1.5" />
@@ -147,7 +147,7 @@ export function StudioTopbar() {
             size="sm"
             onClick={() => setView("list")}
             className={`h-7 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-300 ${
-              nav.view === "list" ? "bg-primary text-white shadow-lg" : "text-[#475569] hover:text-muted-foreground"
+              nav.view === "list" ? "bg-primary text-white shadow-lg" : "text-muted-foreground/60 hover:text-muted-foreground"
             }`}
           >
             <ListTodo className="h-3.5 w-3.5 mr-1.5" />
@@ -158,7 +158,7 @@ export function StudioTopbar() {
             size="sm"
             onClick={() => setView("kanban")}
             className={`h-7 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-300 ${
-              nav.view === "kanban" ? "bg-primary text-white shadow-lg" : "text-[#475569] hover:text-muted-foreground"
+              nav.view === "kanban" ? "bg-primary text-white shadow-lg" : "text-muted-foreground/60 hover:text-muted-foreground"
             }`}
           >
             <Layout className="h-3.5 w-3.5 mr-1.5" />
@@ -169,7 +169,7 @@ export function StudioTopbar() {
             size="sm"
             onClick={() => setView("cal")}
             className={`h-7 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-300 ${
-              nav.view === "cal" ? "bg-primary text-white shadow-lg" : "text-[#475569] hover:text-muted-foreground"
+              nav.view === "cal" ? "bg-primary text-white shadow-lg" : "text-muted-foreground/60 hover:text-muted-foreground"
             }`}
           >
             <CalendarIcon className="h-3.5 w-3.5 mr-1.5" />
@@ -180,7 +180,7 @@ export function StudioTopbar() {
             size="sm"
             onClick={() => setView("team")}
             className={`h-7 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-300 ${
-              nav.view === "team" ? "bg-primary text-white shadow-lg" : "text-[#475569] hover:text-muted-foreground"
+              nav.view === "team" ? "bg-primary text-white shadow-lg" : "text-muted-foreground/60 hover:text-muted-foreground"
             }`}
           >
             <Users className="h-3.5 w-3.5 mr-1.5" />
@@ -192,10 +192,10 @@ export function StudioTopbar() {
       <div className="flex items-center gap-3">
         {/* Active timer pill */}
         {timerInfo && (
-          <div className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-full px-3 py-1 shadow-[0_0_12px_hsl(var(--primary)/0.2)]">
+          <div className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-full px-4 py-1.5 shadow-[0_0_12px_hsl(var(--primary)/0.2)]">
             <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-            <Timer className="h-3 w-3 text-primary" />
-            <span className="text-[11px] font-mono font-bold text-primary">{timerInfo.timeStr}</span>
+            <Timer className="h-3.5 w-3.5 text-primary" />
+            <span className="text-[11px] font-black text-primary tabular-nums uppercase tracking-widest">{timerInfo.timeStr}</span>
             {timerInfo.task && (
               <span className="text-[10px] text-primary/70 font-medium max-w-[120px] truncate">
                 {timerInfo.task.title}

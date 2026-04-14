@@ -35,6 +35,7 @@ import { QuickCalculator } from "@/components/analytics/QuickCalculator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import { AnalyticsReportPDF } from "@/components/analytics/AnalyticsReportPDF";
+import { PageTransition } from "@/components/common/PageTransition";
 import { Progress } from "@/components/ui/progress";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -1010,8 +1011,8 @@ export default function Analytics() {
             <CardHeader className="border-b border-border/30">
               <CardTitle className="text-sm font-black uppercase tracking-widest text-foreground">Trend Margine</CardTitle>
             </CardHeader>
-            <CardContent className="h-[300px] pt-8">
-              <ResponsiveContainer width="100%" height="100%">
+            <CardContent className="h-[300px] pt-8 min-h-[300px]">
+              <ResponsiveContainer width="100%" height="100%" debounce={50}>
                  <LineChart data={[...clientCommesse].reverse().map((c) => ({
                    month: formatDate(parseISO(c.mese_competenza), "MMM", { locale: it }).toUpperCase(),
                    margin: Number(c.margine_percentuale || 0)
@@ -1030,14 +1031,18 @@ export default function Analytics() {
   }
 
   return (
-    <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <h1 className="text-3xl font-black text-foreground tracking-tighter uppercase italic underline decoration-primary/30 decoration-4 underline-offset-8">
-            Business <span className="text-primary not-italic">Intelligence</span>
-          </h1>
-          <p className="mt-3 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/80">Analisi avanzata performance e marginalità | {periodLabel}</p>
-        </div>
+    <PageTransition>
+      <div className="p-8 space-y-12 bg-background selection:bg-primary/30 pb-20">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+            <h1 className="flex items-center gap-3 text-4xl font-black tracking-tighter text-foreground uppercase italic underline decoration-primary/30 decoration-8 underline-offset-[12px]">
+              Business <span className="font-thin text-muted-foreground/30 not-italic">-</span>{" "}
+              <span className="text-primary not-italic">Intelligence</span>
+            </h1>
+            <p className="mt-6 text-[11px] font-bold uppercase tracking-[0.3em] text-muted-foreground/60">
+              Analisi avanzata performance e marginalità | {periodLabel}
+            </p>
+          </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-start gap-4">
           <div className="flex flex-col gap-3 rounded-2xl border border-border/50 bg-card/50 p-3 shadow-sm">
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
@@ -1147,8 +1152,7 @@ export default function Analytics() {
           }}
         />
       </div>
-      </div>
-      
+
       {/* Cash Flow & Liquidità */}
       <div className="lg:col-span-3 mt-12 bg-card/40 border border-border/50 rounded-[2.5rem] p-10 shadow-xl">
         <div className="flex items-center justify-between mb-10">
@@ -1289,7 +1293,7 @@ export default function Analytics() {
             </div>
           </CardHeader>
           <CardContent className="pt-8 h-[350px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" debounce={50}>
               <BarChart
                 data={trendData}
                 onClick={(event: any) => {
@@ -1344,7 +1348,7 @@ export default function Analytics() {
             </div>
           </CardHeader>
           <CardContent className="pt-8 h-[350px]">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" debounce={50}>
               <LineChart
                 data={trendData}
                 onClick={(event: any) => {
@@ -1541,8 +1545,6 @@ export default function Analytics() {
           </CardContent>
         </Card>
 
-        {/* Sezione Benchmark & Trend */}
-        <BenchmarkSection data={benchmarkData} />
 
         {/* Efficiency Chart */}
         <Card className="lg:col-span-1 bg-card border-border/50 shadow-2xl rounded-3xl">
@@ -1554,8 +1556,8 @@ export default function Analytics() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="h-[350px] pt-4">
-            <ResponsiveContainer width="100%" height="100%">
+          <CardContent className="h-[350px] pt-4 min-h-[350px]">
+            <ResponsiveContainer width="100%" height="100%" debounce={50}>
               <ScatterChart 
                 margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
                 onClick={(event: any) => {
@@ -1740,9 +1742,10 @@ export default function Analytics() {
                 </div>
               </Card>
             );
+          })}
         </div>
       </div>
-
-    </div>
+      </div>
+    </PageTransition>
   );
 }

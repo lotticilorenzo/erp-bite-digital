@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { toast } from "sonner";
 import type { Commessa, CommessaStatus } from "@/types";
 
 export function useCommesse(params?: { mese?: string; stato?: CommessaStatus; cliente_id?: string }) {
@@ -34,6 +35,9 @@ export function useCreateCommessa() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["commesse"], exact: false });
     },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nella creazione della commessa");
+    },
   });
 }
 
@@ -48,6 +52,9 @@ export function useUpdateCommessa() {
       queryClient.invalidateQueries({ queryKey: ["commesse"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["commessa", data.id], exact: false });
     },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nell'aggiornamento della commessa");
+    },
   });
 }
 
@@ -59,6 +66,9 @@ export function useDeleteCommessa() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["commesse"], exact: false });
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nell'eliminazione della commessa");
     },
   });
 }
@@ -73,6 +83,9 @@ export function useCollegaFattura() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["commesse"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["commessa", data.id], exact: false });
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nel collegamento fattura");
     },
   });
 }

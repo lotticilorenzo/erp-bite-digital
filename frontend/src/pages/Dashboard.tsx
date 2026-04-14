@@ -700,6 +700,7 @@ export default function DashboardPage() {
         commessa={selectedCommessa}
         defaultMeseCompetenza={selectedMonthQuery}
       />
+      </div>
     </PageTransition>
   );
 }

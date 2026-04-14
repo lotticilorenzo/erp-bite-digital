@@ -12,13 +12,17 @@ import {
   Pencil, 
   Trash2, 
   Search, 
-  Calendar,
-  MoreHorizontal,
+  ArrowUpRight,
+  ArrowDownRight,
   ExternalLink,
   Filter,
   TrendingUp,
+  TrendingDown,
+  Clock,
+  Briefcase,
   FileText,
-  Briefcase
+  Calendar,
+  MoreHorizontal
 } from "lucide-react";
 import { EmptyState } from "../common/EmptyState";
 import { Button } from "@/components/ui/button";

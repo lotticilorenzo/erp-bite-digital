@@ -1,9 +1,11 @@
 import uuid
+from collections import defaultdict
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 from typing import Optional, List
 import secrets
-from fastapi import APIRouter, Depends, HTTPException, Request, status, Query, Body, File, UploadFile
+import time
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, Query, Body, File, UploadFile
 from fastapi_mail import FastMail, ConnectionConfig, MessageSchema, MessageType
 import os
 import shutil
@@ -69,6 +71,26 @@ from app.api.v1 import chat
 from app.api.v1 import uploads
 from app.api.v1 import documents
 
+# ── Simple in-memory rate limiter (no external deps) ─────────────────────────
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+_LOGIN_MAX = 10          # max attempts
+_LOGIN_WINDOW = 60.0     # seconds
+
+def _check_login_rate(ip: str) -> None:
+    now = time.time()
+    attempts = _login_attempts[ip]
+    # Drop old attempts outside the window
+    _login_attempts[ip] = [t for t in attempts if now - t < _LOGIN_WINDOW]
+    if len(_login_attempts[ip]) >= _LOGIN_MAX:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Troppi tentativi. Riprova tra {_LOGIN_WINDOW:.0f} secondi.",
+            headers={"Retry-After": str(int(_LOGIN_WINDOW))},
+        )
+    _login_attempts[ip].append(now)
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 router = APIRouter()
 router.include_router(timer.router)
 router.include_router(ai.router)
@@ -87,7 +109,8 @@ router.include_router(documents.router, prefix="/documents", tags=["Documents"])
 # AUTH
 # ═══════════════════════════════════════════════════════
 @router.post("/auth/login", response_model=TokenResponse, tags=["Auth"])
-async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends(get_db)):
+    _check_login_rate(request.client.host if request.client else "unknown")
     from app.services.services import get_user_by_identifier
     user = await get_user_by_identifier(db, data.email)
     if not user or not verify_password(data.password, user.password_hash):
@@ -114,7 +137,7 @@ async def get_preventivi(
     cliente_id: Optional[uuid.UUID] = Query(None),
     stato: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     from app.models.models import PreventivoStatus
     p_status = None
@@ -129,7 +152,7 @@ async def get_preventivi(
 async def get_single_preventivo(
     preventivo_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     p = await get_preventivo(db, preventivo_id)
     if not p:
@@ -140,7 +163,7 @@ async def get_single_preventivo(
 async def add_preventivo(
     data: PreventivoCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     p = await create_preventivo(db, data, current_user.id)
     await db.commit()
@@ -151,7 +174,7 @@ async def patch_preventivo(
     preventivo_id: uuid.UUID,
     data: PreventivoUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     p = await update_preventivo(db, preventivo_id, data, current_user.id)
     if not p:
@@ -163,7 +186,7 @@ async def patch_preventivo(
 async def remove_preventivo(
     preventivo_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
 ):
     ok = await delete_preventivo(db, preventivo_id)
     if not ok:
@@ -174,7 +197,7 @@ async def remove_preventivo(
 async def converti_preventivo(
     preventivo_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     try:
         commessa = await converti_preventivo_in_commessa(db, preventivo_id, current_user)
@@ -331,7 +354,7 @@ async def reset_password(data: ResetPasswordRequest, db: AsyncSession = Depends(
 async def get_users(
     attivo: Optional[bool] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     return await list_users(db, attivo)
 
@@ -339,7 +362,7 @@ async def get_users(
 async def add_user(
     data: UserCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
 ):
     existing = await get_user_by_email(db, data.email)
     if existing:
@@ -396,6 +419,12 @@ async def get_user_capacity_today(
     current_user: User = Depends(get_current_user)
 ):
     """Calcola la capacità rimanente di un utente per la giornata odierna."""
+    # IDOR fix: solo l'utente stesso o admin/pm possono vedere la capacity altrui
+    is_self = current_user.id == user_id
+    is_manager = current_user.ruolo in (UserRole.ADMIN, UserRole.PM)
+    if not is_self and not is_manager:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Non autorizzato")
+
     from sqlalchemy import select, func
     from app.models.models import Risorsa, Task, TaskStatus
 
@@ -529,7 +558,7 @@ async def get_categorie_fornitori(
 async def add_categoria_fornitore(
     data: CategoriaFornitoreCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
 ):
     from app.services.services import create_categoria_fornitore
     try:
@@ -546,7 +575,7 @@ async def patch_categoria_fornitore(
     cat_id: uuid.UUID,
     data: CategoriaFornitoreUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
 ):
     from app.services.services import update_categoria_fornitore
     cat = await update_categoria_fornitore(db, cat_id, data)
@@ -560,7 +589,7 @@ async def patch_categoria_fornitore(
 async def remove_categoria_fornitore(
     cat_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
 ):
     from app.services.services import delete_categoria_fornitore
     ok = await delete_categoria_fornitore(db, cat_id)
@@ -579,7 +608,7 @@ async def get_clienti(
     skip: int = Query(0, ge=0),
     limit: int = Query(1000, ge=1, le=5000),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     from app.models.models import Cliente as ClienteModel
     q = select(ClienteModel)
@@ -595,7 +624,7 @@ async def get_clienti(
 async def get_single_cliente(
     cliente_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     c = await get_cliente(db, cliente_id)
     if not c:
@@ -606,7 +635,7 @@ async def get_single_cliente(
 async def get_cliente_health(
     cliente_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     from app.services.services import get_client_health_score
     return await get_client_health_score(db, cliente_id)
@@ -615,7 +644,7 @@ async def get_cliente_health(
 async def add_cliente(
     data: ClienteCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     return await create_cliente(db, data)
 
@@ -624,7 +653,7 @@ async def patch_cliente(
     cliente_id: uuid.UUID,
     data: ClienteUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     c = await update_cliente(db, cliente_id, data, current_user.id)
     if not c:
@@ -636,7 +665,7 @@ async def upload_cliente_logo(
     cliente_id: uuid.UUID,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     # Validazione estensione
     allowed_exts = {".png", ".jpg", ".jpeg", ".webp", ".svg"}
@@ -684,7 +713,7 @@ async def upload_cliente_logo(
 async def delete_cliente_logo(
     cliente_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     from app.models.models import Cliente
     from sqlalchemy import select as _sel_c
@@ -725,7 +754,7 @@ async def get_progetti(
     skip: int = Query(0, ge=0),
     limit: int = Query(1000, ge=1, le=5000),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     from app.models.models import Progetto as ProgettoModel
     from sqlalchemy.orm import selectinload
@@ -748,7 +777,7 @@ async def get_progetti(
 async def get_single_progetto(
     progetto_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     p = await get_progetto(db, progetto_id)
     if not p:
@@ -759,7 +788,7 @@ async def get_single_progetto(
 async def add_progetto(
     data: ProgettoCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     p = await create_progetto(db, data)
     await db.commit()
@@ -771,7 +800,7 @@ async def patch_progetto(
     progetto_id: uuid.UUID,
     data: ProgettoUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     p = await update_progetto(db, progetto_id, data, current_user.id)
     if not p:
@@ -838,7 +867,7 @@ async def get_commesse(
     cliente_id: Optional[uuid.UUID] = Query(None),
     progetto_id: Optional[uuid.UUID] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     commesse = await list_commesse(db, mese, stato, cliente_id, progetto_id)
     coeff_cache: dict[date, Decimal] = {}
@@ -862,7 +891,7 @@ async def get_single_commessa(
 async def add_commessa(
     data: CommessaCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     c = await create_commessa(db, data)
     c = await get_commessa(db, c.id)
@@ -894,7 +923,7 @@ async def get_timesheet(
 ):
     # DIPENDENTE e FREELANCER vedono solo le proprie ore
     user_filter = None
-    if current_user.ruolo in (UserRole.DIPENDENTE, UserRole.FREELANCER):
+    if current_user.ruolo in (UserRole.DIPENDENTE, UserRole.FREELANCER, UserRole.COLLABORATORE):
         user_filter = current_user.id
     return await list_timesheet(db, user_filter, mese, stato, commessa_id)
 
@@ -910,7 +939,7 @@ async def add_timesheet(
 async def bulk_approva(
     data: TimesheetApprova,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     return await approva_timesheet(db, data, current_user)
 
@@ -920,18 +949,22 @@ async def bulk_approva(
 # ═══════════════════════════════════════════════════════
 @router.get("/dashboard/kpi", tags=["Report"])
 async def dashboard_kpi(
+    response: Response,
     mese: date = Query(..., description="Formato YYYY-MM-01"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
+    response.headers["Cache-Control"] = "private, max-age=120"
     return await get_dashboard_kpi(db, mese)
 
 @router.get("/report/marginalita", tags=["Report"])
 async def report_marginalita(
+    response: Response,
     mese: Optional[date] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
 ):
+    response.headers["Cache-Control"] = "private, max-age=120"
     return await get_marginalita_clienti(db, mese)
 
 
@@ -940,7 +973,7 @@ async def report_marginalita(
 # ═══════════════════════════════════════════════════════
 @router.post("/fic/sync", response_model=FicSyncStatusOut, tags=["FIC"])
 async def run_fic_sync(
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
 ):
     from app.db.session import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
@@ -950,7 +983,7 @@ async def run_fic_sync(
 @router.get("/fic/sync/status", response_model=FicSyncStatusOut, tags=["FIC"])
 async def fic_sync_status(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     status_obj = await get_last_fic_sync_status(db)
     if not status_obj:
@@ -961,7 +994,7 @@ async def fic_sync_status(
 @router.get("/fatture-attive", response_model=List[FatturaAttivaOut], tags=["FIC"])
 async def get_fatture_attive(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     return await list_fatture_attive(db)
 
@@ -970,7 +1003,7 @@ async def patch_incassa_fattura(
     fattura_id: uuid.UUID,
     body: FatturaIncassaRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     fattura = await incassa_fattura(db, fattura_id, body.data_incasso)
     if not fattura:
@@ -983,7 +1016,7 @@ async def patch_fattura_attiva(
     fattura_id: uuid.UUID,
     body: FatturaAttivaUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     from app.models.models import FatturaAttiva
     from sqlalchemy import select
@@ -1005,7 +1038,7 @@ async def patch_fattura_attiva(
 async def delete_fattura_attiva(
     fattura_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
 ):
     from app.models.models import FatturaAttiva
     from sqlalchemy import select
@@ -1021,7 +1054,7 @@ async def delete_fattura_attiva(
 @router.get("/fornitori-full", tags=["Fornitori"])
 async def get_fornitori_full(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     return await list_fornitori_full(db)
 
@@ -1029,7 +1062,7 @@ async def get_fornitori_full(
 async def add_fornitore(
     data: FornitoreCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     from app.services.services import create_fornitore
     try:
@@ -1045,7 +1078,7 @@ async def patch_fornitore(
     fornitore_id: uuid.UUID,
     body: FornitoreUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     forn = await update_fornitore(db, fornitore_id, body.model_dump(exclude_none=True))
     if not forn:
@@ -1056,7 +1089,7 @@ async def patch_fornitore(
 @router.get("/fatture-passive", tags=["FIC"])
 async def get_fatture_passive(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     return await list_fatture_passive(db)
 
@@ -1066,7 +1099,7 @@ async def patch_fattura_passiva(
     fattura_id: uuid.UUID,
     body: FatturaPassivaUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     fattura = await update_fattura_passiva(db, fattura_id, body.model_dump(exclude_none=True))
     if not fattura:
@@ -1078,7 +1111,7 @@ async def patch_fattura_passiva(
 async def delete_fattura_passive(
     fattura_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
 ):
     from app.models.models import FatturaPassiva
     from sqlalchemy import select
@@ -1093,7 +1126,7 @@ async def delete_fattura_passive(
 @router.get("/fornitori", response_model=List[FornitoreOut], tags=["FIC"])
 async def get_fornitori(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     return await list_fornitori(db)
 
@@ -1101,7 +1134,7 @@ async def get_fornitori(
 @router.get("/movimenti-cassa", tags=["Cassa"])
 async def get_movimenti_cassa(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER)),
 ):
     movimenti = await list_movimenti_cassa(db)
     return {"movimenti_cassa": movimenti}
@@ -1112,7 +1145,7 @@ async def riconcilia_movimento(
     movimento_id: uuid.UUID,
     payload: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER)),
 ):
     from app.models.models import MovimentoCassa
     from sqlalchemy import select
@@ -1131,7 +1164,7 @@ async def patch_movimento_cassa(
     movimento_id: uuid.UUID,
     payload: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER)),
 ):
     from app.models.models import MovimentoCassa, FatturaAttiva, FatturaPassiva
     from sqlalchemy import select
@@ -1195,7 +1228,7 @@ async def patch_movimento_cassa(
 @router.get("/costi-fissi", tags=["CostiFissi"])
 async def get_costi_fissi(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
 ):
     return {"costi_fissi": await list_costi_fissi(db)}
 
@@ -1204,7 +1237,7 @@ async def get_costi_fissi(
 async def post_costo_fisso(
     payload: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
 ):
     return await create_costo_fisso(db, payload)
 
@@ -1257,7 +1290,7 @@ async def delete_costo_fisso_endpoint(costo_id: uuid.UUID, db: AsyncSession = De
 @router.get("/regole-riconciliazione", tags=["Regole"])
 async def get_regole(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
 ):
     from app.services.services import list_regole
     return {"regole": await list_regole(db)}
@@ -1267,7 +1300,7 @@ async def get_regole(
 async def post_regola(
     payload: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
 ):
     from app.services.services import create_regola
     return await create_regola(db, payload)
@@ -1294,7 +1327,7 @@ async def delete_regola_endpoint(regola_id: uuid.UUID, db: AsyncSession = Depend
 @router.post("/regole-riconciliazione/applica", tags=["Regole"])
 async def applica_regole(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
 ):
     from app.services.services import applica_regole_automatiche
     return await applica_regole_automatiche(db)
@@ -1311,7 +1344,7 @@ async def suggest_mov(movimento_id: uuid.UUID, db: AsyncSession = Depends(get_db
 async def get_imputazioni_fattura(
     fattura_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
 ):
     from app.services.services import get_imputazioni
     return await get_imputazioni(db, fattura_id)
@@ -1364,7 +1397,7 @@ async def collega_fattura_commessa(
     commessa_id: uuid.UUID,
     body: dict = Body(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     """Collega o scollega una fattura da una commessa. body: {fattura_id: uuid | null}"""
     from sqlalchemy import select as _sel
@@ -1401,7 +1434,7 @@ async def delete_commessa(commessa_id: uuid.UUID, db: AsyncSession = Depends(get
 @router.get("/risorse", tags=["HR"])
 async def get_risorse(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
 ):
     from app.services.services import list_risorse
     return await list_risorse(db)
@@ -1436,7 +1469,7 @@ async def del_risorsa(risorsa_id: uuid.UUID, db: AsyncSession = Depends(get_db),
 @router.get("/piani", tags=["Pianificazione"])
 async def list_piani(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     from sqlalchemy import text
     rows = await db.execute(text("""
@@ -1451,7 +1484,7 @@ async def list_piani(
 async def get_piano(
     piano_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     from sqlalchemy import text
     row = await db.execute(text("SELECT p.*, cl.ragione_sociale as cliente_nome, cl.codice_cliente FROM piano_commessa p JOIN clienti cl ON cl.id=p.cliente_id WHERE p.id=:pid"), {"pid": str(piano_id)})
@@ -1465,7 +1498,7 @@ async def get_piano(
 async def create_piano(
     payload: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     from sqlalchemy import text
     from datetime import date
@@ -1498,7 +1531,7 @@ async def update_piano(
     piano_id: uuid.UUID,
     payload: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     from sqlalchemy import text
     await db.execute(text("""
@@ -1588,7 +1621,7 @@ async def delete_servizio_progetto_endpoint(progetto_id: uuid.UUID, servizio_id:
 async def bulk_elimina(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     from app.schemas.schemas import TimesheetBulkDelete
     body = await request.json()
@@ -1600,7 +1633,7 @@ async def bulk_elimina(
 async def bulk_cambia_mese(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     from app.schemas.schemas import TimesheetBulkMese
     body = await request.json()
@@ -1631,7 +1664,7 @@ async def _cu_get(path: str) -> dict:
 
 @router.get("/clickup/users", tags=["ClickUp"])
 async def get_clickup_members(
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     """Lista membri workspace ClickUp con ID — per configurare clickup_user_id su users"""
     data = await _cu_get(f"/team/{CLICKUP_TEAM_ID}/member")
@@ -1908,7 +1941,7 @@ async def delete_timesheet_singolo(
     if not ts:
         raise HTTPException(status_code=404, detail="Timesheet non trovato")
 
-    if current_user.ruolo in (UserRole.DIPENDENTE, UserRole.FREELANCER):
+    if current_user.ruolo in (UserRole.DIPENDENTE, UserRole.FREELANCER, UserRole.COLLABORATORE):
         if ts.user_id != current_user.id:
             raise HTTPException(status_code=403, detail="Non autorizzato")
         if ts.stato != TimesheetStatus.PENDING:
@@ -2733,7 +2766,7 @@ async def convert_lead(
 @router.get("/crm/statistiche", response_model=CRMStatsOut, tags=["CRM"])
 async def get_crm_stats(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     from sqlalchemy import select, func
     

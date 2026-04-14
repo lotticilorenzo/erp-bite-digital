@@ -501,15 +501,14 @@ function TaskRow({ task, depth, utenti, getUserInitials, getUserName }: TaskRowP
                 <Flag
                   className={cn("h-3 w-3 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity", p.color)}
                   fill="currentColor"
-                  title={`Priorità: ${p.label}`}
                 />
               ) : null;
             })()}
 
             <span
               className={cn(
-                "text-[13px] font-bold truncate transition-colors duration-200",
-                isTimerActive ? "text-white" : "text-muted-foreground group-hover:text-white"
+                "text-[12px] font-black uppercase tracking-tight italic transition-colors duration-200",
+                isTimerActive ? "text-primary" : "text-foreground group-hover:text-primary"
               )}
             >
               {task.title}

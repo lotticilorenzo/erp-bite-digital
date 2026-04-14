@@ -21,26 +21,26 @@ ClienteAffidabilita = Literal["ALTA", "MEDIA", "BASSA"]
 
 # ── USER ──────────────────────────────────────────────────
 class UserCreate(BaseModel):
-    nome: str
-    cognome: str
+    nome: str = Field(..., min_length=1, max_length=100)
+    cognome: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
-    password: str
+    password: str = Field(..., min_length=8, max_length=128)
     ruolo: UserRole
     costo_orario: Optional[Decimal] = None
-    ore_settimanali: int = 40
-    clickup_user_id: Optional[str] = None
+    ore_settimanali: int = Field(40, ge=1, le=168)
+    clickup_user_id: Optional[str] = Field(None, max_length=100)
     data_inizio: Optional[date] = None
 
 class UserUpdate(BaseModel):
-    nome: Optional[str] = None
-    cognome: Optional[str] = None
-    password: Optional[str] = None
+    nome: Optional[str] = Field(None, min_length=1, max_length=100)
+    cognome: Optional[str] = Field(None, min_length=1, max_length=100)
+    password: Optional[str] = Field(None, min_length=8, max_length=128)
     ruolo: Optional[UserRole] = None
     costo_orario: Optional[Decimal] = None
-    ore_settimanali: Optional[int] = None
-    bio: Optional[str] = None
+    ore_settimanali: Optional[int] = Field(None, ge=1, le=168)
+    bio: Optional[str] = Field(None, max_length=1000)
     preferences: Optional[dict] = None
-    avatar_url: Optional[str] = None
+    avatar_url: Optional[str] = Field(None, max_length=500)
     attivo: Optional[bool] = None
     data_fine: Optional[date] = None
 
@@ -182,33 +182,33 @@ class TokenResponse(BaseModel):
 
 # ── CLIENTE ───────────────────────────────────────────────
 class ClienteCreate(BaseModel):
-    ragione_sociale: str
-    codice_cliente: Optional[str] = None
+    ragione_sociale: str = Field(..., min_length=1, max_length=255)
+    codice_cliente: Optional[str] = Field(None, max_length=50)
     numero_progressivo: Optional[int] = None
-    tipologia: Optional[str] = None
-    referente: Optional[str] = None
-    piva: Optional[str] = None
-    codice_fiscale: Optional[str] = None
-    sdi: Optional[str] = None
-    pec: Optional[str] = None
-    email: Optional[str] = None
-    telefono: Optional[str] = None
-    cellulare: Optional[str] = None
-    sito_web: Optional[str] = None
-    settore: Optional[str] = None
-    categoria: Optional[str] = None
-    indirizzo: Optional[str] = None
-    comune: Optional[str] = None
-    cap: Optional[str] = None
-    provincia: Optional[str] = None
-    paese: Optional[str] = "Italia"
-    note_indirizzo: Optional[str] = None
-    condizioni_pagamento: Optional[str] = None
-    note: Optional[str] = None
+    tipologia: Optional[str] = Field(None, max_length=100)
+    referente: Optional[str] = Field(None, max_length=200)
+    piva: Optional[str] = Field(None, max_length=20)
+    codice_fiscale: Optional[str] = Field(None, max_length=20)
+    sdi: Optional[str] = Field(None, max_length=10)
+    pec: Optional[str] = Field(None, max_length=255)
+    email: Optional[str] = Field(None, max_length=255)
+    telefono: Optional[str] = Field(None, max_length=30)
+    cellulare: Optional[str] = Field(None, max_length=30)
+    sito_web: Optional[str] = Field(None, max_length=500)
+    settore: Optional[str] = Field(None, max_length=100)
+    categoria: Optional[str] = Field(None, max_length=100)
+    indirizzo: Optional[str] = Field(None, max_length=500)
+    comune: Optional[str] = Field(None, max_length=100)
+    cap: Optional[str] = Field(None, max_length=10)
+    provincia: Optional[str] = Field(None, max_length=5)
+    paese: Optional[str] = Field("Italia", max_length=100)
+    note_indirizzo: Optional[str] = Field(None, max_length=500)
+    condizioni_pagamento: Optional[str] = Field(None, max_length=200)
+    note: Optional[str] = Field(None, max_length=5000)
     attivo: bool = True
     affidabilita: Optional[ClienteAffidabilita] = "MEDIA"
     drive_files: Optional[list] = None
-    logo_url: Optional[str] = None
+    logo_url: Optional[str] = Field(None, max_length=500)
 
 class ClienteUpdate(BaseModel):
     ragione_sociale: Optional[str] = None
@@ -575,12 +575,12 @@ class TaskCreate(BaseModel):
     assegnatario_id: Optional[uuid.UUID] = None
     revisore_id: Optional[uuid.UUID] = None
     parent_id: Optional[uuid.UUID] = None
-    titolo: str
-    descrizione: Optional[str] = None
+    titolo: str = Field(..., min_length=1, max_length=500)
+    descrizione: Optional[str] = Field(None, max_length=10000)
     stato: TaskStatus = TaskStatus.DA_FARE
     data_inizio: Optional[date] = None
     data_scadenza: Optional[date] = None
-    stima_minuti: Optional[int] = None
+    stima_minuti: Optional[int] = Field(None, ge=0, le=999999)
 
     @model_validator(mode="after")
     def validate_date_range(self):

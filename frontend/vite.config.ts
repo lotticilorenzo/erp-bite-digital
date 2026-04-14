@@ -33,7 +33,12 @@ export default defineConfig({
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash].[ext]'
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+        manualChunks(id) {
+          if (id.includes('framer-motion') || id.includes('lucide-react') || id.includes('sonner')) return 'vendor-ui';
+          if (id.includes('recharts')) return 'vendor-charts';
+          if (id.includes('@react-pdf')) return 'vendor-pdf';
+        }
       }
     }
   }

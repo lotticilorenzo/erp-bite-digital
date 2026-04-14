@@ -175,7 +175,7 @@ export function TimesheetDialog({ open, onOpenChange, timesheet, initialDate, is
                         commesse?.map((c) => (
                           <SelectItem key={c.id} value={c.id} className="font-medium cursor-pointer focus:bg-purple-500/20 py-2.5">
                             <span className="text-purple-400 font-bold mr-2 text-[10px] uppercase tracking-wider">C-{c.id.substring(0,6)}</span>
-                            {c.cliente.ragione_sociale} 
+                            {c.cliente?.ragione_sociale || "Cliente sconosciuto"} 
                             <span className="text-muted-foreground italic text-xs ml-2">({format(parseISO(c.mese_competenza), "MMM yyyy")})</span>
                           </SelectItem>
                         ))

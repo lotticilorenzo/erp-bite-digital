@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import DOMPurify from "dompurify";
 import {
   Bold,
   Italic,
@@ -279,9 +280,12 @@ export function DocumentEditor({ node, className }: DocumentEditorProps) {
           <div
             className="h-full overflow-y-auto px-8 py-8 prose prose-invert prose-sm max-w-none custom-scrollbar text-foreground/90 leading-relaxed text-[14px]"
             dangerouslySetInnerHTML={{
-              __html: content
-                ? `<p class="mb-3">${markdownToHtml(content)}</p>`
-                : '<p class="text-muted-foreground/30 italic text-sm">Nessun contenuto da visualizzare. Inizia a scrivere nell\'editor.</p>',
+              __html: DOMPurify.sanitize(
+                content
+                  ? `<p class="mb-3">${markdownToHtml(content)}</p>`
+                  : '<p class="text-muted-foreground/30 italic text-sm">Nessun contenuto da visualizzare. Inizia a scrivere nell\'editor.</p>',
+                { USE_PROFILES: { html: true } }
+              ),
             }}
           />
         ) : (

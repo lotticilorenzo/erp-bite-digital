@@ -14,7 +14,8 @@ export function useClientHealthScore(id: string | undefined) {
       return data;
     },
     enabled: !!id,
-    staleTime: 1000 * 60 * 5, // 5 minuti
+    staleTime: 1000 * 60 * 15, // 15 min — calcolo costoso, non serve refresh frequente
+    gcTime: 1000 * 60 * 30,
   });
 }
 

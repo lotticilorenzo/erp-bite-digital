@@ -21,7 +21,7 @@ export function useNotifications() {
       const { data } = await api.get("/notifications/");
       return data;
     },
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 60s — notifiche non richiedono polling aggressivo
   });
 
   const markAsRead = useMutation({

@@ -339,8 +339,11 @@ CREATE INDEX idx_audit_record         ON audit_log(tabella, record_id);
 CREATE INDEX idx_fornitori_fic_id     ON fornitori(fic_id);
 CREATE INDEX idx_fatture_attive_fic_id ON fatture_attive(fic_id);
 CREATE INDEX idx_fatture_attive_scadenza ON fatture_attive(data_scadenza);
+CREATE INDEX idx_fatture_attive_cliente ON fatture_attive(cliente_id);
 CREATE INDEX idx_fatture_passive_fic_id ON fatture_passive(fic_id);
 CREATE INDEX idx_fatture_passive_scadenza ON fatture_passive(data_scadenza);
+CREATE INDEX idx_fatture_passive_fornitore ON fatture_passive(fornitore_id);
+CREATE INDEX idx_commesse_fattura ON commesse(fattura_id);
 CREATE INDEX idx_fic_sync_runs_started_at ON fic_sync_runs(started_at DESC);
 
 -- ── TRIGGER: aggiorna costo_manodopera su approvazione ────

@@ -95,7 +95,7 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
       return res.data;
     },
     enabled: !!taskId,
-    refetchInterval: 15000,
+    refetchInterval: 60000, // 60s — commenti non cambiano ogni secondo
   });
 
   const addCommentMutation = useMutation({

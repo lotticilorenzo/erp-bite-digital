@@ -52,6 +52,9 @@ export function useCRM() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["crm"], exact: false });
     },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nell'aggiornamento del lead");
+    },
   });
 
   const updateLeadStage = useMutation({
@@ -63,6 +66,9 @@ export function useCRM() {
       queryClient.invalidateQueries({ queryKey: ["crm"], exact: false });
       toast.success("Stadio aggiornato");
     },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nell'aggiornamento dello stadio");
+    },
   });
 
   const addActivity = useMutation({
@@ -73,6 +79,9 @@ export function useCRM() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["crm"], exact: false });
       toast.success("Attività salvata");
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nel salvataggio dell'attività");
     },
   });
 

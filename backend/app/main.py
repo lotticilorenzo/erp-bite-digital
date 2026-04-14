@@ -8,6 +8,7 @@ from typing import Optional
 
 from fastapi import FastAPI, Depends, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import JSONResponse
 from sqlalchemy import select, func, text
@@ -45,6 +46,8 @@ def _parse_cors_origins(origins_raw: str) -> list[str]:
 logger = logging.getLogger(__name__)
 scheduler: AsyncIOScheduler | None = None
 
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_parse_cors_origins(settings.CORS_ORIGINS),
@@ -76,8 +79,10 @@ async def catch_exceptions_middleware(request: Request, call_next):
     try:
         return await call_next(request)
     except Exception as exc:
-        print(f"\n--- ERROR {datetime.now()} ---", file=sys.stderr)
-        traceback.print_exc()
+        # In produzione: log senza stacktrace visibile al client
+        logger.error(f"Unhandled exception on {request.method} {request.url.path}: {type(exc).__name__}")
+        if settings.DEBUG:
+            traceback.print_exc()
         return JSONResponse(
             status_code=500,
             content={"detail": "Internal Server Error"}
@@ -101,6 +106,23 @@ async def health():
 app.include_router(router, prefix="/api/v1")
 
 @app.on_event("startup")
+async def validate_security_config():
+    """Blocca l'avvio se la configurazione di sicurezza è insicura."""
+    insecure_defaults = {"CAMBIA_QUESTA_CHIAVE_IN_PRODUZIONE", "secret", "changeme", ""}
+    secret = settings.JWT_SECRET or settings.SECRET_KEY
+    if secret in insecure_defaults and not settings.DEBUG:
+        logger.critical(
+            "SICUREZZA: JWT_SECRET non configurato! Imposta JWT_SECRET nel file .env "
+            "con un valore casuale di almeno 32 caratteri. Avvio bloccato."
+        )
+        raise RuntimeError("JWT_SECRET non sicuro — configurare prima di avviare in produzione")
+    if len(secret) < 32:
+        logger.warning(
+            f"SICUREZZA: JWT_SECRET troppo corto ({len(secret)} caratteri). "
+            "Consigliato almeno 32 caratteri casuali."
+        )
+
+@app.on_event("startup")
 async def ensure_schema_tables_on_startup():
     if not settings.AUTO_CREATE_MISSING_TABLES:
         return
@@ -118,6 +140,29 @@ async def ensure_schema_tables_on_startup():
             retries -= 1
             logger.warning(f"Database non pronto, riprovo in 2s... ({retries} rimasti). Errore: {e}")
             await asyncio.sleep(2)
+
+@app.on_event("startup")
+async def migrate_userrole_enum():
+    """Aggiunge i nuovi valori DEVELOPER e COLLABORATORE all'enum user_role in PostgreSQL.
+    Operazione idempotente: non fa nulla se i valori esistono già."""
+    new_roles = ["DEVELOPER", "COLLABORATORE"]
+    async with AsyncSessionLocal() as session:
+        try:
+            async with session.begin():
+                for role in new_roles:
+                    # PostgreSQL non ha 'ADD VALUE IF NOT EXISTS' prima della v12.
+                    # La gestiamo con un check preventivo.
+                    check = await session.execute(
+                        text("SELECT 1 FROM pg_enum WHERE enumtypid = 'user_role'::regtype::oid AND enumlabel = :role"),
+                        {"role": role}
+                    )
+                    if not check.scalar():
+                        await session.execute(
+                            text(f"ALTER TYPE user_role ADD VALUE '{role}'")
+                        )
+                        logger.info(f"Migrazione DB: aggiunto ruolo '{role}' all'enum user_role.")
+        except Exception as e:
+            logger.warning(f"Migrazione enum user_role saltata (potrebbe già esistere): {e}")
 
 @app.on_event("startup")
 async def bootstrap_admin_on_startup():

@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 import { useAnalytics } from "./useAnalytics";
 
 export interface ChatMessage {
@@ -25,8 +26,11 @@ export function useAI() {
         message,
         context
       });
-      
+
       return data.response as string;
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nella risposta AI");
     },
   });
 }

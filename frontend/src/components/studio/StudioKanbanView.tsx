@@ -110,15 +110,15 @@ function KanbanCard({ task, isDragging }: KanbanCardProps) {
       )}
 
       {/* Title */}
-      <p className="text-sm font-semibold text-white/90 leading-snug mb-2.5 pr-6 line-clamp-2">
+      <p className="text-[11px] font-black text-white/90 leading-tight mb-3 pr-6 uppercase tracking-tight line-clamp-2 italic">
         {task.title}
       </p>
 
       {/* Active timer badge */}
       {isRunning && elapsed > 0 && (
-        <div className="flex items-center gap-1 mb-2">
+        <div className="flex items-center gap-2 mb-3 px-2 py-1 bg-primary/10 rounded-lg border border-primary/20 w-fit glow-primary">
           <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-          <span className="text-[10px] font-mono font-bold text-primary">
+          <span className="text-[10px] font-black text-primary uppercase tracking-widest tabular-nums">
             {formatTime(elapsed)}
           </span>
         </div>
@@ -316,7 +316,7 @@ export function StudioKanbanView() {
     if (!task) return;
 
     if ((task.state_id || "DA_FARE").toUpperCase() !== destCol.id) {
-      updateTask({ id: task.id, data: { stato: destCol.id } });
+      updateTask.mutate({ id: task.id, data: { stato: destCol.id } });
       toast.success(`Spostato in "${destCol.label}"`);
     }
   };

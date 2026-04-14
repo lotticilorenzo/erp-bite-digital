@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 
 export interface Assenza {
   id: string;
@@ -30,6 +31,9 @@ export function useAssenze(params?: { user_id?: string; start_date?: string; end
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["assenze"], exact: false });
     },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nel salvataggio dell'assenza");
+    },
   });
 
   const deleteAssenza = useMutation({
@@ -38,6 +42,9 @@ export function useAssenze(params?: { user_id?: string; start_date?: string; end
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["assenze"], exact: false });
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nell'eliminazione dell'assenza");
     },
   });
 

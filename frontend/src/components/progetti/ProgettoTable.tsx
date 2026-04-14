@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Table,
   TableBody,
@@ -7,10 +8,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { 
-  Pencil, 
-  Trash2, 
-  Search, 
+import {
+  Pencil,
+  Trash2,
+  Search,
   Building2,
   MoreHorizontal,
   ExternalLink,
@@ -41,12 +42,28 @@ interface ProgettoTableProps {
   isLoading: boolean;
 }
 
+// Variants defined outside component — not recreated on every render
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.04 } },
+};
+const item = {
+  hidden: { opacity: 0, x: -8 },
+  show: { opacity: 1, x: 0, transition: { duration: 0.12 } },
+};
+
 export function ProgettoTable({ progetti, onEdit, onDelete, isLoading }: ProgettoTableProps) {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = React.useState("");
 
-  const filteredProgetti = progetti.filter((p) =>
-    p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.cliente?.ragione_sociale.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredProgetti = useMemo(
+    () =>
+      progetti.filter(
+        (p) =>
+          p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          p.cliente?.ragione_sociale.toLowerCase().includes(searchTerm.toLowerCase())
+      ),
+    [progetti, searchTerm]
   );
 
   if (isLoading) {
@@ -90,31 +107,28 @@ export function ProgettoTable({ progetti, onEdit, onDelete, isLoading }: Progett
               <TableHead className="text-right pr-6"></TableHead>
             </TableRow>
           </TableHeader>
-          <motion.tbody 
-            variants={container}
-            initial="hidden"
-            animate="show"
-          >
+          <motion.tbody variants={container} initial="hidden" animate="show">
             {filteredProgetti.length === 0 ? (
               <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={6} className="py-20">
-                  <EmptyState 
+                  <EmptyState
                     icon={FolderOpen}
                     title="Nessun Progetto"
                     description="Non hai ancora creato progetti attivi. Inizia ora aggiungendo il tuo primo progetto per un cliente."
                     actionLabel="Nuovo Progetto"
-                    onAction={() => window.location.href = '/progetti?action=new'}
+                    onAction={() => navigate("/progetti?action=new")}
                   />
                 </TableCell>
               </TableRow>
             ) : (
               filteredProgetti.map((progetto) => (
-                <motion.tr 
+                <motion.tr
                   variants={item}
-                  key={progetto.id} 
+                  key={progetto.id}
+                  onClick={() => navigate(`/progetti/${progetto.id}`)}
                   className="border-border hover:bg-white/[0.02] cursor-pointer group transition-colors border-b"
                 >
-                  <TableCell className="py-4 pl-6" onClick={() => window.location.href = `/progetti/${progetto.id}`}>
+                  <TableCell className="py-4 pl-6">
                     <div className="flex flex-col">
                       <span className="font-semibold text-foreground group-hover:text-purple-400 transition-colors">
                         {progetto.nome}
@@ -124,7 +138,7 @@ export function ProgettoTable({ progetti, onEdit, onDelete, isLoading }: Progett
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell onClick={() => window.location.href = `/progetti/${progetto.id}`}>
+                  <TableCell>
                     <div className="flex items-center gap-2">
                       <div className="w-6 h-6 rounded bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
                         <Building2 className="w-3 h-3 text-purple-400" />
@@ -132,30 +146,37 @@ export function ProgettoTable({ progetti, onEdit, onDelete, isLoading }: Progett
                       <span className="text-foreground">{progetto.cliente?.ragione_sociale || "N/A"}</span>
                     </div>
                   </TableCell>
-                  <TableCell onClick={() => window.location.href = `/progetti/${progetto.id}`}>
-                    <Badge 
-                      variant="outline" 
-                      className={`
-                        ${progetto.tipo === "RETAINER" 
-                          ? "bg-blue-500/10 text-blue-400 border-blue-500/20" 
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={`${
+                        progetto.tipo === "RETAINER"
+                          ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
                           : "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                        } font-medium px-2 py-0
-                      `}
+                      } font-medium px-2 py-0`}
                     >
                       {progetto.tipo}
                     </Badge>
                   </TableCell>
-                  <TableCell onClick={() => window.location.href = `/progetti/${progetto.id}`}>
+                  <TableCell>
                     <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${progetto.stato === "ATTIVO" ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-slate-500"}`} />
+                      <div
+                        className={`w-2 h-2 rounded-full ${
+                          progetto.stato === "ATTIVO"
+                            ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
+                            : "bg-slate-500"
+                        }`}
+                      />
                       <span className={progetto.stato === "ATTIVO" ? "text-emerald-400" : "text-muted-foreground"}>
                         {progetto.stato}
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell onClick={() => window.location.href = `/progetti/${progetto.id}`}>
+                  <TableCell>
                     <div className="flex flex-col">
-                      <span className="text-foreground font-medium">€{(Number(progetto.importo_fisso) + Number(progetto.importo_variabile)).toLocaleString()}</span>
+                      <span className="text-foreground font-medium">
+                        €{(Number(progetto.importo_fisso) + Number(progetto.importo_variabile)).toLocaleString()}
+                      </span>
                       <span className="text-[10px] text-muted-foreground">Budget Totale</span>
                     </div>
                   </TableCell>
@@ -169,22 +190,28 @@ export function ProgettoTable({ progetti, onEdit, onDelete, isLoading }: Progett
                       <DropdownMenuContent align="end" className="bg-card border-border text-white">
                         <DropdownMenuLabel className="text-muted-foreground">Azioni</DropdownMenuLabel>
                         <DropdownMenuSeparator className="bg-muted" />
-                        <DropdownMenuItem onClick={() => window.location.href = `/progetti/${progetto.id}`} className="hover:bg-muted focus:bg-muted cursor-pointer">
+                        <DropdownMenuItem
+                          onClick={() => navigate(`/progetti/${progetto.id}`)}
+                          className="hover:bg-muted focus:bg-muted cursor-pointer"
+                        >
                           <ExternalLink className="mr-2 h-4 w-4" /> Vedi Dettaglio
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => onEdit(progetto)} className="hover:bg-muted focus:bg-muted cursor-pointer">
                           <Pencil className="mr-2 h-4 w-4" /> Modifica
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onDelete(progetto)} className="text-red-400 hover:bg-red-500/10 focus:bg-red-500/10 cursor-pointer">
+                        <DropdownMenuItem
+                          onClick={() => onDelete(progetto)}
+                          className="text-red-400 hover:bg-red-500/10 focus:bg-red-500/10 cursor-pointer"
+                        >
                           <Trash2 className="mr-2 h-4 w-4" /> Elimina
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
-                </TableRow>
+                </motion.tr>
               ))
             )}
-          </TableBody>
+          </motion.tbody>
         </Table>
       </div>
     </div>

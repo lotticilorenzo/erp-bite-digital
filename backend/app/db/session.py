@@ -15,8 +15,11 @@ def _normalize_async_database_url(url: str) -> str:
 engine = create_async_engine(
     _normalize_async_database_url(settings.DATABASE_URL),
     echo=settings.DEBUG,
-    pool_size=50,
-    max_overflow=100,
+    pool_size=20,
+    max_overflow=40,
+    pool_timeout=10,
+    pool_recycle=3600,
+    pool_pre_ping=True,
 )
 
 AsyncSessionLocal = async_sessionmaker(

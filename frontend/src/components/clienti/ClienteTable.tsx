@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Table,
@@ -78,16 +78,31 @@ interface ClienteTableProps {
   onNew: () => void;
 }
 
+// Variants defined outside component — not recreated on every render
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.04 } },
+};
+const item = {
+  hidden: { opacity: 0, x: -8 },
+  show: { opacity: 1, x: 0, transition: { duration: 0.12 } },
+};
+
 export function ClienteTable({ clienti, isLoading, onEdit, onNew }: ClienteTableProps) {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = React.useState("");
   const [deleteId, setDeleteId] = React.useState<string | null>(null);
   const deleteCliente = useDeleteCliente();
 
-  const filteredClienti = clienti.filter((c) =>
-    c.ragione_sociale.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.piva?.includes(searchTerm)
+  const filteredClienti = useMemo(
+    () =>
+      clienti.filter(
+        (c) =>
+          c.ragione_sociale.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          c.piva?.includes(searchTerm)
+      ),
+    [clienti, searchTerm]
   );
 
   const handleDelete = async () => {
@@ -95,21 +110,6 @@ export function ClienteTable({ clienti, isLoading, onEdit, onNew }: ClienteTable
       await deleteCliente.mutateAsync(deleteId);
       setDeleteId(null);
     }
-  };
-
-  const container = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.05
-      }
-    }
-  };
-
-  const item = {
-    hidden: { opacity: 0, x: -10 },
-    show: { opacity: 1, x: 0 }
   };
 
   if (isLoading) {
@@ -251,7 +251,7 @@ export function ClienteTable({ clienti, isLoading, onEdit, onNew }: ClienteTable
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
-                </motion.tr>
+                </TableRow>
               ))
             )}
           </motion.tbody>

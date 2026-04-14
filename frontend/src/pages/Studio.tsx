@@ -9,9 +9,10 @@ import { StudioTeamView } from "@/components/studio/StudioTeamView";
 import CaricoLavoroPage from "@/pages/studio/CaricoLavoroPage";
 import StudioOverviewPage from "@/pages/studio/StudioOverviewPage";
 import StudioDocumentsPage from "@/pages/studio/StudioDocumentsPage";
+import { WorkspaceTabs } from "@/components/studio/WorkspaceTabs";
 import { TaskDetailView } from "@/components/studio/TaskDetailView";
 import ChatHub from "@/components/chat/ChatHub";
-import { WorkspaceTabs } from "@/components/studio/WorkspaceTabs";
+import { PageTransition } from "@/components/common/PageTransition";
 import { X } from "lucide-react";
 import type { TabItem } from "@/types/studio";
 
@@ -95,67 +96,69 @@ export default function StudioPage() {
   const isSplit = !!splitTabId;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-background">
-      <StudioTopbar />
-      <WorkspaceTabs />
+    <PageTransition>
+      <div className="flex h-screen w-full flex-col overflow-hidden bg-background relative selection:bg-primary/30">
+        <StudioTopbar />
+        <WorkspaceTabs />
 
-      <main
-        ref={containerRef}
-        className="flex-1 overflow-hidden relative flex"
-      >
-        {/* ── Left / main panel ── */}
-        <div
-          className="flex flex-col overflow-hidden"
-          style={{ width: isSplit ? `${leftPct}%` : "100%" }}
+        <main
+          ref={containerRef}
+          className="flex-1 overflow-hidden relative flex"
         >
-          <PanelContent tab={activeTab} view={nav.view} />
-        </div>
-
-        {/* ── Drag divider ── */}
-        {isSplit && (
+          {/* ── Left / main panel ── */}
           <div
-            onMouseDown={onDividerMouseDown}
-            className="w-1 shrink-0 bg-border/40 hover:bg-primary/50 active:bg-primary transition-colors cursor-col-resize z-20 relative group"
+            className="flex-1 flex flex-col overflow-hidden relative w-full"
+            style={{ width: isSplit ? `${leftPct}%` : "100%" }}
           >
-            {/* drag handle dots */}
-            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              {[0,1,2,3,4].map(i => (
-                <div key={i} className="h-1 w-1 rounded-full bg-primary/80" />
-              ))}
-            </div>
+            <PanelContent tab={activeTab} view={nav.view} />
           </div>
-        )}
 
-        {/* ── Right / split panel ── */}
-        {isSplit && (
-          <div
-            className="flex flex-col overflow-hidden border-l border-border/30"
-            style={{ width: `${100 - leftPct - 0.25}%` }}
-          >
-            {/* Split panel header */}
-            <div className="h-9 flex items-center justify-between px-3 bg-card/40 border-b border-border/30 shrink-0 backdrop-blur-sm">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="h-1.5 w-1.5 rounded-full bg-primary/60" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 truncate">
-                  {splitTab?.title ?? "Split"}
-                </span>
+          {/* ── Drag divider ── */}
+          {isSplit && (
+            <div
+              onMouseDown={onDividerMouseDown}
+              className="w-1 shrink-0 bg-border/40 hover:bg-primary/50 active:bg-primary transition-colors cursor-col-resize z-20 relative group"
+            >
+              {/* drag handle dots */}
+              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {[0,1,2,3,4].map(i => (
+                  <div key={i} className="h-1 w-1 rounded-full bg-primary/80" />
+                ))}
               </div>
-              <button
-                onClick={closeSplit}
-                className="h-5 w-5 rounded-md flex items-center justify-center text-muted-foreground/40 hover:text-white hover:bg-white/10 transition-all shrink-0"
-                title="Chiudi split"
-              >
-                <X className="h-3 w-3" />
-              </button>
             </div>
+          )}
 
-            {/* Split content */}
-            <div className="flex-1 overflow-hidden">
-              <PanelContent tab={splitTab} view={nav.view} />
+          {/* ── Right / split panel ── */}
+          {isSplit && (
+            <div
+              className="flex-1 flex flex-col overflow-hidden border-l border-border/30 relative"
+              style={{ width: `${100 - leftPct - 0.25}%` }}
+            >
+              {/* Split panel header */}
+              <div className="h-9 flex items-center justify-between px-3 bg-card/40 border-b border-border/30 shrink-0 backdrop-blur-sm">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="h-1.5 w-1.5 rounded-full bg-primary/60" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 truncate">
+                    {splitTab?.title ?? "Split"}
+                  </span>
+                </div>
+                <button
+                  onClick={closeSplit}
+                  className="h-5 w-5 rounded-md flex items-center justify-center text-muted-foreground/40 hover:text-white hover:bg-white/10 transition-all shrink-0"
+                  title="Chiudi split"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+
+              {/* Split content */}
+              <div className="flex-1 overflow-hidden">
+                <PanelContent tab={splitTab} view={nav.view} />
+              </div>
             </div>
-          </div>
-        )}
-      </main>
-    </div>
+          )}
+        </main>
+      </div>
+    </PageTransition>
   );
 }

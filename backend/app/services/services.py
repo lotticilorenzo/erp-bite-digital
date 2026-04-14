@@ -266,7 +266,10 @@ async def get_client_health_score(db: AsyncSession, cliente_id: uuid.UUID) -> di
 
     # --- 1. MARGINE (40%) ---
     # Media marginalità sulle commesse ultimi 3 mesi
-    m_stmt = select(Commessa).where(Commessa.cliente_id == cliente_id, Commessa.mese_competenza >= three_months_ago)
+    m_stmt = select(Commessa).where(
+        Commessa.cliente_id == cliente_id, 
+        Commessa.mese_competenza >= three_months_ago
+    ).options(selectinload(Commessa.righe_progetto))
     m_res = await db.execute(m_stmt)
     commesse_recenti = m_res.scalars().all()
     
@@ -294,7 +297,10 @@ async def get_client_health_score(db: AsyncSession, cliente_id: uuid.UUID) -> di
 
     # --- 3. REVISIONI / SCOPE CREEP (20%) ---
     # Ore reali vs ore contratto ultimi 12 mesi
-    r_stmt = select(Commessa).where(Commessa.cliente_id == cliente_id, Commessa.mese_competenza >= one_year_ago)
+    r_stmt = select(Commessa).where(
+        Commessa.cliente_id == cliente_id, 
+        Commessa.mese_competenza >= one_year_ago
+    ).options(selectinload(Commessa.righe_progetto))
     r_res = await db.execute(r_stmt)
     commesse_anno = r_res.scalars().all()
     
@@ -710,6 +716,7 @@ async def list_timesheet(
     mese: Optional[date] = None,
     stato: Optional[TimesheetStatus] = None,
     commessa_id: Optional[uuid.UUID] = None,
+    limit: int = 500,
 ) -> List[Timesheet]:
     q = select(Timesheet).options(selectinload(Timesheet.user))
     if user_id:
@@ -720,7 +727,7 @@ async def list_timesheet(
         q = q.where(Timesheet.stato == stato)
     if commessa_id:
         q = q.where(Timesheet.commessa_id == commessa_id)
-    result = await db.execute(q.order_by(Timesheet.data_attivita.desc()))
+    result = await db.execute(q.order_by(Timesheet.data_attivita.desc()).limit(limit))
     return result.scalars().all()
 
 async def approva_timesheet(

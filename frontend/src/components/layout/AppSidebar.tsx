@@ -47,9 +47,15 @@ import { UserAvatar } from "@/components/common/UserAvatar";
 import { Link, useLocation } from "react-router-dom";
 import { StudioSidebar } from "@/components/studio/StudioSidebar";
 
+// Ruoli con accesso completo all'ERP
+const FULL_ACCESS_ROLES = ["ADMIN", "DEVELOPER"];
+// Ruoli con accesso solo allo Studio OS
+const STUDIO_ONLY_ROLES = ["COLLABORATORE", "DIPENDENTE", "FREELANCER"];
+
 const navItems = [
   {
     title: "Generale",
+    roles: FULL_ACCESS_ROLES,
     items: [
       { title: "Dashboard", url: "/", icon: LayoutDashboard },
       { title: "Analytics", url: "/analytics", icon: PieChart },
@@ -57,6 +63,7 @@ const navItems = [
   },
   {
     title: "Gestione",
+    roles: FULL_ACCESS_ROLES,
     items: [
       { title: "Clienti", url: "/clienti", icon: Users },
       { title: "Progetti", url: "/progetti", icon: FolderOpen },
@@ -67,6 +74,7 @@ const navItems = [
   },
   {
     title: "Execution Hub",
+    roles: FULL_ACCESS_ROLES,
     items: [
       { title: "Timesheet", url: "/timesheet", icon: Timer },
       { title: "Planning", url: "/planning", icon: ClipboardList },
@@ -76,6 +84,7 @@ const navItems = [
   },
   {
     title: "Management Console",
+    roles: FULL_ACCESS_ROLES,
     items: [
       { title: "Fatture", url: "/fatture", icon: FileText },
       { title: "Fornitori", url: "/fornitori", icon: ShoppingCart },
@@ -85,6 +94,7 @@ const navItems = [
   },
   {
     title: "Documenti",
+    roles: FULL_ACCESS_ROLES,
     items: [
       { title: "Report Mensili", url: "/report", icon: BarChart3 },
       { title: "Wiki", url: "/wiki", icon: BookOpen },
@@ -98,6 +108,13 @@ export function AppSidebar() {
   const { state } = useSidebar();
 
   const isStudioOS = location.pathname.startsWith("/studio-os");
+  const userRole = user?.ruolo?.toUpperCase() ?? "";
+  const isStudioOnlyUser = STUDIO_ONLY_ROLES.includes(userRole);
+  
+  // Filtra i gruppi di navigazione in base al ruolo
+  const visibleNavItems = navItems.filter(group => 
+    !group.roles || group.roles.includes(userRole)
+  );
 
   return (
     <Sidebar 
@@ -144,7 +161,7 @@ export function AppSidebar() {
             <StudioSidebar />
           </div>
         ) : (
-          navItems.map((group) => (
+          visibleNavItems.map((group) => (
             <SidebarGroup key={group.title} className="pb-2">
               <SidebarGroupLabel className="px-3 mb-2 text-[10px] uppercase font-black tracking-[0.25em] text-[#475569]">
                 {group.title}
@@ -192,19 +209,22 @@ export function AppSidebar() {
         
         {state !== "collapsed" && (
           <div className="p-1 gap-1 flex bg-muted/50 border border-sidebar-border rounded-xl shadow-inner">
-            <Link 
-              to="/" 
-              className={`
-                flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300
-                ${!isStudioOS 
-                  ? "bg-primary text-primary-foreground shadow-lg" 
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-                }
-              `}
-            >
-              <BarChart3 className={`h-3 w-3 ${!isStudioOS ? "animate-pulse" : ""}`} />
-              ERP
-            </Link>
+            {/* Il bottone ERP è visibile solo agli utenti con accesso completo */}
+            {!isStudioOnlyUser && (
+              <Link 
+                to="/" 
+                className={`
+                  flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300
+                  ${!isStudioOS 
+                    ? "bg-primary text-primary-foreground shadow-lg" 
+                    : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                  }
+                `}
+              >
+                <BarChart3 className={`h-3 w-3 ${!isStudioOS ? "animate-pulse" : ""}`} />
+                ERP
+              </Link>
+            )}
             <Link 
               to="/studio-os" 
               className={`

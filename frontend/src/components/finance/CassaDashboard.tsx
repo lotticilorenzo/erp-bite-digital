@@ -18,7 +18,7 @@ interface CassaDashboardProps {
   movimenti: any[];
 }
 
-const COLORS = ["#7c3aed", "#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#ec4899"];
+const COLORS = ["hsl(var(--primary))", "#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#ec4899"];
 
 export function CassaDashboard({ movimenti }: CassaDashboardProps) {
   const chartData = React.useMemo(() => {
@@ -54,9 +54,9 @@ export function CassaDashboard({ movimenti }: CassaDashboardProps) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="bg-card/40 border-border/50 rounded-3xl overflow-hidden">
+        <Card className="bg-card/30 border-border/50 rounded-[2rem] overflow-hidden backdrop-blur-xl">
           <CardHeader className="pb-2">
-            <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-[#475569] flex items-center gap-2">
+            <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 flex items-center gap-2">
               <Wallet className="h-3.5 w-3.5 text-primary" />
               Saldo Attuale
             </CardTitle>
@@ -69,9 +69,9 @@ export function CassaDashboard({ movimenti }: CassaDashboardProps) {
           </CardContent>
         </Card>
 
-        <Card className="bg-card/40 border-border/50 rounded-3xl overflow-hidden">
+        <Card className="bg-card/30 border-border/50 rounded-[2rem] overflow-hidden backdrop-blur-xl transition-all hover:border-emerald-500/30">
           <CardHeader className="pb-2">
-            <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-[#475569] flex items-center gap-2">
+            <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 flex items-center gap-2">
               <ArrowUpRight className="h-3.5 w-3.5 text-emerald-500" />
               Entrate (Mese)
             </CardTitle>
@@ -83,9 +83,9 @@ export function CassaDashboard({ movimenti }: CassaDashboardProps) {
           </CardContent>
         </Card>
 
-        <Card className="bg-card/40 border-border/50 rounded-3xl overflow-hidden">
+        <Card className="bg-card/30 border-border/50 rounded-[2rem] overflow-hidden backdrop-blur-xl transition-all hover:border-red-500/30">
           <CardHeader className="pb-2">
-            <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-[#475569] flex items-center gap-2">
+            <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 flex items-center gap-2">
               <ArrowDownLeft className="h-3.5 w-3.5 text-red-500" />
               Uscite (Mese)
             </CardTitle>
@@ -99,10 +99,10 @@ export function CassaDashboard({ movimenti }: CassaDashboardProps) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 bg-background/50 border-border/50 rounded-3xl p-6">
-          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#475569] mb-6">Andamento Cashflow</h3>
+        <Card className="lg:col-span-2 bg-card/30 border-border/50 rounded-[2rem] p-8 backdrop-blur-xl overflow-hidden relative">
+          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 mb-8 px-1">Andamento Cashflow</h3>
           <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" debounce={50}>
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
@@ -128,10 +128,10 @@ export function CassaDashboard({ movimenti }: CassaDashboardProps) {
           </div>
         </Card>
 
-        <Card className="bg-background/50 border-border/50 rounded-3xl p-6">
-          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#475569] mb-6">Analisi Categorie</h3>
+        <Card className="bg-card/30 border-border/50 rounded-[2rem] p-8 backdrop-blur-xl overflow-hidden">
+          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 mb-8 px-1">Analisi Categorie</h3>
           <div className="h-[250px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" debounce={50}>
               <PieChart>
                 <Pie
                   data={categoryData}

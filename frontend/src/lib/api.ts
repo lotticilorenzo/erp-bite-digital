@@ -15,6 +15,9 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// ── Previene redirect multipli su 401 simultanei ──────────
+let _isRedirectingToLogin = false;
+
 // ── RESPONSE INTERCEPTOR: gestione errori centralizzata ───
 api.interceptors.response.use(
   (response) => response,
@@ -22,8 +25,13 @@ api.interceptors.response.use(
     const status = error.response?.status;
 
     if (status === 401 && !window.location.pathname.startsWith("/login")) {
-      localStorage.removeItem("BITE_ERP_TOKEN");
-      window.location.href = "/login";
+      if (!_isRedirectingToLogin) {
+        _isRedirectingToLogin = true;
+        localStorage.removeItem("BITE_ERP_TOKEN");
+        // Reset flag after navigation so future logins work
+        setTimeout(() => { _isRedirectingToLogin = false; }, 3000);
+        window.location.href = "/login";
+      }
       return Promise.reject(error);
     }
 

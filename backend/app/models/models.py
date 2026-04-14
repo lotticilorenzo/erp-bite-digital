@@ -15,10 +15,14 @@ import enum
 
 # ── ENUMS ─────────────────────────────────────────────────
 class UserRole(str, enum.Enum):
-    ADMIN = "ADMIN"
-    PM = "PM"
-    DIPENDENTE = "DIPENDENTE"
-    FREELANCER = "FREELANCER"
+    # ── RUOLI ATTIVI ──────────────────────────────────────────
+    ADMIN = "ADMIN"           # Accesso totale: Finance + Operations + Gestione Utenti
+    DEVELOPER = "DEVELOPER"   # Accesso totale: come ADMIN (per sviluppatori del gestionale)
+    COLLABORATORE = "COLLABORATORE"  # Solo Studio OS (partner esterni / freelance)
+    DIPENDENTE = "DIPENDENTE" # Solo Studio OS (team interno)
+    # ── LEGACY (mantenuti per compatibilità DB) ───────────────
+    PM = "PM"                 # @deprecated → usare COLLABORATORE o ADMIN
+    FREELANCER = "FREELANCER" # @deprecated → usare COLLABORATORE
 
 
 class ServiceType(str, enum.Enum):

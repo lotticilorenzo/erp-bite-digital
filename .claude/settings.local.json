@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout:*)",
+      "Bash(npm run:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(docker exec bite_erp_db psql -U bite -d bite_erp -c ':*)",
+      "Bash(pip show:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker restart:*)",
+      "Bash(xargs wc:*)",
+      "Bash(grep -v \"//\")",
+      "Bash(grep -B 5 \"current_user.id ==\" /c/Users/lotti/Desktop/erp-bite-digital/backend/app/api/v1/*.py)",
+      "Bash(npm list:*)",
+      "Bash(npm install:*)"
+    ]
+  }
+}

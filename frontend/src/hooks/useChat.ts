@@ -43,7 +43,7 @@ export function useChat() {
       return res.data;
     },
     enabled: !!token,
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 60s — ridotto carico server
   });
 
   const { data: users } = useQuery({

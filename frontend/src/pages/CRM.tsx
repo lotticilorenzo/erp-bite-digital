@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export default function CRM() {
-  const { leads, stages, stats, createLead, convertLeadToClient, deleteLead } = useCRM();
+  const { leads, stages, stats, isLoading, createLead, convertLeadToClient, deleteLead } = useCRM();
   const navigate = useNavigate();
   const [view, setView] = useState<"kanban" | "list" | "automations" | "settings">("kanban");
   const [search, setSearch] = useState("");
@@ -57,7 +57,7 @@ export default function CRM() {
   });
 
   return (
-    <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 h-screen flex flex-col overflow-hidden">
+    <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-200 h-screen flex flex-col overflow-hidden">
       {/* Page Header */}
       <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-5">
@@ -100,8 +100,18 @@ export default function CRM() {
         </div>
       </div>
 
+      {/* Loading skeleton */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="flex items-center gap-3 text-muted-foreground/60">
+            <div className="h-4 w-4 rounded-full border-2 border-primary/40 border-t-primary animate-spin" />
+            <span className="text-xs font-black uppercase tracking-widest">Caricamento pipeline...</span>
+          </div>
+        </div>
+      )}
+
       {/* KPI Stats */}
-      <CRMStats stats={stats || { valore_totale_pipeline: 0, numero_lead_attivi: 0, tasso_conversione: 0, previsione_ricavi: 0 }} />
+      {!isLoading && <CRMStats stats={stats || { valore_totale_pipeline: 0, numero_lead_attivi: 0, tasso_conversione: 0, previsione_ricavi: 0 }} />}
 
       {/* Filters & Actions */}
       {/* Filters & Actions */}

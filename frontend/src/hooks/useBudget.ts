@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 import type { BudgetCategory, BudgetMensile, BudgetConsuntivo } from "@/types/budget";
 import { format } from "date-fns";
 
@@ -32,6 +33,9 @@ export function useBudget(mese?: Date) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budget-consuntivo"], exact: false });
     },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nel salvataggio del budget");
+    },
   });
 
   const copyBudget = useMutation({
@@ -42,6 +46,9 @@ export function useBudget(mese?: Date) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budget-consuntivo"], exact: false });
     },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nella copia del budget");
+    },
   });
 
   const createCategory = useMutation({
@@ -51,6 +58,9 @@ export function useBudget(mese?: Date) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budget-categories"], exact: false });
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nella creazione della categoria");
     },
   });
 

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { toast } from "sonner";
 import type { Progetto } from "@/types";
 
 export function useProgetti(clienteId?: string, stato?: string) {
@@ -37,6 +38,9 @@ export function useCreateProgetto() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["progetti"], exact: false });
     },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nella creazione del progetto");
+    },
   });
 }
 
@@ -51,6 +55,9 @@ export function useUpdateProgetto() {
       queryClient.invalidateQueries({ queryKey: ["progetti"], exact: false });
       queryClient.invalidateQueries({ queryKey: ["progetti", variables.id], exact: false });
     },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nell'aggiornamento del progetto");
+    },
   });
 }
 
@@ -62,6 +69,9 @@ export function useDeleteProgetto() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["progetti"], exact: false });
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail ?? "Errore nell'eliminazione del progetto");
     },
   });
 }
