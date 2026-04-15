@@ -57,6 +57,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { ClientAvatar } from "@/components/common/ClientAvatar";
+import { ForecastWidget } from "@/components/analytics/ForecastWidget";
 import {
   REPORTING_PERIOD_OPTIONS,
   formatDateInput,
@@ -1709,7 +1710,9 @@ export default function Analytics() {
           <div className="h-8 w-1.5 bg-primary rounded-full" />
           <h2 className="text-xl font-black uppercase tracking-tighter italic text-foreground">Forecast Business <span className="text-primary not-italic">(30/60/90g)</span></h2>
         </div>
-        
+
+        <ForecastWidget />
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {forecastData?.map((f) => {
             const relColor = f.reliability === "ALTA" ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20"

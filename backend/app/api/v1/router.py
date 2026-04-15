@@ -1099,6 +1099,115 @@ async def dashboard_kpi(
     response.headers["Cache-Control"] = "private, max-age=120"
     return await get_dashboard_kpi(db, mese)
 
+@router.get("/analytics/forecast", tags=["Analytics"])
+async def get_analytics_forecast(
+    mesi: int = Query(3, ge=1, le=12),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
+):
+    """Forecast ricavi prossimi N mesi: commesse certe + CRM pipeline + storico."""
+    from app.models.models import Commessa, CommessaStatus, CRMLead
+    from sqlalchemy.orm import selectinload as sil
+    from dateutil.relativedelta import relativedelta
+
+    today = date.today()
+    base_month = date(today.year, today.month, 1)
+
+    # Genera mesi futuri
+    forecast_months = [base_month + relativedelta(months=i) for i in range(1, mesi + 1)]
+
+    # ── 1. Commesse future (ricavo certo) ─────────────────
+    future_result = await db.execute(
+        select(Commessa)
+        .options(sil(Commessa.righe_progetto), sil(Commessa.cliente))
+        .where(
+            Commessa.mese_competenza.in_(forecast_months),
+            Commessa.stato.in_([CommessaStatus.APERTA, CommessaStatus.PRONTA_CHIUSURA])
+        )
+    )
+    future_commesse = future_result.scalars().unique().all()
+    commesse_by_month: dict[date, list] = {m: [] for m in forecast_months}
+    for c in future_commesse:
+        if c.mese_competenza in commesse_by_month:
+            commesse_by_month[c.mese_competenza].append(c)
+
+    # ── 2. Storico (media ultimi 24 mesi per stesso mese calendario) ──
+    cutoff = base_month - relativedelta(months=24)
+    hist_result = await db.execute(
+        select(Commessa)
+        .options(sil(Commessa.righe_progetto))
+        .where(Commessa.mese_competenza >= cutoff, Commessa.mese_competenza < base_month)
+    )
+    hist_by_month_num: dict[int, list[float]] = {}
+    for c in hist_result.scalars().unique().all():
+        val = float(c.valore_fatturabile_calc)
+        if val > 0:
+            hist_by_month_num.setdefault(c.mese_competenza.month, []).append(val)
+    storico_avg = {mn: sum(vals) / len(vals) for mn, vals in hist_by_month_num.items()}
+
+    # ── 3. CRM Pipeline ────────────────────────────────────
+    leads_result = await db.execute(
+        select(CRMLead)
+        .options(sil(CRMLead.stadio))
+        .where(CRMLead.valore_stimato > 0)
+    )
+    crm_by_month: dict[date, list[dict]] = {m: [] for m in forecast_months}
+    for lead in leads_result.scalars().all():
+        prob = lead.probabilita_chiusura
+        if prob == 0 and lead.stadio:
+            prob = lead.stadio.probabilita
+        if prob <= 0 or prob >= 100:
+            continue
+        # Assegna al mese basandosi su data_prossimo_followup, altrimenti al più vicino
+        target = forecast_months[0]
+        if lead.data_prossimo_followup:
+            fm = date(lead.data_prossimo_followup.year, lead.data_prossimo_followup.month, 1)
+            if fm in crm_by_month:
+                target = fm
+        crm_by_month[target].append({
+            "id": str(lead.id),
+            "nome": lead.nome_azienda,
+            "valore": float(lead.valore_stimato),
+            "probabilita": prob,
+            "valore_pesato": round(float(lead.valore_stimato) * prob / 100, 2),
+        })
+
+    # ── Costruisci risposta ────────────────────────────────
+    months_out = []
+    for m in forecast_months:
+        commesse = commesse_by_month[m]
+        ricavo_certo = sum(float(c.valore_fatturabile_calc) for c in commesse)
+        crm_leads = crm_by_month[m]
+        ricavo_pipeline = sum(l["valore_pesato"] for l in crm_leads)
+        storico = storico_avg.get(m.month, 0.0)
+        months_out.append({
+            "mese": m.strftime("%Y-%m-%d"),
+            "ricavo_certo": round(ricavo_certo, 2),
+            "ricavo_pipeline_crm": round(ricavo_pipeline, 2),
+            "ricavo_totale": round(ricavo_certo + ricavo_pipeline, 2),
+            "ricavo_storico": round(storico, 2),
+            "num_commesse": len(commesse),
+            "num_lead_crm": len(crm_leads),
+            "top_lead": sorted(crm_leads, key=lambda x: x["valore_pesato"], reverse=True)[:3],
+            "commesse_detail": [
+                {"id": str(c.id), "cliente": c.cliente.ragione_sociale if c.cliente else "?",
+                 "valore": float(c.valore_fatturabile_calc), "stato": c.stato}
+                for c in commesse
+            ],
+        })
+
+    total_certo = sum(r["ricavo_certo"] for r in months_out)
+    total_pipeline = sum(r["ricavo_pipeline_crm"] for r in months_out)
+    return {
+        "mesi": months_out,
+        "kpi": {
+            "ricavi_certi": round(total_certo, 2),
+            "pipeline_crm": round(total_pipeline, 2),
+            "totale_previsto": round(total_certo + total_pipeline, 2),
+        },
+    }
+
+
 @router.get("/report/marginalita", tags=["Report"])
 async def report_marginalita(
     response: Response,

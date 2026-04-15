@@ -30,6 +30,7 @@ import { useUpdateClienteAffidabilita } from "@/hooks/useClienti";
 import { DashboardKpiCard } from "@/components/analytics/DashboardKpiCard";
 import { PageTransition } from "@/components/common/PageTransition";
 import { ForecastTable } from "@/components/analytics/ForecastTable";
+import { ForecastWidget } from "@/components/analytics/ForecastWidget";
 import { CommessaDialog } from "@/components/commesse/CommessaDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -670,6 +671,10 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="pt-4">
+        <ForecastWidget />
       </div>
 
       <div className="pt-4">
