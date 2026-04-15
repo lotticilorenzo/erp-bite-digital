@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { 
   BarChart, 
   Bar, 
@@ -6,7 +6,6 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer,
   Cell
 } from "recharts";
 import { 
@@ -74,6 +73,15 @@ const getInitials = (firstName: string, lastName: string) => {
 };
 
 export default function CaricoLavoroPage() {
+  const chartRef = useRef<HTMLDivElement>(null);
+  const [chartW, setChartW] = useState(0);
+  useEffect(() => {
+    const el = chartRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setChartW(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const [period, setPeriod] = useState<Period>("oggi");
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const { data: users, isLoading: loadingUsers } = useUsers();
@@ -300,92 +308,94 @@ export default function CaricoLavoroPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-8 relative overflow-visible">
-                <div style={{ height: Math.max(500, chartData.length * 70) }}>
-                  <ResponsiveContainer width="100%" height="100%" debounce={50}>
-                    <BarChart 
-                      data={chartData} 
-                      layout="vertical" 
-                      margin={{ left: 100, right: 30, top: 20, bottom: 20 }}
-                      barCategoryGap={25}
-                    >
-                      <CartesianGrid strokeDasharray="4 4" stroke="#ffffff05" horizontal={false} />
-                      <XAxis type="number" hide={true} />
-                      <YAxis 
-                        dataKey="fullName" 
-                        type="category" 
-                        width={100}
-                        tick={(props: any) => {
-                          const { x, y, payload } = props;
-                          const user = chartData.find(u => u.fullName === payload.value);
-                          if (!user) return null;
-                          return (
-                            <g transform={`translate(${x - 90},${y - 20})`}>
-                              <foreignObject width="100" height="50">
-                                <div className="flex flex-col items-center justify-center space-y-1 pr-4">
-                                  <div className={cn(
-                                    "h-8 w-8 rounded-full flex items-center justify-center text-[8px] font-[900] text-white border-2 border-background shadow-lg",
-                                    getAvatarColor(user.fullName)
-                                  )}>
-                                    {getInitials(user.name, user.lastName)}
+                <div ref={chartRef} style={{ width: '100%', height: Math.max(500, chartData.length * 70) }}>
+                  {chartW > 0 && (
+                      <BarChart
+                          width={chartW}
+                          height={Math.max(500, chartData.length * 70)}
+                          data={chartData} 
+                          layout="vertical" 
+                          margin={{ left: 100, right: 30, top: 20, bottom: 20 }}
+                          barCategoryGap={25}
+                        >
+                          <CartesianGrid strokeDasharray="4 4" stroke="#ffffff05" horizontal={false} />
+                          <XAxis type="number" hide={true} />
+                          <YAxis 
+                            dataKey="fullName" 
+                            type="category" 
+                            width={100}
+                            tick={(props: any) => {
+                              const { x, y, payload } = props;
+                              const user = chartData.find(u => u.fullName === payload.value);
+                              if (!user) return null;
+                              return (
+                                <g transform={`translate(${x - 90},${y - 20})`}>
+                                  <foreignObject width="100" height="50">
+                                    <div className="flex flex-col items-center justify-center space-y-1 pr-4">
+                                      <div className={cn(
+                                        "h-8 w-8 rounded-full flex items-center justify-center text-[8px] font-[900] text-white border-2 border-background shadow-lg",
+                                        getAvatarColor(user.fullName)
+                                      )}>
+                                        {getInitials(user.name, user.lastName)}
+                                      </div>
+                                      <span className="text-[9px] font-black text-muted-foreground/80 uppercase text-center w-full truncate px-1">
+                                        {user.name}
+                                      </span>
+                                    </div>
+                                  </foreignObject>
+                                </g>
+                              );
+                            }}
+                          />
+                        <Tooltip 
+                          cursor={{ fill: 'rgba(255,255,255,0.02)', radius: 12 }}
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <motion.div 
+                                  initial={{ scale: 0.95, opacity: 0 }}
+                                  animate={{ scale: 1, opacity: 1 }}
+                                  className="bg-card/95 border border-primary/20 p-5 rounded-[24px] shadow-2xl backdrop-blur-2xl min-w-[200px]"
+                                >
+                                  <p className="text-xs font-black text-white uppercase mb-3 pb-2 border-b border-primary/10 tracking-widest">{data.fullName}</p>
+                                  <div className="space-y-2.5">
+                                    <div className="flex justify-between gap-8 text-[11px] font-bold">
+                                      <span className="text-muted-foreground">Programmate:</span>
+                                      <span className="text-white">{data.actualTotal.toFixed(1)}h</span>
+                                    </div>
+                                    <div className="flex justify-between gap-8 text-[11px] font-bold">
+                                      <span className="text-muted-foreground">Capacità Max:</span>
+                                      <span className="text-white">{data.total.toFixed(1)}h</span>
+                                    </div>
+                                    {data.excess > 0 ? (
+                                      <div className="flex justify-between gap-8 text-[11px] font-bold py-1 px-2 bg-rose-500/10 rounded-lg">
+                                        <span className="text-rose-500 uppercase tracking-tighter">Overload:</span>
+                                        <span className="text-rose-500 font-black">+{data.excess.toFixed(1)}h</span>
+                                      </div>
+                                    ) : (
+                                      <div className="flex justify-between gap-8 text-[11px] font-bold py-1 px-2 bg-emerald-500/10 rounded-lg">
+                                        <span className="text-emerald-500 uppercase tracking-tighter">Libere:</span>
+                                        <span className="text-emerald-500 font-black">-{data.free.toFixed(1)}h</span>
+                                      </div>
+                                    )}
                                   </div>
-                                  <span className="text-[9px] font-black text-muted-foreground/80 uppercase text-center w-full truncate px-1">
-                                    {user.name}
-                                  </span>
-                                </div>
-                              </foreignObject>
-                            </g>
-                          );
-                        }}
-                      />
-                    <Tooltip 
-                      cursor={{ fill: 'rgba(255,255,255,0.02)', radius: 12 }}
-                      content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
-                          return (
-                            <motion.div 
-                              initial={{ scale: 0.95, opacity: 0 }}
-                              animate={{ scale: 1, opacity: 1 }}
-                              className="bg-card/95 border border-primary/20 p-5 rounded-[24px] shadow-2xl backdrop-blur-2xl min-w-[200px]"
-                            >
-                              <p className="text-xs font-black text-white uppercase mb-3 pb-2 border-b border-primary/10 tracking-widest">{data.fullName}</p>
-                              <div className="space-y-2.5">
-                                <div className="flex justify-between gap-8 text-[11px] font-bold">
-                                  <span className="text-muted-foreground">Programmate:</span>
-                                  <span className="text-white">{data.actualTotal.toFixed(1)}h</span>
-                                </div>
-                                <div className="flex justify-between gap-8 text-[11px] font-bold">
-                                  <span className="text-muted-foreground">Capacità Max:</span>
-                                  <span className="text-white">{data.total.toFixed(1)}h</span>
-                                </div>
-                                {data.excess > 0 ? (
-                                  <div className="flex justify-between gap-8 text-[11px] font-bold py-1 px-2 bg-rose-500/10 rounded-lg">
-                                    <span className="text-rose-500 uppercase tracking-tighter">Overload:</span>
-                                    <span className="text-rose-500 font-black">+{data.excess.toFixed(1)}h</span>
-                                  </div>
-                                ) : (
-                                  <div className="flex justify-between gap-8 text-[11px] font-bold py-1 px-2 bg-emerald-500/10 rounded-lg">
-                                    <span className="text-emerald-500 uppercase tracking-tighter">Libere:</span>
-                                    <span className="text-emerald-500 font-black">-{data.free.toFixed(1)}h</span>
-                                  </div>
-                                )}
-                              </div>
-                              <p className="mt-4 text-[9px] font-black uppercase text-primary tracking-[0.2em]">Saturation {Math.round(data.perc)}%</p>
-                            </motion.div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <Bar dataKey="programmed" stackId="a" fill="hsl(var(--primary))" radius={[0, 0, 0, 0]} barSize={32}>
-                       {chartData.map((entry, index) => (
-                        <Cell key={index} fill={entry.perc > 100 ? 'hsl(var(--destructive))' : entry.perc > 90 ? 'hsl(var(--warning))' : 'hsl(var(--primary))'} fillOpacity={0.9} />
-                      ))}
-                    </Bar>
-                    <Bar dataKey="free" stackId="a" fill="hsl(var(--chart-2))" radius={[0, 10, 10, 0]} barSize={32} fillOpacity={0.15} stroke="hsl(var(--chart-2))" strokeWidth={1} strokeDasharray="2 2" />
-                    <Bar dataKey="excess" stackId="a" fill="hsl(var(--destructive))" radius={[0, 10, 10, 0]} barSize={32} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                                  <p className="mt-4 text-[9px] font-black uppercase text-primary tracking-[0.2em]">Saturation {Math.round(data.perc)}%</p>
+                                </motion.div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        <Bar dataKey="programmed" stackId="a" fill="hsl(var(--primary))" radius={[0, 0, 0, 0]} barSize={32}>
+                           {chartData.map((entry, index) => (
+                            <Cell key={index} fill={entry.perc > 100 ? 'hsl(var(--destructive))' : entry.perc > 90 ? 'hsl(var(--warning))' : 'hsl(var(--primary))'} fillOpacity={0.9} />
+                          ))}
+                        </Bar>
+                        <Bar dataKey="free" stackId="a" fill="hsl(var(--chart-2))" radius={[0, 10, 10, 0]} barSize={32} fillOpacity={0.15} stroke="hsl(var(--chart-2))" strokeWidth={1} strokeDasharray="2 2" />
+                        <Bar dataKey="excess" stackId="a" fill="hsl(var(--destructive))" radius={[0, 10, 10, 0]} barSize={32} />
+                        </BarChart>
+                  )}
                 </div>
               </CardContent>
             </Card>

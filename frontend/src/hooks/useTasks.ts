@@ -13,12 +13,15 @@ export function useTasks(filters?: {
   return useQuery({
     queryKey: ["studio-tasks", filters],
     queryFn: async () => {
-      // Add parent_only=true by default if not specified to clean up the main list
-      const actualFilters = { 
-        parent_only: true, // Default to true unless explicitly false
-        ...filters 
+      const actualFilters: Record<string, any> = {
+        parent_only: true,
+        ...filters
       };
-      
+      // Strip falsy string values so the backend (which expects UUID) doesn't get ""
+      Object.keys(actualFilters).forEach(k => {
+        if (actualFilters[k] === "" || actualFilters[k] === null) delete actualFilters[k];
+      });
+
       const { data } = await api.get<any[]>("/tasks", { params: actualFilters });
       
       const mapTask = (t: any): TaskSO => ({

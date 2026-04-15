@@ -1,3 +1,4 @@
+import React from "react";
 import {
   LayoutDashboard,
   Users,
@@ -17,6 +18,7 @@ import {
   Target,
   BookOpen,
   FolderOpen,
+  GripVertical,
 } from "lucide-react";
 
 // ... (other imports)
@@ -51,6 +53,10 @@ import { StudioSidebar } from "@/components/studio/StudioSidebar";
 const FULL_ACCESS_ROLES = ["ADMIN", "DEVELOPER"];
 // Ruoli con accesso solo allo Studio OS
 const STUDIO_ONLY_ROLES = ["COLLABORATORE", "DIPENDENTE", "FREELANCER"];
+const STUDIO_SIDEBAR_WIDTH_KEY = "studio_os_sidebar_width";
+const STUDIO_SIDEBAR_DEFAULT_WIDTH = 320;
+const STUDIO_SIDEBAR_MIN_WIDTH = 280;
+const STUDIO_SIDEBAR_MAX_WIDTH = 440;
 
 const navItems = [
   {
@@ -78,7 +84,6 @@ const navItems = [
     items: [
       { title: "Timesheet", url: "/timesheet", icon: Timer },
       { title: "Planning", url: "/planning", icon: ClipboardList },
-      { title: "Gantt", url: "/gantt", icon: LayoutDashboard },
       { title: "Collaboratori", url: "/collaboratori", icon: Users },
     ],
   },
@@ -106,6 +111,14 @@ export function AppSidebar() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const { state } = useSidebar();
+  const [studioSidebarWidth, setStudioSidebarWidth] = React.useState<number>(() => {
+    if (typeof window === "undefined") return STUDIO_SIDEBAR_DEFAULT_WIDTH;
+    const saved = window.localStorage.getItem(STUDIO_SIDEBAR_WIDTH_KEY);
+    const parsed = saved ? Number(saved) : NaN;
+    return Number.isFinite(parsed)
+      ? Math.min(STUDIO_SIDEBAR_MAX_WIDTH, Math.max(STUDIO_SIDEBAR_MIN_WIDTH, parsed))
+      : STUDIO_SIDEBAR_DEFAULT_WIDTH;
+  });
 
   const isStudioOS = location.pathname.startsWith("/studio-os");
   const userRole = user?.ruolo?.toUpperCase() ?? "";
@@ -116,10 +129,46 @@ export function AppSidebar() {
     !group.roles || group.roles.includes(userRole)
   );
 
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(STUDIO_SIDEBAR_WIDTH_KEY, String(studioSidebarWidth));
+  }, [studioSidebarWidth]);
+
+  const handleSidebarResizeStart = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!isStudioOS || state === "collapsed") return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startX = event.clientX;
+    const startWidth = studioSidebarWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const nextWidth = Math.min(
+        STUDIO_SIDEBAR_MAX_WIDTH,
+        Math.max(STUDIO_SIDEBAR_MIN_WIDTH, startWidth + (moveEvent.clientX - startX))
+      );
+      setStudioSidebarWidth(nextWidth);
+    };
+
+    const handleMouseUp = () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  }, [isStudioOS, state, studioSidebarWidth]);
+  
   return (
     <Sidebar 
       variant="sidebar" 
       collapsible="icon" 
+      style={isStudioOS ? ({ "--sidebar-width": `${studioSidebarWidth}px` } as React.CSSProperties) : undefined}
       className="border-r border-sidebar-border/40 bg-sidebar/80 backdrop-blur-2xl h-full shadow-[20px_0_40px_-15px_rgba(0,0,0,0.5)] transition-all duration-700"
     >
       <SidebarHeader className="pt-6 px-4 pb-4">
@@ -303,6 +352,19 @@ export function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+
+      {isStudioOS && state !== "collapsed" && (
+        <div
+          onMouseDown={handleSidebarResizeStart}
+          onDoubleClick={() => setStudioSidebarWidth(STUDIO_SIDEBAR_DEFAULT_WIDTH)}
+          className="absolute right-0 top-0 hidden h-full w-4 translate-x-1/2 cursor-col-resize md:flex items-center justify-center z-30 group/sidebar-resize"
+          title="Trascina per allargare o restringere"
+        >
+          <div className="flex h-16 w-2 items-center justify-center rounded-full border border-white/10 bg-background/80 text-muted-foreground/50 shadow-lg backdrop-blur-sm transition-all group-hover/sidebar-resize:h-24 group-hover/sidebar-resize:border-primary/30 group-hover/sidebar-resize:text-primary">
+            <GripVertical className="h-4 w-4" />
+          </div>
+        </div>
+      )}
     </Sidebar>
   );
 }

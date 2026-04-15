@@ -20,3 +20,22 @@ build/
 .DS_Store
 *.zip
 *.docx
+*.db
+
+# Log e output temporanei
+*.log
+backend/*.txt
+backend/tmp/
+scratch/
+tmp/
+output/
+
+# Playwright CLI (artefatti debug)
+.playwright-cli/
+
+# File con nome strano (artefatti editor)
+el.getAttribute*
+[data-studio*
+
+# Claude settings locali
+.claude/settings.local.json

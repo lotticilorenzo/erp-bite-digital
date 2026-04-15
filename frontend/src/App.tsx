@@ -24,7 +24,6 @@ const AnalyticsPage = React.lazy(() => import("./pages/Analytics"));
 const ReportsPage = React.lazy(() => import("./pages/Reports"));
 const PlanningPage = React.lazy(() => import("./pages/Planning"));
 const CollaboratoriPage = React.lazy(() => import("./pages/Collaboratori"));
-const GanttPage = React.lazy(() => import("./pages/GanttPage"));
 const BudgetPage = React.lazy(() => import("./components/budget/BudgetPage"));
 const WikiPage = React.lazy(() => import("./components/wiki/WikiPage"));
 const CRMPage = React.lazy(() => import("./pages/CRM"));
@@ -111,7 +110,6 @@ function App() {
               <Route path="/planning" element={<PlanningPage />} />
               <Route path="/collaboratori" element={<CollaboratoriPage />} />
               <Route path="/fornitori" element={<Fornitori />} />
-              <Route path="/gantt" element={<GanttPage />} />
               <Route path="/budget" element={<BudgetPage />} />
               <Route path="/wiki" element={<WikiPage />} />
               <Route path="/crm" element={<CRMPage />} />

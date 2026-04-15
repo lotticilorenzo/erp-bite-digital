@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { CommessaTable } from "@/components/commesse/CommessaTable";
 import { CommessaDialog } from "@/components/commesse/CommessaDialog";
 import { useCommesse, useDeleteCommessa } from "@/hooks/useCommesse";

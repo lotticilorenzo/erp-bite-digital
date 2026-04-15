@@ -2336,7 +2336,7 @@ async def get_budget_consuntivo(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    from app.models.models import BudgetCategory, BudgetMensile, MovimentoCassa, FatturaPassiva, Notification, NotificationType
+    from app.models.models import BudgetCategory, BudgetMensile, MovimentoCassa, FatturaPassiva, Notification
     from sqlalchemy import and_, or_
     
     mese_start = mese.replace(day=1)
@@ -2401,27 +2401,28 @@ async def get_budget_consuntivo(
             msg = ""
             
             if total_spent >= threshold_100:
-                alert_type = NotificationType.URGENT
+                alert_type = "ERROR"
                 msg = f"Budget SUPERATO per {cat.nome}: {total_spent}€ / {budget_amt}€"
             elif total_spent >= threshold_80:
-                alert_type = NotificationType.WARNING
+                alert_type = "WARNING"
                 msg = f"Budget quasi esaurito (80%) per {cat.nome}: {total_spent}€ / {budget_amt}€"
-            
+
             if alert_type:
                 # Check if notification already exists for this month/category/type
                 check_stmt = select(Notification).where(
                     and_(
-                        Notification.tipo == alert_type,
-                        Notification.titolo.like(f"%{cat.nome}%"),
+                        Notification.type == alert_type,
+                        Notification.title.like(f"%{cat.nome}%"),
                         Notification.created_at >= datetime.combine(mese_start, datetime.min.time())
                     )
                 )
                 res_check = await db.execute(check_stmt)
                 if not res_check.scalar_one_or_none():
                     new_notif = Notification(
-                        tipo=alert_type,
-                        titolo=f"Alert Budget: {cat.nome}",
-                        messaggio=msg,
+                        user_id=current_user.id,
+                        type=alert_type,
+                        title=f"Alert Budget: {cat.nome}",
+                        message=msg,
                         link=f"/budget?mese={mese_start.isoformat()}"
                     )
                     db.add(new_notif)

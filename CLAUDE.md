@@ -116,4 +116,59 @@ L'obiettivo imminente è la modernizzazione del frontend mantendo il backend att
 - Ogni nuova feature va prima pianificata e approvata
 - Mantieni sempre la compatibilità con Docker Compose esistente
 - Il branch main è quello di produzione, usa sempre branch separati
+
+## 13. DEPLOY SU DIGITAL OCEAN — "pusha sito online"
+
+Quando l'utente dice **"pusha sito online"** o **"deploya"**, esegui questa procedura:
+
+### Dati server
+- **IP**: `178.128.198.11`
+- **URL**: `http://178.128.198.11`
+- **SSH**: `ssh bite-do` (chiave `~/.ssh/bite_erp_do`, già configurata)
+- **Path progetto sul server**: `/mio-gestionale`
+- **SSH user**: `root`
+
+### Setup SSH (una tantum — già eseguito)
+```bash
+# Chiave generata in: ~/.ssh/bite_erp_do
+# Config SSH in:      ~/.ssh/config  (alias: bite-do)
+# Per rigenerare la chiave o re-installare sul server:
+#   bash setup_ssh_do.bat
+```
+
+### Procedura deploy completa (codice)
+```bash
+# 1. Commit + push locale su GitHub
+cd /c/Users/lotti/Desktop/erp-bite-digital
+git add -A
+git commit -m "deploy: descrizione modifiche"
+git push origin main
+
+# 2. Pull sul server
+ssh bite-do "cd /mio-gestionale && git pull origin main"
+
+# 3. Build frontend
+ssh bite-do "cd /mio-gestionale/frontend && npm install --legacy-peer-deps && npm run build"
+
+# 4. Rebuild e restart containers
+ssh bite-do "cd /mio-gestionale/backend && docker-compose up --build -d"
+```
+
+### Procedura sync DB (dati locali → server)
+**ATTENZIONE**: sovrascrive il DB sul server. Usare solo per migrare i dati locali.
+```bash
+# 1. Dump locale
+docker exec bite_erp_db pg_dump -U bite --no-owner --no-privileges bite_erp > /tmp/bite_erp_dump.sql
+
+# 2. Copia sul server
+scp -i ~/.ssh/bite_erp_do /tmp/bite_erp_dump.sql root@178.128.198.11:/tmp/bite_erp_dump.sql
+
+# 3. Restore sul server
+ssh bite-do "docker exec -i bite_erp_db psql -U bite -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;' bite_erp && docker exec -i bite_erp_db psql -U bite bite_erp < /tmp/bite_erp_dump.sql"
+```
+
+### Script pronti (doppio click su Windows)
+- `deploy.bat` — deploy codice completo (commit + push + build + restart)
+- `sync_db_to_server.bat` — sync dati DB locale → server
+- `setup_ssh_do.bat` — setup chiave SSH (solo se la chiave va rigenerata)
 - Testa sempre in locale prima di pushare

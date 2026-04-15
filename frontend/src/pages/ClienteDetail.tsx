@@ -56,6 +56,10 @@ import type { Preventivo, PreventivoStatus } from "@/types/preventivi";
 import { toast } from "sonner";
 
 export default function ClienteDetailPage() {
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: cliente, isLoading: loadingC } = useCliente(id);
@@ -335,33 +339,37 @@ export default function ClienteDetailPage() {
           </div>
         </CardHeader>
         <CardContent className="pt-8 h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={projectionData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-              <XAxis 
-                dataKey="month" 
-                stroke="hsl(var(--muted-foreground))" 
-                fontSize={10} 
-                fontWeight="bold" 
-                tickLine={false} 
-                axisLine={false} 
-              />
-              <YAxis 
-                stroke="hsl(var(--muted-foreground))" 
-                fontSize={10} 
-                fontWeight="bold" 
-                tickLine={false} 
-                axisLine={false}
-                tickFormatter={(val) => `€${val/1000}k`}
-              />
-              <Tooltip 
-                contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "16px", fontSize: "12px", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)" }}
-                itemStyle={{ fontWeight: "black", color: "hsl(var(--primary))" }}
-                cursor={{ fill: "hsl(var(--primary)/0.05)" }}
-              />
-              <Bar dataKey="projected" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} barSize={24} />
-            </BarChart>
-          </ResponsiveContainer>
+          <div style={{ width: '100%', height: '100%', minWidth: 0, minHeight: 0, position: 'relative' }}>
+            {isMounted && (
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <BarChart data={projectionData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis 
+                    dataKey="month" 
+                    stroke="hsl(var(--muted-foreground))" 
+                    fontSize={10} 
+                    fontWeight="bold" 
+                    tickLine={false} 
+                    axisLine={false} 
+                  />
+                  <YAxis 
+                    stroke="hsl(var(--muted-foreground))" 
+                    fontSize={10} 
+                    fontWeight="bold" 
+                    tickLine={false} 
+                    axisLine={false}
+                    tickFormatter={(val) => `€${val/1000}k`}
+                  />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "16px", fontSize: "12px", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)" }}
+                    itemStyle={{ fontWeight: "black", color: "hsl(var(--primary))" }}
+                    cursor={{ fill: "hsl(var(--primary)/0.05)" }}
+                  />
+                  <Bar dataKey="projected" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} barSize={24} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
         </CardContent>
       </Card>
 

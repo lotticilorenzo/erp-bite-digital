@@ -74,7 +74,7 @@ export function TimesheetDialog({ open, onOpenChange, timesheet, initialDate, is
 
   const selectedCommessaId = form.watch("commessa_id");
   const { data: tasks, isLoading: loadingTasks } = useTasks(
-    { commessa_id: selectedCommessaId, parent_only: false }
+    { commessa_id: selectedCommessaId || undefined, parent_only: false }
   );
 
   useEffect(() => {

@@ -71,20 +71,23 @@ export const PreventiviPage: React.FC = () => {
     <div className="flex-1 h-screen overflow-y-auto p-8 space-y-8 animate-in fade-in duration-500 bg-background text-foreground">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-3">
-            <FileText className="w-8 h-8 text-purple-600" />
+          <h1 className="text-3xl font-black tracking-tight text-foreground flex items-center gap-3 italic uppercase">
+            <FileText className="w-8 h-8 text-primary" />
             VENDITE: Preventivi
           </h1>
           <p className="text-muted-foreground font-medium">Gestisci le offerte commerciali e convertile in commesse operative.</p>
         </div>
-        <Button onClick={handleCreate} className="bg-purple-600 hover:bg-purple-700 h-11 px-6 shadow-lg shadow-purple-200">
-          <Plus className="w-5 h-5 mr-2" /> Nuova Offerta
+        <Button 
+          onClick={handleCreate} 
+          className="h-10 px-6 text-sm font-black bg-primary text-white shadow-[0_0_20px_hsl(var(--primary)/0.2)] hover:bg-primary/90 hover:shadow-primary/30 rounded-xl active:scale-95 transition-all uppercase tracking-wide"
+        >
+          <Plus className="w-5 h-5 mr-2 stroke-[3]" /> Nuova Offerta
         </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-card p-4 rounded-2xl border border-border shadow-sm flex items-center gap-4">
-          <div className="bg-purple-500/10 p-3 rounded-xl text-purple-500">
+        <div className="bg-card p-4 rounded-2xl border border-border shadow-sm flex items-center gap-4 group hover:border-primary/50 transition-colors">
+          <div className="bg-primary/10 p-3 rounded-xl text-primary">
             <TrendingUp className="w-6 h-6" />
           </div>
           <div className="flex flex-col">
@@ -143,7 +146,7 @@ export const PreventiviPage: React.FC = () => {
 
         {isLoading ? (
           <div className="h-64 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-            <Loader2 className="w-10 h-10 animate-spin text-purple-500" />
+            <Loader2 className="w-10 h-10 animate-spin text-primary" />
             <span className="font-medium">Caricamento preventivi...</span>
           </div>
         ) : (

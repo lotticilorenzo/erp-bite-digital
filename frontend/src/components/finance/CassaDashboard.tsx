@@ -1,16 +1,28 @@
-import React from "react";
-import { 
-  AreaChart, 
-  Area, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
+import React, { useRef, useState, useEffect } from "react";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   PieChart,
   Pie,
   Cell
 } from "recharts";
+
+function useChartSize(height: number): [React.RefObject<HTMLDivElement>, number, number] {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, width, height];
+}
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Wallet, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 
@@ -21,6 +33,8 @@ interface CassaDashboardProps {
 const COLORS = ["hsl(var(--primary))", "#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#ec4899"];
 
 export function CassaDashboard({ movimenti }: CassaDashboardProps) {
+  const [chart1Ref, chart1W, chart1H] = useChartSize(280);
+  const [chart2Ref, chart2W, chart2H] = useChartSize(230);
   const chartData = React.useMemo(() => {
     // Raggruppa per data e calcola saldo progressivo
     const daily = movimenti.reduce((acc: any, m) => {
@@ -101,9 +115,9 @@ export function CassaDashboard({ movimenti }: CassaDashboardProps) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2 bg-card/30 border-border/50 rounded-[2rem] p-8 backdrop-blur-xl overflow-hidden relative">
           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 mb-8 px-1">Andamento Cashflow</h3>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%" debounce={50}>
-              <AreaChart data={chartData}>
+          <div ref={chart1Ref} style={{ width: '100%', height: '280px' }}>
+            {chart1W > 0 && (
+              <AreaChart width={chart1W} height={chart1H} data={chartData}>
                 <defs>
                   <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3}/>
@@ -111,28 +125,28 @@ export function CassaDashboard({ movimenti }: CassaDashboardProps) {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                <XAxis 
-                  dataKey="date" 
-                  stroke="#475569" 
-                  fontSize={10} 
+                <XAxis
+                  dataKey="date"
+                  stroke="#475569"
+                  fontSize={10}
                   tickFormatter={(val) => new Date(val).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
                 />
                 <YAxis stroke="#475569" fontSize={10} tickFormatter={(val) => `${val/1000}k`} />
-                <Tooltip 
+                <Tooltip
                   contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
                   itemStyle={{ color: '#fff', fontSize: '10px', fontWeight: 'bold' }}
                 />
                 <Area type="monotone" dataKey="balance" stroke="#7c3aed" strokeWidth={3} fillOpacity={1} fill="url(#colorBalance)" />
               </AreaChart>
-            </ResponsiveContainer>
+            )}
           </div>
         </Card>
 
         <Card className="bg-card/30 border-border/50 rounded-[2rem] p-8 backdrop-blur-xl overflow-hidden">
           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 mb-8 px-1">Analisi Categorie</h3>
-          <div className="h-[250px] w-full">
-            <ResponsiveContainer width="100%" height="100%" debounce={50}>
-              <PieChart>
+          <div ref={chart2Ref} style={{ width: '100%', height: '230px' }}>
+            {chart2W > 0 && (
+              <PieChart width={chart2W} height={chart2H}>
                 <Pie
                   data={categoryData}
                   innerRadius={60}
@@ -146,7 +160,7 @@ export function CassaDashboard({ movimenti }: CassaDashboardProps) {
                 </Pie>
                 <Tooltip />
               </PieChart>
-            </ResponsiveContainer>
+            )}
           </div>
           <div className="mt-4 space-y-2">
              {categoryData.slice(0, 4).map((c, i) => (

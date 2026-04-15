@@ -30,7 +30,7 @@ interface ChatContextType {
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
-  const { isLoading: isAuthLoading } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const token = sessionStorage.getItem("BITE_ERP_TOKEN");
   const queryClient = useQueryClient();
 
@@ -212,14 +212,32 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     isUnmountedRef.current = false;
-    if (!token) return;
+    // Don't connect if loading auth, or no token, or no user (e.g. on login page)
+    if (isAuthLoading || !token || !user) return;
+    
     connectWS();
     return () => {
       isUnmountedRef.current = true;
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      ws.current?.close();
+      
+      if (ws.current) {
+        // Remove listeners before closing to avoid "closed before established" console noise 
+        // and prevent any further logic from firing during unmount
+        const socket = ws.current;
+        socket.onopen = null;
+        socket.onmessage = null;
+        socket.onerror = null;
+        socket.onclose = null;
+        
+        // Only close if fully open to avoid "closed before established" warning.
+        // We already cleared listeners, so it won't trigger any logic if it's connecting.
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.close();
+        }
+        ws.current = null;
+      }
     };
-  }, [token, connectWS]);
+  }, [token, user, isAuthLoading, connectWS]);
 
   // Actions
   const sendMessage = useCallback(async (content: string, type: string = 'testo', replyToId?: string) => {

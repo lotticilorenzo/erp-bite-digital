@@ -14,6 +14,58 @@ import uuid as _uuid
 
 router = APIRouter(prefix="/studio", tags=["Studio Workspace"])
 
+
+async def _list_siblings(
+    db: AsyncSession,
+    parent_id: Optional[uuid.UUID],
+    *,
+    exclude_id: Optional[uuid.UUID] = None,
+) -> List[StudioNode]:
+    stmt = select(StudioNode)
+    if parent_id is None:
+        stmt = stmt.where(StudioNode.parent_id.is_(None))
+    else:
+        stmt = stmt.where(StudioNode.parent_id == parent_id)
+
+    if exclude_id is not None:
+        stmt = stmt.where(StudioNode.id != exclude_id)
+
+    stmt = stmt.order_by(StudioNode.order.asc(), StudioNode.created_at.asc(), StudioNode.id.asc())
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def _normalize_sibling_orders(
+    db: AsyncSession,
+    parent_id: Optional[uuid.UUID],
+    *,
+    exclude_id: Optional[uuid.UUID] = None,
+) -> None:
+    siblings = await _list_siblings(db, parent_id, exclude_id=exclude_id)
+    for index, sibling in enumerate(siblings):
+        sibling.order = index
+
+
+async def _place_node(
+    db: AsyncSession,
+    node: StudioNode,
+    *,
+    parent_id: Optional[uuid.UUID],
+    requested_order: Optional[int],
+) -> None:
+    siblings = await _list_siblings(db, parent_id, exclude_id=node.id)
+
+    if requested_order is None:
+        target_order = len(siblings)
+    else:
+        target_order = max(0, min(requested_order, len(siblings)))
+
+    for index, sibling in enumerate(siblings):
+        sibling.order = index if index < target_order else index + 1
+
+    node.parent_id = parent_id
+    node.order = target_order
+
 # ═══════════════════════════════════════
 # TASK COMMENTS
 # ═══════════════════════════════════════
@@ -165,7 +217,7 @@ async def get_studio_hierarchy(
         .where(
             (StudioNode.is_private == False) | (StudioNode.user_id == current_user.id)
         )
-        .order_by(StudioNode.order)
+        .order_by(StudioNode.order.asc(), StudioNode.created_at.asc(), StudioNode.id.asc())
     )
     all_nodes = result.scalars().all()
     
@@ -222,6 +274,14 @@ async def create_studio_node(
         user_id=current_user.id
     )
     db.add(node)
+    await db.flush()
+    requested_order = data.order if "order" in data.model_fields_set else None
+    await _place_node(
+        db,
+        node,
+        parent_id=data.parent_id,
+        requested_order=requested_order,
+    )
     await db.commit()
     await db.refresh(node)
     
@@ -277,7 +337,10 @@ async def delete_studio_node(
     if node.user_id != current_user.id and current_user.ruolo != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Non hai i permessi per eliminare questo nodo")
 
+    old_parent_id = node.parent_id
     await db.delete(node)
+    await db.flush()
+    await _normalize_sibling_orders(db, old_parent_id, exclude_id=node.id)
     await db.commit()
     return None
 
@@ -316,9 +379,17 @@ async def move_studio_node(
             res_parent = await db.execute(select(StudioNode.parent_id).where(StudioNode.id == curr_parent_id))
             curr_parent_id = res_parent.scalar_one_or_none()
 
-    node.parent_id = parent_id
-    if order is not None:
-        node.order = order
+    old_parent_id = node.parent_id
+
+    if old_parent_id != parent_id:
+        await _normalize_sibling_orders(db, old_parent_id, exclude_id=node.id)
+
+    await _place_node(
+        db,
+        node,
+        parent_id=parent_id,
+        requested_order=order,
+    )
     
     await db.commit()
     await db.refresh(node)

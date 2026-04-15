@@ -1,11 +1,10 @@
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   LineChart,
   Line,
   ScatterChart,
@@ -37,7 +36,7 @@ import { PDFDownloadLink } from "@react-pdf/renderer";
 import { AnalyticsReportPDF } from "@/components/analytics/AnalyticsReportPDF";
 import { PageTransition } from "@/components/common/PageTransition";
 import { Progress } from "@/components/ui/progress";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardKpiCard } from "@/components/analytics/DashboardKpiCard";
 import {
@@ -267,7 +266,32 @@ function calculateProfitabilityMetrics(commesse: Commessa[], range: ReportingDat
   };
 }
 
+function useChartSize(height: number): [React.RefObject<HTMLDivElement>, number, number] {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setWidth(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, width, height];
+}
+
 export default function Analytics() {
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const [chart1Ref, chart1W, chart1H] = useChartSize(240);
+  const [chart2Ref, chart2W, chart2H] = useChartSize(290);
+  const [chart3Ref, chart3W, chart3H] = useChartSize(290);
+  const [chart4Ref, chart4W, chart4H] = useChartSize(316);
+
   const navigate = useNavigate();
   const today = useMemo(() => new Date(), []);
   const initialRange = useMemo(() => getRangeForPreset("CURRENT_YEAR", today), [today]);
@@ -1012,17 +1036,19 @@ export default function Analytics() {
               <CardTitle className="text-sm font-black uppercase tracking-widest text-foreground">Trend Margine</CardTitle>
             </CardHeader>
             <CardContent className="h-[300px] pt-8 min-h-[300px]">
-              <ResponsiveContainer width="100%" height="100%" debounce={50}>
-                 <LineChart data={[...clientCommesse].reverse().map((c) => ({
-                   month: formatDate(parseISO(c.mese_competenza), "MMM", { locale: it }).toUpperCase(),
-                   margin: Number(c.margine_percentuale || 0)
-                 }))}>
-                    <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={10} fontWeight="black" />
-                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} fontWeight="black" unit="%" />
-                    <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: "12px", color: "hsl(var(--foreground))" }} />
-                    <Line type="monotone" dataKey="margin" stroke="hsl(var(--primary))" strokeWidth={3} dot={{ r: 4, fill: "hsl(var(--primary))" }} />
-                 </LineChart>
-              </ResponsiveContainer>
+              <div ref={chart1Ref} style={{ width: '100%', height: '240px' }}>
+                {chart1W > 0 && (
+                  <LineChart width={chart1W} height={chart1H} data={[...clientCommesse].reverse().map((c) => ({
+                      month: formatDate(parseISO(c.mese_competenza), "MMM", { locale: it }).toUpperCase(),
+                      margin: Number(c.margine_percentuale || 0)
+                    }))}>
+                      <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={10} fontWeight="black" />
+                      <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} fontWeight="black" unit="%" />
+                      <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: "12px", color: "hsl(var(--foreground))" }} />
+                      <Line type="monotone" dataKey="margin" stroke="hsl(var(--primary))" strokeWidth={3} dot={{ r: 4, fill: "hsl(var(--primary))" }} />
+                  </LineChart>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -1293,42 +1319,45 @@ export default function Analytics() {
             </div>
           </CardHeader>
           <CardContent className="pt-8 h-[350px]">
-            <ResponsiveContainer width="100%" height="100%" debounce={50}>
-              <BarChart
-                data={trendData}
-                onClick={(event: any) => {
-                  const isoMonth = event?.activePayload?.[0]?.payload?.isoMonth;
-                  if (isoMonth) {
-                    setSelectedMonthKey(isoMonth);
-                    navigate(`/fatture?mese=${isoMonth}`);
-                  }
-                }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis 
-                  dataKey="month" 
-                  stroke="hsl(var(--muted-foreground))" 
-                  fontSize={10} 
-                  fontWeight="bold" 
-                  tickLine={false} 
-                  axisLine={false} 
-                />
-                <YAxis 
-                  stroke="hsl(var(--muted-foreground))" 
-                  fontSize={10} 
-                  fontWeight="bold" 
-                  tickLine={false} 
-                  axisLine={false}
-                  tickFormatter={(val) => `€${val/1000}k`}
-                />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: "12px", color: "hsl(var(--foreground))" }}
-                  itemStyle={{ fontWeight: "bold" }}
-                  cursor={{ fill: "hsl(var(--primary)/0.05)" }}
-                />
-                <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} barSize={24} cursor="pointer" />
-              </BarChart>
-            </ResponsiveContainer>
+            <div ref={chart2Ref} style={{ width: '100%', height: '290px' }}>
+              {chart2W > 0 && (
+                <BarChart
+                  width={chart2W} height={chart2H}
+                  data={trendData}
+                  onClick={(event: any) => {
+                    const isoMonth = event?.activePayload?.[0]?.payload?.isoMonth;
+                    if (isoMonth) {
+                      setSelectedMonthKey(isoMonth);
+                      navigate(`/fatture?mese=${isoMonth}`);
+                    }
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis
+                    dataKey="month"
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={10}
+                    fontWeight="bold"
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={10}
+                    fontWeight="bold"
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(val) => `€${val/1000}k`}
+                  />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: "12px", color: "hsl(var(--foreground))" }}
+                    itemStyle={{ fontWeight: "bold" }}
+                    cursor={{ fill: "hsl(var(--primary)/0.05)" }}
+                  />
+                  <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} barSize={24} cursor="pointer" />
+                </BarChart>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -1348,49 +1377,52 @@ export default function Analytics() {
             </div>
           </CardHeader>
           <CardContent className="pt-8 h-[350px]">
-            <ResponsiveContainer width="100%" height="100%" debounce={50}>
-              <LineChart
-                data={trendData}
-                onClick={(event: any) => {
-                  const isoMonth = event?.activePayload?.[0]?.payload?.isoMonth;
-                  if (isoMonth) {
-                    setSelectedMonthKey(isoMonth);
-                    navigate(`/commesse?mese=${isoMonth}`);
-                  }
-                }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis 
-                  dataKey="month" 
-                  stroke="hsl(var(--muted-foreground))" 
-                  fontSize={10} 
-                  fontWeight="bold" 
-                  tickLine={false} 
-                  axisLine={false} 
-                />
-                <YAxis 
-                  stroke="hsl(var(--muted-foreground))" 
-                  fontSize={10} 
-                  fontWeight="bold" 
-                  tickLine={false} 
-                  axisLine={false}
-                  tickFormatter={(val) => `${val}%`}
-                  domain={[0, 60]}
-                />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: "12px", color: "hsl(var(--foreground))" }}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="margin" 
-                  stroke="hsl(var(--primary))" 
-                  strokeWidth={4} 
-                  dot={{ r: 4, fill: "hsl(var(--primary))", strokeWidth: 2, stroke: "hsl(var(--card))" }}
-                  activeDot={{ r: 6, strokeWidth: 0 }}
-                  cursor="pointer"
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <div ref={chart3Ref} style={{ width: '100%', height: '290px' }}>
+              {chart3W > 0 && (
+                <LineChart
+                  width={chart3W} height={chart3H}
+                  data={trendData}
+                  onClick={(event: any) => {
+                    const isoMonth = event?.activePayload?.[0]?.payload?.isoMonth;
+                    if (isoMonth) {
+                      setSelectedMonthKey(isoMonth);
+                      navigate(`/commesse?mese=${isoMonth}`);
+                    }
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis
+                    dataKey="month"
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={10}
+                    fontWeight="bold"
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={10}
+                    fontWeight="bold"
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(val) => `${val}%`}
+                    domain={[0, 60]}
+                  />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: "12px", color: "hsl(var(--foreground))" }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="margin"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={4}
+                    dot={{ r: 4, fill: "hsl(var(--primary))", strokeWidth: 2, stroke: "hsl(var(--card))" }}
+                    activeDot={{ r: 6, strokeWidth: 0 }}
+                    cursor="pointer"
+                  />
+                </LineChart>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -1557,59 +1589,62 @@ export default function Analytics() {
             </div>
           </CardHeader>
           <CardContent className="h-[350px] pt-4 min-h-[350px]">
-            <ResponsiveContainer width="100%" height="100%" debounce={50}>
-              <ScatterChart 
-                margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
-                onClick={(event: any) => {
-                  const clientId = event?.activePayload?.[0]?.payload?.id;
-                  if (clientId) setSelectedClientId(clientId);
-                }}
-              >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" strokeOpacity={0.1} />
-                <XAxis 
-                  type="number" 
-                  dataKey="hours" 
-                  name="Ore" 
-                  unit="h" 
-                  fontSize={10} 
-                  tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                  axisLine={{ stroke: 'hsl(var(--border))' }}
-                />
-                <YAxis 
-                  type="number" 
-                  dataKey="revenue" 
-                  name="Fatturato" 
-                  unit="€" 
-                  fontSize={10}
-                  tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                  axisLine={{ stroke: 'hsl(var(--border))' }}
-                />
-                <ZAxis type="number" range={[100, 1000]} />
-                <Tooltip 
-                  cursor={{ strokeDasharray: "3 3" }} 
-                  contentStyle={{ 
-                    backgroundColor: "hsl(var(--card))", 
-                    border: "1px solid hsl(var(--border))", 
-                    borderRadius: "12px", 
-                    fontSize: "12px",
-                    color: "hsl(var(--foreground))"
-                  }} 
-                />
-                <Scatter 
-                  name="Clienti" 
-                  data={scatterData} 
-                  cursor="pointer"
+            <div ref={chart4Ref} style={{ width: '100%', height: '316px' }}>
+              {chart4W > 0 && (
+                <ScatterChart
+                  width={chart4W} height={chart4H}
+                  margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
                   onClick={(event: any) => {
-                    const clientId = event?.payload?.id;
-                    if (clientId) navigate(`/clienti/${clientId}`);
+                    const clientId = event?.activePayload?.[0]?.payload?.id;
+                    if (clientId) setSelectedClientId(clientId);
                   }}
                 >
-                  {scatterData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.profitability > 50 ? "#10b981" : "#ef4444"} className="hover:opacity-80 transition-opacity" />
-                  ))}
-                </Scatter>
-              </ScatterChart>
-            </ResponsiveContainer>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" strokeOpacity={0.1} />
+                  <XAxis
+                    type="number"
+                    dataKey="hours"
+                    name="Ore"
+                    unit="h"
+                    fontSize={10}
+                    tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                    axisLine={{ stroke: 'hsl(var(--border))' }}
+                  />
+                  <YAxis
+                    type="number"
+                    dataKey="revenue"
+                    name="Fatturato"
+                    unit="€"
+                    fontSize={10}
+                    tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                    axisLine={{ stroke: 'hsl(var(--border))' }}
+                  />
+                  <ZAxis type="number" range={[100, 1000]} />
+                  <Tooltip
+                    cursor={{ strokeDasharray: "3 3" }}
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "12px",
+                      fontSize: "12px",
+                      color: "hsl(var(--foreground))"
+                    }}
+                  />
+                  <Scatter
+                    name="Clienti"
+                    data={scatterData}
+                    cursor="pointer"
+                    onClick={(event: any) => {
+                      const clientId = event?.payload?.id;
+                      if (clientId) navigate(`/clienti/${clientId}`);
+                    }}
+                  >
+                    {scatterData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.profitability > 50 ? "#10b981" : "#ef4444"} className="hover:opacity-80 transition-opacity" />
+                    ))}
+                  </Scatter>
+                </ScatterChart>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

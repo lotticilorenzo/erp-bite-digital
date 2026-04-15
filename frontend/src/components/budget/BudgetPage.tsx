@@ -1,12 +1,12 @@
-import { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { format, addMonths, subMonths } from "date-fns";
 import { it } from "date-fns/locale";
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Plus, 
-  Copy, 
-  PieChart as PieChartIcon, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Copy,
+  PieChart as PieChartIcon,
   TrendingUp,
   Target
 } from "lucide-react";
@@ -15,12 +15,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useBudget } from "@/hooks/useBudget";
 import { BudgetTable } from "./BudgetTable";
 import { CategoryModal } from "./CategoryModal";
-import { 
-  PieChart, 
-  Pie, 
-  Cell, 
-  ResponsiveContainer, 
-  Tooltip, 
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
   Legend,
   BarChart,
   Bar,
@@ -30,7 +29,22 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 
+function useChartSize(height: number): [React.RefObject<HTMLDivElement>, number, number] {
+  const ref = useRef<HTMLDivElement>(null);
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setW(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, w, height];
+}
+
 export default function BudgetPage() {
+  const [chart1Ref, chart1W, chart1H] = useChartSize(262);
+  const [chart2Ref, chart2W, chart2H] = useChartSize(262);
   const [mese, setMese] = useState(new Date());
   const { consuntivo, copyBudget } = useBudget(mese);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -122,34 +136,25 @@ export default function BudgetPage() {
             <CardDescription className="font-medium">Raggruppamento per categoria di costo</CardDescription>
           </CardHeader>
           <CardContent className="p-6 h-[300px]">
-             {chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={chartData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={80}
-                      outerRadius={100}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
+            {chartData.length > 0 ? (
+              <div ref={chart1Ref} style={{ width: '100%', height: '262px' }}>
+                {chart1W > 0 && (
+                  <PieChart width={chart1W} height={chart1H}>
+                    <Pie data={chartData} cx="50%" cy="50%" innerRadius={80} outerRadius={100} paddingAngle={5} dataKey="value">
                       {chartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip 
-                      contentStyle={{ borderRadius: '15px', border: '1px solid #333', background: '#111' }}
-                      itemStyle={{ fontWeight: 'bold' }}
-                    />
+                    <Tooltip contentStyle={{ borderRadius: '15px', border: '1px solid #333', background: '#111' }} itemStyle={{ fontWeight: 'bold' }} />
                     <Legend />
                   </PieChart>
-                </ResponsiveContainer>
-             ) : (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm font-bold uppercase tracking-widest bg-muted/10 rounded-2xl">
-                   Nessun dato per il grafico
-                </div>
-             )}
+                )}
+              </div>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm font-bold uppercase tracking-widest bg-muted/10 rounded-2xl">
+                Nessun dato per il grafico
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -163,20 +168,19 @@ export default function BudgetPage() {
           </CardHeader>
           <CardContent className="p-6 h-[300px]">
           {barData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
-                <XAxis dataKey="name" stroke="#666" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="#666" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `${val}€`} />
-                <Tooltip 
-                   cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                   contentStyle={{ borderRadius: '15px', border: '1px solid #333', background: '#111' }}
-                />
-                <Legend />
-                <Bar dataKey="budget" fill="#64748b" radius={[4, 4, 0, 0]} name="Pianificato" />
-                <Bar dataKey="speso" fill="#7c3aed" radius={[4, 4, 0, 0]} name="Reale" />
-              </BarChart>
-            </ResponsiveContainer>
+            <div ref={chart2Ref} style={{ width: '100%', height: '262px' }}>
+              {chart2W > 0 && (
+                <BarChart width={chart2W} height={chart2H} data={barData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
+                  <XAxis dataKey="name" stroke="#666" fontSize={10} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#666" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `${val}€`} />
+                  <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ borderRadius: '15px', border: '1px solid #333', background: '#111' }} />
+                  <Legend />
+                  <Bar dataKey="budget" fill="#64748b" radius={[4, 4, 0, 0]} name="Pianificato" />
+                  <Bar dataKey="speso" fill="#7c3aed" radius={[4, 4, 0, 0]} name="Reale" />
+                </BarChart>
+              )}
+            </div>
           ) : (
             <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm font-bold uppercase tracking-widest bg-muted/10 rounded-2xl">
                Inizia a inserire i budget
