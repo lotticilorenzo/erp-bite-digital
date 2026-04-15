@@ -1121,3 +1121,43 @@ class CRMActivity(Base):
 
     lead: Mapped["CRMLead"] = relationship(back_populates="attivita")
     autore: Mapped["User"] = relationship()
+
+
+# ── TASK TEMPLATES ────────────────────────────────────────────
+class TaskTemplate(Base):
+    """Template riutilizzabile per generare task ricorrenti su una commessa."""
+    __tablename__ = "task_templates"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    nome: Mapped[str] = mapped_column(String(255), nullable=False)
+    descrizione: Mapped[Optional[str]] = mapped_column(Text)
+    progetto_tipo: Mapped[Optional[str]] = mapped_column(String(20))  # RETAINER | ONE_OFF | None
+    attivo: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    items: Mapped[List["TaskTemplateItem"]] = relationship(
+        back_populates="template",
+        cascade="all, delete-orphan",
+        order_by="TaskTemplateItem.ordine"
+    )
+    created_by_user: Mapped[Optional["User"]] = relationship(foreign_keys=[created_by])
+
+
+class TaskTemplateItem(Base):
+    """Singolo task all'interno di un template."""
+    __tablename__ = "task_template_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    template_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("task_templates.id", ondelete="CASCADE"), index=True)
+    titolo: Mapped[str] = mapped_column(String(500), nullable=False)
+    descrizione: Mapped[Optional[str]] = mapped_column(Text)
+    servizio: Mapped[Optional[str]] = mapped_column(String(50))
+    stima_minuti: Mapped[Optional[int]] = mapped_column(Integer)
+    priorita: Mapped[str] = mapped_column(String(10), default="media")
+    giorno_scadenza: Mapped[Optional[int]] = mapped_column(Integer)  # 1-31
+    assegnatario_ruolo: Mapped[Optional[str]] = mapped_column(String(30))  # ADMIN | PM | COLLABORATORE
+    ordine: Mapped[int] = mapped_column(Integer, default=0)
+
+    template: Mapped["TaskTemplate"] = relationship(back_populates="items")

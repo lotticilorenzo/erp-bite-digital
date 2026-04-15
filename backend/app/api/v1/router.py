@@ -2452,6 +2452,235 @@ async def remove_task(
     await db.commit()
 
 
+# ═══════════════════════════════════════════════════════
+# TASK TEMPLATES (Recurring Tasks)
+# ═══════════════════════════════════════════════════════
+
+@router.get("/task-templates", tags=["TaskTemplates"])
+async def list_task_templates(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import TaskTemplate
+    from sqlalchemy.orm import selectinload as sil
+    result = await db.execute(
+        select(TaskTemplate)
+        .options(sil(TaskTemplate.items))
+        .order_by(TaskTemplate.nome)
+    )
+    templates = result.scalars().unique().all()
+    return [
+        {
+            "id": str(t.id),
+            "nome": t.nome,
+            "descrizione": t.descrizione,
+            "progetto_tipo": t.progetto_tipo,
+            "attivo": t.attivo,
+            "num_items": len(t.items),
+            "items": [
+                {
+                    "id": str(i.id),
+                    "titolo": i.titolo,
+                    "descrizione": i.descrizione,
+                    "servizio": i.servizio,
+                    "stima_minuti": i.stima_minuti,
+                    "priorita": i.priorita,
+                    "giorno_scadenza": i.giorno_scadenza,
+                    "assegnatario_ruolo": i.assegnatario_ruolo,
+                    "ordine": i.ordine,
+                }
+                for i in t.items
+            ],
+            "created_at": t.created_at.isoformat(),
+        }
+        for t in templates
+    ]
+
+
+@router.post("/task-templates", status_code=201, tags=["TaskTemplates"])
+async def create_task_template(
+    data: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    from app.models.models import TaskTemplate, TaskTemplateItem
+    items_data = data.pop("items", [])
+    template = TaskTemplate(
+        id=uuid.uuid4(),
+        created_by=current_user.id,
+        **{k: v for k, v in data.items() if k in ("nome", "descrizione", "progetto_tipo", "attivo")}
+    )
+    db.add(template)
+    await db.flush()
+    for idx, item in enumerate(items_data):
+        db.add(TaskTemplateItem(
+            id=uuid.uuid4(),
+            template_id=template.id,
+            ordine=idx,
+            **{k: v for k, v in item.items() if k in ("titolo", "descrizione", "servizio", "stima_minuti", "priorita", "giorno_scadenza", "assegnatario_ruolo")}
+        ))
+    await db.commit()
+    return {"id": str(template.id), "nome": template.nome}
+
+
+@router.put("/task-templates/{template_id}", tags=["TaskTemplates"])
+async def update_task_template(
+    template_id: uuid.UUID,
+    data: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    from app.models.models import TaskTemplate, TaskTemplateItem
+    from sqlalchemy.orm import selectinload as sil
+    result = await db.execute(
+        select(TaskTemplate).options(sil(TaskTemplate.items)).where(TaskTemplate.id == template_id)
+    )
+    t = result.unique().scalar_one_or_none()
+    if not t:
+        raise HTTPException(status_code=404, detail="Template non trovato")
+
+    for field in ("nome", "descrizione", "progetto_tipo", "attivo"):
+        if field in data:
+            setattr(t, field, data[field])
+
+    if "items" in data:
+        # Replace all items
+        for old_item in list(t.items):
+            await db.delete(old_item)
+        await db.flush()
+        for idx, item in enumerate(data["items"]):
+            db.add(TaskTemplateItem(
+                id=uuid.uuid4(),
+                template_id=template_id,
+                ordine=idx,
+                **{k: v for k, v in item.items() if k in ("titolo", "descrizione", "servizio", "stima_minuti", "priorita", "giorno_scadenza", "assegnatario_ruolo")}
+            ))
+
+    await db.commit()
+    return {"id": str(template_id), "nome": t.nome}
+
+
+@router.delete("/task-templates/{template_id}", status_code=204, tags=["TaskTemplates"])
+async def delete_task_template(
+    template_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    from app.models.models import TaskTemplate
+    result = await db.execute(select(TaskTemplate).where(TaskTemplate.id == template_id))
+    t = result.scalar_one_or_none()
+    if not t:
+        raise HTTPException(status_code=404, detail="Template non trovato")
+    await db.delete(t)
+    await db.commit()
+
+
+@router.post("/task-templates/{template_id}/genera", tags=["TaskTemplates"])
+async def genera_task_da_template(
+    template_id: uuid.UUID,
+    commessa_id: uuid.UUID = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+):
+    """Genera i task del template per la commessa indicata."""
+    from app.models.models import TaskTemplate, Task, TaskStatus, Commessa
+    from sqlalchemy.orm import selectinload as sil
+    import calendar
+
+    tpl_result = await db.execute(
+        select(TaskTemplate).options(sil(TaskTemplate.items)).where(TaskTemplate.id == template_id)
+    )
+    tpl = tpl_result.unique().scalar_one_or_none()
+    if not tpl:
+        raise HTTPException(status_code=404, detail="Template non trovato")
+
+    cm_result = await db.execute(select(Commessa).where(Commessa.id == commessa_id))
+    cm = cm_result.scalar_one_or_none()
+    if not cm:
+        raise HTTPException(status_code=404, detail="Commessa non trovata")
+
+    created = []
+    mese = cm.mese_competenza
+    _, days_in_month = calendar.monthrange(mese.year, mese.month)
+
+    for item in tpl.items:
+        # Calcola data scadenza
+        scadenza = None
+        if item.giorno_scadenza:
+            day = min(item.giorno_scadenza, days_in_month)
+            scadenza = date(mese.year, mese.month, day)
+
+        task = Task(
+            id=uuid.uuid4(),
+            commessa_id=commessa_id,
+            titolo=item.titolo,
+            descrizione=item.descrizione,
+            servizio=item.servizio,
+            stima_minuti=item.stima_minuti,
+            priorita=item.priorita or "media",
+            data_scadenza=scadenza,
+            stato=TaskStatus.DA_FARE,
+        )
+        db.add(task)
+        created.append({"titolo": task.titolo, "scadenza": str(scadenza) if scadenza else None})
+
+    await db.commit()
+    return {"template": tpl.nome, "generati": len(created), "tasks": created}
+
+
+@router.post("/task-templates/genera-tutti", tags=["TaskTemplates"])
+async def genera_tutti_task_mese(
+    mese: date = Query(..., description="Formato YYYY-MM-01"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN))
+):
+    """Genera i task da tutti i template attivi per le commesse aperte del mese."""
+    from app.models.models import TaskTemplate, Task, TaskStatus, Commessa, CommessaStatus
+    from sqlalchemy.orm import selectinload as sil
+    import calendar
+
+    # Commesse aperte nel mese
+    cm_result = await db.execute(
+        select(Commessa).where(
+            Commessa.mese_competenza == mese,
+            Commessa.stato.in_([CommessaStatus.APERTA, CommessaStatus.PRONTA_CHIUSURA])
+        )
+    )
+    commesse = cm_result.scalars().all()
+
+    # Template attivi
+    tpl_result = await db.execute(
+        select(TaskTemplate).options(sil(TaskTemplate.items)).where(TaskTemplate.attivo == True)
+    )
+    templates = tpl_result.scalars().unique().all()
+
+    _, days_in_month = calendar.monthrange(mese.year, mese.month)
+    total = 0
+
+    for cm in commesse:
+        for tpl in templates:
+            for item in tpl.items:
+                scadenza = None
+                if item.giorno_scadenza:
+                    day = min(item.giorno_scadenza, days_in_month)
+                    scadenza = date(mese.year, mese.month, day)
+                task = Task(
+                    id=uuid.uuid4(),
+                    commessa_id=cm.id,
+                    titolo=item.titolo,
+                    descrizione=item.descrizione,
+                    stima_minuti=item.stima_minuti,
+                    priorita=item.priorita or "media",
+                    data_scadenza=scadenza,
+                    stato=TaskStatus.DA_FARE,
+                )
+                db.add(task)
+                total += 1
+
+    await db.commit()
+    return {"mese": str(mese), "commesse_processate": len(commesse), "task_generati": total}
+
+
 # ── BUDGET ────────────────────────────────────────────────
 
 @router.get("/budget/categorie", response_model=List[BudgetCategoryOut], tags=["Budget"])

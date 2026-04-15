@@ -30,6 +30,7 @@ const CRMPage = React.lazy(() => import("./pages/CRM"));
 const LeadDetailPage = React.lazy(() => import("./pages/LeadDetail"));
 const Fornitori = React.lazy(() => import("./pages/Fornitori"));
 const SupplierCategoryManager = React.lazy(() => import("./pages/admin/SupplierCategoryManager"));
+const TaskTemplatesPage = React.lazy(() => import("./pages/TaskTemplatesPage"));
 
 const SettingsLayout = React.lazy(() => import("./pages/Settings"));
 const ProfileSettings = React.lazy(() => import("./pages/settings/ProfileSettings"));
@@ -115,6 +116,7 @@ function App() {
               <Route path="/crm" element={<CRMPage />} />
               <Route path="/crm/:id" element={<LeadDetailPage />} />
               <Route path="/admin/categorie-fornitori" element={<SupplierCategoryManager />} />
+              <Route path="/task-templates" element={<TaskTemplatesPage />} />
               
               <Route 
                 path="/studio-os/*" 

@@ -19,12 +19,14 @@ import {
   Unlock,
   ArrowRight,
   Calculator,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCommessa, useUpdateCommessa, useProfitability } from "@/hooks/useCommesse";
+import { useTaskTemplates, useGeneraTaskDaTemplate } from "@/hooks/useTaskTemplates";
 import { ProgettoDialog } from "@/components/progetti/ProgettoDialog";
 import { useProgetti } from "@/hooks/useProgetti";
 import { format, parseISO } from "date-fns";
@@ -109,6 +111,9 @@ export default function CommessaDetailPage() {
 
   const canEdit = user?.ruolo === "ADMIN" || user?.ruolo === "PM";
   const { data: profitability } = useProfitability(id);
+  const { data: taskTemplates = [] } = useTaskTemplates();
+  const { mutate: generaTask, isPending: isGenerating } = useGeneraTaskDaTemplate();
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
 
   const handleUpdateScope = () => {
     if (!id) return;
@@ -926,6 +931,69 @@ export default function CommessaDetailPage() {
           </Card>
         </div>
       </div>
+      {/* ── TASK TEMPLATE SECTION ──────────────────────────── */}
+      {canEdit && taskTemplates.length > 0 && (
+        <Card className="bg-card border-border overflow-hidden">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+              <Layers className="w-4 h-4" />
+              Genera Task da Template
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Scegli un template per generare automaticamente i task del mese in questa commessa.
+            </p>
+            <div className="flex gap-3">
+              <select
+                value={selectedTemplateId}
+                onChange={(e) => setSelectedTemplateId(e.target.value)}
+                className="flex-1 h-10 rounded-xl border border-border/50 bg-muted/20 text-sm px-3 text-foreground"
+              >
+                <option value="">Seleziona template...</option>
+                {taskTemplates.filter(t => t.attivo).map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.nome} ({t.num_items} task)
+                  </option>
+                ))}
+              </select>
+              <Button
+                disabled={!selectedTemplateId || isGenerating || !id}
+                onClick={() => {
+                  if (selectedTemplateId && id) {
+                    generaTask({ templateId: selectedTemplateId, commessaId: id });
+                    setSelectedTemplateId("");
+                  }
+                }}
+                className="bg-primary hover:bg-primary/90 text-white text-xs font-black uppercase tracking-widest gap-1.5 shrink-0"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                {isGenerating ? "Generando..." : "Genera Task"}
+              </Button>
+            </div>
+            {selectedTemplateId && (() => {
+              const tpl = taskTemplates.find(t => t.id === selectedTemplateId);
+              if (!tpl) return null;
+              return (
+                <div className="rounded-xl bg-muted/10 border border-border/20 p-3 space-y-1">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Preview: {tpl.items.length} task da creare</p>
+                  {tpl.items.slice(0, 4).map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2 text-xs text-foreground">
+                      <div className="w-1 h-1 rounded-full bg-primary" />
+                      {item.titolo}
+                      {item.giorno_scadenza && <span className="text-muted-foreground ml-auto">gg{item.giorno_scadenza}</span>}
+                    </div>
+                  ))}
+                  {tpl.items.length > 4 && (
+                    <p className="text-[10px] text-muted-foreground">+{tpl.items.length - 4} altri...</p>
+                  )}
+                </div>
+              );
+            })()}
+          </CardContent>
+        </Card>
+      )}
+
       <PlanningDialog
         open={isPlanningDialogOpen}
         onOpenChange={setIsPlanningDialogOpen}

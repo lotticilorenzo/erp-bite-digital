@@ -10,11 +10,11 @@ REM
 REM  PREREQUISITO: eseguire setup_ssh_do.bat una volta sola prima.
 REM
 REM  Server: 178.128.198.11
-REM  Path:   /mio-gestionale
+REM  Path:   /root/mio-gestionale
 REM ============================================================
 
 set DO_HOST=bite-do
-set SERVER_PATH=/mio-gestionale
+set SERVER_PATH=/root/mio-gestionale
 
 echo.
 echo  ====================================================

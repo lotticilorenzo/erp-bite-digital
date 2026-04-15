@@ -84,6 +84,7 @@ const navItems = [
     items: [
       { title: "Timesheet", url: "/timesheet", icon: Timer },
       { title: "Planning", url: "/planning", icon: ClipboardList },
+      { title: "Task Templates", url: "/task-templates", icon: Zap },
       { title: "Collaboratori", url: "/collaboratori", icon: Users },
     ],
   },
