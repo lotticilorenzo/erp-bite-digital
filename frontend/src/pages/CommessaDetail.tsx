@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useCommessa, useUpdateCommessa } from "@/hooks/useCommesse";
+import { useCommessa, useUpdateCommessa, useProfitability } from "@/hooks/useCommesse";
 import { ProgettoDialog } from "@/components/progetti/ProgettoDialog";
 import { useProgetti } from "@/hooks/useProgetti";
 import { format, parseISO } from "date-fns";
@@ -108,6 +108,7 @@ export default function CommessaDetailPage() {
   }, [oreReali, commessa]);
 
   const canEdit = user?.ruolo === "ADMIN" || user?.ruolo === "PM";
+  const { data: profitability } = useProfitability(id);
 
   const handleUpdateScope = () => {
     if (!id) return;
@@ -410,9 +411,116 @@ export default function CommessaDetailPage() {
         </CardContent>
       </Card>
 
+      {/* ── PROFITABILITY ALERT CARD ───────────────────────── */}
+      {profitability && profitability.alert_level !== "NO_DATA" && (
+        <Card className={`border overflow-hidden ${
+          profitability.alert_level === "CRITICAL"
+            ? "border-red-500/30 bg-red-500/5"
+            : profitability.alert_level === "WARNING"
+              ? "border-amber-500/30 bg-amber-500/5"
+              : "border-emerald-500/20 bg-emerald-500/5"
+        }`}>
+          <CardContent className="p-6">
+            <div className="flex flex-col gap-4">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-xl border ${
+                    profitability.alert_level === "CRITICAL"
+                      ? "border-red-500/30 bg-red-500/10 text-red-400"
+                      : profitability.alert_level === "WARNING"
+                        ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                        : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                  }`}>
+                    {profitability.alert_level === "CRITICAL" ? (
+                      <AlertCircle className="w-5 h-5" />
+                    ) : profitability.alert_level === "WARNING" ? (
+                      <TrendingDown className="w-5 h-5" />
+                    ) : (
+                      <TrendingUp className="w-5 h-5" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">
+                      Marginalità in Tempo Reale
+                    </p>
+                    <p className={`text-lg font-black ${
+                      profitability.alert_level === "CRITICAL"
+                        ? "text-red-400"
+                        : profitability.alert_level === "WARNING"
+                          ? "text-amber-400"
+                          : "text-emerald-400"
+                    }`}>
+                      {profitability.alert_level === "CRITICAL"
+                        ? "⚠️ Margine Critico"
+                        : profitability.alert_level === "WARNING"
+                          ? "Attenzione Margine"
+                          : "Margine Sano"}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">Margine Attuale</p>
+                  <p className={`text-3xl font-black ${
+                    profitability.alert_level === "CRITICAL"
+                      ? "text-red-400"
+                      : profitability.alert_level === "WARNING"
+                        ? "text-amber-400"
+                        : "text-emerald-400"
+                  }`}>
+                    {profitability.margine_percentuale}%
+                  </p>
+                </div>
+              </div>
+
+              {/* Progress bar ore */}
+              {profitability.ore_budget > 0 && (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Ore consumate: <span className="text-foreground font-semibold">{profitability.ore_consumate.toFixed(1)}h</span></span>
+                    <span>Budget: <span className="text-foreground font-semibold">{profitability.ore_budget}h</span></span>
+                  </div>
+                  <div className="h-2 bg-muted/40 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        (profitability.perc_ore_consumate ?? 0) > 100
+                          ? "bg-red-500"
+                          : (profitability.perc_ore_consumate ?? 0) > 80
+                            ? "bg-amber-500"
+                            : "bg-emerald-500"
+                      }`}
+                      style={{ width: `${Math.min(profitability.perc_ore_consumate ?? 0, 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground text-right">{profitability.perc_ore_consumate}% del budget ore utilizzato</p>
+                </div>
+              )}
+
+              {/* Breakdown finanziario */}
+              <div className="grid grid-cols-3 gap-4 pt-2 border-t border-border/50">
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">Fatturabile</p>
+                  <p className="text-sm font-black text-foreground">€{profitability.valore_fatturabile.toLocaleString("it-IT", { minimumFractionDigits: 0 })}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">Costo Manodopera</p>
+                  <p className="text-sm font-black text-foreground">€{profitability.costo_manodopera.toLocaleString("it-IT", { minimumFractionDigits: 0 })}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">Margine €</p>
+                  <p className={`text-sm font-black ${profitability.margine_euro >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    €{profitability.margine_euro.toLocaleString("it-IT", { minimumFractionDigits: 0 })}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KPICard 
-          title="Valore Fatturabile" 
+        <KPICard
+          title="Valore Fatturabile"
           value={`€${commessa.valore_fatturabile?.toLocaleString() || "0"}`} 
           icon={<Euro className="w-5 h-5 text-purple-400" />}
           trend="Totale Entrate"

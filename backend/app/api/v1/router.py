@@ -908,6 +908,62 @@ async def get_single_commessa(
         raise HTTPException(status_code=404, detail="Commessa non trovata")
     return await _enrich_commessa(db, c)
 
+@router.get("/commesse/{commessa_id}/profitability", tags=["Commesse"])
+async def get_commessa_profitability(
+    commessa_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Ritorna metriche di profittabilità in tempo reale per una commessa."""
+    c = await get_commessa(db, commessa_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Commessa non trovata")
+
+    # Ore consumate e costo manodopera dai timesheet
+    minuti_totali = sum(t.durata_minuti or 0 for t in c.timesheet)
+    costo_manodopera = float(sum(t.costo_lavoro or Decimal("0") for t in c.timesheet))
+    ore_consumate = minuti_totali / 60.0
+    ore_budget = float(c.ore_contratto or 0)
+
+    # Valore fatturabile dalle righe progetto + aggiustamenti
+    try:
+        valore_fatturabile = float(sum(r.valore_fatturabile_calc for r in c.righe_progetto))
+        for ag in (c.aggiustamenti or []):
+            valore_fatturabile += float(ag.get("importo", 0))
+    except Exception:
+        valore_fatturabile = 0.0
+
+    costi_diretti = float(c.costi_diretti or 0)
+    margine_euro = valore_fatturabile - costo_manodopera - costi_diretti
+    margine_percentuale = round(margine_euro / valore_fatturabile * 100, 1) if valore_fatturabile > 0 else None
+
+    # Percentuale ore consumate rispetto al budget
+    perc_ore = round(ore_consumate / ore_budget * 100, 1) if ore_budget > 0 else None
+
+    # Livello alert
+    if margine_percentuale is None:
+        alert_level = "NO_DATA"
+    elif margine_percentuale < 15:
+        alert_level = "CRITICAL"
+    elif margine_percentuale < 30:
+        alert_level = "WARNING"
+    else:
+        alert_level = "OK"
+
+    return {
+        "commessa_id": str(commessa_id),
+        "ore_budget": ore_budget,
+        "ore_consumate": round(ore_consumate, 2),
+        "perc_ore_consumate": perc_ore,
+        "valore_fatturabile": valore_fatturabile,
+        "costo_manodopera": round(costo_manodopera, 2),
+        "costi_diretti": costi_diretti,
+        "margine_euro": round(margine_euro, 2),
+        "margine_percentuale": margine_percentuale,
+        "alert_level": alert_level,
+    }
+
+
 @router.post("/commesse", status_code=201, tags=["Commesse"])
 async def add_commessa(
     data: CommessaCreate,
@@ -948,13 +1004,78 @@ async def get_timesheet(
         user_filter = current_user.id
     return await list_timesheet(db, user_filter, mese, stato, commessa_id)
 
+async def _check_margin_and_notify(db: AsyncSession, commessa_id: Optional[uuid.UUID]) -> None:
+    """Dopo l'inserimento di un timesheet, controlla il margine e crea notifiche se sotto soglia."""
+    if not commessa_id:
+        return
+    try:
+        from app.services.notification_service import create_notification
+        from app.models.models import Commessa, CommessaProgetto, Timesheet as TS
+        from sqlalchemy.orm import selectinload as sil
+
+        result = await db.execute(
+            select(Commessa)
+            .options(
+                sil(Commessa.righe_progetto),
+                sil(Commessa.timesheet),
+                sil(Commessa.cliente),
+            )
+            .where(Commessa.id == commessa_id)
+        )
+        c = result.unique().scalar_one_or_none()
+        if not c:
+            return
+
+        costo_manodopera = float(sum(t.costo_lavoro or Decimal("0") for t in c.timesheet))
+        try:
+            valore_fatturabile = float(sum(r.valore_fatturabile_calc for r in c.righe_progetto))
+            for ag in (c.aggiustamenti or []):
+                valore_fatturabile += float(ag.get("importo", 0))
+        except Exception:
+            valore_fatturabile = 0.0
+
+        if valore_fatturabile <= 0:
+            return
+
+        costi_diretti = float(c.costi_diretti or 0)
+        margine_euro = valore_fatturabile - costo_manodopera - costi_diretti
+        margine_pct = round(margine_euro / valore_fatturabile * 100, 1)
+        cliente_nome = c.cliente.nome if c.cliente else "?"
+        mese_str = c.mese_competenza.strftime("%B %Y") if c.mese_competenza else "?"
+
+        if margine_pct < 15:
+            alert_type = "CRITICAL"
+            title = f"⚠️ Margine CRITICO — {cliente_nome}"
+            message = f"Commessa {mese_str}: margine sceso al {margine_pct}% (soglia critica: 15%)"
+        elif margine_pct < 30:
+            alert_type = "WARNING"
+            title = f"Attenzione Margine — {cliente_nome}"
+            message = f"Commessa {mese_str}: margine al {margine_pct}% (soglia warning: 30%)"
+        else:
+            return  # Tutto OK, nessuna notifica
+
+        link = f"/commesse/{commessa_id}"
+
+        # Notifica tutti gli ADMIN e PM
+        admins_result = await db.execute(
+            select(User).where(User.ruolo.in_([UserRole.ADMIN, UserRole.PM]))
+        )
+        for admin in admins_result.scalars().all():
+            await create_notification(db, admin.id, title, message, alert_type, link)
+
+    except Exception as e:
+        logger.warning(f"Errore controllo margine commessa {commessa_id}: {e}")
+
+
 @router.post("/timesheet", response_model=TimesheetOut, status_code=201, tags=["Timesheet"])
 async def add_timesheet(
     data: TimesheetCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return await create_timesheet(db, data, current_user.id)
+    ts = await create_timesheet(db, data, current_user.id)
+    await _check_margin_and_notify(db, ts.commessa_id)
+    return ts
 
 @router.post("/timesheet/approva", response_model=List[TimesheetOut], tags=["Timesheet"])
 async def bulk_approva(
@@ -1879,6 +2000,7 @@ async def add_timesheet_manuale(
     db.add(ts)
     await db.commit()
     await db.refresh(ts)
+    await _check_margin_and_notify(db, commessa_id)
     return ts
 
 

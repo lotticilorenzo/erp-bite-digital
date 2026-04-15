@@ -73,6 +73,32 @@ export function useDeleteCommessa() {
   });
 }
 
+export interface ProfitabilityData {
+  commessa_id: string;
+  ore_budget: number;
+  ore_consumate: number;
+  perc_ore_consumate: number | null;
+  valore_fatturabile: number;
+  costo_manodopera: number;
+  costi_diretti: number;
+  margine_euro: number;
+  margine_percentuale: number | null;
+  alert_level: "OK" | "WARNING" | "CRITICAL" | "NO_DATA";
+}
+
+export function useProfitability(id: string | undefined) {
+  return useQuery({
+    queryKey: ["commessa-profitability", id],
+    queryFn: async () => {
+      if (!id) return null;
+      const { data } = await api.get<ProfitabilityData>(`/commesse/${id}/profitability`);
+      return data;
+    },
+    enabled: !!id,
+    refetchInterval: 30000,
+  });
+}
+
 export function useCollegaFattura() {
   const queryClient = useQueryClient();
   return useMutation({
