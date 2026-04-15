@@ -48,7 +48,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { usePreventivi, usePreventivoMutations } from "@/hooks/usePreventivi";
 import { PreventiviTable } from "@/components/preventivi/PreventiviTable";
 import { PreventivoModal } from "@/components/preventivi/PreventivoModal";
