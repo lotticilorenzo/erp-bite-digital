@@ -53,14 +53,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
 } from "@/components/ui/table";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useUsers } from "@/hooks/useUsers";
 import { cn } from "@/lib/utils";
 import type { ClienteAffidabilita, Commessa } from "@/types";
 
@@ -76,6 +78,11 @@ export default function DashboardPage() {
   const [isCommessaDialogOpen, setIsCommessaDialogOpen] = useState(false);
   const [selectedCommessa, setSelectedCommessa] = useState<Commessa | null>(null);
   const updateClienteAffidabilita = useUpdateClienteAffidabilita();
+  const { data: users = [] } = useUsers(); 
+
+  const activeUsers = useMemo(() => users.filter(u => u.attivo), [users]);
+  const visibleUsers = activeUsers.slice(0, 4);
+  const extraUsersCount = activeUsers.length > 4 ? activeUsers.length - 4 : 0;
 
   const selectedDate = useMemo(
     () => new Date(Number(selectedYear), Number(selectedMonth), 1),
@@ -259,19 +266,56 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex -space-x-2">
-            {[1, 2, 3, 4].map((index) => (
-              <div
-                key={index}
-                className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px] font-bold"
-              >
-                {String.fromCharCode(64 + index)}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center -space-x-2 transition-transform hover:scale-105 active:scale-95">
+                {visibleUsers.map((u) => (
+                  <Avatar key={u.id} className="h-8 w-8 border-2 border-background ring-offset-2 ring-primary/20 hover:z-10 transition-all">
+                    <AvatarImage src={u.avatar_url || ""} />
+                    <AvatarFallback className="bg-muted text-[10px] font-bold">
+                      {u.nome?.charAt(0)}{u.cognome?.charAt(0)}
+                    </AvatarFallback>
+                  </Avatar>
+                ))}
+                {extraUsersCount > 0 && (
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-background bg-primary text-[10px] font-bold text-primary-foreground z-20">
+                    +{extraUsersCount}
+                  </div>
+                )}
+                {activeUsers.length === 0 && (
+                   <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px] font-bold text-muted-foreground">
+                    ?
+                   </div>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64 p-2 rounded-3xl border-border/50 bg-card/95 backdrop-blur-xl shadow-2xl">
+              <DropdownMenuLabel className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
+                Collaboratori Online
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-border/50" />
+              <div className="max-h-[300px] overflow-y-auto space-y-1 p-1">
+                {activeUsers.map((u) => (
+                  <DropdownMenuItem 
+                    key={u.id} 
+                    className="flex items-center gap-3 p-2 rounded-2xl cursor-pointer hover:bg-white/5 focus:bg-white/5 transition-colors"
+                    onClick={() => navigate(`/collaboratori?id=${u.id}`)}
+                  >
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={u.avatar_url || ""} />
+                      <AvatarFallback className="text-[10px]">
+                        {u.nome?.charAt(0)}{u.cognome?.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-foreground leading-tight">{u.nome} {u.cognome}</span>
+                      <span className="text-[9px] font-black uppercase tracking-wider text-primary leading-tight">{u.ruolo}</span>
+                    </div>
+                  </DropdownMenuItem>
+                ))}
               </div>
-            ))}
-            <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-background bg-primary text-[10px] font-bold text-primary-foreground">
-              +5
-            </div>
-          </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <div className="mx-2 h-8 w-[1px] bg-border" />
 
