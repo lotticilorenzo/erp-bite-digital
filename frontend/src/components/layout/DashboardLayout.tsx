@@ -21,7 +21,7 @@ export function DashboardLayout() {
             "flex-1 min-w-0 relative",
             isStudioOS 
               ? "overflow-hidden" 
-              : "p-6 md:p-8 overflow-y-auto overflow-x-hidden pb-32"
+              : "layout-padding overflow-y-auto overflow-x-hidden pb-32"
           )}>
             <div className={cn(
               "animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out fill-mode-both",

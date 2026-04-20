@@ -246,7 +246,7 @@ export default function DashboardPage() {
 
   return (
     <PageTransition>
-      <div className="w-full px-8 space-y-12 pt-8 pb-20">
+      <div className="w-full space-y-8 pb-20">
       <header className="flex items-center justify-between px-1">
         <div className="flex flex-col gap-1">
           <h1 className="flex items-center gap-3 text-4xl font-black tracking-tighter text-foreground uppercase italic underline decoration-primary/30 decoration-8 underline-offset-[12px]">
@@ -318,7 +318,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+      <div className="grid layout-gap md:grid-cols-3 lg:grid-cols-6">
         {kpis.map((kpi) => (
           <DashboardKpiCard
             key={kpi.label}
@@ -332,7 +332,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+      <div className="grid grid-cols-1 layout-gap lg:grid-cols-12">
         <div className="space-y-4 lg:col-span-8">
           <div className="flex items-center justify-between px-1">
             <button

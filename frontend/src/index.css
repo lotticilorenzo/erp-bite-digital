@@ -132,11 +132,41 @@
   }
 }
 
-/* Density Utility */
-[data-density="compact"] .density-py { padding-top: 0.25rem; padding-bottom: 0.25rem; }
-[data-density="normal"] .density-py { padding-top: 0.5rem; padding-bottom: 0.5rem; }
-[data-density="comfortable"] .density-py { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+/* Layout Density System */
+:root {
+  --density-spacing: 1;
+  --density-padding: 2rem;
+  --density-gap: 1.5rem;
+}
 
-[data-density="compact"] .density-m { margin: 0.25rem; }
-[data-density="normal"] .density-m { margin: 0.5rem; }
-[data-density="comfortable"] .density-m { margin: 1rem; }
+[data-density="compact"] {
+  --density-spacing: 0.75;
+  --density-padding: 1.5rem;
+  --density-gap: 1rem;
+}
+
+[data-density="normal"] {
+  --density-spacing: 1;
+  --density-padding: 2rem;
+  --density-gap: 1.5rem;
+}
+
+[data-density="comfortable"] {
+  --density-spacing: 1.25;
+  --density-padding: 3rem;
+  --density-gap: 2rem;
+}
+
+/* Global Density Reactivity */
+.layout-padding { padding: var(--density-padding); }
+.layout-gap { gap: var(--density-gap); }
+
+/* density-py and density-m kept for specific overrides if needed, but updated to use variables */
+.density-py { 
+  padding-top: calc(0.5rem * var(--density-spacing)); 
+  padding-bottom: calc(0.5rem * var(--density-spacing)); 
+}
+.density-m { 
+  margin: calc(0.5rem * var(--density-spacing)); 
+}
+
