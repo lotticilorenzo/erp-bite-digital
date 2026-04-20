@@ -1,16 +1,21 @@
-import { 
+import { useState } from "react";
+import {
   Download,
   ArrowRightLeft,
-  Calendar
+  Calendar,
+  ShieldCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMovimentiCassa } from "@/hooks/useCassa";
 import { CassaDashboard } from "@/components/finance/CassaDashboard";
 import { MovimentiTable } from "@/components/finance/MovimentiTable";
+import { ImputazioneCostiDrawer } from "@/components/finance/ImputazioneCostiDrawer";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Link } from "react-router-dom";
 
 export default function Cassa() {
   const { data: movimenti, isLoading } = useMovimentiCassa();
+  const [imputaMovimento, setImputaMovimento] = useState<any>(null);
 
   if (isLoading) {
     return (
@@ -37,6 +42,12 @@ export default function Cassa() {
           <p className="text-[#475569] text-xs font-bold uppercase tracking-[0.2em] mt-1">Gestione flussi bancari e riconciliazioni</p>
         </div>
         <div className="flex items-center gap-3">
+          <Link to="/cassa/regole">
+            <Button variant="outline" className="h-10 bg-card/50 border-border text-muted-foreground hover:text-white rounded-xl gap-2 font-bold uppercase text-[10px] tracking-widest">
+              <ShieldCheck className="h-4 w-4" />
+              Regole Matching
+            </Button>
+          </Link>
           <Button variant="outline" className="h-10 bg-card/50 border-border text-muted-foreground hover:text-white rounded-xl gap-2 font-bold uppercase text-[10px] tracking-widest">
             <Calendar className="h-4 w-4" />
             Ultimi 30 Giorni
@@ -61,8 +72,19 @@ export default function Cassa() {
           </Button>
         </div>
         
-        <MovimentiTable data={movimenti || []} />
+        <MovimentiTable data={movimenti || []} onImputa={setImputaMovimento} />
       </div>
+
+      {imputaMovimento && (
+        <ImputazioneCostiDrawer
+          open={!!imputaMovimento}
+          onClose={() => setImputaMovimento(null)}
+          sourceType="movimento_cassa"
+          sourceId={imputaMovimento.id}
+          importoTotale={Math.abs(Number(imputaMovimento.importo))}
+          sourceLabel={imputaMovimento.descrizione}
+        />
+      )}
     </div>
   );
 }

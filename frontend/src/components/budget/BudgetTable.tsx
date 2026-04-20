@@ -1,191 +1,334 @@
-import { useState } from "react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { useBudget } from "@/hooks/useBudget";
-import type { BudgetConsuntivo } from "@/types/budget";
+import { useMemo, useState } from "react";
 import { format } from "date-fns";
+import { AlertTriangle, CheckCircle2, PencilLine, Save, Wallet } from "lucide-react";
 import { toast } from "sonner";
-import { AlertCircle, TrendingDown, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { useBudget } from "@/hooks/useBudget";
+import type { BudgetVariance, BudgetVarianceStatus } from "@/types/budget";
+import { cn } from "@/lib/utils";
 
 interface BudgetTableProps {
   mese: Date;
-  data: BudgetConsuntivo[];
+  data: BudgetVariance[];
   isLoading: boolean;
+}
+
+const STATUS_META: Record<BudgetVarianceStatus, { label: string; pill: string; bar: string; text: string }> = {
+  ok: {
+    label: "OK",
+    pill: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
+    bar: "bg-emerald-500",
+    text: "text-emerald-400",
+  },
+  warning: {
+    label: "Warning",
+    pill: "border-amber-500/30 bg-amber-500/10 text-amber-400",
+    bar: "bg-amber-500",
+    text: "text-amber-400",
+  },
+  over: {
+    label: "Over",
+    pill: "border-rose-500/30 bg-rose-500/10 text-rose-400",
+    bar: "bg-rose-500",
+    text: "text-rose-400",
+  },
+};
+
+function euro(value: number) {
+  return new Intl.NumberFormat("it-IT", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
 }
 
 export function BudgetTable({ mese, data, isLoading }: BudgetTableProps) {
   const { upsertBudget } = useBudget(mese);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [valore, setValore] = useState<string>("");
+  const [valore, setValore] = useState("");
 
-  const handleEdit = (item: BudgetConsuntivo) => {
+  const totals = useMemo(() => {
+    const budget = data.reduce((acc, item) => acc + Number(item.budget || 0), 0);
+    const speso = data.reduce((acc, item) => acc + Number(item.speso || 0), 0);
+    const varianza = speso - budget;
+    const percentualeUtilizzo = budget > 0 ? (speso / budget) * 100 : (speso > 0 ? 100 : 0);
+    const varianzaPct = budget > 0 ? (varianza / budget) * 100 : (speso > 0 ? 100 : 0);
+    const status: BudgetVarianceStatus = percentualeUtilizzo > 100 ? "over" : percentualeUtilizzo >= 80 ? "warning" : "ok";
+
+    return { budget, speso, varianza, percentualeUtilizzo, varianzaPct, status };
+  }, [data]);
+
+  function startEdit(item: BudgetVariance) {
     setEditingId(item.categoria_id);
-    setValore(item.importo_budget.toString());
-  };
+    setValore(String(item.budget ?? 0));
+  }
 
-  const handleSave = async (categoria_id: string) => {
+  async function handleSave(categoriaId: string) {
     try {
       await upsertBudget.mutateAsync({
-        categoria_id,
+        categoria_id: categoriaId,
         mese_competenza: format(mese, "yyyy-MM-01"),
-        importo_budget: parseFloat(valore),
+        importo_budget: parseFloat(valore || "0"),
       });
       toast.success("Budget aggiornato");
       setEditingId(null);
-    } catch (error) {
+      setValore("");
+    } catch {
       toast.error("Errore durante l'aggiornamento");
     }
-  };
-
-  if (isLoading) {
-    return <div className="p-8 text-center text-muted-foreground animate-pulse">Caricamento budget...</div>;
   }
 
-  const totalBudget = data.reduce((acc, curr) => acc + curr.importo_budget, 0);
-  const totalSpent = data.reduce((acc, curr) => acc + curr.importo_speso, 0);
-  const totalPerc = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+  if (isLoading) {
+    return (
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div key={index} className="h-52 rounded-3xl border border-border bg-card/40 animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  if (data.length === 0) {
+    return (
+      <div className="rounded-[28px] border border-dashed border-border bg-card/30 p-12 text-center">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/40 text-muted-foreground">
+          <Wallet className="h-6 w-6" />
+        </div>
+        <p className="text-lg font-black text-white">Nessun budget impostato per questo mese</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Crea categorie o copia il mese precedente per iniziare a monitorare la spesa.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* KPI Riassuntivi */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-card/50 border border-border p-6 rounded-3xl space-y-2">
-          <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Budget Totale</p>
-          <p className="text-3xl font-black text-white">{totalBudget.toLocaleString('it-IT')}€</p>
-        </div>
-        <div className="bg-card/50 border border-border p-6 rounded-3xl space-y-2">
-          <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Speso Reale</p>
-          <div className="flex items-end gap-3">
-            <p className="text-3xl font-black text-white">{totalSpent.toLocaleString('it-IT')}€</p>
-            <span className={`text-sm font-bold flex items-center gap-1 mb-1 ${totalPerc > 100 ? 'text-red-500' : 'text-emerald-500'}`}>
-              {totalPerc > 100 ? <TrendingUp size={16}/> : <TrendingDown size={16}/>}
-              {totalPerc.toFixed(1)}%
-            </span>
-          </div>
-        </div>
-        <div className="bg-card/50 border border-border p-6 rounded-3xl space-y-2">
-          <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Rimanente</p>
-          <p className={`text-3xl font-black ${(totalBudget - totalSpent) < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-            {(totalBudget - totalSpent).toLocaleString('it-IT')}€
-          </p>
-        </div>
-      </div>
+      <BudgetTotalCard totals={totals} />
 
-      <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-xl">
-        <Table>
-          <TableHeader className="bg-muted/30">
-            <TableRow className="border-border hover:bg-transparent">
-              <TableHead className="font-black text-xs uppercase tracking-widest text-muted-foreground h-12">Categoria</TableHead>
-              <TableHead className="font-black text-xs uppercase tracking-widest text-muted-foreground h-12">Budget</TableHead>
-              <TableHead className="font-black text-xs uppercase tracking-widest text-muted-foreground h-12">Speso</TableHead>
-              <TableHead className="font-black text-xs uppercase tracking-widest text-muted-foreground h-12 w-[300px]">Progresso</TableHead>
-              <TableHead className="font-black text-xs uppercase tracking-widest text-muted-foreground h-12 text-right">Azioni</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.map((item) => {
-              const perc = item.percentuale;
-              const isOver = perc >= 100;
-              const isWarn = perc >= 80 && perc < 100;
+      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+        {data.map((item) => {
+          const meta = STATUS_META[item.status];
+          const progress = Math.min(item.percentuale_utilizzo, 140);
+          const isEditing = editingId === item.categoria_id;
 
-              return (
-                <TableRow key={item.categoria_id} className="border-border hover:bg-muted/20 transition-colors">
-                  <TableCell className="py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.categoria_colore }} />
-                      <span className="font-bold text-white">{item.categoria_nome}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {editingId === item.categoria_id ? (
+          return (
+            <div
+              key={item.categoria_id}
+              onClick={() => !isEditing && startEdit(item)}
+              className={cn(
+                "group rounded-[28px] border border-border bg-card/60 p-5 shadow-xl transition-all",
+                "hover:border-primary/30 hover:bg-card hover:shadow-2xl cursor-pointer",
+                item.status === "over" && "border-rose-500/30"
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="mt-0.5 inline-block h-3 w-3 shrink-0 rounded-full"
+                      style={{ backgroundColor: item.categoria_colore }}
+                    />
+                    <h3 className="truncate text-lg font-black text-white">{item.categoria_nome}</h3>
+                  </div>
+                  <p className="mt-2 text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                    {euro(item.speso)} / {euro(item.budget)} ({item.percentuale_utilizzo.toFixed(0)}%)
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Badge className={cn("border text-[10px] font-black uppercase tracking-widest", meta.pill)}>
+                    {meta.label}
+                  </Badge>
+                  {!isEditing && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        startEdit(item);
+                      }}
+                      className="rounded-xl border border-border/60 p-2 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                    >
+                      <PencilLine className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <div className="h-3 overflow-hidden rounded-full bg-muted/50">
+                  <div
+                    className={cn("h-full rounded-full transition-all", meta.bar)}
+                    style={{ width: `${Math.max(4, Math.min(progress, 100))}%` }}
+                  />
+                </div>
+                <div className="mt-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider">
+                  <span className={meta.text}>{item.percentuale_utilizzo.toFixed(1)}% utilizzato</span>
+                  <span className="text-muted-foreground">
+                    {item.varianza >= 0 ? "+" : "-"}
+                    {euro(Math.abs(item.varianza))}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-border/60 bg-background/30 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">
+                      Budget Pianificato
+                    </p>
+                    {isEditing ? (
                       <Input
                         type="number"
+                        min="0"
+                        step="0.01"
                         value={valore}
-                        onChange={(e) => setValore(e.target.value)}
-                        className="w-32 bg-muted h-9 rounded-lg font-bold"
+                        onChange={(event) => setValore(event.target.value)}
+                        onClick={(event) => event.stopPropagation()}
+                        className="mt-2 h-10 max-w-[180px] bg-background font-bold"
                         autoFocus
                       />
                     ) : (
-                      <span className="font-bold text-white">{item.importo_budget.toLocaleString('it-IT')}€</span>
+                      <p className="mt-2 text-2xl font-black text-white">{euro(item.budget)}</p>
                     )}
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-bold">{item.importo_speso.toLocaleString('it-IT')}€</span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-2">
-                      <Progress 
-                        value={Math.min(perc, 100)} 
-                        className={`h-2 rounded-full bg-muted overflow-hidden`}
-                        style={{ "--progress-foreground": isOver ? "#ef4444" : isWarn ? "#f59e0b" : "var(--primary)" } as React.CSSProperties}
-                      />
-                      <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-tighter">
-                        <span className={isOver ? "text-red-500" : isWarn ? "text-amber-500" : "text-muted-foreground"}>
-                          {perc}% Utilizzato
-                        </span>
-                        <span className="text-muted-foreground">
-                          Residuo: {item.rimanente.toLocaleString('it-IT')}€
-                        </span>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {editingId === item.categoria_id ? (
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setEditingId(null)}
-                          className="h-8 rounded-lg font-bold text-muted-foreground"
-                        >
-                          Annulla
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => handleSave(item.categoria_id)}
-                          className="h-8 rounded-lg font-bold bg-primary text-white"
-                        >
-                          Salva
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(item)}
-                        className="h-8 rounded-lg font-bold text-primary hover:text-primary hover:bg-primary/10"
-                      >
-                        Modifica
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-
-            {data.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={5} className="py-20 text-center">
-                  <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                    <AlertCircle size={40} className="opacity-20" />
-                    <p className="font-bold">Nessun budget impostato per questo mese</p>
-                    <p className="text-sm">Inizia impostando un budget per una categoria o copia dal mese precedente.</p>
                   </div>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+
+                  <div className="text-right">
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">
+                      Varianza
+                    </p>
+                    <p className={cn("mt-2 text-xl font-black", item.varianza > 0 ? "text-rose-400" : "text-emerald-400")}>
+                      {item.varianza > 0 ? "+" : "-"}
+                      {euro(Math.abs(item.varianza))}
+                    </p>
+                    <p className={cn("text-xs font-bold", item.varianza > 0 ? "text-rose-300" : "text-emerald-300")}>
+                      {item.varianza_pct > 0 ? "+" : ""}
+                      {item.varianza_pct.toFixed(1)}%
+                    </p>
+                  </div>
+                </div>
+
+                {item.note && (
+                  <p className="mt-4 line-clamp-2 text-xs text-muted-foreground">
+                    {item.note}
+                  </p>
+                )}
+
+                {isEditing && (
+                  <div className="mt-4 flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setEditingId(null);
+                        setValore("");
+                      }}
+                      className="flex-1"
+                    >
+                      Annulla
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void handleSave(item.categoria_id);
+                      }}
+                      disabled={upsertBudget.isPending}
+                      className="flex-1"
+                    >
+                      <Save className="mr-2 h-4 w-4" />
+                      Salva
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
+    </div>
+  );
+}
+
+function BudgetTotalCard({
+  totals,
+}: {
+  totals: {
+    budget: number;
+    speso: number;
+    varianza: number;
+    percentualeUtilizzo: number;
+    varianzaPct: number;
+    status: BudgetVarianceStatus;
+  };
+}) {
+  const meta = STATUS_META[totals.status];
+
+  return (
+    <div className="rounded-[32px] border border-border bg-card/70 p-6 shadow-2xl">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-muted-foreground">Totale Mese</p>
+          <div className="mt-3 flex flex-wrap items-end gap-6">
+            <Metric label="Budget" value={euro(totals.budget)} />
+            <Metric label="Speso" value={euro(totals.speso)} />
+            <Metric
+              label="Varianza"
+              value={`${totals.varianza > 0 ? "+" : "-"}${euro(Math.abs(totals.varianza))}`}
+              className={totals.varianza > 0 ? "text-rose-400" : "text-emerald-400"}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {totals.status === "over" ? (
+            <AlertTriangle className="h-4 w-4 text-rose-400" />
+          ) : (
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+          )}
+          <Badge className={cn("border text-[10px] font-black uppercase tracking-widest", meta.pill)}>
+            {meta.label}
+          </Badge>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <div className="h-3 overflow-hidden rounded-full bg-muted/40">
+          <div
+            className={cn("h-full rounded-full transition-all", meta.bar)}
+            style={{ width: `${Math.max(4, Math.min(totals.percentualeUtilizzo, 100))}%` }}
+          />
+        </div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm">
+          <span className={cn("font-black uppercase tracking-widest", meta.text)}>
+            {totals.percentualeUtilizzo.toFixed(1)}% del budget utilizzato
+          </span>
+          <span className="font-bold text-muted-foreground">
+            {totals.varianzaPct > 0 ? "+" : ""}
+            {totals.varianzaPct.toFixed(1)}% rispetto al pianificato
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Metric({
+  label,
+  value,
+  className,
+}: {
+  label: string;
+  value: string;
+  className?: string;
+}) {
+  return (
+    <div>
+      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
+      <p className={cn("mt-2 text-3xl font-black text-white", className)}>{value}</p>
     </div>
   );
 }

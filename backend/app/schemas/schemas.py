@@ -591,6 +591,7 @@ class TaskCreate(BaseModel):
     data_inizio: Optional[date] = None
     data_scadenza: Optional[date] = None
     stima_minuti: Optional[int] = Field(None, ge=0, le=999999)
+    priorita: Optional[str] = "media"
 
     @model_validator(mode="after")
     def validate_date_range(self):
@@ -895,6 +896,58 @@ class AIChatRequest(BaseModel):
 class AIChatResponse(BaseModel):
     response: str
 
+
+class AIGenerateTasksRequest(BaseModel):
+    commessa_id: uuid.UUID
+    prompt_extra: str = ""
+    max_ore: int = Field(40, ge=1, le=400)
+
+
+class AITaskSuggestionOut(BaseModel):
+    titolo: str
+    servizio: Optional[str] = None
+    stima_minuti: int
+    priorita: str = "media"
+    ruolo_suggerito: Optional[str] = None
+    assegnatario_id: Optional[uuid.UUID] = None
+    assegnatario_nome: Optional[str] = None
+    rationale: Optional[str] = None
+
+
+class AIGenerateTasksContextOut(BaseModel):
+    cliente_nome: str
+    project_types: List[str] = []
+    storico_mesi: int = 6
+    budget_ore: float = 0
+    template_count: int = 0
+    mese_commessa: Optional[date] = None
+
+
+class AIGenerateTasksResponse(BaseModel):
+    context: AIGenerateTasksContextOut
+    suggestions: List[AITaskSuggestionOut]
+    source: str = "ai"
+
+
+class AIEstimateHoursRequest(BaseModel):
+    titolo_task: str
+    cliente_id: uuid.UUID
+    mesi_storico: int = Field(6, ge=1, le=24)
+
+
+class AIEstimateHoursSimilarOut(BaseModel):
+    titolo: str
+    durata_avg: int
+    count: int
+
+
+class AIEstimateHoursResponse(BaseModel):
+    stima_minuti: int
+    confidenza: float
+    simili: List[AIEstimateHoursSimilarOut] = []
+    ragionamento: str
+    source: str = "history"
+
 # ── PREVENTIVO ────────────────────────────────────────────
 class PreventivoVoceCreate(BaseModel):
     descrizione: str
@@ -982,6 +1035,7 @@ class PianificazioneOut(OrmBase, PianificazioneBase):
     id: uuid.UUID
     created_at: datetime
     updated_at: datetime
+    commessa_id: Optional[uuid.UUID] = None
     cliente: Optional[ClienteOut] = None
     lavorazioni: List[PianificazioneLavorazioneOut] = []
     
@@ -1037,6 +1091,41 @@ class BudgetConsuntivoOut(BaseModel):
     rimanente: Decimal
     percentuale: float
     note: Optional[str] = None
+
+
+class BudgetVarianceOut(BaseModel):
+    categoria_id: uuid.UUID
+    categoria_nome: str
+    categoria_colore: str
+    budget: Decimal
+    speso: Decimal
+    varianza: Decimal
+    varianza_pct: float
+    percentuale_utilizzo: float
+    status: str
+    note: Optional[str] = None
+
+
+class BudgetTrendPointOut(BaseModel):
+    mese: str
+    budget: Decimal
+    speso: Decimal
+    varianza: Decimal
+    varianza_pct: float
+    percentuale_utilizzo: float
+    status: str
+
+
+class BudgetTrendSeriesOut(BaseModel):
+    categoria_id: uuid.UUID
+    categoria_nome: str
+    categoria_colore: str
+    data: List[BudgetTrendPointOut]
+
+
+class BudgetTrendOut(BaseModel):
+    mesi: List[str]
+    series: List[BudgetTrendSeriesOut]
 
 
 # ── WIKI SCHEMAS ──────────────────────────────────────────
@@ -1304,8 +1393,12 @@ class PianificazioneCreate(PianificazioneBase):
 class PianificazioneOut(OrmBase, PianificazioneBase):
     id: uuid.UUID
     lavorazioni: List[PianificazioneLavorazioneOut] = []
+    commessa_id: Optional[uuid.UUID] = None
     created_at: datetime
     updated_at: datetime
+    costo_totale: Decimal = Decimal("0")
+    margine_euro: Decimal = Decimal("0")
+    margine_percentuale: float = 0
 
 # ── Update Forward Refs ──
 CommessaOut.model_rebuild()

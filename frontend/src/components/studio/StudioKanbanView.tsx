@@ -20,6 +20,7 @@ import {
   Plus,
   Clock,
   AlertCircle,
+  MessageSquare,
 } from "lucide-react";
 import { useStudio } from "@/hooks/useStudio";
 import { useTasks, useTaskMutations } from "@/hooks/useTasks";
@@ -173,6 +174,13 @@ function KanbanCard({ task, isDragging }: KanbanCardProps) {
             <span className="text-[10px] text-muted-foreground font-mono flex items-center gap-0.5">
               <Clock className="h-2.5 w-2.5" />
               {Math.round(task.stima_minuti / 60)}h
+            </span>
+          )}
+
+          {(task.commenti_count ?? 0) > 0 && (
+            <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+              <MessageSquare className="h-2.5 w-2.5" />
+              {task.commenti_count}
             </span>
           )}
         </div>

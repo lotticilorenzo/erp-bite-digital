@@ -52,14 +52,17 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { usePreventivi, usePreventivoMutations } from "@/hooks/usePreventivi";
 import { PreventiviTable } from "@/components/preventivi/PreventiviTable";
 import { PreventivoModal } from "@/components/preventivi/PreventivoModal";
+import { AuditLogTable } from "@/components/audit/AuditLogTable";
 import type { Preventivo, PreventivoStatus } from "@/types/preventivi";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function ClienteDetailPage() {
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
     setIsMounted(true);
   }, []);
+  const { user } = useAuth();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: cliente, isLoading: loadingC } = useCliente(id);
@@ -180,6 +183,7 @@ export default function ClienteDetailPage() {
   const status = score >= 70 ? "ECCELLENTE" : score >= 40 ? "ATTENZIONE" : "CRITICO";
   const statusColor = score >= 70 ? "text-emerald-400" : score >= 40 ? "text-amber-400" : "text-red-400";
   const statusBg = score >= 70 ? "bg-emerald-500/10 border-emerald-500/20" : score >= 40 ? "bg-amber-500/10 border-amber-500/20" : "bg-red-500/10 border-red-500/20";
+  const canViewAudit = ["ADMIN", "DEVELOPER", "PM"].includes(user?.ruolo ?? "");
 
   const periodoLabel = {
     YTD: `Anno Corrente (${format(new Date(), "yyyy")})`,
@@ -718,6 +722,20 @@ export default function ClienteDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {canViewAudit && (
+            <Card className="bg-card border-border overflow-hidden">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2 text-white">
+                  <History className="w-4 h-4 text-primary" />
+                  Storico Cliente
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <AuditLogTable tabella="clienti" recordId={cliente.id} hideFilters defaultLimit={6} compact />
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="bg-card border-border shadow-2xl relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-blue-500" />

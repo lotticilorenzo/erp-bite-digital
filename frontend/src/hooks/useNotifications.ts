@@ -6,10 +6,16 @@ export interface Notification {
   user_id: string;
   title: string;
   message: string;
-  type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' | 'URGENTE' | 'AVVISO' | 'FATTURA' | 'APPROVAZIONE';
+  type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' | 'CRITICAL' | 'URGENTE' | 'AVVISO' | 'FATTURA' | 'APPROVAZIONE';
   link?: string;
   is_read: boolean;
   created_at: string;
+}
+
+export interface NotificationNode extends Notification {
+  description: string;
+  timestamp: string;
+  isRead: boolean;
 }
 
 export function useNotifications() {
@@ -43,14 +49,14 @@ export function useNotifications() {
   });
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
-  const hasUrgent = notifications.some(n => !n.is_read && n.type === 'URGENTE');
+  const hasUrgent = notifications.some(n => !n.is_read && ['URGENTE', 'CRITICAL', 'ERROR'].includes(n.type));
 
   // Mapped version for components that expect camelCase
-  const mappedNodes = notifications.map(n => ({
+  const mappedNodes: NotificationNode[] = notifications.map((n) => ({
     ...n,
     description: n.message,
     timestamp: n.created_at,
-    isRead: n.is_read
+    isRead: n.is_read,
   }));
 
   return {
@@ -62,6 +68,6 @@ export function useNotifications() {
     isLoading,
     allNodes: mappedNodes,
     unreadNodes: mappedNodes.filter(n => !n.isRead),
-    importantNodes: mappedNodes.filter(n => n.type === 'URGENTE' || n.type === 'AVVISO' || n.type === 'FATTURA')
+    importantNodes: mappedNodes.filter(n => ['URGENTE', 'AVVISO', 'FATTURA', 'APPROVAZIONE', 'CRITICAL', 'WARNING', 'ERROR'].includes(n.type))
   };
 }

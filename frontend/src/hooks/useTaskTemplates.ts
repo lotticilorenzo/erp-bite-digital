@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { AxiosError } from "axios";
 import api from "@/lib/api";
 import { toast } from "sonner";
 
@@ -25,6 +26,10 @@ export interface TaskTemplate {
   created_at: string;
 }
 
+function errorDetail(error: unknown, fallback: string) {
+  return (error as AxiosError<{ detail?: string }>)?.response?.data?.detail ?? fallback;
+}
+
 export function useTaskTemplates() {
   return useQuery({
     queryKey: ["task-templates"],
@@ -46,7 +51,7 @@ export function useCreateTaskTemplate() {
       qc.invalidateQueries({ queryKey: ["task-templates"] });
       toast.success("Template creato");
     },
-    onError: (e: any) => toast.error(e?.response?.data?.detail ?? "Errore"),
+    onError: (error) => toast.error(errorDetail(error, "Errore")),
   });
 }
 
@@ -61,7 +66,7 @@ export function useUpdateTaskTemplate() {
       qc.invalidateQueries({ queryKey: ["task-templates"] });
       toast.success("Template aggiornato");
     },
-    onError: (e: any) => toast.error(e?.response?.data?.detail ?? "Errore"),
+    onError: (error) => toast.error(errorDetail(error, "Errore")),
   });
 }
 
@@ -75,7 +80,7 @@ export function useDeleteTaskTemplate() {
       qc.invalidateQueries({ queryKey: ["task-templates"] });
       toast.success("Template eliminato");
     },
-    onError: (e: any) => toast.error(e?.response?.data?.detail ?? "Errore"),
+    onError: (error) => toast.error(errorDetail(error, "Errore")),
   });
 }
 
@@ -90,8 +95,15 @@ export function useGeneraTaskDaTemplate() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["tasks"] });
-      toast.success(`${data.generati} task generati da "${data.template}"`);
+      qc.invalidateQueries({ queryKey: ["studio-tasks"], exact: false });
+      qc.invalidateQueries({ queryKey: ["commesse"], exact: false });
+      const skipped = Number(data?.saltati || 0);
+      toast.success(
+        skipped > 0
+          ? `${data.generati} task generati da "${data.template}" (${skipped} gia presenti)`
+          : `${data.generati} task generati da "${data.template}"`
+      );
     },
-    onError: (e: any) => toast.error(e?.response?.data?.detail ?? "Errore generazione"),
+    onError: (error) => toast.error(errorDetail(error, "Errore generazione")),
   });
 }

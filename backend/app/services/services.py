@@ -2054,6 +2054,87 @@ async def applica_regole_automatiche(db: AsyncSession):
     return {'movimenti_processati': len(movimenti), 'match_trovati': matched}
 
 
+async def dry_run_regole_automatiche(db: AsyncSession):
+    """Simula l'applicazione delle regole senza modificare il DB."""
+    import re as re_module
+    from app.models.models import RegolaRiconciliazione, MovimentoCassa
+
+    res_regole = await db.execute(
+        select(RegolaRiconciliazione)
+        .where(RegolaRiconciliazione.attiva == True)
+        .order_by(RegolaRiconciliazione.priorita.desc())
+    )
+    regole = res_regole.scalars().all()
+
+    res_mov = await db.execute(
+        select(MovimentoCassa).where(MovimentoCassa.riconciliato == False)
+    )
+    movimenti = res_mov.scalars().all()
+
+    preview = []
+    for mov in movimenti:
+        desc = (mov.descrizione or '').lower()
+        for regola in regole:
+            pattern = regola.pattern.lower()
+            hit = False
+            if regola.tipo_match == 'contains':
+                hit = pattern in desc
+            elif regola.tipo_match == 'startswith':
+                hit = desc.startswith(pattern)
+            elif regola.tipo_match == 'regex':
+                try:
+                    hit = bool(re_module.search(pattern, desc))
+                except re_module.error:
+                    pass
+            if hit:
+                preview.append({
+                    'movimento_id': str(mov.id),
+                    'movimento_descrizione': mov.descrizione,
+                    'movimento_importo': float(mov.importo or 0),
+                    'movimento_data': str(mov.data_valuta) if mov.data_valuta else None,
+                    'regola_id': str(regola.id),
+                    'regola_nome': regola.nome,
+                    'regola_pattern': regola.pattern,
+                    'azione': 'RICONCILIA_AUTO' if regola.auto_riconcilia else 'CATEGORIZZA',
+                    'categoria_prevista': regola.categoria,
+                })
+                break
+
+    return {
+        'movimenti_non_riconciliati': len(movimenti),
+        'match_previsti': len(preview),
+        'preview': preview,
+    }
+
+
+async def get_regola_application_log(db: AsyncSession, regola_id: uuid.UUID):
+    """Recupera lo storico applicazioni di una regola dall'audit_log."""
+    from app.models.models import AuditLog, User as UserModel
+    res = await db.execute(
+        select(AuditLog, UserModel.nome, UserModel.cognome)
+        .outerjoin(UserModel, AuditLog.user_id == UserModel.id)
+        .where(
+            AuditLog.tabella == 'regole_riconciliazione',
+            AuditLog.record_id == str(regola_id),
+            AuditLog.azione == 'APPLICA'
+        )
+        .order_by(AuditLog.created_at.desc())
+        .limit(50)
+    )
+    rows = res.all()
+    return {
+        'log': [
+            {
+                'id': str(row.AuditLog.id),
+                'applicato_at': row.AuditLog.created_at.isoformat() if row.AuditLog.created_at else None,
+                'applicato_da': f"{row.nome} {row.cognome}".strip() if row.nome else None,
+                'dati': row.AuditLog.dati_dopo,
+            }
+            for row in rows
+        ]
+    }
+
+
 async def suggest_riconciliazione(db: AsyncSession, movimento_id: uuid.UUID):
     import re as re_module
     from app.models.models import MovimentoCassa, FatturaPassiva, Fornitore, RegolaRiconciliazione
@@ -2753,3 +2834,62 @@ async def converti_preventivo_in_commessa(db: AsyncSession, preventivo_id: uuid.
     
     await db.flush()
     return await get_commessa(db, commessa.id)
+
+
+async def get_costi_dettaglio_commessa(db: AsyncSession, commessa_id: uuid.UUID):
+    """Breakdown costi diretti: manuali + da fatture passive + da movimenti cassa."""
+    from app.models.models import (
+        Commessa, FatturaPassivaImputazione, MovimentoCassaImputazione,
+        FatturaPassiva, MovimentoCassa, Cliente, Progetto
+    )
+
+    res = await db.execute(select(Commessa).where(Commessa.id == commessa_id))
+    commessa = res.scalar_one_or_none()
+    if not commessa:
+        return None
+
+    # Imputazioni da fatture passive (cerca commessa via progetto)
+    res_fp = await db.execute(
+        select(FatturaPassivaImputazione, FatturaPassiva.numero, FatturaPassiva.data_emissione)
+        .join(FatturaPassiva, FatturaPassivaImputazione.fattura_passiva_id == FatturaPassiva.id)
+        .where(FatturaPassivaImputazione.commessa_id == commessa_id)
+    )
+    imp_fatture = []
+    for row in res_fp.all():
+        imp = {c.name: getattr(row.FatturaPassivaImputazione, c.name)
+               for c in row.FatturaPassivaImputazione.__table__.columns}
+        imp['fonte'] = 'fattura_passiva'
+        imp['fonte_numero'] = row.numero
+        imp['fonte_data'] = str(row.data_emissione) if row.data_emissione else None
+        imp_fatture.append(imp)
+
+    # Imputazioni da movimenti cassa
+    res_mc = await db.execute(
+        select(MovimentoCassaImputazione, MovimentoCassa.descrizione, MovimentoCassa.data_valuta)
+        .join(MovimentoCassa, MovimentoCassaImputazione.movimento_id == MovimentoCassa.id)
+        .where(MovimentoCassaImputazione.commessa_id == commessa_id)
+    )
+    imp_movimenti = []
+    for row in res_mc.all():
+        imp = {c.name: getattr(row.MovimentoCassaImputazione, c.name)
+               for c in row.MovimentoCassaImputazione.__table__.columns}
+        imp['fonte'] = 'movimento_cassa'
+        imp['fonte_descrizione'] = row.descrizione
+        imp['fonte_data'] = str(row.data_valuta) if row.data_valuta else None
+        imp_movimenti.append(imp)
+
+    totale_fatture = sum(float(i.get('importo') or 0) for i in imp_fatture)
+    totale_movimenti = sum(float(i.get('importo') or 0) for i in imp_movimenti)
+    costi_manuali = float(commessa.costi_diretti or 0) - totale_fatture - totale_movimenti
+
+    return {
+        'commessa_id': str(commessa_id),
+        'costi_diretti_totale': float(commessa.costi_diretti or 0),
+        'breakdown': {
+            'manuali': round(max(costi_manuali, 0), 2),
+            'da_fatture_passive': round(totale_fatture, 2),
+            'da_movimenti_cassa': round(totale_movimenti, 2),
+        },
+        'imputazioni_fatture': imp_fatture,
+        'imputazioni_movimenti': imp_movimenti,
+    }

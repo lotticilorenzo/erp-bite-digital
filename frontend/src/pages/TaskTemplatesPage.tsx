@@ -3,7 +3,7 @@ import {
   Plus, Trash2, Edit2, Check, X, ChevronDown, ChevronUp,
   Layers, Clock, Zap, ToggleLeft, ToggleRight, Copy
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,7 @@ import {
 } from "@/hooks/useTaskTemplates";
 
 const PRIORITA_OPTIONS = ["urgente", "alta", "media", "bassa"];
-const RUOLO_OPTIONS = ["", "ADMIN", "PM", "COLLABORATORE", "DIPENDENTE"];
+const RUOLO_OPTIONS = ["", "PM", "COLLABORATORE", "DIPENDENTE", "DEVELOPER", "ADMIN"];
 const PROGETTO_TIPO_OPTIONS = [
   { value: "", label: "Tutti" },
   { value: "RETAINER", label: "Retainer" },
@@ -27,11 +27,11 @@ const DEFAULT_TEMPLATES: Omit<TaskTemplate, "id" | "num_items" | "created_at">[]
     progetto_tipo: "RETAINER",
     attivo: true,
     items: [
-      { titolo: "Report performance mensile", stima_minuti: 60, priorita: "alta", giorno_scadenza: 5 },
-      { titolo: "Piano editoriale mese successivo", stima_minuti: 90, priorita: "alta", giorno_scadenza: 20 },
-      { titolo: "Creazione contenuti", stima_minuti: 240, priorita: "media", giorno_scadenza: 15 },
-      { titolo: "Call mensile cliente", stima_minuti: 60, priorita: "alta", giorno_scadenza: 10 },
-      { titolo: "Analisi competitor", stima_minuti: 45, priorita: "bassa", giorno_scadenza: 25 },
+      { titolo: "Report performance mensile", servizio: "Social Media", assegnatario_ruolo: "PM", stima_minuti: 60, priorita: "alta", giorno_scadenza: 5 },
+      { titolo: "Piano editoriale mese successivo", servizio: "Social Media", assegnatario_ruolo: "PM", stima_minuti: 90, priorita: "alta", giorno_scadenza: 20 },
+      { titolo: "Creazione contenuti", servizio: "Social Media", assegnatario_ruolo: "COLLABORATORE", stima_minuti: 240, priorita: "media", giorno_scadenza: 15 },
+      { titolo: "Call mensile cliente", servizio: "Social Media", assegnatario_ruolo: "PM", stima_minuti: 60, priorita: "alta", giorno_scadenza: 10 },
+      { titolo: "Analisi competitor", servizio: "Social Media", assegnatario_ruolo: "COLLABORATORE", stima_minuti: 45, priorita: "bassa", giorno_scadenza: 25 },
     ],
   },
   {
@@ -40,22 +40,22 @@ const DEFAULT_TEMPLATES: Omit<TaskTemplate, "id" | "num_items" | "created_at">[]
     progetto_tipo: "RETAINER",
     attivo: true,
     items: [
-      { titolo: "Ottimizzazione campagne", stima_minuti: 120, priorita: "alta", giorno_scadenza: 8 },
-      { titolo: "Report performance Ads", stima_minuti: 45, priorita: "alta", giorno_scadenza: 5 },
-      { titolo: "Call mensile cliente", stima_minuti: 60, priorita: "media", giorno_scadenza: 12 },
-      { titolo: "Analisi keywords e bid", stima_minuti: 60, priorita: "media", giorno_scadenza: 18 },
+      { titolo: "Ottimizzazione campagne", servizio: "Google Ads", assegnatario_ruolo: "COLLABORATORE", stima_minuti: 120, priorita: "alta", giorno_scadenza: 8 },
+      { titolo: "Report performance Ads", servizio: "Google Ads", assegnatario_ruolo: "PM", stima_minuti: 45, priorita: "alta", giorno_scadenza: 5 },
+      { titolo: "Call mensile cliente", servizio: "Google Ads", assegnatario_ruolo: "PM", stima_minuti: 60, priorita: "media", giorno_scadenza: 12 },
+      { titolo: "Analisi keywords e bid", servizio: "Google Ads", assegnatario_ruolo: "COLLABORATORE", stima_minuti: 60, priorita: "media", giorno_scadenza: 18 },
     ],
   },
   {
     nome: "SEO",
-    descrizione: "Task mensili per attività SEO",
+    descrizione: "Task mensili per attivita SEO",
     progetto_tipo: "RETAINER",
     attivo: true,
     items: [
-      { titolo: "Analisi ranking keywords", stima_minuti: 60, priorita: "alta", giorno_scadenza: 5 },
-      { titolo: "Contenuti blog / articoli", stima_minuti: 180, priorita: "media", giorno_scadenza: 20 },
-      { titolo: "Report link building", stima_minuti: 30, priorita: "bassa", giorno_scadenza: 25 },
-      { titolo: "Call mensile cliente", stima_minuti: 60, priorita: "media", giorno_scadenza: 10 },
+      { titolo: "Analisi ranking keywords", servizio: "SEO", assegnatario_ruolo: "COLLABORATORE", stima_minuti: 60, priorita: "alta", giorno_scadenza: 5 },
+      { titolo: "Contenuti blog / articoli", servizio: "SEO", assegnatario_ruolo: "COLLABORATORE", stima_minuti: 180, priorita: "media", giorno_scadenza: 20 },
+      { titolo: "Report link building", servizio: "SEO", assegnatario_ruolo: "COLLABORATORE", stima_minuti: 30, priorita: "bassa", giorno_scadenza: 25 },
+      { titolo: "Call mensile cliente", servizio: "SEO", assegnatario_ruolo: "PM", stima_minuti: 60, priorita: "media", giorno_scadenza: 10 },
     ],
   },
 ];
@@ -70,13 +70,27 @@ function ItemRow({
   onRemove: () => void;
 }) {
   return (
-    <div className="grid grid-cols-[1fr_80px_70px_80px_30px] gap-2 items-center py-2 border-b border-border/20 last:border-0">
+    <div className="grid grid-cols-[minmax(0,1.5fr)_130px_120px_80px_80px_70px_30px] gap-2 items-center py-2 border-b border-border/20 last:border-0">
       <Input
         value={item.titolo}
         onChange={(e) => onUpdate({ ...item, titolo: e.target.value })}
         placeholder="Titolo task..."
         className="bg-muted/20 border-border/40 text-xs h-8"
       />
+      <Input
+        value={item.servizio ?? ""}
+        onChange={(e) => onUpdate({ ...item, servizio: e.target.value || undefined })}
+        placeholder="Servizio"
+        className="bg-muted/20 border-border/40 text-xs h-8"
+      />
+      <select
+        value={item.assegnatario_ruolo ?? ""}
+        onChange={(e) => onUpdate({ ...item, assegnatario_ruolo: e.target.value || undefined })}
+        className="h-8 rounded-md border border-border/40 bg-muted/20 text-xs px-1 text-foreground"
+      >
+        <option value="">Auto</option>
+        {RUOLO_OPTIONS.filter(Boolean).map((ruolo) => <option key={ruolo} value={ruolo}>{ruolo}</option>)}
+      </select>
       <Input
         type="number"
         value={item.stima_minuti ?? ""}
@@ -89,7 +103,7 @@ function ItemRow({
         onChange={(e) => onUpdate({ ...item, priorita: e.target.value })}
         className="h-8 rounded-md border border-border/40 bg-muted/20 text-xs px-1 text-foreground"
       >
-        {PRIORITA_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+        {PRIORITA_OPTIONS.map((priorita) => <option key={priorita} value={priorita}>{priorita}</option>)}
       </select>
       <Input
         type="number"
@@ -145,7 +159,7 @@ function TemplateEditor({
           onChange={(e) => setProgettoTipo(e.target.value)}
           className="h-10 rounded-xl border border-border/50 bg-card text-sm px-3 text-foreground"
         >
-          {PROGETTO_TIPO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          {PROGETTO_TIPO_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
         <div className="flex items-center gap-2">
           <button
@@ -167,12 +181,13 @@ function TemplateEditor({
         className="bg-card border-border/50 text-sm"
       />
 
-      {/* Items header */}
       <div className="space-y-1">
-        <div className="grid grid-cols-[1fr_80px_70px_80px_30px] gap-2 pb-1">
+        <div className="grid grid-cols-[minmax(0,1.5fr)_130px_120px_80px_80px_70px_30px] gap-2 pb-1">
           <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Titolo Task</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Servizio</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Ruolo</span>
           <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Minuti</span>
-          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Priorità</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Priorita</span>
           <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Giorno</span>
           <span />
         </div>
@@ -209,7 +224,7 @@ function TemplateEditor({
 export default function TaskTemplatesPage() {
   const { data: templates = [], isLoading } = useTaskTemplates();
   const { mutate: create, isPending: isCreating } = useCreateTaskTemplate();
-  const { mutate: update, isPending: isUpdating } = useUpdateTaskTemplate();
+  const { mutate: update } = useUpdateTaskTemplate();
   const { mutate: remove } = useDeleteTaskTemplate();
 
   const [showNew, setShowNew] = useState(false);
@@ -222,7 +237,6 @@ export default function TaskTemplatesPage() {
 
   return (
     <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black text-foreground tracking-tight">Task Templates</h1>
@@ -250,7 +264,6 @@ export default function TaskTemplatesPage() {
         </div>
       </div>
 
-      {/* New template form */}
       {showNew && (
         <TemplateEditor
           initial={{}}
@@ -259,7 +272,6 @@ export default function TaskTemplatesPage() {
         />
       )}
 
-      {/* Template list */}
       <div className="space-y-3">
         {isLoading && (
           <div className="text-center text-muted-foreground py-12 text-sm">Caricamento...</div>
@@ -287,90 +299,96 @@ export default function TaskTemplatesPage() {
                 />
               </CardContent>
             ) : (
-              <>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-2 h-2 rounded-full shrink-0 ${tpl.attivo ? "bg-emerald-400" : "bg-muted-foreground/30"}`} />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-black text-foreground text-sm">{tpl.nome}</h3>
-                          {tpl.progetto_tipo && (
-                            <Badge variant="outline" className="text-[9px] font-black uppercase border-purple-500/20 text-purple-400 bg-purple-500/5">
-                              {tpl.progetto_tipo}
-                            </Badge>
-                          )}
-                          <Badge variant="outline" className="text-[9px] font-black border-border/40 text-muted-foreground">
-                            {tpl.num_items} task
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${tpl.attivo ? "bg-emerald-400" : "bg-muted-foreground/30"}`} />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-black text-foreground text-sm">{tpl.nome}</h3>
+                        {tpl.progetto_tipo && (
+                          <Badge variant="outline" className="text-[9px] font-black uppercase border-purple-500/20 text-purple-400 bg-purple-500/5">
+                            {tpl.progetto_tipo}
                           </Badge>
-                        </div>
-                        {tpl.descrizione && (
-                          <p className="text-xs text-muted-foreground mt-0.5 truncate">{tpl.descrizione}</p>
                         )}
+                        <Badge variant="outline" className="text-[9px] font-black border-border/40 text-muted-foreground">
+                          {tpl.num_items} task
+                        </Badge>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0 ml-2">
-                      <button
-                        onClick={() => setExpandedId(expandedId === tpl.id ? null : tpl.id)}
-                        className="p-1.5 rounded-lg hover:bg-muted/30 text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        {expandedId === tpl.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      </button>
-                      <button
-                        onClick={() => { setEditingId(tpl.id); setExpandedId(null); }}
-                        className="p-1.5 rounded-lg hover:bg-muted/30 text-muted-foreground hover:text-primary transition-colors"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => { if (confirm("Eliminare questo template?")) remove(tpl.id); }}
-                        className="p-1.5 rounded-lg hover:bg-muted/30 text-muted-foreground hover:text-red-400 transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {tpl.descrizione && (
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">{tpl.descrizione}</p>
+                      )}
                     </div>
                   </div>
+                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                    <button
+                      onClick={() => setExpandedId(expandedId === tpl.id ? null : tpl.id)}
+                      className="p-1.5 rounded-lg hover:bg-muted/30 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {expandedId === tpl.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </button>
+                    <button
+                      onClick={() => { setEditingId(tpl.id); setExpandedId(null); }}
+                      className="p-1.5 rounded-lg hover:bg-muted/30 text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => { if (confirm("Eliminare questo template?")) remove(tpl.id); }}
+                      className="p-1.5 rounded-lg hover:bg-muted/30 text-muted-foreground hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
 
-                  {/* Expanded items */}
-                  {expandedId === tpl.id && tpl.items.length > 0 && (
-                    <div className="mt-4 space-y-1.5 border-t border-border/30 pt-3">
-                      {tpl.items.map((item, idx) => (
-                        <div key={item.id ?? idx} className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/10 border border-border/20">
-                          <span className="text-[10px] font-black text-muted-foreground/50 w-4">{idx + 1}</span>
-                          <span className="text-xs text-foreground flex-1 font-medium">{item.titolo}</span>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {item.stima_minuti && (
-                              <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                                <Clock className="w-3 h-3" />
-                                {item.stima_minuti}m
-                              </div>
-                            )}
-                            {item.giorno_scadenza && (
-                              <span className="text-[10px] text-muted-foreground">gg{item.giorno_scadenza}</span>
-                            )}
-                            <Badge
-                              variant="outline"
-                              className={`text-[9px] font-black ${
-                                item.priorita === "urgente" ? "border-red-500/30 text-red-400" :
-                                item.priorita === "alta" ? "border-amber-500/30 text-amber-400" :
-                                "border-border/40 text-muted-foreground"
-                              }`}
-                            >
-                              {item.priorita}
+                {expandedId === tpl.id && tpl.items.length > 0 && (
+                  <div className="mt-4 space-y-1.5 border-t border-border/30 pt-3">
+                    {tpl.items.map((item, idx) => (
+                      <div key={item.id ?? idx} className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/10 border border-border/20">
+                        <span className="text-[10px] font-black text-muted-foreground/50 w-4">{idx + 1}</span>
+                        <span className="text-xs text-foreground flex-1 font-medium">{item.titolo}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {item.servizio && (
+                            <Badge variant="outline" className="text-[9px] font-black border-sky-500/30 text-sky-300">
+                              {item.servizio}
                             </Badge>
-                          </div>
+                          )}
+                          {item.assegnatario_ruolo && (
+                            <Badge variant="outline" className="text-[9px] font-black border-emerald-500/30 text-emerald-300">
+                              {item.assegnatario_ruolo}
+                            </Badge>
+                          )}
+                          {item.stima_minuti && (
+                            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                              <Clock className="w-3 h-3" />
+                              {item.stima_minuti}m
+                            </div>
+                          )}
+                          {item.giorno_scadenza && (
+                            <span className="text-[10px] text-muted-foreground">gg{item.giorno_scadenza}</span>
+                          )}
+                          <Badge
+                            variant="outline"
+                            className={`text-[9px] font-black ${
+                              item.priorita === "urgente" ? "border-red-500/30 text-red-400" :
+                              item.priorita === "alta" ? "border-amber-500/30 text-amber-400" :
+                              "border-border/40 text-muted-foreground"
+                            }`}
+                          >
+                            {item.priorita}
+                          </Badge>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
             )}
           </Card>
         ))}
       </div>
 
-      {/* Info box */}
       <Card className="bg-primary/5 border-primary/20">
         <CardContent className="p-4">
           <div className="flex items-start gap-3">

@@ -842,10 +842,13 @@ class Assenza(Base):
     data_inizio: Mapped[date] = mapped_column(Date, nullable=False)
     data_fine: Mapped[date] = mapped_column(Date, nullable=False)
     tipo: Mapped[str] = mapped_column(String(50), default="FERIE") # FERIE, MALATTIA, PERMESSO
+    stato: Mapped[str] = mapped_column(String(20), default="PENDING") # PENDING, APPROVATA, RIFIUTATA
+    approvato_da: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     note: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    user: Mapped["User"] = relationship()
+    user: Mapped["User"] = relationship(foreign_keys=[user_id])
+    approvatore: Mapped[Optional["User"]] = relationship(foreign_keys=[approvato_da])
 
 # ── PREVENTIVO ────────────────────────────────────────────
 class Preventivo(Base):
@@ -1161,3 +1164,81 @@ class TaskTemplateItem(Base):
     ordine: Mapped[int] = mapped_column(Integer, default=0)
 
     template: Mapped["TaskTemplate"] = relationship(back_populates="items")
+
+
+# ── CONTENUTI (Pipeline Approvazione) ────────────────────────
+class ContenutoStatus(str, enum.Enum):
+    BOZZA = "BOZZA"
+    IN_REVISIONE_INTERNA = "IN_REVISIONE_INTERNA"
+    MODIFICHE_RICHIESTE_INTERNE = "MODIFICHE_RICHIESTE_INTERNE"
+    APPROVATO_INTERNAMENTE = "APPROVATO_INTERNAMENTE"
+    INVIATO_AL_CLIENTE = "INVIATO_AL_CLIENTE"
+    MODIFICHE_RICHIESTE_CLIENTE = "MODIFICHE_RICHIESTE_CLIENTE"
+    APPROVATO_CLIENTE = "APPROVATO_CLIENTE"
+    PUBBLICATO = "PUBBLICATO"
+    ARCHIVIATO = "ARCHIVIATO"
+
+
+class ContenutoTipo(str, enum.Enum):
+    POST_SOCIAL = "POST_SOCIAL"
+    COPY = "COPY"
+    DESIGN = "DESIGN"
+    VIDEO = "VIDEO"
+    EMAIL = "EMAIL"
+    ALTRO = "ALTRO"
+
+
+class Contenuto(Base):
+    __tablename__ = "contenuti"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    titolo: Mapped[str] = mapped_column(String(500), nullable=False)
+    tipo: Mapped[ContenutoTipo] = mapped_column(SAEnum(ContenutoTipo, name="contenuto_tipo"), default=ContenutoTipo.POST_SOCIAL)
+    stato: Mapped[ContenutoStatus] = mapped_column(SAEnum(ContenutoStatus, name="contenuto_status"), default=ContenutoStatus.BOZZA, index=True)
+    commessa_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("commesse.id"), nullable=True, index=True)
+    progetto_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id"), nullable=True, index=True)
+    assegnatario_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    data_consegna_prevista: Mapped[Optional[date]] = mapped_column(Date)
+    url_preview: Mapped[Optional[str]] = mapped_column(String(1000))
+    testo: Mapped[Optional[str]] = mapped_column(Text)
+    note_revisione: Mapped[Optional[str]] = mapped_column(Text)
+    approvato_da: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    approvato_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    pubblicato_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    assegnatario: Mapped[Optional["User"]] = relationship(foreign_keys=[assegnatario_id])
+    approvatore: Mapped[Optional["User"]] = relationship(foreign_keys=[approvato_da])
+    commessa: Mapped[Optional["Commessa"]] = relationship(foreign_keys=[commessa_id])
+    progetto: Mapped[Optional["Progetto"]] = relationship(foreign_keys=[progetto_id])
+    eventi: Mapped[List["ContenutoEvento"]] = relationship(
+        back_populates="contenuto",
+        cascade="all, delete-orphan",
+        order_by="ContenutoEvento.created_at",
+    )
+
+
+class ContenutoEvento(Base):
+    __tablename__ = "contenuto_eventi"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    contenuto_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("contenuti.id", ondelete="CASCADE"),
+        index=True,
+    )
+    autore_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    stato_precedente: Mapped[Optional[ContenutoStatus]] = mapped_column(
+        SAEnum(ContenutoStatus, name="contenuto_status"),
+        nullable=True,
+    )
+    stato_nuovo: Mapped[ContenutoStatus] = mapped_column(
+        SAEnum(ContenutoStatus, name="contenuto_status"),
+        nullable=False,
+    )
+    nota: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    contenuto: Mapped["Contenuto"] = relationship(back_populates="eventi")
+    autore: Mapped[Optional["User"]] = relationship()

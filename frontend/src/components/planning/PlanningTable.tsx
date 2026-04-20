@@ -38,13 +38,15 @@ import { it } from "date-fns/locale";
 
 interface PlanningTableProps {
   plans: Pianificazione[];
+  onOpen: (plan: Pianificazione) => void;
   onEdit: (plan: Pianificazione) => void;
+  onApprove: (plan: Pianificazione) => void;
   onDelete: (plan: Pianificazione) => void;
   onConvert: (plan: Pianificazione) => void;
   isLoading: boolean;
 }
 
-export function PlanningTable({ plans, onEdit, onDelete, onConvert, isLoading }: PlanningTableProps) {
+export function PlanningTable({ plans, onOpen, onEdit, onApprove, onDelete, onConvert, isLoading }: PlanningTableProps) {
   const [searchTerm, setSearchTerm] = React.useState("");
 
   const filteredPlans = plans.filter((p) =>
@@ -106,7 +108,8 @@ export function PlanningTable({ plans, onEdit, onDelete, onConvert, isLoading }:
               filteredPlans.map((plan) => (
                 <TableRow 
                   key={plan.id} 
-                  className="border-border hover:bg-muted/30 group transition-colors"
+                  className="border-border hover:bg-muted/30 group transition-colors cursor-pointer"
+                  onClick={() => onOpen(plan)}
                 >
                   <TableCell className="py-4 pl-6">
                     <div className="flex flex-col">
@@ -147,12 +150,28 @@ export function PlanningTable({ plans, onEdit, onDelete, onConvert, isLoading }:
                   </TableCell>
                   <TableCell className="text-right pr-6">
                     <div className="flex items-center justify-end gap-2">
-                       {plan.stato !== "CONVERTED" && (
+                       {plan.stato === "PENDING" && (
+                         <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 bg-slate-500/10 text-slate-200 border-slate-400/20 hover:bg-slate-500/20 hover:text-white"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onApprove(plan);
+                            }}
+                          >
+                            Approva
+                          </Button>
+                       )}
+                       {plan.stato === "ACCEPTED" && (
                          <Button 
                             variant="outline" 
                             size="sm" 
-                            className="h-8 bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20 hover:text-purple-300"
-                            onClick={() => onConvert(plan)}
+                            className="h-8 bg-blue-500/10 text-blue-300 border-blue-500/20 hover:bg-blue-500/20 hover:text-white"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onConvert(plan);
+                            }}
                           >
                             <ArrowRight className="w-3.5 h-3.5 mr-1.5" />
                             Converti
@@ -160,19 +179,30 @@ export function PlanningTable({ plans, onEdit, onDelete, onConvert, isLoading }:
                        )}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-white hover:bg-muted">
+                          <Button
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-white hover:bg-muted"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="bg-card border-border text-white">
                           <DropdownMenuLabel className="text-muted-foreground">Azioni</DropdownMenuLabel>
                           <DropdownMenuSeparator className="bg-muted" />
-                          <DropdownMenuItem onClick={() => onEdit(plan)} className="hover:bg-muted focus:bg-muted cursor-pointer">
-                            <Pencil className="mr-2 h-4 w-4" /> Modifica
+                          <DropdownMenuItem onClick={() => onOpen(plan)} className="hover:bg-muted focus:bg-muted cursor-pointer">
+                            <Search className="mr-2 h-4 w-4" /> Apri dettaglio
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onDelete(plan)} className="text-red-400 hover:bg-red-500/10 focus:bg-red-500/10 cursor-pointer">
-                            <Trash2 className="mr-2 h-4 w-4" /> Elimina
-                          </DropdownMenuItem>
+                          {plan.stato !== "CONVERTED" && (
+                            <DropdownMenuItem onClick={() => onEdit(plan)} className="hover:bg-muted focus:bg-muted cursor-pointer">
+                              <Pencil className="mr-2 h-4 w-4" /> Modifica
+                            </DropdownMenuItem>
+                          )}
+                          {plan.stato !== "CONVERTED" && (
+                            <DropdownMenuItem onClick={() => onDelete(plan)} className="text-red-400 hover:bg-red-500/10 focus:bg-red-500/10 cursor-pointer">
+                              <Trash2 className="mr-2 h-4 w-4" /> Elimina
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -189,15 +219,15 @@ export function PlanningTable({ plans, onEdit, onDelete, onConvert, isLoading }:
 
 function PlanningStatusBadge({ status }: { status: PianificazioneStatus }) {
   const styles: Record<string, string> = {
-    PENDING: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-    ACCEPTED: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    CONVERTED: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+    PENDING: "bg-slate-500/10 text-slate-300 border-slate-500/20",
+    ACCEPTED: "bg-blue-500/10 text-blue-300 border-blue-500/20",
+    CONVERTED: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
   };
 
   const labels: Record<string, string> = {
-    PENDING: "IN BOZZA",
-    ACCEPTED: "ACCETTATO",
-    CONVERTED: "CONVERTITO",
+    PENDING: "PENDING",
+    ACCEPTED: "ACCEPTED",
+    CONVERTED: "CONVERTED",
   };
 
   return (

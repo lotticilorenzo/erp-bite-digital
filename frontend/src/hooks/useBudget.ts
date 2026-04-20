@@ -1,8 +1,51 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import type { BudgetCategory, BudgetMensile, BudgetConsuntivo } from "@/types/budget";
+import type {
+  BudgetCategory,
+  BudgetMensile,
+  BudgetConsuntivo,
+  BudgetTrendResponse,
+  BudgetVariance,
+} from "@/types/budget";
 import { format } from "date-fns";
+
+function toMonthQueryValue(mese?: Date | string) {
+  if (!mese) return format(new Date(), "yyyy-MM");
+  return typeof mese === "string" ? mese : format(mese, "yyyy-MM");
+}
+
+export function useBudgetVariance(mese?: Date | string) {
+  const meseStr = toMonthQueryValue(mese);
+
+  return useQuery({
+    queryKey: ["budget-variance", meseStr],
+    queryFn: async () => {
+      const res = await api.get<BudgetVariance[]>("/budget/variance", {
+        params: { mese: meseStr },
+      });
+      return res.data;
+    },
+    enabled: !!meseStr,
+  });
+}
+
+export function useBudgetTrend(mesi = 6, meseFine?: Date | string) {
+  const meseFineStr = meseFine ? toMonthQueryValue(meseFine) : undefined;
+
+  return useQuery({
+    queryKey: ["budget-trend", mesi, meseFineStr],
+    queryFn: async () => {
+      const res = await api.get<BudgetTrendResponse>("/budget/trend", {
+        params: {
+          mesi,
+          mese_fine: meseFineStr,
+        },
+      });
+      return res.data;
+    },
+  });
+}
 
 export function useBudget(mese?: Date) {
   const queryClient = useQueryClient();
@@ -32,6 +75,8 @@ export function useBudget(mese?: Date) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budget-consuntivo"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["budget-variance"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["budget-trend"], exact: false });
     },
     onError: (err: any) => {
       toast.error(err?.response?.data?.detail ?? "Errore nel salvataggio del budget");
@@ -45,6 +90,8 @@ export function useBudget(mese?: Date) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budget-consuntivo"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["budget-variance"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["budget-trend"], exact: false });
     },
     onError: (err: any) => {
       toast.error(err?.response?.data?.detail ?? "Errore nella copia del budget");

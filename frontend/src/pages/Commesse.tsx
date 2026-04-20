@@ -7,11 +7,11 @@ import { CommessaDialog } from "@/components/commesse/CommessaDialog";
 import { useCommesse, useDeleteCommessa } from "@/hooks/useCommesse";
 import { useCliente } from "@/hooks/useClienti";
 import type { Commessa, CommessaStatus } from "@/types";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { format, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { usePianificazioni, useDeletePianificazione, useConvertPianificazione } from "@/hooks/usePianificazioni";
+import { usePianificazioni, useDeletePianificazione, useConvertPianificazione, useApprovePianificazione } from "@/hooks/usePianificazioni";
 import { PlanningTable } from "@/components/planning/PlanningTable";
 import { PlanningDialog } from "@/components/planning/PlanningDialog";
 import type { Pianificazione } from "@/types";
@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 
 export default function CommessePage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const clienteIdFilter = searchParams.get("cliente_id") || undefined;
   const clienteNomeFilter = searchParams.get("cliente_nome") || undefined;
@@ -46,6 +47,7 @@ export default function CommessePage() {
   const [selectedPlanning, setSelectedPlanning] = React.useState<Pianificazione | null>(null);
   const [commessaToDelete, setCommessaToDelete] = React.useState<Commessa | null>(null);
   const [planningToDelete, setPlanningToDelete] = React.useState<Pianificazione | null>(null);
+  const [planningToApprove, setPlanningToApprove] = React.useState<Pianificazione | null>(null);
   const [planningToConvert, setPlanningToConvert] = React.useState<Pianificazione | null>(null);
   const [conversionMese, setConversionMese] = React.useState(format(new Date(), "yyyy-MM"));
 
@@ -56,6 +58,7 @@ export default function CommessePage() {
   });
 
   const deletePlanning = useDeletePianificazione();
+  const approvePlanning = useApprovePianificazione();
   const convertPlanning = useConvertPianificazione();
 
   const handleEdit = (commessa: Commessa) => {
@@ -188,10 +191,12 @@ export default function CommessePage() {
           <PlanningTable 
             plans={pianificazioni}
             isLoading={isPlanningLoading}
+            onOpen={(p) => navigate(`/pianificazioni/${p.id}`)}
             onEdit={(p) => {
               setSelectedPlanning(p);
               setIsPlanningDialogOpen(true);
             }}
+            onApprove={(p) => setPlanningToApprove(p)}
             onDelete={(p) => setPlanningToDelete(p)}
             onConvert={(p) => setPlanningToConvert(p)}
           />
@@ -256,6 +261,33 @@ export default function CommessePage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!planningToApprove} onOpenChange={() => setPlanningToApprove(null)}>
+        <DialogContent className="bg-card border-border text-white">
+          <DialogHeader>
+            <DialogTitle>Approva Pianificazione</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Stai approvando la pianificazione di <strong>{planningToApprove?.cliente?.ragione_sociale}</strong>.
+              Le ore previste diventeranno il riferimento operativo per la successiva conversione in commessa.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPlanningToApprove(null)}>Annulla</Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={approvePlanning.isPending}
+              onClick={async () => {
+                if (planningToApprove) {
+                  await approvePlanning.mutateAsync(planningToApprove.id);
+                  setPlanningToApprove(null);
+                }
+              }}
+            >
+              Conferma Approvazione
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!planningToConvert} onOpenChange={() => setPlanningToConvert(null)}>
         <DialogContent className="bg-card border-border text-white">
           <DialogHeader>
@@ -278,12 +310,14 @@ export default function CommessePage() {
             <Button variant="ghost" onClick={() => setPlanningToConvert(null)}>Annulla</Button>
             <Button 
               className="bg-purple-600 hover:bg-purple-700 text-white"
+              disabled={convertPlanning.isPending}
               onClick={async () => {
                 if (planningToConvert) {
                   const [year, month] = conversionMese.split("-");
                   const meseStr = `${year}-${month}-01`;
-                  await convertPlanning.mutateAsync({ id: planningToConvert.id, mese_competenza: meseStr });
+                  const result = await convertPlanning.mutateAsync({ id: planningToConvert.id, mese_competenza: meseStr });
                   setPlanningToConvert(null);
+                  navigate(`/commesse/${result.id}`);
                 }
               }}
             >

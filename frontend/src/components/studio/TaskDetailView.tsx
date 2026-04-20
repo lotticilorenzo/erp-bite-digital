@@ -11,9 +11,6 @@ import {
   Clock,
   BookCheck,
   History,
-  MessageSquare,
-  Send,
-  X,
   Flag,
 } from "lucide-react";
 import { useStudio } from "@/hooks/useStudio";
@@ -23,6 +20,7 @@ import { useUsers } from "@/hooks/useUsers";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
+import { TaskCommentSection } from "@/components/studio/TaskCommentSection";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -85,42 +83,6 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set());
-  const [newComment, setNewComment] = useState("");
-
-  // ── Comments ────────────────────────────────────────────────
-  const { data: comments = [] } = useQuery({
-    queryKey: ["task-comments", taskId],
-    queryFn: async () => {
-      const res = await api.get(`/studio/tasks/${taskId}/comments`);
-      return res.data;
-    },
-    enabled: !!taskId,
-    refetchInterval: 60000, // 60s — commenti non cambiano ogni secondo
-  });
-
-  const addCommentMutation = useMutation({
-    mutationFn: async (contenuto: string) => {
-      const res = await api.post(`/studio/tasks/${taskId}/comments`, { contenuto });
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["task-comments", taskId] });
-      setNewComment("");
-    },
-    onError: () => toast.error("Errore nell'invio del commento"),
-  });
-
-  const deleteCommentMutation = useMutation({
-    mutationFn: async (commentId: string) => {
-      await api.delete(`/studio/tasks/${taskId}/comments/${commentId}`);
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["task-comments", taskId] }),
-  });
-
-  const submitComment = () => {
-    if (!newComment.trim()) return;
-    addCommentMutation.mutate(newComment.trim());
-  };
   // ───────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -432,91 +394,8 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
               )}
 
               {/* ── Comments Section ── */}
-              <div className="space-y-5 pt-6 border-t border-border/30">
-                <div className="flex items-center gap-2 text-xs font-black text-white uppercase tracking-widest">
-                  <MessageSquare className="h-4 w-4 text-primary" />
-                  Commenti
-                  {comments.length > 0 && (
-                    <span className="text-[10px] font-mono text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded-md">
-                      {comments.length}
-                    </span>
-                  )}
-                </div>
-
-                {/* Comment list */}
-                <div className="space-y-4">
-                  {comments.map((c: any) => (
-                    <div key={c.id} className="flex gap-3 group/comment animate-in fade-in duration-300">
-                      <Avatar className="w-8 h-8 shrink-0 mt-0.5">
-                        <AvatarFallback className="text-[10px] font-black bg-primary/10 text-primary">
-                          {c.autore_nome?.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[11px] font-black text-white">{c.autore_nome}</span>
-                          <span className="text-[9px] text-muted-foreground/50 font-mono">
-                            {format(new Date(c.created_at), "d MMM HH:mm", { locale: it })}
-                          </span>
-                        </div>
-                        <div className="bg-card/50 border border-border/30 rounded-2xl rounded-tl-md px-4 py-3 text-sm text-white/80 leading-relaxed">
-                          {c.contenuto}
-                        </div>
-                      </div>
-                      {(c.autore_id === (user as any)?.id || isAdmin) && (
-                        <button
-                          onClick={() => deleteCommentMutation.mutate(c.id)}
-                          className="opacity-0 group-hover/comment:opacity-100 transition-opacity h-6 w-6 rounded-lg flex items-center justify-center text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 mt-0.5 shrink-0"
-                          title="Elimina commento"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-
-                  {comments.length === 0 && (
-                    <div className="flex flex-col items-center py-6 gap-2 opacity-20">
-                      <MessageSquare className="h-8 w-8" />
-                      <p className="text-[10px] font-black uppercase tracking-widest">Nessun commento ancora</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* New comment input */}
-                <div className="flex gap-3 items-end pt-2">
-                  <Avatar className="w-8 h-8 shrink-0">
-                    <AvatarFallback className="text-[10px] font-black bg-primary/10 text-primary">
-                      {(user as any)?.nome?.[0]}{(user as any)?.cognome?.[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 bg-card/50 border border-border/30 rounded-2xl focus-within:border-primary/40 transition-colors overflow-hidden">
-                    <textarea
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          submitComment();
-                        }
-                      }}
-                      placeholder="Scrivi un commento... (Enter per inviare)"
-                      className="w-full bg-transparent border-none outline-none p-4 text-sm text-white placeholder:text-slate-700 resize-none min-h-[60px] max-h-[140px]"
-                      rows={2}
-                    />
-                    <div className="flex justify-end px-3 pb-2">
-                      <Button
-                        size="sm"
-                        onClick={submitComment}
-                        disabled={!newComment.trim() || addCommentMutation.isPending}
-                        className="h-7 px-3 bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-widest text-[9px] gap-1.5 rounded-xl"
-                      >
-                        <Send className="h-3 w-3" />
-                        Invia
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+              <div className="pt-6 border-t border-border/30">
+                <TaskCommentSection taskId={taskId} />
               </div>
             </div>
           </ScrollArea>

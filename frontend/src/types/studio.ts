@@ -1,6 +1,6 @@
 import type { Cliente } from "./index";
 
-export type StudioView = "home" | "dash" | "list" | "kanban" | "cal" | "team" | "carico-lavoro" | "overview" | "chat";
+export type StudioView = "home" | "dash" | "list" | "kanban" | "cal" | "gantt" | "team" | "carico-lavoro" | "overview" | "chat";
 
 export interface TabItem {
   id: string;
@@ -72,6 +72,7 @@ export type TaskSO = {
   stima_minuti?: number;
   tempo_trascorso_minuti?: number;
   priorita?: string | null;
+  commenti_count?: number;
   // Deprecated ClickUp fields
   clickup_id?: string;
   folder_id?: string;

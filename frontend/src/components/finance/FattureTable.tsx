@@ -8,16 +8,17 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { 
-  FileText, 
-  User, 
+  FileText,
+  User,
   ExternalLink,
-  CheckCircle2, 
-  Clock, 
+  CheckCircle2,
+  Clock,
   AlertCircle,
   MoreHorizontal,
   Eye,
   Edit3,
-  Trash2
+  Trash2,
+  GitBranch,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -32,7 +33,7 @@ import { it } from "date-fns/locale";
 interface FattureTableProps {
   data: any[];
   type: "attive" | "passive";
-  onAction?: (fattura: any, action: "view" | "edit" | "delete") => void;
+  onAction?: (fattura: any, action: "view" | "edit" | "delete" | "imputa") => void;
 }
 
 export function FattureTable({ data, type, onAction }: FattureTableProps) {
@@ -155,8 +156,17 @@ export function FattureTable({ data, type, onAction }: FattureTableProps) {
                         <Edit3 className="h-4 w-4" />
                         <span className="text-[10px] font-black uppercase tracking-widest">Modifica</span>
                       </DropdownMenuItem>
+                      {type === "passive" && (
+                        <DropdownMenuItem
+                          onClick={() => onAction?.(item, "imputa")}
+                          className="flex items-center gap-2 rounded-lg py-2 cursor-pointer focus:bg-primary/10 focus:text-primary transition-colors"
+                        >
+                          <GitBranch className="h-4 w-4" />
+                          <span className="text-[10px] font-black uppercase tracking-widest">Imputa Costi</span>
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuSeparator className="bg-border/50 my-1" />
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         onClick={() => onAction?.(item, "delete")}
                         className="flex items-center gap-2 rounded-lg py-2 cursor-pointer text-rose-500 focus:bg-rose-500/10 focus:text-rose-500 transition-colors"
                       >

@@ -4,6 +4,7 @@ import {
   Layout,
   ListTodo,
   Calendar as CalendarIcon,
+  CalendarRange,
   Settings,
   MoreVertical,
   Filter,
@@ -174,6 +175,17 @@ export function StudioTopbar() {
           >
             <CalendarIcon className="h-3.5 w-3.5 mr-1.5" />
             Calendario
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setView("gantt")}
+            className={`h-7 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-300 ${
+              nav.view === "gantt" ? "bg-primary text-white shadow-lg" : "text-muted-foreground/60 hover:text-muted-foreground"
+            }`}
+          >
+            <CalendarRange className="h-3.5 w-3.5 mr-1.5" />
+            Gantt
           </Button>
           <Button
             variant="ghost"

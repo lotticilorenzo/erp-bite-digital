@@ -4,10 +4,12 @@ import {
   Palette, 
   Bell, 
   Shield, 
+  History,
   ChevronRight 
 } from "lucide-react";
 import { Link, Outlet, useLocation, Navigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 
 const sidebarItems = [
   {
@@ -39,11 +41,22 @@ const sidebarItems = [
     icon: Shield,
     href: "/settings/privacy",
     description: "Gestisci le sessioni attive e i tuoi dati."
-  }
+  },
+  {
+    title: "Audit Trail",
+    icon: History,
+    href: "/settings/audit",
+    description: "Storico modifiche e diff delle entità critiche.",
+    roles: ["ADMIN", "DEVELOPER"],
+  },
 ];
 
 export default function SettingsLayout() {
   const location = useLocation();
+  const { user } = useAuth();
+  const userRole = user?.ruolo?.toUpperCase() ?? "";
+
+  const visibleSidebarItems = sidebarItems.filter((item) => !item.roles || item.roles.includes(userRole));
 
   if (location.pathname === "/settings") {
     return <Navigate to="/settings/profile" replace />;
@@ -64,7 +77,7 @@ export default function SettingsLayout() {
           </div>
 
           <nav className="space-y-1">
-            {sidebarItems.map((item) => {
+            {visibleSidebarItems.map((item) => {
               const isActive = location.pathname === item.href;
               return (
                 <Link

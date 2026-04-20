@@ -26,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { FatturaDetailDialog } from "@/components/finance/FatturaDetailDialog";
 import { FatturaModal } from "@/components/finance/FatturaModal";
 import { toast } from "sonner";
+import { ImputazioneCostiDrawer } from "@/components/finance/ImputazioneCostiDrawer";
 
 export default function Fatture() {
   const { data: attive, isLoading: loadingA } = useFattureAttive();
@@ -36,8 +37,13 @@ export default function Fatture() {
   const [detailOpen, setDetailOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<"attive" | "passive">("attive");
+  const [imputaFattura, setImputaFattura] = React.useState<any>(null);
 
-  const handleAction = async (fattura: any, action: "view" | "edit" | "delete", type: "attive" | "passive") => {
+  const handleAction = async (fattura: any, action: "view" | "edit" | "delete" | "imputa", type: "attive" | "passive") => {
+    if (action === "imputa") {
+      setImputaFattura(fattura);
+      return;
+    }
     switch (action) {
       case "view":
         setSelectedFattura(fattura);
@@ -206,12 +212,22 @@ export default function Fatture() {
         onOpenChange={setDetailOpen}
         type={activeTab}
       />
-      <FatturaModal 
+      <FatturaModal
         open={editOpen}
         onOpenChange={setEditOpen}
         type={activeTab}
         fattura={selectedFattura}
       />
+      {imputaFattura && (
+        <ImputazioneCostiDrawer
+          open={!!imputaFattura}
+          onClose={() => setImputaFattura(null)}
+          sourceType="fattura_passiva"
+          sourceId={imputaFattura.id}
+          importoTotale={Number(imputaFattura.importo_totale)}
+          sourceLabel={`Fattura ${imputaFattura.numero ?? ""} — ${imputaFattura.fornitore_nome ?? ""}`}
+        />
+      )}
     </div>
   );
 }

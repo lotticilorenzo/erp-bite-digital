@@ -1,4 +1,4 @@
-export type UserRole = "ADMIN" | "PM" | "DIPENDENTE" | "FREELANCER";
+export type UserRole = "ADMIN" | "DEVELOPER" | "COLLABORATORE" | "PM" | "DIPENDENTE" | "FREELANCER";
 export type ProjectType = "RETAINER" | "ONE_OFF";
 export type ProjectStatus = "ATTIVO" | "CHIUSO";
 export type CommessaStatus = "APERTA" | "PRONTA_CHIUSURA" | "CHIUSA" | "FATTURATA" | "INCASSATA";
@@ -250,7 +250,16 @@ export interface AuthResponse {
   user: User;
 }
 
-export type NotificationType = 'URGENTE' | 'AVVISO' | 'FATTURA' | 'APPROVAZIONE' | 'INFO';
+export type NotificationType =
+  | 'INFO'
+  | 'SUCCESS'
+  | 'WARNING'
+  | 'ERROR'
+  | 'CRITICAL'
+  | 'URGENTE'
+  | 'AVVISO'
+  | 'FATTURA'
+  | 'APPROVAZIONE';
 
 export interface Notification {
   id: string;
@@ -258,9 +267,9 @@ export interface Notification {
   title: string;
   description: string;
   timestamp: string;
-  link: string;
+  link?: string;
   isRead: boolean;
-  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  priority?: 'HIGH' | 'MEDIUM' | 'LOW';
 }
 
 export interface HealthScore {
@@ -295,6 +304,7 @@ export interface Pianificazione {
   budget: number;
   note?: string;
   stato: PianificazioneStatus;
+  commessa_id?: string | null;
   created_at: string;
   updated_at: string;
   cliente?: Cliente;
@@ -303,4 +313,64 @@ export interface Pianificazione {
   costo_totale: number;
   margine_euro: number;
   margine_percentuale: number;
+}
+
+export interface PianificazioneDeltaRow {
+  key: string;
+  label: string;
+  planned_hours: number;
+  planned_cost: number;
+  actual_hours: number;
+  actual_cost: number;
+  delta_hours: number;
+  delta_cost: number;
+  delta_hours_pct?: number | null;
+  delta_cost_pct?: number | null;
+}
+
+export interface PianificazioneDelta {
+  pianificazione_id: string;
+  commessa_id?: string | null;
+  has_commessa: boolean;
+  summary: {
+    planned_hours: number;
+    planned_cost: number;
+    actual_hours: number;
+    actual_cost: number;
+    delta_hours: number;
+    delta_cost: number;
+    delta_hours_pct?: number | null;
+    delta_cost_pct?: number | null;
+  };
+  rows: PianificazioneDeltaRow[];
+}
+
+export type ImputazioneTipo = "PROGETTO" | "CLIENTE" | "SPESA_GENERICA" | "STIPENDIO" | "FORNITORE" | "ALTRO";
+
+export interface Imputazione {
+  id?: string;
+  tipo: ImputazioneTipo;
+  cliente_id?: string;
+  progetto_id?: string;
+  percentuale: number;
+  importo: number;
+  note?: string;
+  cliente_nome?: string;
+  progetto_nome?: string;
+  fonte?: "fattura_passiva" | "movimento_cassa";
+  fonte_numero?: string;
+  fonte_descrizione?: string;
+  fonte_data?: string;
+}
+
+export interface CostiDettaglioCommessa {
+  commessa_id: string;
+  costi_diretti_totale: number;
+  breakdown: {
+    manuali: number;
+    da_fatture_passive: number;
+    da_movimenti_cassa: number;
+  };
+  imputazioni_fatture: Imputazione[];
+  imputazioni_movimenti: Imputazione[];
 }

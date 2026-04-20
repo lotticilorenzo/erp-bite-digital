@@ -26,8 +26,13 @@ export function NotificationCenter() {
 
   const getIcon = (type: Notification['type']) => {
     switch (type) {
+      case 'URGENTE': return <AlertCircle className="h-4 w-4 text-rose-500" />;
+      case 'AVVISO': return <AlertTriangle className="h-4 w-4 text-amber-500" />;
+      case 'FATTURA': return <Info className="h-4 w-4 text-orange-500" />;
+      case 'APPROVAZIONE': return <CheckCircle2 className="h-4 w-4 text-sky-500" />;
       case 'SUCCESS': return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
       case 'WARNING': return <AlertTriangle className="h-4 w-4 text-amber-500" />;
+      case 'CRITICAL': return <AlertCircle className="h-4 w-4 text-rose-500" />;
       case 'ERROR': return <AlertCircle className="h-4 w-4 text-rose-500" />;
       default: return <Info className="h-4 w-4 text-blue-500" />;
     }

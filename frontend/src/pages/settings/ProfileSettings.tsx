@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { startOfYear } from "date-fns";
 import api from "@/lib/api";
+import { AssenzeTeamPanel } from "@/components/assenze/AssenzePanel";
 
 const roleColors: Record<string, string> = {
   ADMIN: "bg-red-500/10 text-red-500 border-red-500/20",
@@ -301,6 +302,10 @@ export default function ProfileSettings() {
           </Button>
         </div>
       </form>
+
+      <div className="mt-8">
+        <AssenzeTeamPanel />
+      </div>
     </div>
   );
 }

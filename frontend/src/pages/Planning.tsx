@@ -22,7 +22,9 @@ import {
   startOfWeek, 
   addWeeks, 
   subWeeks, 
-  isSameDay 
+  isSameDay,
+  addMonths,
+  subMonths,
 } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { 
@@ -37,6 +39,10 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { useAssenze } from '@/hooks/useAssenze';
+import { AssenzeTeamPanel } from '@/components/assenze/AssenzePanel';
+import { GanttChart } from '@/components/gantt/GanttChart';
+import { useTasks, useTaskMutations } from '@/hooks/useTasks';
+import { useUsers } from '@/hooks/useUsers';
 
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -81,11 +87,12 @@ const PlanningPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [view, setView] = useState<'week' | 'month'>('week');
+  const [view, setView] = useState<'week' | 'month' | 'gantt'>('week');
   const [backlogSearch, setBacklogSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
+  const { updateTask } = useTaskMutations();
   
   // Sensors for DND
   const sensors = useSensors(
@@ -115,6 +122,9 @@ const PlanningPage: React.FC = () => {
       return res.data;
     }
   });
+
+  const { data: ganttTasks = [] } = useTasks();
+  const { data: ganttUsers = [] } = useUsers();
 
   // Calculate costs for assigned tasks
   const { data: costs = {} } = useQuery({
@@ -279,6 +289,32 @@ const PlanningPage: React.FC = () => {
     return colors[index];
   };
 
+  const planningGanttTasks = ganttTasks.filter((task) => task.data_inizio && task.due_date);
+
+  const handleOpenGanttTask = (taskId: string) => {
+    const task =
+      tasks.find((item) => item.id === taskId) ||
+      planningGanttTasks.find((item) => item.id === taskId);
+    if (!task) return;
+    setSelectedTask(task);
+    setIsTaskDialogOpen(true);
+  };
+
+  const handleGanttDateChange = async (taskId: string, newStart: string, newEnd: string) => {
+    try {
+      await updateTask.mutateAsync({
+        id: taskId,
+        data: {
+          data_inizio: newStart,
+          data_scadenza: newEnd,
+        },
+      });
+      toast.success("Date task aggiornate dal Gantt");
+    } catch {
+      toast.error("Errore durante l'aggiornamento delle date");
+    }
+  };
+
   return (
     <PageTransition>
       <div className="p-8 space-y-8 pb-20">
@@ -313,6 +349,14 @@ const PlanningPage: React.FC = () => {
             >
               Previsione
             </Button>
+            <Button 
+              variant={view === 'gantt' ? 'secondary' : 'ghost'} 
+              size="sm" 
+              onClick={() => setView('gantt')}
+              className="text-[10px] font-black uppercase tracking-widest h-8"
+            >
+              Gantt
+            </Button>
           </div>
 
           <Button 
@@ -330,7 +374,7 @@ const PlanningPage: React.FC = () => {
             <Button 
               variant="ghost" 
               size="icon" 
-              onClick={() => setCurrentDate(subWeeks(currentDate, 1))}
+              onClick={() => setCurrentDate(view === 'week' ? subWeeks(currentDate, 1) : subMonths(currentDate, 1))}
               className="hover:bg-white/5 text-slate-400 h-8 w-8"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -346,7 +390,7 @@ const PlanningPage: React.FC = () => {
             <Button 
               variant="ghost" 
               size="icon" 
-              onClick={() => setCurrentDate(addWeeks(currentDate, 1))}
+              onClick={() => setCurrentDate(view === 'week' ? addWeeks(currentDate, 1) : addMonths(currentDate, 1))}
               className="hover:bg-white/5 text-slate-400 h-8 w-8"
             >
               <ChevronRight className="h-4 w-4" />
@@ -464,7 +508,7 @@ const PlanningPage: React.FC = () => {
                   </div>
                 </div>
               </Card>
-            ) : (
+            ) : view === 'month' ? (
               /* Month Forecast View */
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {filteredRisorse.map(risorsa => (
@@ -524,6 +568,40 @@ const PlanningPage: React.FC = () => {
                     )}
                   </Card>
                 ))}
+              </div>
+            ) : (
+              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <Card className="bg-card/50 border-border backdrop-blur-xl shadow-2xl">
+                  <div className="flex flex-col gap-3 p-5 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <h3 className="text-sm font-black uppercase tracking-widest text-white">
+                        Timeline Team
+                      </h3>
+                      <p className="mt-1 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                        Vista aggregata per risorsa con assenze sovrapposte e drag orizzontale sulle date.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="border-primary/20 bg-primary/10 font-black text-primary">
+                        {planningGanttTasks.length} task con date
+                      </Badge>
+                      <Badge variant="outline" className="border-border/60 bg-background/40 font-black text-muted-foreground">
+                        {assenze.filter((item: any) => item.stato !== 'RIFIUTATA').length} assenze visibili
+                      </Badge>
+                    </div>
+                  </div>
+                </Card>
+
+                <GanttChart
+                  tasks={planningGanttTasks}
+                  users={ganttUsers}
+                  assenze={assenze}
+                  groupBy="assignee"
+                  period="month"
+                  anchorDate={currentDate}
+                  onTaskClick={handleOpenGanttTask}
+                  onTaskDateChange={handleGanttDateChange}
+                />
               </div>
             )}
           </div>
@@ -610,11 +688,15 @@ const PlanningPage: React.FC = () => {
         </DragOverlay>
       </DndContext>
 
-        <TaskPlanningDialog 
-          open={isTaskDialogOpen} 
-          onOpenChange={setIsTaskDialogOpen} 
+        <TaskPlanningDialog
+          open={isTaskDialogOpen}
+          onOpenChange={setIsTaskDialogOpen}
           task={selectedTask}
         />
+
+      <div className="mt-6">
+        <AssenzeTeamPanel compact />
+      </div>
       </div>
     </PageTransition>
   );

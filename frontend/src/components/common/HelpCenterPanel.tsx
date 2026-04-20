@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react";
-import { Search, X, ChevronDown, CheckCircle2 } from "lucide-react";
+import { Search, X, ChevronDown, CheckCircle2, BookOpen, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Link, useLocation } from "react-router-dom";
 
 interface HelpSection {
   id: string;
@@ -209,6 +210,36 @@ const HELP_DATA: HelpSection[] = [
   }
 ];
 
+// Mappa route → id sezione pertinente
+const ROUTE_HELP_MAP: Record<string, string[]> = {
+  "/": ["dashboard"],
+  "/analytics": ["dashboard"],
+  "/clienti": ["clienti"],
+  "/crm": ["clienti"],
+  "/progetti": ["progetti"],
+  "/commesse": ["progetti"],
+  "/preventivi": ["preventivi"],
+  "/budget": ["preventivi"],
+  "/timesheet": ["timer"],
+  "/planning": ["timer"],
+  "/studio-os": ["studio-os"],
+  "/contenuti": ["studio-os"],
+  "/task-templates": ["studio-os"],
+  "/fatture": ["preventivi"],
+  "/cassa": ["preventivi"],
+  "/fornitori": ["preventivi"],
+  "/wiki": ["chat"],
+  "/settings": ["impostazioni"],
+  "/collaboratori": ["impostazioni"],
+};
+
+function getContextualSectionIds(pathname: string): string[] {
+  const exact = ROUTE_HELP_MAP[pathname];
+  if (exact) return exact;
+  const prefix = Object.keys(ROUTE_HELP_MAP).find(k => k !== "/" && pathname.startsWith(k));
+  return prefix ? ROUTE_HELP_MAP[prefix] : [];
+}
+
 interface HelpCenterPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -217,6 +248,12 @@ interface HelpCenterPanelProps {
 export function HelpCenterPanel({ open, onOpenChange }: HelpCenterPanelProps) {
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const location = useLocation();
+  const contextualIds = useMemo(() => getContextualSectionIds(location.pathname), [location.pathname]);
+  const contextualSections = useMemo(
+    () => HELP_DATA.filter(s => contextualIds.includes(s.id)),
+    [contextualIds]
+  );
 
   // Filter sections safely
   const filteredData = useMemo(() => {
@@ -292,6 +329,28 @@ export function HelpCenterPanel({ open, onOpenChange }: HelpCenterPanelProps) {
                 />
               </div>
             </div>
+
+            {/* Articoli contestuali basati sulla pagina attiva */}
+            {!search && contextualSections.length > 0 && (
+              <div className="px-6 py-3 bg-primary/5 border-b border-primary/10">
+                <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-2 flex items-center gap-1.5">
+                  <BookOpen className="h-3 w-3" />
+                  Suggeriti per questa pagina
+                </p>
+                <div className="space-y-1">
+                  {contextualSections.map(section => (
+                    <button
+                      key={section.id}
+                      onClick={() => setExpandedId(expandedId === section.id ? null : section.id)}
+                      className="w-full text-left text-xs font-bold text-foreground/80 hover:text-primary transition-colors flex items-center gap-1.5 py-0.5"
+                    >
+                      <ArrowRight className="h-3 w-3 text-primary/60 shrink-0" />
+                      {section.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* List */}
             <ScrollArea className="flex-1 custom-scrollbar">

@@ -5,6 +5,7 @@ import StudioHome from "@/pages/studio/StudioHome";
 import { StudioListView } from "@/components/studio/StudioListView";
 import { StudioKanbanView } from "@/components/studio/StudioKanbanView";
 import { StudioCalendarView } from "@/components/studio/StudioCalendarView";
+import { StudioGanttView } from "@/components/studio/StudioGanttView";
 import { StudioTeamView } from "@/components/studio/StudioTeamView";
 import CaricoLavoroPage from "@/pages/studio/CaricoLavoroPage";
 import StudioOverviewPage from "@/pages/studio/StudioOverviewPage";
@@ -24,6 +25,7 @@ function PanelContent({ tab, view }: { tab: TabItem | null; view: string }) {
       case "chat":          return <ChatHub />;
       case "overview":      return <StudioOverviewPage />;
       case "cal":           return <StudioCalendarView />;
+      case "gantt":         return <StudioGanttView />;
       case "team":          return <StudioTeamView />;
       default:              return <StudioHome />;
     }
@@ -34,6 +36,7 @@ function PanelContent({ tab, view }: { tab: TabItem | null; view: string }) {
       switch (view) {
         case "kanban":   return <StudioKanbanView key={tab.id} />;
         case "cal":      return <StudioCalendarView key={tab.id} />;
+        case "gantt":    return <StudioGanttView key={tab.id} />;
         case "team":     return <StudioTeamView key={tab.id} />;
         case "overview": return <StudioOverviewPage key={tab.id} />;
         default:         return <StudioListView key={tab.id} />;

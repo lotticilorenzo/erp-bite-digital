@@ -20,6 +20,8 @@ import {
   ArrowRight,
   Calculator,
   Zap,
+  History,
+  Bot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCommessa, useUpdateCommessa, useProfitability } from "@/hooks/useCommesse";
 import { useTaskTemplates, useGeneraTaskDaTemplate } from "@/hooks/useTaskTemplates";
+import { useContenuti } from "@/hooks/useContenuti";
 import { ProgettoDialog } from "@/components/progetti/ProgettoDialog";
 import { useProgetti } from "@/hooks/useProgetti";
 import { format, parseISO } from "date-fns";
@@ -64,6 +67,9 @@ import { useTimesheets } from "@/hooks/useTimesheet";
 import { Download } from "lucide-react";
 import { ClientAvatar } from "@/components/common/ClientAvatar";
 import { PlanningDialog } from "@/components/planning/PlanningDialog";
+import { ContenutoDialog } from "@/components/contenuti/ContenutoDialog";
+import { AuditLogTable } from "@/components/audit/AuditLogTable";
+import { AITaskGeneratorDialog } from "@/components/ai/AITaskGeneratorDialog";
 import { toast } from "sonner";
 
 export default function CommessaDetailPage() {
@@ -87,6 +93,7 @@ export default function CommessaDetailPage() {
   });
 
   const [isPlanningDialogOpen, setIsPlanningDialogOpen] = useState(false);
+  const [isContenutoDialogOpen, setIsContenutoDialogOpen] = useState(false);
   
   const [editOreContratto, setEditOreContratto] = useState<string>("0");
   const [isAddingProject, setIsAddingProject] = useState(false);
@@ -109,11 +116,27 @@ export default function CommessaDetailPage() {
     return (oreReali / commessa.ore_contratto) * 100;
   }, [oreReali, commessa]);
 
-  const canEdit = user?.ruolo === "ADMIN" || user?.ruolo === "PM";
+  const canEdit = user?.ruolo === "ADMIN" || user?.ruolo === "DEVELOPER" || user?.ruolo === "PM";
   const { data: profitability } = useProfitability(id);
   const { data: taskTemplates = [] } = useTaskTemplates();
+  const { data: contenutiCommessa = [] } = useContenuti(id ? { commessa_id: id } : undefined);
   const { mutate: generaTask, isPending: isGenerating } = useGeneraTaskDaTemplate();
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [isAITaskDialogOpen, setIsAITaskDialogOpen] = useState(false);
+
+  const projectTypes = useMemo(
+    () => Array.from(new Set((commessa?.righe_progetto || []).map((r) => r.progetto?.tipo).filter(Boolean))).map(String),
+    [commessa?.righe_progetto]
+  );
+  const eligibleTemplates = useMemo(() => {
+    const projectTypeSet = new Set(projectTypes);
+    return taskTemplates.filter((template) => template.attivo && (!template.progetto_tipo || projectTypeSet.has(template.progetto_tipo)));
+  }, [projectTypes, taskTemplates]);
+
+  const aiBudgetOre = useMemo(() => {
+    const contracted = Number(commessa?.ore_contratto || 0);
+    return contracted > 0 ? contracted : 40;
+  }, [commessa?.ore_contratto]);
 
   const handleUpdateScope = () => {
     if (!id) return;
@@ -801,10 +824,10 @@ export default function CommessaDetailPage() {
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    onClick={() => setIsPlanningDialogOpen(true)}
+                    onClick={() => commessa.pianificazione_id ? navigate(`/pianificazioni/${commessa.pianificazione_id}`) : setIsPlanningDialogOpen(true)}
                     className="h-6 text-[9px] font-black uppercase tracking-widest text-purple-400 hover:text-white hover:bg-purple-500/10"
                   >
-                    Dettaglio Piano
+                    Apri Piano
                   </Button>
                 </div>
               </CardContent>
@@ -854,6 +877,23 @@ export default function CommessaDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* ═══ COSTI DIRETTI DETTAGLIO ══════════════════════ */}
+          <CostiDettaglioCard commessaId={id!} />
+
+          {canEdit && (
+            <Card className="bg-card border-border text-white overflow-hidden">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                  <History className="w-4 h-4 text-primary" />
+                  Storico Modifiche
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <AuditLogTable tabella="commesse" recordId={commessa.id} hideFilters defaultLimit={8} compact />
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="bg-card border-border text-white">
             <CardHeader>
@@ -929,70 +969,155 @@ export default function CommessaDetailPage() {
               </p>
             </CardContent>
           </Card>
+
+          <Card className="bg-card border-border text-white overflow-hidden">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-lg font-medium">Pipeline Contenuti</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate(`/contenuti?commessa_id=${commessa.id}`)}
+                    className="border-border/50 bg-muted/20 text-xs font-black uppercase tracking-widest"
+                  >
+                    Vedi board
+                    <ArrowRight className="ml-2 h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => setIsContenutoDialogOpen(true)}
+                    className="bg-primary hover:bg-primary/90 text-white text-xs font-black uppercase tracking-widest"
+                  >
+                    <Plus className="mr-2 h-3.5 w-3.5" />
+                    Nuovo
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {contenutiCommessa.slice(0, 4).map((contenuto) => (
+                <button
+                  key={contenuto.id}
+                  onClick={() => navigate(`/contenuti?commessa_id=${commessa.id}`)}
+                  className="w-full rounded-2xl border border-border/40 bg-muted/10 p-3 text-left hover:border-primary/30 hover:bg-muted/20 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{contenuto.titolo}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{contenuto.assegnatario_nome || "Non assegnato"}</p>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest">
+                      {contenuto.stato.replaceAll("_", " ")}
+                    </Badge>
+                  </div>
+                </button>
+              ))}
+              {!contenutiCommessa.length && (
+                <div className="rounded-2xl border border-dashed border-border/50 p-5 text-sm text-muted-foreground">
+                  Nessun contenuto collegato a questa commessa.
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
       {/* ── TASK TEMPLATE SECTION ──────────────────────────── */}
-      {canEdit && taskTemplates.length > 0 && (
+      {canEdit && id && (
         <Card className="bg-card border-border overflow-hidden">
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between gap-4">
             <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
               <Layers className="w-4 h-4" />
-              Genera Task da Template
+              Task Generation
             </CardTitle>
+            <Button
+              onClick={() => setIsAITaskDialogOpen(true)}
+              className="bg-primary hover:bg-primary/90 text-white text-xs font-black uppercase tracking-widest gap-1.5 shrink-0"
+            >
+              <Bot className="w-3.5 h-3.5" />
+              Genera con AI
+            </Button>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Scegli un template per generare automaticamente i task del mese in questa commessa.
+              Usa un template statico oppure fai generare all'AI una proposta più contestuale per questo mese.
             </p>
-            <div className="flex gap-3">
-              <select
-                value={selectedTemplateId}
-                onChange={(e) => setSelectedTemplateId(e.target.value)}
-                className="flex-1 h-10 rounded-xl border border-border/50 bg-muted/20 text-sm px-3 text-foreground"
-              >
-                <option value="">Seleziona template...</option>
-                {taskTemplates.filter(t => t.attivo).map(t => (
-                  <option key={t.id} value={t.id}>
-                    {t.nome} ({t.num_items} task)
-                  </option>
-                ))}
-              </select>
-              <Button
-                disabled={!selectedTemplateId || isGenerating || !id}
-                onClick={() => {
-                  if (selectedTemplateId && id) {
-                    generaTask({ templateId: selectedTemplateId, commessaId: id });
-                    setSelectedTemplateId("");
-                  }
-                }}
-                className="bg-primary hover:bg-primary/90 text-white text-xs font-black uppercase tracking-widest gap-1.5 shrink-0"
-              >
-                <Zap className="w-3.5 h-3.5" />
-                {isGenerating ? "Generando..." : "Genera Task"}
-              </Button>
-            </div>
-            {selectedTemplateId && (() => {
-              const tpl = taskTemplates.find(t => t.id === selectedTemplateId);
-              if (!tpl) return null;
-              return (
-                <div className="rounded-xl bg-muted/10 border border-border/20 p-3 space-y-1">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Preview: {tpl.items.length} task da creare</p>
-                  {tpl.items.slice(0, 4).map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-2 text-xs text-foreground">
-                      <div className="w-1 h-1 rounded-full bg-primary" />
-                      {item.titolo}
-                      {item.giorno_scadenza && <span className="text-muted-foreground ml-auto">gg{item.giorno_scadenza}</span>}
-                    </div>
-                  ))}
-                  {tpl.items.length > 4 && (
-                    <p className="text-[10px] text-muted-foreground">+{tpl.items.length - 4} altri...</p>
-                  )}
+            {eligibleTemplates.length > 0 ? (
+              <>
+                <div className="flex gap-3">
+                  <select
+                    value={selectedTemplateId}
+                    onChange={(e) => setSelectedTemplateId(e.target.value)}
+                    className="flex-1 h-10 rounded-xl border border-border/50 bg-muted/20 text-sm px-3 text-foreground"
+                  >
+                    <option value="">Seleziona template...</option>
+                    {eligibleTemplates.map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.nome} ({t.num_items} task)
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    disabled={!selectedTemplateId || isGenerating || !id}
+                    onClick={() => {
+                      if (selectedTemplateId && id) {
+                        generaTask({ templateId: selectedTemplateId, commessaId: id });
+                        setSelectedTemplateId("");
+                      }
+                    }}
+                    className="bg-primary hover:bg-primary/90 text-white text-xs font-black uppercase tracking-widest gap-1.5 shrink-0"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    {isGenerating ? "Generando..." : "Da Template"}
+                  </Button>
                 </div>
-              );
-            })()}
+                {selectedTemplateId && (() => {
+                  const tpl = eligibleTemplates.find(t => t.id === selectedTemplateId);
+                  if (!tpl) return null;
+                  return (
+                    <div className="rounded-xl bg-muted/10 border border-border/20 p-3 space-y-1">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Preview: {tpl.items.length} task da creare</p>
+                      {tpl.items.slice(0, 4).map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-2 text-xs text-foreground">
+                          <div className="w-1 h-1 rounded-full bg-primary" />
+                          {item.titolo}
+                          {item.giorno_scadenza && <span className="text-muted-foreground ml-auto">gg{item.giorno_scadenza}</span>}
+                        </div>
+                      ))}
+                      {tpl.items.length > 4 && (
+                        <p className="text-[10px] text-muted-foreground">+{tpl.items.length - 4} altri...</p>
+                      )}
+                    </div>
+                  );
+                })()}
+              </>
+            ) : (
+              <div className="rounded-xl bg-muted/10 border border-dashed border-border/30 p-4 text-xs text-muted-foreground">
+                Nessun template compatibile con i progetti di questa commessa. Puoi comunque generare una proposta con AI.
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
+
+      {id && commessa && (
+        <AITaskGeneratorDialog
+          open={isAITaskDialogOpen}
+          onOpenChange={setIsAITaskDialogOpen}
+          commessaId={id}
+          clienteNome={commessa.cliente?.ragione_sociale || "Cliente"}
+          meseLabel={commessa.mese_competenza ? format(parseISO(String(commessa.mese_competenza)), "MMMM yyyy", { locale: it }) : "Mese corrente"}
+          projectTypes={projectTypes}
+          budgetOre={aiBudgetOre}
+          defaultProjectId={commessa.righe_progetto?.[0]?.progetto_id}
+        />
+      )}
+
+      <ContenutoDialog
+        open={isContenutoDialogOpen}
+        onOpenChange={setIsContenutoDialogOpen}
+        defaultCommessaId={id}
+      />
 
       <PlanningDialog
         open={isPlanningDialogOpen}
@@ -1022,6 +1147,69 @@ function ComparisonItem({ label, planned, actual, symbol, invert = false }: any)
         <p className="text-[9px] text-[#475569] font-medium">Previsto: {symbol}{planned.toLocaleString()}</p>
       </div>
     </div>
+  );
+}
+
+function CostiDettaglioCard({ commessaId }: { commessaId: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["commessa-costi-dettaglio", commessaId],
+    queryFn: async () => {
+      const res = await api.get(`/commesse/${commessaId}/costi-dettaglio`);
+      return res.data;
+    },
+    enabled: !!commessaId,
+  });
+
+  const formatEur = (n: number) =>
+    new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(n ?? 0);
+
+  if (isLoading) return null;
+  if (!data || data.costi_diretti_totale === 0) return null;
+
+  return (
+    <Card className="bg-card border-border text-white overflow-hidden">
+      <div className="h-1 bg-gradient-to-r from-amber-500 to-orange-500" />
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+          <Briefcase className="w-4 h-4 text-amber-400" />
+          Costi Diretti
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">Totale</span>
+          <span className="text-sm font-black text-amber-400">{formatEur(data.costi_diretti_totale)}</span>
+        </div>
+        {data.breakdown?.da_fatture_passive > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-muted-foreground uppercase tracking-widest">Fatture passive</span>
+            <span className="text-xs font-bold text-foreground">{formatEur(data.breakdown.da_fatture_passive)}</span>
+          </div>
+        )}
+        {data.breakdown?.da_movimenti_cassa > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-muted-foreground uppercase tracking-widest">Movimenti cassa</span>
+            <span className="text-xs font-bold text-foreground">{formatEur(data.breakdown.da_movimenti_cassa)}</span>
+          </div>
+        )}
+        {data.breakdown?.manuali > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-muted-foreground uppercase tracking-widest">Costi manuali</span>
+            <span className="text-xs font-bold text-foreground">{formatEur(data.breakdown.manuali)}</span>
+          </div>
+        )}
+        {(data.imputazioni_fatture?.length > 0 || data.imputazioni_movimenti?.length > 0) && (
+          <div className="pt-2 border-t border-border space-y-1.5">
+            {[...(data.imputazioni_fatture ?? []), ...(data.imputazioni_movimenti ?? [])].map((imp: any, i: number) => (
+              <div key={i} className="flex items-center justify-between text-[10px]">
+                <span className="text-muted-foreground truncate max-w-[160px]">{imp.source_label ?? imp.tipo}</span>
+                <span className="font-mono text-foreground">{formatEur(imp.importo)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

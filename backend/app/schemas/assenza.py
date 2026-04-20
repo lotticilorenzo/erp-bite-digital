@@ -16,6 +16,8 @@ class AssenzaCreate(AssenzaBase):
 
 class AssenzaOut(AssenzaBase):
     id: uuid.UUID
+    stato: str = "PENDING"
+    approvato_da: Optional[uuid.UUID] = None
     created_at: datetime
 
     class Config:

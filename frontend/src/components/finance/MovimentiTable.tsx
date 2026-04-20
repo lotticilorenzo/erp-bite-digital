@@ -7,9 +7,10 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Link2, 
-  Tag
+import {
+  Link2,
+  Tag,
+  GitBranch,
 } from "lucide-react";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
@@ -17,9 +18,10 @@ import { it } from "date-fns/locale";
 interface MovimentiTableProps {
   data: any[];
   onRiconcilia?: (movimento: any) => void;
+  onImputa?: (movimento: any) => void;
 }
 
-export function MovimentiTable({ data, onRiconcilia }: MovimentiTableProps) {
+export function MovimentiTable({ data, onRiconcilia, onImputa }: MovimentiTableProps) {
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(val);
   };
@@ -88,15 +90,24 @@ export function MovimentiTable({ data, onRiconcilia }: MovimentiTableProps) {
                   )}
                 </TableCell>
                 <TableCell className="text-right">
-                  {!item.riconciliato && (
-                    <button 
-                      onClick={() => onRiconcilia?.(item)}
-                      className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center text-[#475569] hover:text-white hover:bg-primary transition-all duration-300 shadow-lg"
-                      title="Riconcilia con fattura"
+                  <div className="flex items-center justify-end gap-1">
+                    {!item.riconciliato && (
+                      <button
+                        onClick={() => onRiconcilia?.(item)}
+                        className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center text-[#475569] hover:text-white hover:bg-primary transition-all duration-300 shadow-lg"
+                        title="Riconcilia con fattura"
+                      >
+                        <Link2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => onImputa?.(item)}
+                      className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center text-[#475569] hover:text-white hover:bg-violet-600 transition-all duration-300 shadow-lg"
+                      title="Imputa a progetto/cliente"
                     >
-                      <Link2 className="h-3.5 w-3.5" />
+                      <GitBranch className="h-3.5 w-3.5" />
                     </button>
-                  )}
+                  </div>
                 </TableCell>
               </TableRow>
             );

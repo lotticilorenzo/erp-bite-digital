@@ -31,6 +31,9 @@ const LeadDetailPage = React.lazy(() => import("./pages/LeadDetail"));
 const Fornitori = React.lazy(() => import("./pages/Fornitori"));
 const SupplierCategoryManager = React.lazy(() => import("./pages/admin/SupplierCategoryManager"));
 const TaskTemplatesPage = React.lazy(() => import("./pages/TaskTemplatesPage"));
+const ContenutiPage = React.lazy(() => import("./pages/ContenutiPage"));
+const RegoleRiconciliazionePageLazy = React.lazy(() => import("./pages/RegoleRiconciliazione"));
+const PianificazioneDetailPage = React.lazy(() => import("./pages/PianificazioneDetail"));
 
 const SettingsLayout = React.lazy(() => import("./pages/Settings"));
 const ProfileSettings = React.lazy(() => import("./pages/settings/ProfileSettings"));
@@ -38,6 +41,7 @@ const AccountSettings = React.lazy(() => import("./pages/settings/AccountSetting
 const AppearanceSettings = React.lazy(() => import("./pages/settings/AppearanceSettings"));
 const NotificationSettings = React.lazy(() => import("./pages/settings/NotificationSettings"));
 const PrivacySettings = React.lazy(() => import("./pages/settings/PrivacySettings"));
+const AuditSettings = React.lazy(() => import("./pages/settings/AuditSettings"));
 const ForgotPasswordPage = React.lazy(() => import("./pages/ForgotPassword"));
 const ResetPasswordPage = React.lazy(() => import("./pages/ResetPassword"));
 const PopoutPage = React.lazy(() => import("./pages/PopoutPage"));
@@ -102,10 +106,12 @@ function App() {
               <Route path="/progetti/:id" element={<ProgettoDetailPage />} />
               <Route path="/commesse" element={<CommessePage />} />
               <Route path="/commesse/:id" element={<CommessaDetailPage />} />
+              <Route path="/pianificazioni/:id" element={<PianificazioneDetailPage />} />
               <Route path="/preventivi" element={<PreventiviPage />} />
               <Route path="/timesheet" element={<TimesheetPage />} />
               <Route path="/fatture" element={<FatturePage />} />
               <Route path="/cassa" element={<CassaPage />} />
+              <Route path="/cassa/regole" element={<RegoleRiconciliazionePageLazy />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/report" element={<ReportsPage />} />
               <Route path="/planning" element={<PlanningPage />} />
@@ -115,6 +121,7 @@ function App() {
               <Route path="/wiki" element={<WikiPage />} />
               <Route path="/crm" element={<CRMPage />} />
               <Route path="/crm/:id" element={<LeadDetailPage />} />
+              <Route path="/contenuti" element={<ContenutiPage />} />
               <Route path="/admin/categorie-fornitori" element={<SupplierCategoryManager />} />
               <Route path="/task-templates" element={<TaskTemplatesPage />} />
               
@@ -129,6 +136,7 @@ function App() {
                 <Route path="appearance" element={<AppearanceSettings />} />
                 <Route path="notifications" element={<NotificationSettings />} />
                 <Route path="privacy" element={<PrivacySettings />} />
+                <Route path="audit" element={<AuditSettings />} />
               </Route>
             </Route>
   

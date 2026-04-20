@@ -20,6 +20,14 @@ from sqlalchemy import text, select, func, and_, or_
 
 from app.db.session import get_db
 from app.core.config import settings
+from app.core.content_pipeline_rules import (
+    can_assign_content_to_user,
+    can_change_content_scope,
+    can_link_new_content_to_scope,
+    is_content_manager_role,
+    is_limited_content_role,
+    template_matches_commessa,
+)
 from app.core.security import (
     verify_password, create_access_token,
     get_current_user, require_roles
@@ -43,6 +51,7 @@ from app.schemas.schemas import (
     CategoriaFornitoreCreate, CategoriaFornitoreOut, CategoriaFornitoreUpdate,
     PreventivoCreate, PreventivoUpdate, PreventivoOut,
     BudgetCategoryCreate, BudgetCategoryOut, BudgetMensileCreate, BudgetMensileUpdate, BudgetMensileOut, BudgetConsuntivoOut,
+    BudgetVarianceOut, BudgetTrendOut, BudgetTrendPointOut, BudgetTrendSeriesOut,
     WikiCategoriaCreate, WikiCategoriaOut, WikiArticoloCreate, WikiArticoloUpdate, WikiArticoloOut,
     ChatReazioneBase, ChatReazioneRead, ChatMessaggioCreate, ChatMessaggioUpdate, ChatMessaggioRead,
     CRMStageOut, CRMLeadCreate, CRMLeadUpdate, CRMLeadOut, CRMActivityCreate, CRMActivityOut, CRMStatsOut
@@ -1010,7 +1019,7 @@ async def _check_margin_and_notify(db: AsyncSession, commessa_id: Optional[uuid.
         return
     try:
         from app.services.notification_service import create_notification
-        from app.models.models import Commessa, CommessaProgetto, Timesheet as TS
+        from app.models.models import Commessa, Notification
         from sqlalchemy.orm import selectinload as sil
 
         result = await db.execute(
@@ -1040,27 +1049,38 @@ async def _check_margin_and_notify(db: AsyncSession, commessa_id: Optional[uuid.
         costi_diretti = float(c.costi_diretti or 0)
         margine_euro = valore_fatturabile - costo_manodopera - costi_diretti
         margine_pct = round(margine_euro / valore_fatturabile * 100, 1)
-        cliente_nome = c.cliente.nome if c.cliente else "?"
+        cliente_nome = c.cliente.ragione_sociale if c.cliente else "?"
         mese_str = c.mese_competenza.strftime("%B %Y") if c.mese_competenza else "?"
 
         if margine_pct < 15:
             alert_type = "CRITICAL"
-            title = f"⚠️ Margine CRITICO — {cliente_nome}"
+            title = f"Margine critico - {cliente_nome}"
             message = f"Commessa {mese_str}: margine sceso al {margine_pct}% (soglia critica: 15%)"
         elif margine_pct < 30:
             alert_type = "WARNING"
-            title = f"Attenzione Margine — {cliente_nome}"
+            title = f"Attenzione margine - {cliente_nome}"
             message = f"Commessa {mese_str}: margine al {margine_pct}% (soglia warning: 30%)"
         else:
             return  # Tutto OK, nessuna notifica
 
         link = f"/commesse/{commessa_id}"
+        month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
         # Notifica tutti gli ADMIN e PM
         admins_result = await db.execute(
             select(User).where(User.ruolo.in_([UserRole.ADMIN, UserRole.PM]))
         )
         for admin in admins_result.scalars().all():
+            existing = await db.execute(
+                select(Notification).where(
+                    Notification.user_id == admin.id,
+                    Notification.type == alert_type,
+                    Notification.link == link,
+                    Notification.created_at >= month_start,
+                )
+            )
+            if existing.scalar_one_or_none():
+                continue
             await create_notification(db, admin.id, title, message, alert_type, link)
 
     except Exception as e:
@@ -1584,6 +1604,27 @@ async def applica_regole(
     return await applica_regole_automatiche(db)
 
 
+@router.post("/regole-riconciliazione/dry-run", tags=["Regole"])
+async def dry_run_regole(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
+):
+    """Preview di cosa verrebbe riconciliato senza applicare modifiche al DB."""
+    from app.services.services import dry_run_regole_automatiche
+    return await dry_run_regole_automatiche(db)
+
+
+@router.get("/regole-riconciliazione/{regola_id}/log", tags=["Regole"])
+async def get_regola_log(
+    regola_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
+):
+    """Storico applicazioni di una singola regola (da audit_log)."""
+    from app.services.services import get_regola_application_log
+    return await get_regola_application_log(db, regola_id)
+
+
 @router.get("/movimenti-cassa/{movimento_id}/suggest", tags=["Regole"])
 async def suggest_mov(movimento_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     from app.services.services import suggest_riconciliazione
@@ -1626,6 +1667,47 @@ async def save_imputazioni_mov(movimento_id: uuid.UUID, payload: dict, db: Async
     if result is None:
         raise HTTPException(status_code=404, detail="Movimento non trovato")
     return {"imputazioni": result}
+
+
+@router.delete("/fatture-passive/{fattura_id}/imputazioni", tags=["Imputazioni"], status_code=204)
+async def delete_imputazioni_fattura(
+    fattura_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
+):
+    """Elimina tutte le imputazioni di una fattura passiva."""
+    from app.models.models import FatturaPassivaImputazione
+    await db.execute(
+        __import__('sqlalchemy', fromlist=['delete']).delete(FatturaPassivaImputazione)
+        .where(FatturaPassivaImputazione.fattura_passiva_id == fattura_id)
+    )
+    await db.commit()
+
+
+@router.delete("/movimenti-cassa/{movimento_id}/imputazioni", tags=["Imputazioni"], status_code=204)
+async def delete_imputazioni_movimento(
+    movimento_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
+):
+    """Elimina tutte le imputazioni di un movimento cassa."""
+    from app.models.models import MovimentoCassaImputazione
+    await db.execute(
+        __import__('sqlalchemy', fromlist=['delete']).delete(MovimentoCassaImputazione)
+        .where(MovimentoCassaImputazione.movimento_id == movimento_id)
+    )
+    await db.commit()
+
+
+@router.get("/commesse/{commessa_id}/costi-dettaglio", tags=["Commesse"])
+async def get_commessa_costi_dettaglio(
+    commessa_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
+):
+    """Breakdown costi diretti di una commessa: manuali + imputazioni fatture + imputazioni movimenti."""
+    from app.services.services import get_costi_dettaglio_commessa
+    return await get_costi_dettaglio_commessa(db, commessa_id)
 
 
 # ── DELETE PROGETTO ───────────────────────────────────────
@@ -2456,6 +2538,58 @@ async def remove_task(
 # TASK TEMPLATES (Recurring Tasks)
 # ═══════════════════════════════════════════════════════
 
+async def _pick_user_id_for_role(db: AsyncSession, role_name: Optional[str]) -> Optional[uuid.UUID]:
+    if not role_name:
+        return None
+    try:
+        role = UserRole(role_name)
+    except ValueError:
+        return None
+
+    result = await db.execute(
+        select(User)
+        .where(User.ruolo == role, User.attivo == True)
+        .order_by(User.nome, User.cognome)
+        .limit(1)
+    )
+    user = result.scalar_one_or_none()
+    return user.id if user else None
+
+
+async def _task_template_item_exists(
+    db: AsyncSession,
+    commessa_id: uuid.UUID,
+    titolo: str,
+    data_scadenza: Optional[date],
+) -> bool:
+    from app.models.models import Task
+
+    stmt = select(func.count()).select_from(Task).where(
+        Task.commessa_id == commessa_id,
+        Task.titolo == titolo,
+    )
+    if data_scadenza is None:
+        stmt = stmt.where(Task.data_scadenza.is_(None))
+    else:
+        stmt = stmt.where(Task.data_scadenza == data_scadenza)
+    result = await db.execute(stmt)
+    return bool(result.scalar_one())
+
+
+def _commessa_project_types(commessa) -> set[str]:
+    tipi: set[str] = set()
+    for riga in getattr(commessa, "righe_progetto", []) or []:
+        progetto = getattr(riga, "progetto", None)
+        if progetto and getattr(progetto, "tipo", None):
+            tipo = getattr(progetto, "tipo")
+            tipi.add(tipo.value if hasattr(tipo, "value") else str(tipo))
+    return tipi
+
+
+def _template_matches_commessa(template, commessa) -> bool:
+    return template_matches_commessa(template, commessa)
+
+
 @router.get("/task-templates", tags=["TaskTemplates"])
 async def list_task_templates(
     db: AsyncSession = Depends(get_db),
@@ -2501,7 +2635,7 @@ async def list_task_templates(
 async def create_task_template(
     data: dict = Body(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     from app.models.models import TaskTemplate, TaskTemplateItem
     items_data = data.pop("items", [])
@@ -2528,7 +2662,7 @@ async def update_task_template(
     template_id: uuid.UUID,
     data: dict = Body(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     from app.models.models import TaskTemplate, TaskTemplateItem
     from sqlalchemy.orm import selectinload as sil
@@ -2564,7 +2698,7 @@ async def update_task_template(
 async def delete_task_template(
     template_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     from app.models.models import TaskTemplate
     result = await db.execute(select(TaskTemplate).where(TaskTemplate.id == template_id))
@@ -2580,10 +2714,10 @@ async def genera_task_da_template(
     template_id: uuid.UUID,
     commessa_id: uuid.UUID = Query(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.PM))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     """Genera i task del template per la commessa indicata."""
-    from app.models.models import TaskTemplate, Task, TaskStatus, Commessa
+    from app.models.models import TaskTemplate, Task, TaskStatus, Commessa, CommessaProgetto, Progetto
     from sqlalchemy.orm import selectinload as sil
     import calendar
 
@@ -2594,21 +2728,35 @@ async def genera_task_da_template(
     if not tpl:
         raise HTTPException(status_code=404, detail="Template non trovato")
 
-    cm_result = await db.execute(select(Commessa).where(Commessa.id == commessa_id))
-    cm = cm_result.scalar_one_or_none()
+    cm_result = await db.execute(
+        select(Commessa)
+        .options(
+            sil(Commessa.righe_progetto)
+            .selectinload(CommessaProgetto.progetto)
+            .selectinload(Progetto.servizi)
+        )
+        .where(Commessa.id == commessa_id)
+    )
+    cm = cm_result.unique().scalar_one_or_none()
     if not cm:
         raise HTTPException(status_code=404, detail="Commessa non trovata")
+    if not _template_matches_commessa(tpl, cm):
+        raise HTTPException(status_code=422, detail="Template non compatibile con i progetti della commessa")
 
     created = []
+    skipped = []
     mese = cm.mese_competenza
     _, days_in_month = calendar.monthrange(mese.year, mese.month)
 
     for item in tpl.items:
-        # Calcola data scadenza
         scadenza = None
         if item.giorno_scadenza:
             day = min(item.giorno_scadenza, days_in_month)
             scadenza = date(mese.year, mese.month, day)
+        if await _task_template_item_exists(db, commessa_id, item.titolo, scadenza):
+            skipped.append(item.titolo)
+            continue
+        assegnatario_id = await _pick_user_id_for_role(db, item.assegnatario_ruolo)
 
         task = Task(
             id=uuid.uuid4(),
@@ -2619,34 +2767,41 @@ async def genera_task_da_template(
             stima_minuti=item.stima_minuti,
             priorita=item.priorita or "media",
             data_scadenza=scadenza,
+            assegnatario_id=assegnatario_id,
             stato=TaskStatus.DA_FARE,
         )
         db.add(task)
         created.append({"titolo": task.titolo, "scadenza": str(scadenza) if scadenza else None})
 
     await db.commit()
-    return {"template": tpl.nome, "generati": len(created), "tasks": created}
+    return {"template": tpl.nome, "generati": len(created), "saltati": len(skipped), "tasks": created}
 
 
 @router.post("/task-templates/genera-tutti", tags=["TaskTemplates"])
 async def genera_tutti_task_mese(
     mese: date = Query(..., description="Formato YYYY-MM-01"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN))
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
 ):
     """Genera i task da tutti i template attivi per le commesse aperte del mese."""
-    from app.models.models import TaskTemplate, Task, TaskStatus, Commessa, CommessaStatus
+    from app.models.models import TaskTemplate, Task, TaskStatus, Commessa, CommessaProgetto, CommessaStatus, Progetto
     from sqlalchemy.orm import selectinload as sil
     import calendar
 
     # Commesse aperte nel mese
     cm_result = await db.execute(
-        select(Commessa).where(
+        select(Commessa)
+        .options(
+            sil(Commessa.righe_progetto)
+            .selectinload(CommessaProgetto.progetto)
+            .selectinload(Progetto.servizi)
+        )
+        .where(
             Commessa.mese_competenza == mese,
             Commessa.stato.in_([CommessaStatus.APERTA, CommessaStatus.PRONTA_CHIUSURA])
         )
     )
-    commesse = cm_result.scalars().all()
+    commesse = cm_result.scalars().unique().all()
 
     # Template attivi
     tpl_result = await db.execute(
@@ -2656,32 +2811,668 @@ async def genera_tutti_task_mese(
 
     _, days_in_month = calendar.monthrange(mese.year, mese.month)
     total = 0
+    skipped = 0
 
     for cm in commesse:
         for tpl in templates:
+            if not _template_matches_commessa(tpl, cm):
+                continue
             for item in tpl.items:
                 scadenza = None
                 if item.giorno_scadenza:
                     day = min(item.giorno_scadenza, days_in_month)
                     scadenza = date(mese.year, mese.month, day)
+                if await _task_template_item_exists(db, cm.id, item.titolo, scadenza):
+                    skipped += 1
+                    continue
+                assegnatario_id = await _pick_user_id_for_role(db, item.assegnatario_ruolo)
                 task = Task(
                     id=uuid.uuid4(),
                     commessa_id=cm.id,
                     titolo=item.titolo,
                     descrizione=item.descrizione,
+                    servizio=item.servizio,
                     stima_minuti=item.stima_minuti,
                     priorita=item.priorita or "media",
                     data_scadenza=scadenza,
+                    assegnatario_id=assegnatario_id,
                     stato=TaskStatus.DA_FARE,
                 )
                 db.add(task)
                 total += 1
 
     await db.commit()
-    return {"mese": str(mese), "commesse_processate": len(commesse), "task_generati": total}
+    return {"mese": str(mese), "commesse_processate": len(commesse), "task_generati": total, "task_saltati": skipped}
+
+
+# ═══════════════════════════════════════════════════════
+# CONTENUTI (Pipeline Approvazione)
+# ═══════════════════════════════════════════════════════
+
+_STATO_TRANSITIONS: dict[str, list[str]] = {
+    "BOZZA":                        ["IN_REVISIONE_INTERNA"],
+    "IN_REVISIONE_INTERNA":         ["MODIFICHE_RICHIESTE_INTERNE", "APPROVATO_INTERNAMENTE"],
+    "MODIFICHE_RICHIESTE_INTERNE":  ["IN_REVISIONE_INTERNA"],
+    "APPROVATO_INTERNAMENTE":       ["INVIATO_AL_CLIENTE"],
+    "INVIATO_AL_CLIENTE":           ["MODIFICHE_RICHIESTE_CLIENTE", "APPROVATO_CLIENTE"],
+    "MODIFICHE_RICHIESTE_CLIENTE":  ["INVIATO_AL_CLIENTE"],
+    "APPROVATO_CLIENTE":            ["PUBBLICATO"],
+    "PUBBLICATO":                   ["ARCHIVIATO"],
+    "ARCHIVIATO":                   [],
+}
+
+_STATO_NOTIFICHE: dict[str, tuple[str, str]] = {
+    "IN_REVISIONE_INTERNA":        ("INFO",     "Contenuto in revisione interna"),
+    "MODIFICHE_RICHIESTE_INTERNE": ("WARNING",  "Modifiche richieste"),
+    "APPROVATO_INTERNAMENTE":      ("INFO",     "Approvato internamente - pronto per il cliente"),
+    "INVIATO_AL_CLIENTE":          ("INFO",     "Inviato al cliente per approvazione"),
+    "MODIFICHE_RICHIESTE_CLIENTE": ("WARNING",  "Il cliente ha richiesto modifiche"),
+    "APPROVATO_CLIENTE":           ("INFO",     "Approvato dal cliente!"),
+    "PUBBLICATO":                  ("INFO",     "Contenuto pubblicato"),
+}
+
+def _contenuto_event_to_dict(evento) -> dict:
+    return {
+        "id": str(evento.id),
+        "stato_precedente": evento.stato_precedente,
+        "stato_nuovo": evento.stato_nuovo,
+        "nota": evento.nota,
+        "autore_id": str(evento.autore_id) if evento.autore_id else None,
+        "autore_nome": (
+            f"{evento.autore.nome} {evento.autore.cognome}"
+            if getattr(evento, "autore", None) else None
+        ),
+        "created_at": evento.created_at.isoformat(),
+    }
+
+
+def _parse_optional_uuid_field(value, field_name: str) -> Optional[uuid.UUID]:
+    if value in (None, ""):
+        return None
+    try:
+        return uuid.UUID(str(value))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail=f"Campo '{field_name}' non valido")
+
+
+def _parse_optional_date_field(value, field_name: str) -> Optional[date]:
+    if value in (None, ""):
+        return None
+    try:
+        return date.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail=f"Campo '{field_name}' non valido")
+
+
+def _parse_contenuto_tipo_field(value, field_name: str = "tipo"):
+    from app.models.models import ContenutoTipo
+
+    if value in (None, ""):
+        return None
+    try:
+        return ContenutoTipo(str(value))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail=f"Campo '{field_name}' non valido")
+
+
+def _is_content_manager(user: User) -> bool:
+    return is_content_manager_role(getattr(user, "ruolo", None))
+
+
+def _is_limited_content_user(user: User) -> bool:
+    return is_limited_content_role(getattr(user, "ruolo", None))
+
+
+async def _validate_contenuto_relations(
+    db: AsyncSession,
+    commessa_id: Optional[uuid.UUID],
+    progetto_id: Optional[uuid.UUID],
+    assegnatario_id: Optional[uuid.UUID],
+) -> None:
+    from app.models.models import Commessa, CommessaProgetto, Progetto
+
+    if assegnatario_id:
+        assignee_result = await db.execute(
+            select(User).where(User.id == assegnatario_id, User.attivo == True)
+        )
+        if not assignee_result.scalar_one_or_none():
+            raise HTTPException(status_code=422, detail="Assegnatario non valido o non attivo")
+
+    if commessa_id:
+        commessa_result = await db.execute(select(Commessa.id).where(Commessa.id == commessa_id))
+        if not commessa_result.scalar_one_or_none():
+            raise HTTPException(status_code=422, detail="Commessa non trovata")
+
+    if progetto_id:
+        progetto_result = await db.execute(select(Progetto.id).where(Progetto.id == progetto_id))
+        if not progetto_result.scalar_one_or_none():
+            raise HTTPException(status_code=422, detail="Progetto non trovato")
+
+    if commessa_id and progetto_id:
+        link_result = await db.execute(
+            select(CommessaProgetto.id).where(
+                CommessaProgetto.commessa_id == commessa_id,
+                CommessaProgetto.progetto_id == progetto_id,
+            )
+        )
+        if not link_result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=422,
+                detail="Il progetto selezionato non appartiene alla commessa indicata",
+            )
+
+
+def _contenuto_to_dict(c) -> dict:
+    return {
+        "id": str(c.id),
+        "titolo": c.titolo,
+        "tipo": c.tipo,
+        "stato": c.stato,
+        "commessa_id": str(c.commessa_id) if c.commessa_id else None,
+        "progetto_id": str(c.progetto_id) if c.progetto_id else None,
+        "assegnatario_id": str(c.assegnatario_id) if c.assegnatario_id else None,
+        "assegnatario_nome": f"{c.assegnatario.nome} {c.assegnatario.cognome}" if c.assegnatario else None,
+        "cliente_nome": c.commessa.cliente.ragione_sociale if (c.commessa and hasattr(c.commessa, "cliente") and c.commessa.cliente) else None,
+        "data_consegna_prevista": str(c.data_consegna_prevista) if c.data_consegna_prevista else None,
+        "url_preview": c.url_preview,
+        "testo": c.testo,
+        "note_revisione": c.note_revisione,
+        "approvato_da": str(c.approvato_da) if c.approvato_da else None,
+        "approvato_at": c.approvato_at.isoformat() if c.approvato_at else None,
+        "pubblicato_at": c.pubblicato_at.isoformat() if c.pubblicato_at else None,
+        "created_at": c.created_at.isoformat(),
+        "updated_at": c.updated_at.isoformat(),
+        "transizioni_possibili": _STATO_TRANSITIONS.get(c.stato, []),
+        "eventi": [_contenuto_event_to_dict(e) for e in getattr(c, "eventi", [])],
+    }
+
+
+@router.get("/contenuti", tags=["Contenuti"])
+async def list_contenuti(
+    commessa_id: Optional[uuid.UUID] = Query(None),
+    stato: Optional[str] = Query(None),
+    tipo: Optional[str] = Query(None),
+    assegnatario_id: Optional[uuid.UUID] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import Contenuto, ContenutoEvento, Commessa
+    from sqlalchemy.orm import selectinload as sil
+    q = select(Contenuto).options(
+        sil(Contenuto.assegnatario),
+        sil(Contenuto.commessa).selectinload(Commessa.cliente),
+        sil(Contenuto.eventi).selectinload(ContenutoEvento.autore),
+    ).order_by(Contenuto.created_at.desc())
+    if commessa_id:
+        q = q.where(Contenuto.commessa_id == commessa_id)
+    if stato:
+        q = q.where(Contenuto.stato == stato)
+    if tipo:
+        q = q.where(Contenuto.tipo == tipo)
+    if assegnatario_id:
+        q = q.where(Contenuto.assegnatario_id == assegnatario_id)
+    if _is_limited_content_user(current_user):
+        q = q.where(Contenuto.assegnatario_id == current_user.id)
+    result = await db.execute(q)
+    return [_contenuto_to_dict(c) for c in result.scalars().unique().all()]
+
+
+@router.post("/contenuti", status_code=201, tags=["Contenuti"])
+async def create_contenuto(
+    data: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import Contenuto, ContenutoEvento, ContenutoStatus, ContenutoTipo, Commessa
+    from sqlalchemy.orm import selectinload as sil
+    can_manage_content = _is_content_manager(current_user)
+    requested_assignee_id = _parse_optional_uuid_field(
+        data.get("assegnatario_id", current_user.id),
+        "assegnatario_id",
+    )
+    if not can_assign_content_to_user(can_manage_content, requested_assignee_id, current_user.id):
+        raise HTTPException(status_code=403, detail="Non puoi assegnare contenuti ad altri utenti")
+
+    commessa_id = _parse_optional_uuid_field(data.get("commessa_id"), "commessa_id")
+    progetto_id = _parse_optional_uuid_field(data.get("progetto_id"), "progetto_id")
+    if not can_link_new_content_to_scope(can_manage_content, commessa_id, progetto_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Solo PM/Admin/Developer possono collegare nuovi contenuti a commesse o progetti",
+        )
+    assegnatario_id = requested_assignee_id if can_manage_content else current_user.id
+    await _validate_contenuto_relations(db, commessa_id, progetto_id, assegnatario_id)
+
+    c = Contenuto(
+        id=uuid.uuid4(),
+        titolo=data.get("titolo", "Senza titolo"),
+        tipo=_parse_contenuto_tipo_field(data.get("tipo"), "tipo") or ContenutoTipo.POST_SOCIAL,
+        stato=ContenutoStatus.BOZZA,
+        commessa_id=commessa_id,
+        progetto_id=progetto_id,
+        assegnatario_id=assegnatario_id,
+        data_consegna_prevista=_parse_optional_date_field(data.get("data_consegna_prevista"), "data_consegna_prevista"),
+        url_preview=data.get("url_preview"),
+        testo=data.get("testo"),
+        note_revisione=data.get("note_revisione"),
+    )
+    db.add(c)
+    db.add(ContenutoEvento(
+        id=uuid.uuid4(),
+        contenuto_id=c.id,
+        autore_id=current_user.id,
+        stato_precedente=None,
+        stato_nuovo=ContenutoStatus.BOZZA,
+        nota=data.get("note_revisione"),
+    ))
+    await db.commit()
+    result = await db.execute(
+        select(Contenuto)
+        .options(
+            sil(Contenuto.assegnatario),
+            sil(Contenuto.commessa).selectinload(Commessa.cliente),
+            sil(Contenuto.eventi).selectinload(ContenutoEvento.autore),
+        )
+        .where(Contenuto.id == c.id)
+    )
+    return _contenuto_to_dict(result.unique().scalar_one())
+
+
+@router.put("/contenuti/{contenuto_id}", tags=["Contenuti"])
+async def update_contenuto(
+    contenuto_id: uuid.UUID,
+    data: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import Contenuto, ContenutoEvento, Commessa
+    from sqlalchemy.orm import selectinload as sil
+    can_manage_content = _is_content_manager(current_user)
+    result = await db.execute(
+        select(Contenuto).options(
+            sil(Contenuto.assegnatario),
+            sil(Contenuto.commessa).selectinload(Commessa.cliente),
+            sil(Contenuto.eventi).selectinload(ContenutoEvento.autore),
+        )
+        .where(Contenuto.id == contenuto_id)
+    )
+    c = result.unique().scalar_one_or_none()
+    if not c:
+        raise HTTPException(status_code=404, detail="Contenuto non trovato")
+    if _is_limited_content_user(current_user) and c.assegnatario_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Permesso negato")
+    for field in ("titolo", "url_preview", "testo", "note_revisione", "data_consegna_prevista"):
+        if field in data:
+            val = data[field]
+            if val == "":
+                val = None
+            if field == "data_consegna_prevista" and val:
+                val = _parse_optional_date_field(val, "data_consegna_prevista")
+            setattr(c, field, val)
+
+    if "tipo" in data:
+        parsed_tipo = _parse_contenuto_tipo_field(data.get("tipo"), "tipo")
+        if parsed_tipo is not None:
+            c.tipo = parsed_tipo
+
+    next_commessa_id = c.commessa_id
+    next_progetto_id = c.progetto_id
+    next_assegnatario_id = c.assegnatario_id
+
+    if "commessa_id" in data:
+        next_commessa_id = _parse_optional_uuid_field(data.get("commessa_id"), "commessa_id")
+        if not can_change_content_scope(can_manage_content, c.commessa_id, next_commessa_id):
+            raise HTTPException(status_code=403, detail="Non puoi cambiare la commessa del contenuto")
+
+    if "progetto_id" in data:
+        next_progetto_id = _parse_optional_uuid_field(data.get("progetto_id"), "progetto_id")
+        if not can_change_content_scope(can_manage_content, c.progetto_id, next_progetto_id):
+            raise HTTPException(status_code=403, detail="Non puoi cambiare il progetto del contenuto")
+
+    if "assegnatario_id" in data:
+        next_assegnatario_id = _parse_optional_uuid_field(data.get("assegnatario_id"), "assegnatario_id")
+        if not can_change_content_scope(can_manage_content, c.assegnatario_id, next_assegnatario_id):
+            raise HTTPException(status_code=403, detail="Non puoi riassegnare il contenuto")
+
+    await _validate_contenuto_relations(db, next_commessa_id, next_progetto_id, next_assegnatario_id)
+    c.commessa_id = next_commessa_id
+    c.progetto_id = next_progetto_id
+    c.assegnatario_id = next_assegnatario_id
+    await db.commit()
+    result = await db.execute(
+        select(Contenuto)
+        .options(
+            sil(Contenuto.assegnatario),
+            sil(Contenuto.commessa).selectinload(Commessa.cliente),
+            sil(Contenuto.eventi).selectinload(ContenutoEvento.autore),
+        )
+        .where(Contenuto.id == contenuto_id)
+    )
+    return _contenuto_to_dict(result.unique().scalar_one())
+
+
+@router.put("/contenuti/{contenuto_id}/stato", tags=["Contenuti"])
+async def cambia_stato_contenuto(
+    contenuto_id: uuid.UUID,
+    data: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import Contenuto, ContenutoEvento, ContenutoStatus
+    from app.services.notification_service import create_notification
+    from sqlalchemy.orm import selectinload as sil
+    from app.models.models import Commessa
+
+    result = await db.execute(
+        select(Contenuto)
+        .options(sil(Contenuto.assegnatario), sil(Contenuto.commessa).selectinload(Commessa.cliente))
+        .where(Contenuto.id == contenuto_id)
+    )
+    c = result.unique().scalar_one_or_none()
+    if not c:
+        raise HTTPException(status_code=404, detail="Contenuto non trovato")
+
+    nuovo_stato = data.get("stato")
+    if not nuovo_stato:
+        raise HTTPException(status_code=400, detail="Campo 'stato' obbligatorio")
+
+    transizioni_ok = _STATO_TRANSITIONS.get(c.stato, [])
+    if nuovo_stato not in transizioni_ok:
+        raise HTTPException(status_code=422, detail=f"Transizione non consentita: {c.stato} -> {nuovo_stato}")
+
+    # Permessi: solo PM/ADMIN possono approvare o inviare al cliente
+    stati_pm_only = {"APPROVATO_INTERNAMENTE", "INVIATO_AL_CLIENTE", "APPROVATO_CLIENTE", "PUBBLICATO"}
+    if nuovo_stato in stati_pm_only and current_user.ruolo not in (UserRole.ADMIN, UserRole.PM, UserRole.DEVELOPER):
+        raise HTTPException(status_code=403, detail="Permesso negato")
+    if _is_limited_content_user(current_user) and c.assegnatario_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Permesso negato")
+    if nuovo_stato in {"MODIFICHE_RICHIESTE_INTERNE", "MODIFICHE_RICHIESTE_CLIENTE"} and not data.get("note_revisione"):
+        raise HTTPException(status_code=422, detail="Inserisci una nota revisione per richiedere modifiche")
+
+    vecchio_stato = c.stato
+    c.stato = nuovo_stato
+    if data.get("note_revisione"):
+        c.note_revisione = data["note_revisione"]
+    if nuovo_stato in ("APPROVATO_INTERNAMENTE", "APPROVATO_CLIENTE"):
+        c.approvato_da = current_user.id
+        c.approvato_at = datetime.now()
+    if nuovo_stato == "PUBBLICATO":
+        c.pubblicato_at = datetime.now()
+    db.add(ContenutoEvento(
+        id=uuid.uuid4(),
+        contenuto_id=c.id,
+        autore_id=current_user.id,
+        stato_precedente=vecchio_stato,
+        stato_nuovo=nuovo_stato,
+        nota=data.get("note_revisione"),
+    ))
+
+    await db.commit()
+
+    # Notifiche automatiche
+    notif_info = _STATO_NOTIFICHE.get(nuovo_stato)
+    if notif_info and c.assegnatario_id:
+        tipo_notif, msg_suffix = notif_info
+        cliente_str = ""
+        if c.commessa and c.commessa.cliente:
+            cliente_str = f" - {c.commessa.cliente.ragione_sociale}"
+        msg = f'"{c.titolo}"{cliente_str}: {msg_suffix}'
+        # Notifica assegnatario
+        await create_notification(db, c.assegnatario_id, f"Aggiornamento contenuto", msg, tipo_notif, f"/contenuti")
+        # Se in revisione interna, notifica PM/ADMIN
+        if nuovo_stato == "IN_REVISIONE_INTERNA":
+            pm_result = await db.execute(select(User).where(User.ruolo.in_([UserRole.ADMIN, UserRole.PM])))
+            for pm in pm_result.scalars().all():
+                if pm.id != current_user.id:
+                    await create_notification(db, pm.id, "Contenuto da revisionare", msg, "INFO", "/contenuti")
+
+    return {"id": str(c.id), "stato_precedente": vecchio_stato, "stato_nuovo": nuovo_stato}
+
+
+@router.delete("/contenuti/{contenuto_id}", status_code=204, tags=["Contenuti"])
+async def delete_contenuto(
+    contenuto_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.models import Contenuto
+    result = await db.execute(select(Contenuto).where(Contenuto.id == contenuto_id))
+    c = result.scalar_one_or_none()
+    if not c:
+        raise HTTPException(status_code=404, detail="Contenuto non trovato")
+    if c.assegnatario_id != current_user.id and current_user.ruolo not in (UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM):
+        raise HTTPException(status_code=403, detail="Permesso negato")
+    await db.delete(c)
+    await db.commit()
 
 
 # ── BUDGET ────────────────────────────────────────────────
+
+def _normalize_budget_month(value: str | date) -> date:
+    if isinstance(value, date):
+        return value.replace(day=1)
+
+    raw = (value or "").strip()
+    try:
+        if len(raw) == 7:
+            return datetime.strptime(f"{raw}-01", "%Y-%m-%d").date()
+        return date.fromisoformat(raw).replace(day=1)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Formato mese non valido. Usa YYYY-MM o YYYY-MM-DD") from exc
+
+
+def _normalize_budget_category_name(value: Optional[str]) -> str:
+    return (value or "").strip().casefold()
+
+
+def _budget_status(percentuale_utilizzo: float) -> str:
+    if percentuale_utilizzo > 100:
+        return "over"
+    if percentuale_utilizzo >= 80:
+        return "warning"
+    return "ok"
+
+
+def _budget_periodicity_divisor(periodicita: Optional[str]) -> Decimal:
+    value = (periodicita or "").strip().lower()
+    if "semes" in value:
+        return Decimal("6")
+    if "annual" in value or "annua" in value:
+        return Decimal("12")
+    return Decimal("1")
+
+
+def _budget_fixed_cost_amount_for_month(costo_fisso, mese_start: date) -> Decimal:
+    if not costo_fisso.attivo and not costo_fisso.data_fine:
+        return Decimal("0")
+
+    start_month = (costo_fisso.data_inizio or mese_start).replace(day=1)
+    end_month = (costo_fisso.data_fine or mese_start).replace(day=1)
+
+    if mese_start < start_month or mese_start > end_month:
+        return Decimal("0")
+
+    amount = Decimal(costo_fisso.importo or 0)
+    divisor = _budget_periodicity_divisor(costo_fisso.periodicita)
+    return (amount / divisor).quantize(Decimal("0.01")) if divisor > 0 else amount
+
+
+async def _build_budget_variance_rows(
+    db: AsyncSession,
+    mese_start: date,
+    *,
+    notify_admins: bool = False,
+) -> list[BudgetVarianceOut]:
+    from dateutil.relativedelta import relativedelta
+    from app.models.models import (
+        BudgetCategory,
+        BudgetMensile,
+        CostoFisso,
+        FatturaPassiva,
+        FatturaPassivaImputazione,
+        MovimentoCassa,
+        MovimentoCassaImputazione,
+        Notification,
+    )
+
+    next_month = mese_start + relativedelta(months=1)
+
+    res_cats = await db.execute(select(BudgetCategory).order_by(BudgetCategory.nome))
+    categories = res_cats.scalars().all()
+    categories_by_key = {_normalize_budget_category_name(cat.nome): cat for cat in categories}
+
+    res_budgets = await db.execute(select(BudgetMensile).where(BudgetMensile.mese_competenza == mese_start))
+    budgets_map = {b.categoria_id: b for b in res_budgets.scalars().all()}
+
+    spent_by_category: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+
+    res_costi_fissi = await db.execute(
+        select(CostoFisso).where(
+            or_(
+                CostoFisso.attivo == True,
+                CostoFisso.data_fine == None,
+                CostoFisso.data_fine >= mese_start,
+            )
+        )
+    )
+    for costo in res_costi_fissi.scalars().all():
+        key = _normalize_budget_category_name(costo.categoria)
+        if key in categories_by_key:
+            spent_by_category[key] += _budget_fixed_cost_amount_for_month(costo, mese_start)
+
+    res_invoice_alloc = await db.execute(
+        select(
+            FatturaPassivaImputazione.fattura_passiva_id,
+            func.coalesce(func.sum(FatturaPassivaImputazione.importo), 0),
+        )
+        .join(FatturaPassiva, FatturaPassivaImputazione.fattura_passiva_id == FatturaPassiva.id)
+        .where(
+            and_(
+                FatturaPassiva.data_emissione >= mese_start,
+                FatturaPassiva.data_emissione < next_month,
+            )
+        )
+        .group_by(FatturaPassivaImputazione.fattura_passiva_id)
+    )
+    invoice_alloc_map = {row[0]: Decimal(row[1] or 0) for row in res_invoice_alloc.all()}
+
+    res_invoices = await db.execute(
+        select(FatturaPassiva.id, FatturaPassiva.categoria, FatturaPassiva.importo_totale).where(
+            and_(
+                FatturaPassiva.data_emissione >= mese_start,
+                FatturaPassiva.data_emissione < next_month,
+            )
+        )
+    )
+    for invoice_id, categoria, importo_totale in res_invoices.all():
+        key = _normalize_budget_category_name(categoria)
+        if key not in categories_by_key:
+            continue
+        spent_by_category[key] += invoice_alloc_map.get(invoice_id) or Decimal(importo_totale or 0)
+
+    res_movement_alloc = await db.execute(
+        select(
+            MovimentoCassaImputazione.movimento_id,
+            func.coalesce(func.sum(MovimentoCassaImputazione.importo), 0),
+        )
+        .join(MovimentoCassa, MovimentoCassaImputazione.movimento_id == MovimentoCassa.id)
+        .where(
+            and_(
+                MovimentoCassa.data_valuta >= mese_start,
+                MovimentoCassa.data_valuta < next_month,
+                MovimentoCassa.importo < 0,
+                MovimentoCassa.fattura_passiva_id == None,
+            )
+        )
+        .group_by(MovimentoCassaImputazione.movimento_id)
+    )
+    movement_alloc_map = {row[0]: Decimal(row[1] or 0) for row in res_movement_alloc.all()}
+
+    res_movements = await db.execute(
+        select(MovimentoCassa.id, MovimentoCassa.categoria, MovimentoCassa.importo).where(
+            and_(
+                MovimentoCassa.data_valuta >= mese_start,
+                MovimentoCassa.data_valuta < next_month,
+                MovimentoCassa.importo < 0,
+                MovimentoCassa.fattura_passiva_id == None,
+            )
+        )
+    )
+    for movimento_id, categoria, importo in res_movements.all():
+        key = _normalize_budget_category_name(categoria)
+        if key not in categories_by_key:
+            continue
+        allocated = movement_alloc_map.get(movimento_id)
+        amount = Decimal(allocated if allocated and allocated > 0 else abs(importo or 0))
+        spent_by_category[key] += amount
+
+    rows: list[BudgetVarianceOut] = []
+    over_items: list[BudgetVarianceOut] = []
+    for category in categories:
+        budget_row = budgets_map.get(category.id)
+        budget_amount = Decimal(budget_row.importo_budget or 0) if budget_row else Decimal("0")
+        spent_amount = spent_by_category[_normalize_budget_category_name(category.nome)]
+        variance_amount = spent_amount - budget_amount
+        usage_pct = float(spent_amount / budget_amount * 100) if budget_amount > 0 else (100.0 if spent_amount > 0 else 0.0)
+        variance_pct = float(variance_amount / budget_amount * 100) if budget_amount > 0 else (100.0 if spent_amount > 0 else 0.0)
+        row = BudgetVarianceOut(
+            categoria_id=category.id,
+            categoria_nome=category.nome,
+            categoria_colore=category.colore or "#7c3aed",
+            budget=budget_amount.quantize(Decimal("0.01")),
+            speso=spent_amount.quantize(Decimal("0.01")),
+            varianza=variance_amount.quantize(Decimal("0.01")),
+            varianza_pct=round(variance_pct, 1),
+            percentuale_utilizzo=round(usage_pct, 1),
+            status=_budget_status(usage_pct),
+            note=budget_row.note if budget_row else None,
+        )
+        rows.append(row)
+        if row.percentuale_utilizzo > 110:
+            over_items.append(row)
+
+    if notify_admins and over_items:
+        admins_res = await db.execute(
+            select(User).where(
+                User.attivo == True,
+                User.ruolo == UserRole.ADMIN,
+            )
+        )
+        admins = admins_res.scalars().all()
+        month_start_dt = datetime.combine(mese_start, datetime.min.time())
+        next_month_dt = datetime.combine(next_month, datetime.min.time())
+        link = f"/budget?mese={mese_start.isoformat()}"
+
+        for item in over_items:
+            title = f"Budget oltre soglia: {item.categoria_nome}"
+            message = (
+                f"{item.categoria_nome} ha superato il budget del {item.varianza_pct:.1f}% "
+                f"({item.speso}€ vs {item.budget}€) nel mese {mese_start.strftime('%m/%Y')}"
+            )
+            for admin in admins:
+                existing = await db.execute(
+                    select(Notification.id).where(
+                        and_(
+                            Notification.user_id == admin.id,
+                            Notification.title == title,
+                            Notification.link == link,
+                            Notification.created_at >= month_start_dt,
+                            Notification.created_at < next_month_dt,
+                        )
+                    )
+                )
+                if existing.scalar_one_or_none():
+                    continue
+                db.add(Notification(
+                    user_id=admin.id,
+                    type="ERROR",
+                    title=title,
+                    message=message,
+                    link=link,
+                ))
+
+    return rows
+
 
 @router.get("/budget/categorie", response_model=List[BudgetCategoryOut], tags=["Budget"])
 async def list_budget_categories_endpoint(
@@ -2789,6 +3580,57 @@ async def copy_prev_month_budget(
             
     await db.commit()
     return {"status": "ok", "clonati": count}
+
+@router.get("/budget/variance", response_model=List[BudgetVarianceOut], tags=["Budget"])
+async def get_budget_variance(
+    mese: str = Query(..., description="Formato YYYY-MM oppure YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    mese_start = _normalize_budget_month(mese)
+    rows = await _build_budget_variance_rows(db, mese_start, notify_admins=True)
+    await db.commit()
+    return rows
+
+@router.get("/budget/trend", response_model=BudgetTrendOut, tags=["Budget"])
+async def get_budget_trend(
+    mesi: int = Query(6, ge=1, le=12),
+    mese_fine: Optional[str] = Query(None, description="Mese finale opzionale, formato YYYY-MM"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from dateutil.relativedelta import relativedelta
+
+    end_month = _normalize_budget_month(mese_fine or date.today())
+    month_list = [end_month - relativedelta(months=offset) for offset in reversed(range(mesi))]
+    labels: list[str] = []
+    series_map: dict[uuid.UUID, dict] = {}
+
+    for month_start in month_list:
+        labels.append(month_start.strftime("%Y-%m"))
+        rows = await _build_budget_variance_rows(db, month_start)
+        for row in rows:
+            series = series_map.setdefault(row.categoria_id, {
+                "categoria_id": row.categoria_id,
+                "categoria_nome": row.categoria_nome,
+                "categoria_colore": row.categoria_colore,
+                "data": [],
+            })
+            series["data"].append(BudgetTrendPointOut(
+                mese=month_start.strftime("%Y-%m"),
+                budget=row.budget,
+                speso=row.speso,
+                varianza=row.varianza,
+                varianza_pct=row.varianza_pct,
+                percentuale_utilizzo=row.percentuale_utilizzo,
+                status=row.status,
+            ))
+
+    ordered_series = [
+        BudgetTrendSeriesOut(**series_map[key])
+        for key in sorted(series_map, key=lambda category_id: series_map[category_id]["categoria_nome"].lower())
+    ]
+    return BudgetTrendOut(mesi=labels, series=ordered_series)
 
 @router.get("/budget/consuntivo", response_model=List[BudgetConsuntivoOut], tags=["Budget"])
 async def get_budget_consuntivo(
@@ -3273,4 +4115,141 @@ async def get_crm_stats(
         "numero_lead_attivi": numero_attivi,
         "tasso_conversione": tasso,
         "previsione_ricavi": previsione
+    }
+
+
+# ── AUDIT LOG ─────────────────────────────────────────────
+def _apply_audit_filters(
+    query,
+    audit_model,
+    *,
+    tabella: Optional[str] = None,
+    record_id: Optional[uuid.UUID] = None,
+    user_id: Optional[uuid.UUID] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+):
+    if tabella:
+        query = query.where(audit_model.tabella == tabella)
+    if record_id:
+        query = query.where(audit_model.record_id == record_id)
+    if user_id:
+        query = query.where(audit_model.user_id == user_id)
+    if from_date:
+        query = query.where(audit_model.created_at >= datetime.combine(from_date, datetime.min.time()))
+    if to_date:
+        query = query.where(audit_model.created_at < datetime.combine(to_date + timedelta(days=1), datetime.min.time()))
+    return query
+
+
+def _serialize_audit_rows(rows):
+    items = []
+    for log, user_nome, user_cognome in rows:
+        nome_completo = " ".join(part for part in [user_nome, user_cognome] if part).strip() or None
+        items.append(
+            {
+                "id": str(log.id),
+                "user_id": str(log.user_id) if log.user_id else None,
+                "user_nome": nome_completo,
+                "tabella": log.tabella,
+                "record_id": str(log.record_id),
+                "azione": log.azione,
+                "dati_prima": log.dati_prima,
+                "dati_dopo": log.dati_dopo,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+            }
+        )
+    return items
+
+
+@router.get("/audit-log", tags=["AuditLog"])
+async def get_audit_log(
+    tabella: Optional[str] = Query(None),
+    record_id: Optional[uuid.UUID] = Query(None),
+    user_id: Optional[uuid.UUID] = Query(None),
+    from_date: Optional[date] = Query(None),
+    to_date: Optional[date] = Query(None),
+    limit: int = Query(50, le=200),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
+):
+    from app.models.models import AuditLog, User as UserModel
+
+    count_query = _apply_audit_filters(
+        select(AuditLog.id),
+        AuditLog,
+        tabella=tabella,
+        record_id=record_id,
+        user_id=user_id,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    total_res = await db.execute(select(func.count()).select_from(count_query.subquery()))
+    total = total_res.scalar() or 0
+
+    query = (
+        select(AuditLog, UserModel.nome, UserModel.cognome)
+        .outerjoin(UserModel, AuditLog.user_id == UserModel.id)
+        .order_by(AuditLog.created_at.desc())
+    )
+    query = _apply_audit_filters(
+        query,
+        AuditLog,
+        tabella=tabella,
+        record_id=record_id,
+        user_id=user_id,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    result = await db.execute(query.offset(offset).limit(limit))
+
+    return {
+        "total": total,
+        "items": _serialize_audit_rows(result.all()),
+    }
+
+
+@router.get("/audit-log/entity/{tabella}/{record_id}", tags=["AuditLog"])
+async def get_entity_audit_log(
+    tabella: str,
+    record_id: uuid.UUID,
+    from_date: Optional[date] = Query(None),
+    to_date: Optional[date] = Query(None),
+    limit: int = Query(20, le=200),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
+):
+    from app.models.models import AuditLog, User as UserModel
+
+    count_query = _apply_audit_filters(
+        select(AuditLog.id),
+        AuditLog,
+        tabella=tabella,
+        record_id=record_id,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    total_res = await db.execute(select(func.count()).select_from(count_query.subquery()))
+    total = total_res.scalar() or 0
+
+    query = (
+        select(AuditLog, UserModel.nome, UserModel.cognome)
+        .outerjoin(UserModel, AuditLog.user_id == UserModel.id)
+        .order_by(AuditLog.created_at.desc())
+    )
+    query = _apply_audit_filters(
+        query,
+        AuditLog,
+        tabella=tabella,
+        record_id=record_id,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    result = await db.execute(query.offset(offset).limit(limit))
+
+    return {
+        "total": total,
+        "items": _serialize_audit_rows(result.all()),
     }

@@ -19,6 +19,8 @@ import {
   BookOpen,
   FolderOpen,
   GripVertical,
+  Clapperboard,
+  ShieldCheck,
 } from "lucide-react";
 
 // ... (other imports)
@@ -50,7 +52,7 @@ import { Link, useLocation } from "react-router-dom";
 import { StudioSidebar } from "@/components/studio/StudioSidebar";
 
 // Ruoli con accesso completo all'ERP
-const FULL_ACCESS_ROLES = ["ADMIN", "DEVELOPER"];
+const FULL_ACCESS_ROLES = ["ADMIN", "DEVELOPER", "PM"];
 // Ruoli con accesso solo allo Studio OS
 const STUDIO_ONLY_ROLES = ["COLLABORATORE", "DIPENDENTE", "FREELANCER"];
 const STUDIO_SIDEBAR_WIDTH_KEY = "studio_os_sidebar_width";
@@ -84,6 +86,7 @@ const navItems = [
     items: [
       { title: "Timesheet", url: "/timesheet", icon: Timer },
       { title: "Planning", url: "/planning", icon: ClipboardList },
+      { title: "Contenuti", url: "/contenuti", icon: Clapperboard },
       { title: "Task Templates", url: "/task-templates", icon: Zap },
       { title: "Collaboratori", url: "/collaboratori", icon: Users },
     ],
@@ -95,6 +98,7 @@ const navItems = [
       { title: "Fatture", url: "/fatture", icon: FileText },
       { title: "Fornitori", url: "/fornitori", icon: ShoppingCart },
       { title: "Cassa", url: "/cassa", icon: Wallet },
+      { title: "Regole Matching", url: "/cassa/regole", icon: ShieldCheck },
       { title: "Budget", url: "/budget", icon: Target },
     ],
   },
