@@ -15,6 +15,7 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  Trash2,
   Trophy,
   TrendingUp,
   Zap,
@@ -27,6 +28,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useUpdateClienteAffidabilita } from "@/hooks/useClienti";
+import { useDeleteCommessa } from "@/hooks/useCommesse";
 import { DashboardKpiCard } from "@/components/analytics/DashboardKpiCard";
 import { PageTransition } from "@/components/common/PageTransition";
 import { ForecastTable } from "@/components/analytics/ForecastTable";
@@ -53,6 +55,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { 
   Table, 
   TableBody, 
@@ -77,7 +87,9 @@ export default function DashboardPage() {
   const [selectedYear, setSelectedYear] = useState(String(initialDate.getFullYear()));
   const [isCommessaDialogOpen, setIsCommessaDialogOpen] = useState(false);
   const [selectedCommessa, setSelectedCommessa] = useState<Commessa | null>(null);
+  const [commessaToDelete, setCommessaToDelete] = useState<Commessa | null>(null);
   const updateClienteAffidabilita = useUpdateClienteAffidabilita();
+  const deleteCommessa = useDeleteCommessa();
   const { data: users = [] } = useUsers(); 
 
   const activeUsers = useMemo(() => users.filter(u => u.attivo), [users]);
@@ -179,6 +191,17 @@ export default function DashboardPage() {
     affidabilita: ClienteAffidabilita
   ) => {
     updateClienteAffidabilita.mutate({ id: clienteId, affidabilita });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (commessaToDelete) {
+      try {
+        await deleteCommessa.mutateAsync(commessaToDelete.id);
+        setCommessaToDelete(null);
+      } catch (error) {
+        console.error("Errore eliminazione commessa:", error);
+      }
+    }
   };
 
   const kpis = [
@@ -582,6 +605,13 @@ export default function DashboardPage() {
                                   Modifica commessa
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
+                                  onClick={() => setCommessaToDelete(commessa)}
+                                  className="cursor-pointer text-xs font-bold text-rose-500 focus:bg-rose-500/10 focus:text-rose-500"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Elimina commessa
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
                                   onClick={() => openClientePage(commessa.cliente_id)}
                                   className="cursor-pointer text-xs font-bold focus:bg-muted"
                                 >
@@ -687,6 +717,11 @@ export default function DashboardPage() {
                 <div
                   key={`${alert.title}-${index}`}
                   className="group flex cursor-pointer items-center justify-between rounded-2xl border border-border/30 bg-card/40 p-4 transition-all hover:border-primary/40 hover:bg-card/60"
+                  onClick={() => {
+                    if (alert.type === "INVOICE") navigate("/fatture");
+                    else if (alert.type === "TASK") navigate("/studio-os");
+                    else navigate("/commesse");
+                  }}
                 >
                   <div className="flex flex-col gap-0.5">
                     <span className="max-w-[200px] truncate text-xs font-bold text-foreground group-hover:text-primary transition-colors">
@@ -749,6 +784,25 @@ export default function DashboardPage() {
         commessa={selectedCommessa}
         defaultMeseCompetenza={selectedMonthQuery}
       />
+
+      <Dialog open={!!commessaToDelete} onOpenChange={() => setCommessaToDelete(null)}>
+        <DialogContent className="bg-card border-border text-white">
+          <DialogHeader>
+            <DialogTitle>Sei sicuro?</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Questa azione eliminerà permanentemente la commessa per <strong>{commessaToDelete?.cliente?.ragione_sociale}</strong> e tutti i dati associati.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setCommessaToDelete(null)} className="text-muted-foreground hover:text-white hover:bg-muted">
+              Annulla
+            </Button>
+            <Button onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-500/20">
+              Sì, elimina commessa
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       </div>
     </PageTransition>
   );

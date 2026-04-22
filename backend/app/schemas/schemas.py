@@ -323,6 +323,7 @@ class ProgettoCreate(BaseModel):
     cliente_id: Optional[uuid.UUID] = None
     nome: str
     tipo: ProjectType
+    stato: ProjectStatus = ProjectStatus.ATTIVO
     importo_fisso: Decimal = Decimal("0")
     importo_variabile: Decimal = Decimal("0")
     delivery_attesa: int = 0

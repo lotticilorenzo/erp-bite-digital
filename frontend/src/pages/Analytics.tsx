@@ -780,7 +780,7 @@ export default function Analytics() {
 
   const analyticsPdfData = useMemo(
     () => ({
-      kpis: { revenueYTD: kpis.revenue, marginYTD: kpis.averageMargin, monthlyHours: kpis.totalHours },
+      kpis: { revenueYTD: kpis?.revenue?.value || 0, marginYTD: kpis?.margin?.value || 0, monthlyHours: kpis?.hours?.value || 0 },
       clientStats,
       revenueTrend: trendData,
     }),
@@ -1329,7 +1329,6 @@ export default function Analytics() {
                     const isoMonth = event?.activePayload?.[0]?.payload?.isoMonth;
                     if (isoMonth) {
                       setSelectedMonthKey(isoMonth);
-                      navigate(`/fatture?mese=${isoMonth}`);
                     }
                   }}
                 >
@@ -1387,7 +1386,6 @@ export default function Analytics() {
                     const isoMonth = event?.activePayload?.[0]?.payload?.isoMonth;
                     if (isoMonth) {
                       setSelectedMonthKey(isoMonth);
-                      navigate(`/commesse?mese=${isoMonth}`);
                     }
                   }}
                 >
