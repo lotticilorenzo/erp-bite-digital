@@ -34,8 +34,20 @@ function Invoke-Native {
         [switch]$CaptureOutput
     )
 
+    $previousNativePref = $null
+    if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
+        $previousNativePref = $PSNativeCommandUseErrorActionPreference
+        $PSNativeCommandUseErrorActionPreference = $false
+    }
+
     $output = & $FilePath @Arguments 2>&1
-    if ($LASTEXITCODE -ne 0) {
+    $exitCode = $LASTEXITCODE
+
+    if ($null -ne $previousNativePref) {
+        $PSNativeCommandUseErrorActionPreference = $previousNativePref
+    }
+
+    if ($exitCode -ne 0) {
         throw ($output | Out-String).Trim()
     }
 
@@ -52,8 +64,20 @@ function Invoke-RepoCommand {
     param([string]$Command)
     Push-Location $RepoRoot
     try {
+        $previousNativePref = $null
+        if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
+            $previousNativePref = $PSNativeCommandUseErrorActionPreference
+            $PSNativeCommandUseErrorActionPreference = $false
+        }
+
         $output = Invoke-Expression $Command 2>&1
-        if ($LASTEXITCODE -ne 0) {
+        $exitCode = $LASTEXITCODE
+
+        if ($null -ne $previousNativePref) {
+            $PSNativeCommandUseErrorActionPreference = $previousNativePref
+        }
+
+        if ($exitCode -ne 0) {
             throw ($output | Out-String).Trim()
         }
         return ($output | Out-String).Trim()
