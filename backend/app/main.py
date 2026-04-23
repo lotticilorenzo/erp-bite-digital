@@ -264,6 +264,15 @@ async def bootstrap_admin_on_startup():
             res = await db.execute(text("SELECT to_regclass('public.users')"))
             if not res.scalar_one():
                 return
+            existing_admin = (
+                await db.execute(select(User).where(User.email == email))
+            ).scalar_one_or_none()
+            if existing_admin:
+                if not existing_admin.attivo:
+                    existing_admin.attivo = True
+                    await db.commit()
+                    logger.info(f"Bootstrap Admin riattivato: {email}")
+                return
             count_res = await db.execute(select(func.count(User.id)))
             if count_res.scalar_one() == 0:
                 admin = User(

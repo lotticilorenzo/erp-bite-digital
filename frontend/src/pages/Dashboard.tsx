@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, parseISO, subMonths } from "date-fns";
 import { it } from "date-fns/locale";
@@ -280,10 +280,10 @@ export default function DashboardPage() {
       <header className="flex items-center justify-between px-1">
         <div className="flex flex-col gap-1">
           <h1 className="flex items-center gap-3 text-4xl font-black tracking-tighter text-foreground uppercase italic underline decoration-primary/30 decoration-8 underline-offset-[12px]">
-            Dashboard <span className="font-thin text-muted-foreground/30 not-italic">-</span>{" "}
+            Dashboard <span className="font-thin text-faint not-italic">-</span>{" "}
             <span className="capitalize text-primary not-italic">{currentMonthName}</span>
           </h1>
-          <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.3em] text-muted-foreground/60">
+          <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.3em] text-muted-strong">
             Panoramica finanziaria e operativa in tempo reale
           </p>
         </div>
@@ -312,8 +312,8 @@ export default function DashboardPage() {
                 )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64 p-2 rounded-3xl border-border/50 bg-card/95 backdrop-blur-xl shadow-2xl">
-              <DropdownMenuLabel className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
+            <DropdownMenuContent align="end" className="w-64 rounded-3xl p-2">
+              <DropdownMenuLabel className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-faint">
                 Collaboratori Online
               </DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-border/50" />
@@ -321,7 +321,7 @@ export default function DashboardPage() {
                 {activeUsers.map((u) => (
                   <DropdownMenuItem 
                     key={u.id} 
-                    className="flex items-center gap-3 p-2 rounded-2xl cursor-pointer hover:bg-white/5 focus:bg-white/5 transition-colors"
+                    className="flex cursor-pointer items-center gap-3 rounded-2xl p-2 transition-colors hover:bg-accent focus:bg-accent"
                     onClick={() => navigate(`/collaboratori?id=${u.id}`)}
                   >
                     <Avatar className="h-8 w-8">
@@ -373,11 +373,11 @@ export default function DashboardPage() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button className="rounded-xl p-2 transition-all hover:bg-white/5 group">
-                  <Info className="h-5 w-5 text-slate-500 group-hover:text-primary transition-colors" />
+                <button className="group rounded-xl p-2 transition-all hover:bg-accent">
+                  <Info className="h-5 w-5 text-faint transition-colors group-hover:text-primary" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent className="bg-card border-border text-white text-[10px] font-bold uppercase tracking-widest px-3 py-2">
+              <TooltipContent className="app-panel-strong px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-foreground">
                 Aiuto & Informazioni Dashboard
               </TooltipContent>
             </Tooltip>
@@ -410,7 +410,7 @@ export default function DashboardPage() {
             </button>
 
             <div className="flex items-center gap-4">
-              <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60">
+              <span className="text-[10px] font-black uppercase tracking-widest text-faint">
                 {currentClientsCount} clienti | {currentCommesse.length} commesse
               </span>
               <Button
@@ -431,26 +431,26 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-border/40 bg-card/30 shadow-2xl">
+          <div className="app-panel overflow-hidden rounded-[1.5rem]">
             <Table>
-              <TableHeader className="bg-muted/30">
+              <TableHeader className="bg-muted/55">
                 <TableRow className="border-border/50 hover:bg-transparent">
-                  <TableHead className="py-4 pl-6 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">
+                  <TableHead className="py-4 pl-6 text-[10px] font-black uppercase tracking-widest text-faint">
                     Cliente
                   </TableHead>
-                  <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">
+                  <TableHead className="py-4 text-[10px] font-black uppercase tracking-widest text-faint">
                     Progetti
                   </TableHead>
-                  <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">
+                  <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-faint">
                     Fatturabile
                   </TableHead>
-                  <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">
+                  <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-faint">
                     Margine
                   </TableHead>
-                  <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">
+                  <TableHead className="py-4 text-right text-[10px] font-black uppercase tracking-widest text-faint">
                     Stato
                   </TableHead>
-                  <TableHead className="py-4 pr-6 text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground/80">
+                  <TableHead className="py-4 pr-6 text-right text-[10px] font-black uppercase tracking-widest text-faint">
                     Azioni
                   </TableHead>
                 </TableRow>
@@ -469,10 +469,10 @@ export default function DashboardPage() {
                     </TableRow>
                   ))
                 ) : currentCommesse.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="py-10 text-center opacity-50">
-                      Nessuna commessa trovata per il mese selezionato
-                    </TableCell>
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-10 text-center text-muted-strong">
+                        Nessuna commessa trovata per il mese selezionato
+                      </TableCell>
                   </TableRow>
                 ) : (
                   currentCommesse.map((commessa) => {
@@ -505,7 +505,7 @@ export default function DashboardPage() {
                             >
                               {commessa.cliente?.ragione_sociale}
                             </button>
-                            <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                            <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-faint">
                               {commessa.cliente?.codice_cliente || "MOD"}
                             </span>
                           </div>
@@ -518,7 +518,7 @@ export default function DashboardPage() {
                                 <button
                                   key={riga.id}
                                   type="button"
-                                  className="w-fit text-left text-[10px] font-bold text-muted-foreground transition-colors hover:text-primary hover:underline"
+                                  className="w-fit text-left text-[10px] font-bold text-muted-strong transition-colors hover:text-primary hover:underline"
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     openProgettoPage(riga.progetto?.id || riga.progetto_id);
@@ -528,7 +528,7 @@ export default function DashboardPage() {
                                 </button>
                               ))
                             ) : (
-                              <span className="text-[10px] italic text-muted-foreground/40">
+                              <span className="text-[10px] italic text-faint">
                                 Nessun progetto
                               </span>
                             )}
@@ -564,7 +564,7 @@ export default function DashboardPage() {
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"
+                              className="h-8 w-8 rounded-xl text-muted-foreground hover:bg-accent hover:text-foreground"
                               onClick={() => handleEditCommessa(commessa)}
                             >
                               <Pencil className="h-4 w-4" />
@@ -573,7 +573,7 @@ export default function DashboardPage() {
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"
+                              className="h-8 w-8 rounded-xl text-muted-foreground hover:bg-accent hover:text-foreground"
                               onClick={() => openCommessaDetail(commessa.id)}
                             >
                               <Eye className="h-4 w-4" />
@@ -584,22 +584,22 @@ export default function DashboardPage() {
                                   type="button"
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"
+                                  className="h-8 w-8 rounded-xl text-muted-foreground hover:bg-accent hover:text-foreground"
                                 >
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent
                                 align="end"
-                                className="rounded-3xl border-border/50 bg-card/40 text-foreground shadow-2xl"
+                                className="rounded-3xl"
                               >
-                                <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                                <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-faint">
                                   Azioni commessa
                                 </DropdownMenuLabel>
                                 <DropdownMenuSeparator className="bg-border/50" />
                                 <DropdownMenuItem
                                   onClick={() => handleEditCommessa(commessa)}
-                                  className="cursor-pointer text-xs font-bold focus:bg-muted"
+                                  className="cursor-pointer text-xs font-bold focus:bg-accent"
                                 >
                                   <Pencil className="mr-2 h-4 w-4" />
                                   Modifica commessa
@@ -613,7 +613,7 @@ export default function DashboardPage() {
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => openClientePage(commessa.cliente_id)}
-                                  className="cursor-pointer text-xs font-bold focus:bg-muted"
+                                  className="cursor-pointer text-xs font-bold focus:bg-accent"
                                 >
                                   <Building2 className="mr-2 h-4 w-4" />
                                   Vai al cliente
@@ -621,7 +621,7 @@ export default function DashboardPage() {
                                 {linkedProjects.length === 1 && (
                                   <DropdownMenuItem
                                     onClick={() => openProgettoPage(linkedProjects[0].id)}
-                                    className="cursor-pointer text-xs font-bold focus:bg-muted"
+                                    className="cursor-pointer text-xs font-bold focus:bg-accent"
                                   >
                                     <FolderOpen className="mr-2 h-4 w-4" />
                                     Vai al progetto
@@ -629,16 +629,16 @@ export default function DashboardPage() {
                                 )}
                                 {linkedProjects.length > 1 && (
                                   <DropdownMenuSub>
-                                    <DropdownMenuSubTrigger className="cursor-pointer text-xs font-bold focus:bg-muted">
+                                    <DropdownMenuSubTrigger className="cursor-pointer text-xs font-bold focus:bg-accent">
                                       <FolderOpen className="mr-2 h-4 w-4" />
                                       Vai al progetto
                                     </DropdownMenuSubTrigger>
-                                    <DropdownMenuSubContent className="rounded-3xl border-border/50 bg-card/40 text-foreground shadow-2xl">
+                                    <DropdownMenuSubContent className="rounded-3xl">
                                       {linkedProjects.map((project) => (
                                         <DropdownMenuItem
                                           key={project.id}
                                           onClick={() => openProgettoPage(project.id)}
-                                          className="cursor-pointer text-xs font-bold focus:bg-muted"
+                                          className="cursor-pointer text-xs font-bold focus:bg-accent"
                                         >
                                           {project.nome}
                                         </DropdownMenuItem>
@@ -660,7 +660,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="space-y-6 lg:col-span-4">
-          <Card className="group relative overflow-hidden border-rose-500/30 bg-card shadow-2xl transition-all hover:border-rose-500/50">
+          <Card className="group relative overflow-hidden border-rose-500/30 bg-card/95 shadow-2xl transition-all hover:border-rose-500/50">
             <div className="absolute top-0 right-0 p-3 opacity-50 group-hover:opacity-100 transition-opacity">
               <AlertTriangle className={cn("h-4 w-4 text-rose-500", (analytics?.kpis.timesheetPendingCount || 0) > 0 && "animate-pulse")} />
             </div>
@@ -676,12 +676,12 @@ export default function DashboardPage() {
                   Attention <span className="text-rose-500 not-italic">Required</span>
                 </h3>
                 <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/30">
-                  <span className="text-[11px] font-bold text-muted-foreground uppercase">
+                  <span className="text-[11px] font-bold uppercase text-muted-strong">
                     Timesheet da approvare
                   </span>
                   <span className={cn(
                     "text-lg font-black transition-all",
-                    (analytics?.kpis.timesheetPendingCount || 0) > 0 ? "text-rose-500 scale-110" : "text-slate-500"
+                    (analytics?.kpis.timesheetPendingCount || 0) > 0 ? "text-rose-500 scale-110" : "text-faint"
                   )}>
                     {analytics?.kpis.timesheetPendingCount || 0}
                   </span>
@@ -691,7 +691,7 @@ export default function DashboardPage() {
               {(analytics?.kpis.marginiSottoSoglia || 0) > 0 && (
                 <div className="flex items-start gap-2 rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4">
                   <Info className="mt-0.5 h-4 w-4 text-rose-500" />
-                  <p className="text-[10px] font-bold leading-relaxed text-foreground/80">
+                  <p className="text-[10px] font-bold leading-relaxed text-soft">
                     Rilevate{" "}
                     <span className="font-black text-rose-600 dark:text-rose-500">{analytics?.kpis.marginiSottoSoglia} commesse</span>{" "}
                     con margine critico sotto la soglia del 30%.
@@ -709,14 +709,14 @@ export default function DashboardPage() {
           </Card>
 
           <div className="space-y-4">
-            <h4 className="px-1 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">
+            <h4 className="px-1 text-[10px] font-black uppercase tracking-[0.2em] text-faint">
               Alert di sistema
             </h4>
             <div className="space-y-2">
               {analytics?.alerts.slice(0, 3).map((alert, index) => (
                 <div
                   key={`${alert.title}-${index}`}
-                  className="group flex cursor-pointer items-center justify-between rounded-2xl border border-border/30 bg-card/40 p-4 transition-all hover:border-primary/40 hover:bg-card/60"
+                  className="group flex cursor-pointer items-center justify-between rounded-2xl border border-border/30 bg-muted/35 p-4 transition-all hover:border-primary/40 hover:bg-accent/80"
                   onClick={() => {
                     if (alert.type === "INVOICE") navigate("/fatture");
                     else if (alert.type === "TASK") navigate("/studio-os");
@@ -727,7 +727,7 @@ export default function DashboardPage() {
                     <span className="max-w-[200px] truncate text-xs font-bold text-foreground group-hover:text-primary transition-colors">
                       {alert.title}
                     </span>
-                    <span className="text-[9px] font-black uppercase tracking-wider text-muted-foreground/60">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-faint">
                       {alert.value}
                     </span>
                   </div>
@@ -786,19 +786,19 @@ export default function DashboardPage() {
       />
 
       <Dialog open={!!commessaToDelete} onOpenChange={() => setCommessaToDelete(null)}>
-        <DialogContent className="bg-card border-border text-white">
+        <DialogContent className="text-foreground">
           <DialogHeader>
             <DialogTitle>Sei sicuro?</DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              Questa azione eliminerà permanentemente la commessa per <strong>{commessaToDelete?.cliente?.ragione_sociale}</strong> e tutti i dati associati.
+              Questa azione eliminera permanentemente la commessa per <strong>{commessaToDelete?.cliente?.ragione_sociale}</strong> e tutti i dati associati.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setCommessaToDelete(null)} className="text-muted-foreground hover:text-white hover:bg-muted">
+            <Button variant="ghost" onClick={() => setCommessaToDelete(null)} className="text-muted-strong hover:bg-accent hover:text-foreground">
               Annulla
             </Button>
             <Button onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-500/20">
-              Sì, elimina commessa
+              Si, elimina commessa
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -807,3 +807,4 @@ export default function DashboardPage() {
     </PageTransition>
   );
 }
+

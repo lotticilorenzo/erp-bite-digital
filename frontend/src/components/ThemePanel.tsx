@@ -52,7 +52,7 @@ export function ThemeSettingsContent() {
         </div>
         <button 
           onClick={() => setMode(mode === "dark" ? "light" : "dark")}
-          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${mode === 'dark' ? 'bg-primary' : 'bg-muted'}`}
+          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${mode === 'dark' ? 'bg-primary' : 'bg-accent'}`}
         >
           <span className={`pointer-events-none block h-4 w-4 rounded-full bg-white shadow-lg ring-0 transition-transform duration-300 ${mode === 'dark' ? 'translate-x-5' : 'translate-x-0'}`} />
         </button>
@@ -62,7 +62,7 @@ export function ThemeSettingsContent() {
 
       {/* SEZIONE 2 - COLORE ACCENT */}
       <div className="space-y-3">
-        <div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-muted-foreground">
+        <div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-faint">
           <Palette className="h-3 w-3" />
           Colore Accent
         </div>
@@ -84,16 +84,16 @@ export function ThemeSettingsContent() {
 
       {/* SEZIONE 3 - DENSITÀ LAYOUT */}
       <div className="space-y-3">
-        <div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-muted-foreground">
+        <div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-faint">
           <Layout className="h-3 w-3" />
           Densità Layout
         </div>
-        <div className="flex bg-muted p-1 rounded-lg">
+        <div className="flex rounded-xl border border-border bg-muted/60 p-1">
           {(["compact", "normal", "comfortable"] as ThemeDensity[]).map((d) => (
             <button
               key={d}
               onClick={() => setDensity(d)}
-              className={`flex-1 py-1.5 px-2 rounded-md text-[10px] font-black uppercase transition-all ${density === d ? 'bg-primary text-white shadow-lg' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-black uppercase transition-all ${density === d ? 'bg-primary text-primary-foreground shadow-lg' : 'text-muted-strong hover:bg-accent/70 hover:text-foreground'}`}
             >
               {d === 'compact' ? 'Comp' : d === 'normal' ? 'Norm' : 'Comod'}
             </button>
@@ -105,16 +105,16 @@ export function ThemeSettingsContent() {
 
       {/* SEZIONE 4 - DIMENSIONE TESTO */}
       <div className="space-y-3">
-        <div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-muted-foreground">
+        <div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-faint">
           <Type className="h-3 w-3" />
           Dimensione Testo
         </div>
-        <div className="flex bg-muted p-1 rounded-lg">
+        <div className="flex rounded-xl border border-border bg-muted/60 p-1">
           {(["sm", "md", "lg"] as ThemeFontSize[]).map((s) => (
             <button
               key={s}
               onClick={() => setFontSize(s)}
-              className={`flex-1 py-1.5 px-2 rounded-md font-black transition-all ${fontSize === s ? 'bg-primary text-white shadow-lg' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`flex-1 py-1.5 px-2 rounded-lg font-black transition-all ${fontSize === s ? 'bg-primary text-primary-foreground shadow-lg' : 'text-muted-strong hover:bg-accent/70 hover:text-foreground'}`}
               style={{ fontSize: s === 'sm' ? '10px' : s === 'md' ? '12px' : '14px' }}
             >
               {s === 'sm' ? 'A' : s === 'md' ? 'A' : 'A'}
@@ -139,13 +139,13 @@ export function ThemePanel() {
           <Button 
             variant="ghost" 
             size="icon" 
-            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg active:scale-95 transition-all"
+            className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground active:scale-95 transition-all"
           >
             <Palette className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-[300px] p-6 bg-card border-border shadow-2xl rounded-xl animate-in slide-in-from-top-2 duration-300">
-          <DropdownMenuLabel className="text-[10px] uppercase font-black tracking-[0.2em] text-muted-foreground mb-4">
+        <DropdownMenuContent align="end" className="w-[300px] p-6 animate-in slide-in-from-top-2 duration-300">
+          <DropdownMenuLabel className="mb-4 text-[10px] uppercase font-black tracking-[0.2em] text-faint">
             Personalizzazione Visiva
           </DropdownMenuLabel>
           <ThemeSettingsContent />
@@ -153,7 +153,7 @@ export function ThemePanel() {
       </DropdownMenu>
 
       <Dialog open={isThemePanelOpen} onOpenChange={setIsThemePanelOpen}>
-        <DialogContent className="sm:max-w-[400px] p-8 bg-card border-border rounded-2xl">
+        <DialogContent className="sm:max-w-[400px] p-8">
           <DialogHeader className="mb-6">
             <DialogTitle className="text-xl font-black uppercase tracking-tight text-foreground">
               Personalizzazione Progetto

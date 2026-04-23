@@ -174,12 +174,12 @@ export function AppSidebar() {
       variant="sidebar" 
       collapsible="icon" 
       style={isStudioOS ? ({ "--sidebar-width": `${studioSidebarWidth}px` } as React.CSSProperties) : undefined}
-      className="border-r border-sidebar-border/40 bg-sidebar/80 backdrop-blur-2xl h-full shadow-[20px_0_40px_-15px_rgba(0,0,0,0.5)] transition-all duration-700"
+      className="h-full border-r border-sidebar-border bg-sidebar/95 shadow-[20px_0_40px_-22px_hsl(var(--shadow-color)/0.55)] backdrop-blur-2xl transition-all duration-700"
     >
       <SidebarHeader className="pt-6 px-4 pb-4">
         <Link to="/" className="flex items-center gap-3 group cursor-pointer lg:px-1">
           {state === "collapsed" ? (
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white p-1 shadow-lg border border-primary/20 group-hover:scale-110 transition-transform duration-500">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-card p-1 shadow-lg group-hover:scale-110 transition-transform duration-500">
               <img src="/logo_quadrato.png" className="h-full w-full object-contain" alt="B" />
             </div>
           ) : (
@@ -217,7 +217,7 @@ export function AppSidebar() {
         ) : (
           visibleNavItems.map((group) => (
             <SidebarGroup key={group.title} className="pb-2">
-              <SidebarGroupLabel className="px-3 mb-2 text-[10px] uppercase font-black tracking-[0.25em] text-[#475569]">
+              <SidebarGroupLabel className="px-3 mb-2 text-[10px] uppercase font-black tracking-[0.25em] text-faint">
                 {group.title}
               </SidebarGroupLabel>
               <SidebarGroupContent>
@@ -231,8 +231,8 @@ export function AppSidebar() {
                         className={`
                           transition-all duration-300 h-10 rounded-xl px-3 mb-1.5 group/btn
                           ${(item.url === "/" ? location.pathname === "/" : location.pathname.startsWith(item.url))
-                            ? "bg-primary/10 text-white border border-primary/20 shadow-[0_0_15px_rgba(124,58,237,0.15)] ring-1 ring-primary/20"
-                            : "text-[#94a3b8] hover:text-white hover:bg-white/5"
+                            ? "border border-primary/30 bg-primary/12 text-foreground shadow-[0_0_18px_hsl(var(--primary)/0.16)] ring-1 ring-primary/20"
+                            : "text-muted-strong hover:bg-accent/60 hover:text-foreground"
                           }
                         `}
                       >
@@ -271,7 +271,7 @@ export function AppSidebar() {
                   flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300
                   ${!isStudioOS 
                     ? "bg-primary text-primary-foreground shadow-lg" 
-                    : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                    : "text-muted-strong hover:bg-accent/70 hover:text-foreground"
                   }
                 `}
               >
@@ -285,7 +285,7 @@ export function AppSidebar() {
                 flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300
                 ${isStudioOS 
                   ? "bg-primary text-primary-foreground shadow-lg" 
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                  : "text-muted-strong hover:bg-accent/70 hover:text-foreground"
                 }
               `}
             >
@@ -297,10 +297,10 @@ export function AppSidebar() {
 
         {state === "collapsed" && (
           <div className="flex flex-col items-center gap-2">
-            <Link to="/" className={`p-2 rounded-lg transition-all ${!isStudioOS ? "bg-primary text-primary-foreground shadow-lg" : "bg-muted/50 text-muted-foreground border border-sidebar-border"}`}>
+            <Link to="/" className={`p-2 rounded-lg transition-all ${!isStudioOS ? "bg-primary text-primary-foreground shadow-lg" : "border border-sidebar-border bg-muted/60 text-muted-strong"}`}>
               <BarChart3 className="h-4 w-4" />
             </Link>
-            <Link to="/studio-os" className={`p-2 rounded-lg transition-all ${isStudioOS ? "bg-primary text-primary-foreground shadow-lg" : "bg-muted/50 text-muted-foreground border border-sidebar-border"}`}>
+            <Link to="/studio-os" className={`p-2 rounded-lg transition-all ${isStudioOS ? "bg-primary text-primary-foreground shadow-lg" : "border border-sidebar-border bg-muted/60 text-muted-strong"}`}>
               <Zap className="h-4 w-4" />
             </Link>
           </div>
@@ -312,33 +312,33 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <SidebarMenuButton size="lg" className="hover:bg-white/5 transition-all px-1 h-12 rounded-xl border border-transparent hover:border-white/10 group/user">
+                <SidebarMenuButton size="lg" className="h-12 rounded-xl border border-transparent px-1 transition-all hover:border-border hover:bg-accent/60 group/user">
                   <UserAvatar 
                     user={user} 
                     size="md" 
-                    className="h-9 w-9 rounded-lg border border-white/10 shadow-2xl group-hover/user:scale-105 transition-transform" 
+                    className="h-9 w-9 rounded-lg border border-border shadow-2xl group-hover/user:scale-105 transition-transform" 
                   />
                   <div className="flex flex-col items-start gap-0.5 truncate flex-1 min-w-0 ml-2">
-                    <span className="text-sm font-black truncate leading-none text-white group-hover:text-primary transition-colors">
+                    <span className="text-sm font-black truncate leading-none text-foreground group-hover:text-primary transition-colors">
                       {user?.nome} {user?.cognome}
                     </span>
-                    <span className="text-[10px] text-slate-500 truncate uppercase tracking-[0.2em] font-black group-hover:text-slate-300 transition-colors">
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-faint truncate transition-colors group-hover:text-soft">
                       {user?.ruolo}
                     </span>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-slate-600 ml-auto mr-1 group-hover/user:translate-x-1 transition-transform" />
+                  <ChevronRight className="h-4 w-4 text-faint ml-auto mr-1 group-hover/user:translate-x-1 transition-transform" />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
-              <DropdownMenuContent side="right" align="end" className="w-[220px] bg-card border-border p-2 shadow-2xl rounded-xl">
+              <DropdownMenuContent side="right" align="end" className="w-[220px] p-2">
                 <Link to="/settings/profile">
-                  <DropdownMenuItem className="gap-2.5 cursor-pointer rounded-lg focus:bg-muted focus:text-foreground transition-all text-xs font-bold text-muted-foreground">
+                  <DropdownMenuItem className="gap-2.5 cursor-pointer rounded-lg text-xs font-bold text-muted-strong transition-all focus:bg-accent focus:text-foreground">
                     <User className="h-4 w-4" />
                     Profilo
                   </DropdownMenuItem>
                 </Link>
                 <Link to="/settings">
                   <DropdownMenuItem 
-                    className="gap-2.5 cursor-pointer rounded-lg focus:bg-muted focus:text-foreground transition-all text-xs font-bold text-muted-foreground"
+                    className="gap-2.5 cursor-pointer rounded-lg text-xs font-bold text-muted-strong transition-all focus:bg-accent focus:text-foreground"
                   >
                     <Settings className="h-4 w-4" />
                     Impostazioni
@@ -365,7 +365,7 @@ export function AppSidebar() {
           className="absolute right-0 top-0 hidden h-full w-4 translate-x-1/2 cursor-col-resize md:flex items-center justify-center z-30 group/sidebar-resize"
           title="Trascina per allargare o restringere"
         >
-          <div className="flex h-16 w-2 items-center justify-center rounded-full border border-white/10 bg-background/80 text-muted-foreground/50 shadow-lg backdrop-blur-sm transition-all group-hover/sidebar-resize:h-24 group-hover/sidebar-resize:border-primary/30 group-hover/sidebar-resize:text-primary">
+          <div className="flex h-16 w-2 items-center justify-center rounded-full border border-border bg-background/80 text-faint shadow-lg backdrop-blur-sm transition-all group-hover/sidebar-resize:h-24 group-hover/sidebar-resize:border-primary/30 group-hover/sidebar-resize:text-primary">
             <GripVertical className="h-4 w-4" />
           </div>
         </div>

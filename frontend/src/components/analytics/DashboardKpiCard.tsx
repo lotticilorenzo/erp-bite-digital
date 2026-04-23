@@ -32,16 +32,16 @@ export function DashboardKpiCard({
     <Card 
       onClick={onClick}
       className={cn(
-        "bg-[#0f172a]/30 backdrop-blur-md border-white/[0.03] shadow-[0_8px_30px_rgb(0,0,0,0.12)] overflow-hidden group transition-all duration-500 relative",
-        onClick ? "cursor-pointer active:scale-[0.98] hover:border-primary/20 hover:bg-white/[0.02]" : "hover:border-white/[0.05]"
+        "app-panel overflow-hidden group relative transition-all duration-500",
+        onClick ? "cursor-pointer active:scale-[0.98] hover:border-primary/25 hover:shadow-[0_18px_45px_-28px_hsl(var(--primary)/0.45)]" : "hover:border-border"
       )}
     >
       <CardHeader className="flex flex-row items-center justify-between pb-1 space-y-0 pt-5 px-5">
-        <CardTitle className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 group-hover:text-slate-400 transition-colors">
+        <CardTitle className="app-kicker group-hover:text-muted-strong transition-colors">
           {label}
         </CardTitle>
         {Icon && (
-          <div className="p-2.5 rounded-2xl bg-white/[0.03] border border-white/[0.05] group-hover:bg-primary/10 group-hover:border-primary/20 transition-all duration-500 shadow-inner">
+          <div className="rounded-2xl border border-border bg-accent/60 p-2.5 shadow-inner transition-all duration-500 group-hover:border-primary/20 group-hover:bg-primary/10">
             <Icon className={cn("h-4 w-4", color, "group-hover:scale-110 transition-transform duration-500")} />
           </div>
         )}
@@ -50,7 +50,7 @@ export function DashboardKpiCard({
         <div className="flex flex-col gap-1">
           <div className="relative">
             <div className="absolute -left-4 top-0 w-12 h-12 bg-primary/10 blur-[30px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-            <div className="text-2xl font-black tracking-tighter text-white relative z-10">
+            <div className="relative z-10 text-2xl font-black tracking-tighter text-foreground">
               {loading ? (
                 <div className="flex flex-col gap-2 py-1">
                   <div className="h-8 w-24 animate-pulse rounded-lg bg-white/5" />
@@ -65,7 +65,7 @@ export function DashboardKpiCard({
             {loading ? (
               <div className="h-3 w-32 animate-pulse rounded bg-muted/40" />
             ) : subValue && (
-              <div className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wide">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-muted-strong">
                 {subValue}
               </div>
             )}
@@ -77,7 +77,7 @@ export function DashboardKpiCard({
                     "px-1.5 py-0.5 rounded-lg text-[9px] font-black flex items-center gap-0.5",
                     trendType === "up" ? "bg-emerald-500/10 text-emerald-500" : 
                     trendType === "down" ? "bg-rose-500/10 text-rose-500" : 
-                    "bg-slate-500/10 text-slate-500"
+                    "bg-muted text-faint"
                   )}>
                     {trendType === "up" ? <ArrowUpRight className="h-2.5 w-2.5" /> : 
                      trendType === "down" ? <ArrowDownRight className="h-2.5 w-2.5" /> : null}

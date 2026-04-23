@@ -78,28 +78,28 @@ export function ForecastTable({
       <div className="flex items-center justify-between px-1">
         <div className="flex flex-col">
           <h3 className="text-lg font-black tracking-tight text-foreground">Forecast 3 mesi</h3>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground opacity-50">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-faint">
             Storico ultimi 3 mesi - solo RETAINER
           </span>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-border/40 bg-card/30 shadow-2xl">
+      <div className="app-panel overflow-hidden rounded-[1.5rem]">
         <Table>
-          <TableHeader className="bg-muted/30">
+          <TableHeader className="bg-muted/55">
             <TableRow className="border-border/50 hover:bg-transparent">
-              <TableHead className="py-3 text-[10px] font-black uppercase tracking-widest">
+              <TableHead className="py-3 text-[10px] font-black uppercase tracking-widest text-faint">
                 Cliente
               </TableHead>
               {nextMonths.map((month, index) => (
                 <TableHead
                   key={index}
-                  className="py-3 text-right text-[10px] font-black uppercase tracking-widest"
+                  className="py-3 text-right text-[10px] font-black uppercase tracking-widest text-faint"
                 >
                   {format(month, "MMM yyyy", { locale: it })}
                 </TableHead>
               ))}
-              <TableHead className="py-3 text-right text-[10px] font-black uppercase tracking-widest">
+              <TableHead className="py-3 text-right text-[10px] font-black uppercase tracking-widest text-faint">
                 Affidabilita
               </TableHead>
             </TableRow>
@@ -108,13 +108,13 @@ export function ForecastTable({
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={5} className="py-8 text-center text-muted-strong">
                   Caricamento...
                 </TableCell>
               </TableRow>
             ) : data.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={5} className="py-8 text-center text-muted-strong">
                   Nessun dato retainer trovato
                 </TableCell>
               </TableRow>
@@ -128,7 +128,7 @@ export function ForecastTable({
                   <TableRow
                     key={item.clienteId || index}
                     className={`border-border/30 transition-colors ${
-                      isClickable ? "cursor-pointer hover:bg-muted/20" : "hover:bg-muted/20"
+                      isClickable ? "cursor-pointer hover:bg-accent/70" : "hover:bg-accent/50"
                     }`}
                     onClick={isClickable ? () => onClienteClick?.(item.clienteId!) : undefined}
                   >
@@ -141,14 +141,14 @@ export function ForecastTable({
                         >
                           {item.cliente}
                         </span>
-                        <span className="text-[9px] font-black uppercase opacity-50 text-muted-foreground">
+                        <span className="text-[9px] font-black uppercase text-faint">
                           {item.clienteCode}
                         </span>
                       </div>
                     </TableCell>
 
                     {item.months.map((value, monthIndex) => (
-                      <TableCell key={monthIndex} className="py-3 text-right text-xs font-medium">
+                      <TableCell key={monthIndex} className="py-3 text-right text-xs font-semibold text-soft">
                         {formatCurrency(value)}
                       </TableCell>
                     ))}
@@ -162,7 +162,7 @@ export function ForecastTable({
                           <DropdownMenuTrigger asChild>
                             <button
                               type="button"
-                              className="inline-flex items-center justify-end gap-2 rounded-xl border border-border/50 bg-card/40 px-3 py-1.5 transition-colors hover:bg-muted/30"
+                              className="inline-flex items-center justify-end gap-2 rounded-xl border border-border bg-muted/38 px-3 py-1.5 text-soft transition-colors hover:bg-accent/70"
                             >
                               <Badge
                                 variant="outline"
@@ -171,17 +171,17 @@ export function ForecastTable({
                                 {item.affidabilita}
                               </Badge>
                               {isUpdating ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-strong" />
                               ) : (
-                                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                <ChevronDown className="h-3.5 w-3.5 text-faint" />
                               )}
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent
                             align="end"
-                            className="rounded-3xl border-border/50 bg-card/40 text-foreground shadow-2xl"
+                            className="rounded-3xl"
                           >
-                            <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                            <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-faint">
                               Affidabilita
                             </DropdownMenuLabel>
                             <DropdownMenuRadioGroup
@@ -197,7 +197,7 @@ export function ForecastTable({
                                 <DropdownMenuRadioItem
                                   key={value}
                                   value={value}
-                                  className="cursor-pointer text-xs font-bold uppercase tracking-widest focus:bg-muted"
+                                  className="cursor-pointer text-xs font-bold uppercase tracking-widest focus:bg-accent"
                                 >
                                   <span className={affidabilitaStyles[value].split(" ")[1]}>{value}</span>
                                 </DropdownMenuRadioItem>
@@ -220,9 +220,9 @@ export function ForecastTable({
             )}
           </TableBody>
 
-          <tfoot className="border-t border-border/60 bg-muted/10">
+          <tfoot className="border-t border-border/70 bg-muted/16">
             <TableRow className="font-bold hover:bg-transparent">
-              <TableCell className="py-4 text-xs uppercase tracking-tighter">
+              <TableCell className="py-4 text-xs uppercase tracking-tighter text-soft">
                 Fatturabile totale
               </TableCell>
               {totals.map((total, index) => (
@@ -235,7 +235,7 @@ export function ForecastTable({
               ))}
               <TableCell />
             </TableRow>
-            <TableRow className="!border-t-0 text-muted-foreground hover:bg-transparent">
+            <TableRow className="!border-t-0 text-muted-strong hover:bg-transparent">
               <TableCell className="py-2 text-[10px] font-bold uppercase tracking-tight">
                 Costo MO (media 3m)
               </TableCell>
@@ -246,7 +246,7 @@ export function ForecastTable({
               ))}
               <TableCell />
             </TableRow>
-            <TableRow className="!border-t-0 text-muted-foreground hover:bg-transparent">
+            <TableRow className="!border-t-0 text-muted-strong hover:bg-transparent">
               <TableCell className="py-2 text-[10px] font-bold uppercase tracking-tight">
                 Costo struttura
               </TableCell>
@@ -277,7 +277,7 @@ export function ForecastTable({
         </Table>
       </div>
 
-      <div className="flex items-center gap-4 px-2 text-[9px] font-black uppercase tracking-widest text-muted-foreground opacity-60">
+      <div className="flex items-center gap-4 px-2 text-[9px] font-black uppercase tracking-widest text-faint">
         <div className="flex items-center gap-2">
           <Badge
             variant="outline"
@@ -305,7 +305,7 @@ export function ForecastTable({
           </Badge>
           <span>cliente da monitorare</span>
         </div>
-        <div className="ml-auto italic">Clienti senza storico RETAINER non inclusi</div>
+        <div className="ml-auto italic text-muted-strong">Clienti senza storico RETAINER non inclusi</div>
       </div>
     </div>
   );

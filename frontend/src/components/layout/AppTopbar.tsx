@@ -1,13 +1,5 @@
-import { Fragment, useState, useEffect } from "react";
-import { 
-  Search, 
-  Plus,
-  UserPlus,
-  Briefcase,
-  ListTodo,
-  HelpCircle,
-  BookOpen
-} from "lucide-react";
+import { Fragment, useEffect, useState } from "react";
+import { Search, Plus, UserPlus, Briefcase, ListTodo, HelpCircle, BookOpen } from "lucide-react";
 import { ThemePanel } from "../ThemePanel";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { TimerWidget } from "./TimerWidget";
@@ -47,36 +39,48 @@ export function AppTopbar() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in input/textarea
       const target = e.target as HTMLElement;
-      if (['INPUT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable) {
+      if (["INPUT", "TEXTAREA"].includes(target.tagName) || target.isContentEditable) {
         return;
       }
-      
-      if (e.key === '?') {
-        setIsHelpOpen(prev => !prev);
+
+      if (e.key === "?") {
+        setIsHelpOpen((prev) => !prev);
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   const getBreadcrumbLabel = (path: string) => {
     switch (path) {
-      case "clienti": return "Clienti";
-      case "projects": return "Progetti";
-      case "planning": return "Execution Hub";
-      case "commesse": return "Commesse";
-      case "timesheet": return "Timesheet";
-      case "studio-os": return "Studio OS";
-      case "settings": return "Impostazioni";
-      case "profile": return "Profilo";
-      case "account": return "Account";
-      case "appearance": return "Aspetto";
-      case "notifications": return "Notifiche";
-      case "privacy": return "Privacy";
-      default: return path.charAt(0) ? path.charAt(0).toUpperCase() + path.slice(1) : "Home";
+      case "clienti":
+        return "Clienti";
+      case "projects":
+        return "Progetti";
+      case "planning":
+        return "Execution Hub";
+      case "commesse":
+        return "Commesse";
+      case "timesheet":
+        return "Timesheet";
+      case "studio-os":
+        return "Studio OS";
+      case "settings":
+        return "Impostazioni";
+      case "profile":
+        return "Profilo";
+      case "account":
+        return "Account";
+      case "appearance":
+        return "Aspetto";
+      case "notifications":
+        return "Notifiche";
+      case "privacy":
+        return "Privacy";
+      default:
+        return path.charAt(0) ? path.charAt(0).toUpperCase() + path.slice(1) : "Home";
     }
   };
 
@@ -88,24 +92,28 @@ export function AppTopbar() {
   };
 
   return (
-    <header className="flex sticky top-0 z-30 h-14 shrink-0 items-center justify-between border-b border-border/50 bg-background/80 backdrop-blur-xl px-4">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-border/80 bg-background/90 px-4 backdrop-blur-2xl">
       <div className="flex items-center gap-4">
-        <SidebarTrigger className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-white/5 active:scale-95 transition-all" />
+        <SidebarTrigger className="h-8 w-8 rounded-lg text-muted-foreground transition-all hover:bg-accent hover:text-foreground active:scale-95" />
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
               <BreadcrumbLink asChild>
-                <Link to="/" className="text-muted-foreground transition-colors hover:text-foreground">Home</Link>
+                <Link to="/" className="text-faint transition-colors hover:text-foreground">
+                  Home
+                </Link>
               </BreadcrumbLink>
             </BreadcrumbItem>
             {pathnames.map((path, i) => (
               <Fragment key={path}>
-                <BreadcrumbSeparator className="text-muted-foreground/30" />
+                <BreadcrumbSeparator className="text-faint/60" />
                 <BreadcrumbItem>
                   <BreadcrumbLink asChild>
-                    <Link 
+                    <Link
                       to={`/${pathnames.slice(0, i + 1).join("/")}`}
-                      className={`transition-colors hover:text-foreground ${i === pathnames.length - 1 ? 'text-foreground font-medium' : 'text-muted-foreground'}`}
+                      className={`transition-colors hover:text-foreground ${
+                        i === pathnames.length - 1 ? "text-soft font-semibold" : "text-faint"
+                      }`}
                     >
                       {getBreadcrumbLabel(path)}
                     </Link>
@@ -118,37 +126,33 @@ export function AppTopbar() {
       </div>
 
       <div className="flex items-center gap-2 md:gap-4">
-        {/* Search Bar - Minimal Linear Style */}
         <div className="relative hidden lg:block group">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#475569] group-focus-within:text-primary transition-colors" />
-          <Input 
-            placeholder="Cerca..." 
-            className="h-8 w-64 pl-9 bg-card border-border text-xs focus-visible:ring-1 focus-visible:ring-primary/50 placeholder:text-[#475569] text-foreground transition-all"
-          />
-          <kbd className="absolute right-2 top-1.5 hidden h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100 sm:flex">
-            <span className="text-xs">⌘</span>K
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-faint transition-colors group-focus-within:text-primary" />
+          <Input placeholder="Cerca..." className="h-8 w-64 pl-9 text-xs" />
+          <kbd className="absolute right-2 top-1.5 hidden h-5 select-none items-center rounded border border-border bg-muted/60 px-1.5 font-mono text-[10px] font-medium text-faint opacity-100 sm:flex">
+            Ctrl K
           </kbd>
         </div>
 
-        <div className="flex items-center px-4 h-8 border-x border-border">
+        <div className="flex h-8 items-center border-x border-border px-4">
           <TimerWidget />
         </div>
 
         <div className="flex items-center gap-1">
           <NotificationDropdown />
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-8 w-8 text-muted-foreground hover:text-foreground" 
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
             onClick={() => navigate("/wiki")}
             title="Wiki Aziendale"
           >
             <BookOpen className="h-4 w-4" />
           </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-8 w-8 text-muted-foreground hover:text-foreground" 
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
             onClick={() => setIsHelpOpen(true)}
             title="Centro Assistenza"
           >
@@ -156,47 +160,56 @@ export function AppTopbar() {
           </Button>
           <ThemePanel />
 
-          <div className="h-6 w-[1px] bg-muted mx-2 hidden md:block" />
+          <div className="mx-2 hidden h-6 w-[1px] bg-muted md:block" />
 
           <Link to="/settings/profile">
-            <UserAvatar 
-              user={user} 
-              size="sm" 
-              className="h-7 w-7 rounded-lg border border-border shadow-lg hidden md:block cursor-pointer hover:border-primary/50 transition-colors" 
+            <UserAvatar
+              user={user}
+              size="sm"
+              className="hidden h-7 w-7 cursor-pointer rounded-lg border border-border shadow-lg transition-colors hover:border-primary/50 md:block"
             />
           </Link>
 
           {isStudioOS ? (
-            <Button 
+            <Button
               onClick={handleNewTask}
-              className="h-8 px-4 text-xs font-black bg-primary text-white shadow-[0_0_20px_hsl(var(--primary)/0.2)] hover:bg-primary/90 hover:shadow-primary/30 rounded-lg active:scale-95 transition-all ml-2 uppercase tracking-wide"
+              className="ml-2 h-8 rounded-lg bg-primary px-4 text-xs font-black uppercase tracking-wide text-primary-foreground shadow-[0_0_20px_hsl(var(--primary)/0.2)] transition-all hover:bg-primary/90 hover:shadow-primary/30 active:scale-95"
             >
-              <Plus className="h-3.5 w-3.5 mr-1.5 stroke-[3]" />
+              <Plus className="mr-1.5 h-3.5 w-3.5 stroke-[3]" />
               Nuovo
             </Button>
           ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button 
-                  className="h-8 px-4 text-xs font-black bg-primary text-white shadow-[0_0_20px_hsl(var(--primary)/0.2)] hover:bg-primary/90 hover:shadow-primary/30 rounded-lg active:scale-95 transition-all ml-2 uppercase tracking-wide"
-                >
-                  <Plus className="h-3.5 w-3.5 mr-1.5 stroke-[3]" />
+                <Button className="ml-2 h-8 rounded-lg bg-primary px-4 text-xs font-black uppercase tracking-wide text-primary-foreground shadow-[0_0_20px_hsl(var(--primary)/0.2)] transition-all hover:bg-primary/90 hover:shadow-primary/30 active:scale-95">
+                  <Plus className="mr-1.5 h-3.5 w-3.5 stroke-[3]" />
                   Nuovo
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 bg-card border-border text-foreground">
-                <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-2 py-1.5">Azioni Rapide</DropdownMenuLabel>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-black uppercase tracking-widest text-faint">
+                  Azioni Rapide
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-border" />
-                <DropdownMenuItem onClick={handleNewTask} className="text-xs font-bold py-2 focus:bg-primary/10 cursor-pointer">
-                  <ListTodo className="h-4 w-4 mr-2 text-primary" />
+                <DropdownMenuItem
+                  onClick={handleNewTask}
+                  className="cursor-pointer py-2 text-xs font-bold focus:bg-primary/10"
+                >
+                  <ListTodo className="mr-2 h-4 w-4 text-primary" />
                   Nuovo Task
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/clienti?action=new")} className="text-xs font-bold py-2 focus:bg-primary/10 cursor-pointer">
-                  <UserPlus className="h-4 w-4 mr-2 text-emerald-500" />
+                <DropdownMenuItem
+                  onClick={() => navigate("/clienti?action=new")}
+                  className="cursor-pointer py-2 text-xs font-bold focus:bg-primary/10"
+                >
+                  <UserPlus className="mr-2 h-4 w-4 text-emerald-500" />
                   Nuovo Cliente
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/commesse?action=new")} className="text-xs font-bold py-2 focus:bg-primary/10 cursor-pointer">
-                  <Briefcase className="h-4 w-4 mr-2 text-blue-500" />
+                <DropdownMenuItem
+                  onClick={() => navigate("/commesse?action=new")}
+                  className="cursor-pointer py-2 text-xs font-bold focus:bg-primary/10"
+                >
+                  <Briefcase className="mr-2 h-4 w-4 text-blue-500" />
                   Nuova Commessa
                 </DropdownMenuItem>
               </DropdownMenuContent>

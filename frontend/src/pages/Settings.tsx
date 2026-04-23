@@ -68,10 +68,10 @@ export default function SettingsLayout() {
       <aside className="w-full lg:w-[280px] shrink-0">
         <div className="sticky top-8 space-y-1">
           <div className="px-3 mb-6">
-            <h1 className="text-2xl font-black uppercase tracking-tight text-white italic">
+            <h1 className="text-2xl font-black uppercase tracking-tight text-foreground italic">
               Impostazioni
             </h1>
-            <p className="text-[10px] uppercase font-black tracking-widest text-[#475569] mt-1">
+            <p className="mt-1 text-[10px] uppercase font-black tracking-widest text-faint">
               Centro di Controllo Personale
             </p>
           </div>
@@ -84,29 +84,29 @@ export default function SettingsLayout() {
                   key={item.href}
                   to={item.href}
                   className={cn(
-                    "group flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 border border-transparent",
+                    "group flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 border",
                     isActive 
-                      ? "bg-muted text-white border-border shadow-lg" 
-                      : "text-muted-foreground hover:text-white hover:bg-muted/40"
+                      ? "bg-accent text-foreground border-border shadow-lg" 
+                      : "text-muted-strong border-transparent hover:text-foreground hover:bg-accent/50 hover:border-border/70"
                   )}
                 >
                   <div className={cn(
                     "p-2 rounded-lg transition-all duration-300",
-                    isActive ? "bg-primary text-primary-foreground shadow-lg" : "bg-muted/50 group-hover:bg-muted group-hover:text-white"
+                    isActive ? "bg-primary text-primary-foreground shadow-lg" : "bg-muted/60 group-hover:bg-accent group-hover:text-foreground"
                   )}>
                     <item.icon className="h-4 w-4" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className={cn(
                       "text-sm font-bold leading-none",
-                      isActive ? "text-white" : "text-muted-foreground group-hover:text-white"
+                      isActive ? "text-foreground" : "text-muted-strong group-hover:text-foreground"
                     )}>
                       {item.title}
                     </p>
                   </div>
                   <ChevronRight className={cn(
                     "h-4 w-4 transition-transform duration-300",
-                    isActive ? "translate-x-0 opacity-100" : "translate-x-2 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 text-slate-600"
+                    isActive ? "translate-x-0 opacity-100 text-faint" : "translate-x-2 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 text-faint"
                   )} />
                 </Link>
               );

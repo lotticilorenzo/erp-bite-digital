@@ -64,7 +64,7 @@ export function TimerWidget() {
 
   if (!active_session && !showSaveDialog) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-muted-foreground">
+      <div className="flex items-center gap-2 rounded-full border border-border bg-muted/70 px-3 py-1.5 text-soft shadow-sm">
         <Clock className="w-3.5 h-3.5" />
         <span className="text-[10px] font-medium uppercase tracking-wider">Nessun task attivo</span>
       </div>
@@ -105,7 +105,7 @@ export function TimerWidget() {
       </div>
 
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
-        <DialogContent className="bg-card border-border shadow-2xl text-white sm:max-w-[400px] rounded-[2rem] overflow-hidden p-0">
+        <DialogContent className="overflow-hidden p-0 text-foreground sm:max-w-[400px]">
           <DialogHeader className="p-5 border-b border-border/50">
             <DialogTitle className="flex items-center gap-2 text-emerald-400 font-black uppercase tracking-widest text-lg">
               <CheckCircle2 className="w-5 h-5" />
@@ -118,20 +118,20 @@ export function TimerWidget() {
               <p className="text-5xl font-black text-emerald-400 mt-2 tracking-tighter drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]">{formatTime(seconds)}</p>
             </div>
             <div className="space-y-3">
-              <Label className="text-xs font-black uppercase tracking-widest text-[#475569] flex items-center gap-1.5 opacity-80">Note Rapide Lavoro</Label>
+              <Label className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-faint">Note Rapide Lavoro</Label>
               <Input 
                 value={note} 
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Es. Sviluppo UI componenti..."
-                className="bg-muted/50 border-border/50 text-white h-12 rounded-xl shadow-inner placeholder:italic focus:ring-emerald-500"
+                className="h-12 rounded-xl border-border bg-muted/46 text-foreground shadow-inner placeholder:italic focus-visible:ring-emerald-500"
               />
             </div>
           </div>
-          <DialogFooter className="p-5 border-t border-border/40 bg-card/40 flex-row justify-end space-x-3">
+          <DialogFooter className="flex-row justify-end space-x-3 border-t border-border/40 bg-muted/18 p-5">
             <Button 
               variant="ghost" 
               onClick={() => { setShowSaveDialog(false); setLastStoppedSessionId(null); }}
-              className="text-muted-foreground hover:text-white rounded-xl h-12 px-6 font-bold uppercase text-[10px] tracking-widest"
+              className="h-12 rounded-xl px-6 text-[10px] font-bold uppercase tracking-widest text-muted-strong hover:bg-accent hover:text-foreground"
             >
               Annulla
             </Button>

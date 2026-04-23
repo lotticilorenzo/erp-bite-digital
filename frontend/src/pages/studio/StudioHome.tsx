@@ -124,10 +124,10 @@ export default function StudioHome() {
         {/* Header */}
         <header className="flex flex-col md:flex-row md:items-start justify-between gap-6">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/50 mb-1">
+            <p className="mb-1 text-[10px] font-black uppercase tracking-[0.3em] text-faint">
               {format(new Date(), "EEEE d MMMM yyyy", { locale: it })}
             </p>
-            <h1 className="text-4xl font-black text-white tracking-tighter mb-2">
+            <h1 className="mb-2 text-4xl font-black tracking-tighter text-foreground">
               {greet()},{" "}
               <span className="text-primary italic">
                 {user ? `${user.nome}` : "Studio OS"}
@@ -161,7 +161,7 @@ export default function StudioHome() {
               <p className="text-[10px] font-black uppercase tracking-widest text-primary/70">
                 Timer attivo
               </p>
-              <p className="text-sm font-black text-white truncate">{activeTimerTask.title}</p>
+              <p className="truncate text-sm font-black text-foreground">{activeTimerTask.title}</p>
             </div>
             <div className="text-2xl font-black text-primary tabular-nums tracking-tighter">
               {formatTime(timer.getElapsed(activeTimerTask.id))}
@@ -182,11 +182,11 @@ export default function StudioHome() {
             <Card
               key={stat.title}
               onClick={stat.onClick}
-              className="bg-card/40 border-border/50 backdrop-blur-xl group hover:border-primary/30 transition-all duration-500 overflow-hidden relative cursor-pointer hover:scale-[1.02] active:scale-[0.99]"
+              className="app-panel group relative cursor-pointer overflow-hidden transition-all duration-500 hover:scale-[1.02] hover:border-primary/30 active:scale-[0.99]"
             >
               <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-primary/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               <CardHeader className="flex flex-row items-center justify-between pb-2 pt-5 px-5">
-                <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">
+                <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-faint">
                   {stat.title}
                 </CardTitle>
                 <div className={`h-8 w-8 rounded-xl ${stat.bg} flex items-center justify-center`}>
@@ -194,10 +194,10 @@ export default function StudioHome() {
                 </div>
               </CardHeader>
               <CardContent className="px-5 pb-5">
-                <div className="text-4xl font-black text-white group-hover:scale-110 transition-transform origin-left duration-500">
+                <div className="origin-left text-4xl font-black text-foreground transition-transform duration-500 group-hover:scale-110">
                   {stat.value}
                 </div>
-                <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/20 mt-1 group-hover:text-primary/40 transition-colors">
+                <p className="mt-1 text-[9px] font-black uppercase tracking-widest text-faint transition-colors group-hover:text-primary">
                   Vedi lista →
                 </p>
               </CardContent>
@@ -209,10 +209,10 @@ export default function StudioHome() {
 
           {/* My Tasks */}
           <div className="lg:col-span-2 space-y-4">
-            <Card className="bg-card/40 border-border/50 backdrop-blur-xl rounded-3xl overflow-hidden">
+            <Card className="app-panel overflow-hidden rounded-3xl">
               <CardHeader className="border-b border-border/30 px-6 py-5">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-black text-white flex items-center gap-2 uppercase tracking-wider">
+                  <CardTitle className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-foreground">
                     <Target className="h-4 w-4 text-primary" />
                     Le Mie Task
                     <Badge className="bg-primary/10 text-primary border-none text-[9px] font-black">
@@ -249,7 +249,7 @@ export default function StudioHome() {
                         <div
                           key={task.id}
                           onClick={() => openTab({ type: "TASK", title: task.title, linkedId: task.id })}
-                          className={`px-6 py-4 flex items-center gap-4 hover:bg-white/[0.03] cursor-pointer transition-colors group ${isActive ? "bg-primary/5" : ""}`}
+                          className={`group flex cursor-pointer items-center gap-4 px-6 py-4 transition-colors hover:bg-accent/70 ${isActive ? "bg-primary/5" : ""}`}
                         >
                           {/* Status dot */}
                           <div
@@ -267,7 +267,7 @@ export default function StudioHome() {
                           <div className="flex-1 min-w-0">
                             <p
                               className={`text-[13px] font-bold truncate leading-none mb-1 ${
-                                isActive ? "text-white" : "text-foreground/80 group-hover:text-white"
+                                isActive ? "text-foreground" : "text-soft group-hover:text-foreground"
                               }`}
                             >
                               {task.title}
@@ -280,7 +280,7 @@ export default function StudioHome() {
                                       ? "text-red-400"
                                       : isToday(parseISO(task.due_date))
                                       ? "text-yellow-400"
-                                      : "text-muted-foreground/50"
+                                      : "text-faint"
                                   }`}
                                 >
                                   <CalendarIcon className="h-2.5 w-2.5" />
@@ -290,7 +290,7 @@ export default function StudioHome() {
                                 </span>
                               )}
                               {task.stima_minuti && task.stima_minuti > 0 && (
-                                <span className="text-[10px] text-muted-foreground/40 font-medium">
+                                <span className="text-[10px] font-medium text-faint">
                                   {task.stima_minuti >= 60
                                     ? `${Math.floor(task.stima_minuti / 60)}h est.`
                                     : `${task.stima_minuti}m est.`}
@@ -333,7 +333,7 @@ export default function StudioHome() {
                             )}
                           </div>
 
-                          <ChevronRight className="h-4 w-4 text-muted-foreground/20 group-hover:text-primary group-hover:translate-x-1 transition-all shrink-0" />
+                          <ChevronRight className="h-4 w-4 shrink-0 text-faint transition-all group-hover:translate-x-1 group-hover:text-primary" />
                         </div>
                       );
                     })}
@@ -374,16 +374,16 @@ export default function StudioHome() {
           <div className="space-y-6">
 
             {/* Team in Action — who has timer running */}
-            <Card className="bg-card/40 border-border/50 backdrop-blur-xl rounded-2xl overflow-hidden">
+            <Card className="app-panel overflow-hidden rounded-2xl">
               <CardHeader className="px-5 py-4 border-b border-border/20">
-                <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50 flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-faint">
                   <Users className="h-3.5 w-3.5" />
                   Team Online
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 {utenti.length === 0 ? (
-                  <p className="px-5 py-4 text-[10px] text-muted-foreground/30 font-medium italic">
+                  <p className="px-5 py-4 text-[10px] font-medium italic text-faint">
                     Nessun collaboratore trovato.
                   </p>
                 ) : (
@@ -396,7 +396,7 @@ export default function StudioHome() {
                     return (
                       <div
                         key={u.id}
-                        className="flex items-center gap-3 px-5 py-3 border-b border-border/10 last:border-0 hover:bg-white/[0.02] transition-colors"
+                        className="flex items-center gap-3 border-b border-border/10 px-5 py-3 transition-colors last:border-0 hover:bg-accent/60"
                       >
                         <div className="relative shrink-0">
                           <div className="h-8 w-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-black text-primary">
@@ -409,7 +409,7 @@ export default function StudioHome() {
                           />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-black text-foreground/70 leading-none mb-0.5">
+                          <p className="mb-0.5 text-[11px] font-black leading-none text-soft">
                             {u.nome} {u.cognome}
                           </p>
                           {isTracking ? (
@@ -418,7 +418,7 @@ export default function StudioHome() {
                               {uTask!.title}
                             </p>
                           ) : (
-                            <p className="text-[9px] font-bold text-muted-foreground/30 uppercase tracking-widest">
+                            <p className="text-[9px] font-bold uppercase tracking-widest text-faint">
                               {u.ruolo}
                             </p>
                           )}
@@ -440,16 +440,16 @@ export default function StudioHome() {
               <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/20 blur-[60px] rounded-full group-hover:scale-150 transition-transform duration-700" />
               <div className="relative z-10 space-y-3">
                 <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
-                  <TrendingUp className="h-5 w-5 text-white" />
+                  <TrendingUp className="h-5 w-5 text-primary-foreground" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-white leading-tight">Sessioni Oggi</h3>
-                  <p className="text-xs text-muted-foreground/60 mt-0.5 font-medium">
+                  <h3 className="text-sm font-black leading-tight text-foreground">Sessioni Oggi</h3>
+                  <p className="mt-0.5 text-xs font-medium text-muted-strong">
                     {allTasks.filter((t) => (t.tempo_trascorso_minuti || 0) > 0).length} task con tempo registrato
                   </p>
                 </div>
                 <div className="flex items-end gap-1">
-                  <span className="text-3xl font-black text-white tabular-nums">
+                  <span className="text-3xl font-black tabular-nums text-foreground">
                     {Math.floor(
                       allTasks.reduce((sum, t) => sum + (t.tempo_trascorso_minuti || 0), 0) / 60
                     )}

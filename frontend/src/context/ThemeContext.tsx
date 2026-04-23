@@ -77,6 +77,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } else {
       root.classList.remove("light");
     }
+    root.style.colorScheme = settings.mode;
 
     // Accent Color
     root.style.setProperty("--primary", ACCENT_COLORS[settings.accent]);
