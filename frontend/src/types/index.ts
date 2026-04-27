@@ -73,6 +73,7 @@ export interface ProgettoTeam {
   user_id: string;
   ruolo_progetto?: string;
   ore_previste: number;
+  note?: string;
   user?: User;
 }
 
@@ -91,12 +92,14 @@ export interface Progetto {
   created_at: string;
   cliente?: Cliente;
   team?: ProgettoTeam[];
+  has_commessa_mese?: boolean;
 }
 
 export interface ProgettoRef {
   id: string;
   nome: string;
   tipo?: ProjectType;
+  team?: ProgettoTeam[];
 }
 
 export interface CommessaRiga {

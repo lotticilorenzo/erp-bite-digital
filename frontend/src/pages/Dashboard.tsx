@@ -753,7 +753,7 @@ export default function DashboardPage() {
                   <span className="text-[9px] text-faint uppercase">Mancanti in commessa</span>
                 </div>
                 <Badge className="bg-slate-500/20 text-slate-400 border-slate-500/20 h-6">
-                  {currentCommesse.filter(c => !c.costi_diretti || c.costi_diretti.length === 0).length}
+                  {currentCommesse.filter(c => !c.costi_diretti || c.costi_diretti === 0).length}
                 </Badge>
               </div>
 
