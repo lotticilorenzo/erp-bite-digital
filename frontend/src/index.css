@@ -117,6 +117,12 @@
       linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--surface-1)) 100%);
     min-height: 100vh;
   }
+
+  /* Fix for native select options visibility in dark mode */
+  select option {
+    background-color: #1a1b26; /* Deep dark background */
+    color: #ffffff;
+  }
 }
 
 /* Premium Scrollbar */

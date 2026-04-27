@@ -46,6 +46,8 @@ services:
     volumes:
       - ./app:/app/app
       - uploads_data:/app/static/uploads
+      - logos_data:/app/static/logos
+      - avatars_data:/app/static/avatars
     networks:
       - bite_network
 
@@ -139,5 +141,7 @@ volumes:
   postgres_data:
   frontend_node_modules:
   uploads_data:
+  logos_data:
+  avatars_data:
   db_backups:
   nginx_ssl:

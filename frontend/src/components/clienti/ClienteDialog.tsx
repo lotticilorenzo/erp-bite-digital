@@ -9,6 +9,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select as CustomSelect,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useCreateCliente, useUpdateCliente } from "@/hooks/useClienti";
 import type { Cliente } from "@/types";
 import { Loader2, Upload, X, Building2, MapPin, CreditCard, Globe, Phone, Mail, Hash, Link2 } from "lucide-react";
@@ -156,16 +163,21 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
         clienteId = (newCliente as any).id;
       }
 
-      // Logo upload
+      // Logo upload - separately handled to avoid blocking client creation
       if (clienteId) {
-        if (logoFile) {
-          const fd = new FormData();
-          fd.append("file", logoFile);
-          await api.post(`/clienti/${clienteId}/logo`, fd, {
-            headers: { "Content-Type": "multipart/form-data" },
-          });
-        } else if (previewUrl === null && cliente?.logo_url) {
-          await api.delete(`/clienti/${clienteId}/logo`);
+        try {
+          if (logoFile) {
+            const fd = new FormData();
+            fd.append("file", logoFile);
+            await api.post(`/clienti/${clienteId}/logo`, fd, {
+              headers: { "Content-Type": "multipart/form-data" },
+            });
+          } else if (previewUrl === null && cliente?.logo_url) {
+            await api.delete(`/clienti/${clienteId}/logo`);
+          }
+        } catch (logoErr: any) {
+          console.error("Logo operation failed", logoErr);
+          toast.warning("Cliente salvato, ma errore durante l'aggiornamento del logo.");
         }
       }
 
@@ -275,23 +287,26 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
             </Field>
 
             <Field label="Tipologia">
-              <select
-                className={SELECT_CLS}
+              <CustomSelect
                 value={form.tipologia ?? ""}
-                onChange={(e) => set("tipologia", e.target.value)}
+                onValueChange={(val) => set("tipologia", val)}
               >
-                <option value="">—</option>
-                <option value="SRL">S.R.L.</option>
-                <option value="SPA">S.P.A.</option>
-                <option value="SRLS">S.R.L.S.</option>
-                <option value="SNC">S.N.C.</option>
-                <option value="SAS">S.A.S.</option>
-                <option value="DITTA_INDIVIDUALE">Ditta Individuale</option>
-                <option value="LIBERO_PROFESSIONISTA">Libero Professionista</option>
-                <option value="ASSOCIAZIONE">Associazione</option>
-                <option value="ENTE_PUBBLICO">Ente Pubblico</option>
-                <option value="PRIVATO">Privato</option>
-              </select>
+                <SelectTrigger className={SELECT_CLS}>
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="SRL">S.R.L.</SelectItem>
+                  <SelectItem value="SPA">S.P.A.</SelectItem>
+                  <SelectItem value="SRLS">S.R.L.S.</SelectItem>
+                  <SelectItem value="SNC">S.N.C.</SelectItem>
+                  <SelectItem value="SAS">S.A.S.</SelectItem>
+                  <SelectItem value="DITTA_INDIVIDUALE">Ditta Individuale</SelectItem>
+                  <SelectItem value="LIBERO_PROFESSIONISTA">Libero Professionista</SelectItem>
+                  <SelectItem value="ASSOCIAZIONE">Associazione</SelectItem>
+                  <SelectItem value="ENTE_PUBBLICO">Ente Pubblico</SelectItem>
+                  <SelectItem value="PRIVATO">Privato</SelectItem>
+                </SelectContent>
+              </CustomSelect>
             </Field>
 
             <Field label="Referente">
@@ -304,40 +319,46 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
             </Field>
 
             <Field label="Settore">
-              <select
-                className={SELECT_CLS}
+              <CustomSelect
                 value={form.settore ?? ""}
-                onChange={(e) => set("settore", e.target.value)}
+                onValueChange={(val) => set("settore", val)}
               >
-                <option value="">—</option>
-                <option value="ristorazione">Ristorazione / Food</option>
-                <option value="retail">Retail / Moda</option>
-                <option value="immobiliare">Immobiliare</option>
-                <option value="professionale">Servizi Professionali</option>
-                <option value="salute">Salute / Benessere</option>
-                <option value="tech">Tecnologia</option>
-                <option value="turismo">Turismo / Hospitality</option>
-                <option value="industria">Industria / Manifattura</option>
-                <option value="finanza">Finanza / Assicurazioni</option>
-                <option value="istruzione">Istruzione / Formazione</option>
-                <option value="no_profit">No Profit</option>
-                <option value="altro">Altro</option>
-              </select>
+                <SelectTrigger className={SELECT_CLS}>
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ristorazione">Ristorazione / Food</SelectItem>
+                  <SelectItem value="retail">Retail / Moda</SelectItem>
+                  <SelectItem value="immobiliare">Immobiliare</SelectItem>
+                  <SelectItem value="professionale">Servizi Professionali</SelectItem>
+                  <SelectItem value="salute">Salute / Benessere</SelectItem>
+                  <SelectItem value="tech">Tecnologia</SelectItem>
+                  <SelectItem value="turismo">Turismo / Hospitality</SelectItem>
+                  <SelectItem value="industria">Industria / Manifattura</SelectItem>
+                  <SelectItem value="finanza">Finanza / Assicurazioni</SelectItem>
+                  <SelectItem value="istruzione">Istruzione / Formazione</SelectItem>
+                  <SelectItem value="no_profit">No Profit</SelectItem>
+                  <SelectItem value="altro">Altro</SelectItem>
+                </SelectContent>
+              </CustomSelect>
             </Field>
 
             <Field label="Categoria Cliente">
-              <select
-                className={SELECT_CLS}
+              <CustomSelect
                 value={form.categoria ?? ""}
-                onChange={(e) => set("categoria", e.target.value)}
+                onValueChange={(val) => set("categoria", val)}
               >
-                <option value="">—</option>
-                <option value="A">A — Top</option>
-                <option value="B">B — Standard</option>
-                <option value="C">C — Occasionale</option>
-                <option value="VIP">VIP</option>
-                <option value="PROSPECT">Prospect</option>
-              </select>
+                <SelectTrigger className={SELECT_CLS}>
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="A">A — Top</SelectItem>
+                  <SelectItem value="B">B — Standard</SelectItem>
+                  <SelectItem value="C">C — Occasionale</SelectItem>
+                  <SelectItem value="VIP">VIP</SelectItem>
+                  <SelectItem value="PROSPECT">Prospect</SelectItem>
+                </SelectContent>
+              </CustomSelect>
             </Field>
 
             {/* Dati fiscali */}
@@ -482,47 +503,58 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
             <SectionTitle label="Commerciale" />
 
             <Field label="Accordo di Pagamento" icon={<CreditCard className="h-2.5 w-2.5" />}>
-              <select
-                className={SELECT_CLS}
+              <CustomSelect
                 value={form.condizioni_pagamento ?? ""}
-                onChange={(e) => set("condizioni_pagamento", e.target.value)}
+                onValueChange={(val) => set("condizioni_pagamento", val)}
               >
-                <option value="">— Seleziona —</option>
-                <option value="Immediato">Immediato</option>
-                <option value="15gg DFFM">15gg DFFM</option>
-                <option value="30gg DFFM">30gg DFFM</option>
-                <option value="60gg DFFM">60gg DFFM</option>
-                <option value="90gg DFFM">90gg DFFM</option>
-                <option value="Bonifico anticipato">Bonifico anticipato</option>
-                <option value="RiBa 30gg">RiBa 30gg</option>
-                <option value="Personalizzato">Personalizzato</option>
-              </select>
+                <SelectTrigger className={SELECT_CLS}>
+                  <SelectValue placeholder="— Seleziona —" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Immediato">Immediato</SelectItem>
+                  <SelectItem value="15gg DFFM">15gg DFFM</SelectItem>
+                  <SelectItem value="30gg DFFM">30gg DFFM</SelectItem>
+                  <SelectItem value="60gg DFFM">60gg DFFM</SelectItem>
+                  <SelectItem value="90gg DFFM">90gg DFFM</SelectItem>
+                  <SelectItem value="Bonifico anticipato">Bonifico anticipato</SelectItem>
+                  <SelectItem value="RiBa 30gg">RiBa 30gg</SelectItem>
+                  <SelectItem value="Personalizzato">Personalizzato</SelectItem>
+                </SelectContent>
+              </CustomSelect>
             </Field>
 
             <Field label="Affidabilità">
-              <select
-                className={SELECT_CLS}
+              <CustomSelect
                 value={form.affidabilita ?? "MEDIA"}
-                onChange={(e) => set("affidabilita", e.target.value as any)}
+                onValueChange={(val) => set("affidabilita", val)}
               >
-                <option value="ALTA">🟢 Alta</option>
-                <option value="MEDIA">🟡 Media</option>
-                <option value="BASSA">🔴 Bassa</option>
-              </select>
+                <SelectTrigger className={SELECT_CLS}>
+                  <SelectValue placeholder="Seleziona" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALTA">🟢 Alta</SelectItem>
+                  <SelectItem value="MEDIA">🟡 Media</SelectItem>
+                  <SelectItem value="BASSA">🔴 Bassa</SelectItem>
+                </SelectContent>
+              </CustomSelect>
             </Field>
 
             {/* ═══ PREFERENZE FATTURAZIONE ════════════════════════ */}
             <SectionTitle label="Pianificazione & Fatturazione" />
 
             <Field label="Inizio Commessa Mensile" hint="Determina le date di competenza">
-              <select
-                className={SELECT_CLS}
+              <CustomSelect
                 value={form.start_day_type ?? "STANDARD_1"}
-                onChange={(e) => set("start_day_type", e.target.value as any)}
+                onValueChange={(val) => set("start_day_type", val)}
               >
-                <option value="STANDARD_1">Standard (1° del mese)</option>
-                <option value="CROSS_15">Mezzo mese (Dal 15 al 14)</option>
-              </select>
+                <SelectTrigger className={SELECT_CLS}>
+                  <SelectValue placeholder="Seleziona" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="STANDARD_1">Standard (1° del mese)</SelectItem>
+                  <SelectItem value="CROSS_15">Mezzo mese (Dal 15 al 14)</SelectItem>
+                </SelectContent>
+              </CustomSelect>
             </Field>
 
             <Field label="Note Commerciali" className="col-span-full">
@@ -536,14 +568,18 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
             </Field>
 
             <Field label="Stato">
-              <select
-                className={SELECT_CLS}
+              <CustomSelect
                 value={form.attivo ? "attivo" : "inattivo"}
-                onChange={(e) => set("attivo", e.target.value === "attivo")}
+                onValueChange={(val) => set("attivo", val === "attivo")}
               >
-                <option value="attivo">Attivo</option>
-                <option value="inattivo">Inattivo</option>
-              </select>
+                <SelectTrigger className={SELECT_CLS}>
+                  <SelectValue placeholder="Stato" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="attivo">Attivo</SelectItem>
+                  <SelectItem value="inattivo">Inattivo</SelectItem>
+                </SelectContent>
+              </CustomSelect>
             </Field>
 
             {/* ═══ FILE DRIVE ════════════════════════════════════ */}

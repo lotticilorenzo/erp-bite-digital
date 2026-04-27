@@ -706,6 +706,9 @@ async def upload_cliente_logo(
     filename = f"{cliente_id}_{uuid.uuid4().hex}{ext}"
     filepath = os.path.join("static", "logos", filename)
     
+    # Assicurati che la directory esista
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    
     # Salvataggio fisico
     with open(filepath, "wb") as f:
         f.write(content)
