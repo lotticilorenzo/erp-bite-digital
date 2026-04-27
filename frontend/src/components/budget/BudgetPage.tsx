@@ -15,7 +15,6 @@ import {
   CartesianGrid,
   Line,
   LineChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -102,6 +101,16 @@ export default function BudgetPage() {
   );
 
   const latestTrendPoint = selectedSeries?.data?.[selectedSeries.data.length - 1];
+
+  const chartRef = useRef<HTMLDivElement>(null);
+  const [chartW, setChartW] = useState(0);
+  useEffect(() => {
+    const el = chartRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setChartW(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   return (
     <div className="flex-1 space-y-8 p-8 pt-6 min-h-screen bg-background">
@@ -276,9 +285,9 @@ export default function BudgetPage() {
                     />
                   </div>
 
-                  <div className="h-[360px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={trendChartData} margin={{ left: 8, right: 16, top: 20, bottom: 8 }}>
+                  <div ref={chartRef} className="h-[360px] w-full">
+                    {chartW > 0 && (
+                      <LineChart width={chartW} height={360} data={trendChartData} margin={{ left: 8, right: 16, top: 20, bottom: 8 }}>
                         <CartesianGrid strokeDasharray="4 4" stroke="rgba(255,255,255,0.08)" />
                         <XAxis
                           dataKey="mese"
@@ -322,7 +331,7 @@ export default function BudgetPage() {
                           activeDot={{ r: 5 }}
                         />
                       </LineChart>
-                    </ResponsiveContainer>
+                    )}
                   </div>
                 </>
               )}

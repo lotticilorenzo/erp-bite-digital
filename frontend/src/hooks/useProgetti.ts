@@ -28,6 +28,15 @@ export function useProgetto(id?: string) {
   });
 }
 
+const formatError = (err: any, defaultMsg: string) => {
+  const detail = err?.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(", ");
+  }
+  return defaultMsg;
+};
+
 export function useCreateProgetto() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -39,7 +48,7 @@ export function useCreateProgetto() {
       queryClient.invalidateQueries({ queryKey: ["progetti"], exact: false });
     },
     onError: (err: any) => {
-      toast.error(err?.response?.data?.detail ?? "Errore nella creazione del progetto");
+      toast.error(formatError(err, "Errore nella creazione del progetto"));
     },
   });
 }
@@ -56,7 +65,7 @@ export function useUpdateProgetto() {
       queryClient.invalidateQueries({ queryKey: ["progetti", variables.id], exact: false });
     },
     onError: (err: any) => {
-      toast.error(err?.response?.data?.detail ?? "Errore nell'aggiornamento del progetto");
+      toast.error(formatError(err, "Errore nell'aggiornamento del progetto"));
     },
   });
 }
@@ -71,7 +80,7 @@ export function useDeleteProgetto() {
       queryClient.invalidateQueries({ queryKey: ["progetti"], exact: false });
     },
     onError: (err: any) => {
-      toast.error(err?.response?.data?.detail ?? "Errore nell'eliminazione del progetto");
+      toast.error(formatError(err, "Errore nell'eliminazione del progetto"));
     },
   });
 }

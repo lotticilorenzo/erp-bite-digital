@@ -15,6 +15,9 @@ import {
   Building2,
   MoreHorizontal,
   ExternalLink,
+  Calendar,
+  CheckCircle2,
+  AlertCircle,
   Filter,
   FolderOpen
 } from "lucide-react";
@@ -103,7 +106,7 @@ export function ProgettoTable({ progetti, onEdit, onDelete, isLoading }: Progett
               <TableHead className="text-muted-foreground font-black uppercase tracking-widest text-[10px]">CLIENTE</TableHead>
               <TableHead className="text-muted-foreground font-black uppercase tracking-widest text-[10px]">TIPO</TableHead>
               <TableHead className="text-muted-foreground font-black uppercase tracking-widest text-[10px]">STATO</TableHead>
-              <TableHead className="text-muted-foreground font-black uppercase tracking-widest text-[10px]">BUDGET</TableHead>
+              <TableHead className="text-muted-foreground font-black uppercase tracking-widest text-[10px]">VALORE</TableHead>
               <TableHead className="text-right pr-6"></TableHead>
             </TableRow>
           </TableHeader>
@@ -171,13 +174,24 @@ export function ProgettoTable({ progetti, onEdit, onDelete, isLoading }: Progett
                         {progetto.stato}
                       </span>
                     </div>
+                    {progetto.has_commessa_mese ? (
+                      <div className="flex items-center gap-1 mt-1">
+                        <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
+                        <span className="text-[9px] font-bold text-emerald-500/80 uppercase tracking-tight">In Commessa</span>
+                      </div>
+                    ) : progetto.stato === "ATTIVO" ? (
+                      <div className="flex items-center gap-1 mt-1 animate-pulse">
+                        <AlertCircle className="w-2.5 h-2.5 text-amber-500" />
+                        <span className="text-[9px] font-bold text-amber-500/80 uppercase tracking-tight">Manca Commessa</span>
+                      </div>
+                    ) : null}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
                       <span className="text-foreground font-medium">
                         €{(Number(progetto.importo_fisso) + Number(progetto.importo_variabile)).toLocaleString()}
                       </span>
-                      <span className="text-[10px] text-muted-foreground">Budget Totale</span>
+                      <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">Valore Totale</span>
                     </div>
                   </TableCell>
                   <TableCell className="text-right pr-6" onClick={(e: React.MouseEvent) => e.stopPropagation()}>

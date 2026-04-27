@@ -1,4 +1,4 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ChevronLeft,
@@ -19,10 +19,15 @@ import {
   Receipt,
   ArrowRight,
   Building2,
+  Euro,
+  Link2,
+  ExternalLink,
+  FolderOpen,
+  Link2Off,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { useCliente, useClientHealthScore } from "@/hooks/useClienti";
+import { useCliente, useClientHealthScore, useUpdateCliente } from "@/hooks/useClienti";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useCommesse } from "@/hooks/useCommesse";
 import { ClientAvatar } from "@/components/common/ClientAvatar";
@@ -39,6 +44,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger
 } from "@/components/ui/dialog";
 import { 
@@ -72,11 +78,23 @@ export default function ClienteDetailPage() {
   const { data: progetti = [] } = useProgetti(id);
   const { data: fatture = [] } = useFattureAttive();
   const { updatePreventivo, deletePreventivo, convertToCommessa } = usePreventivoMutations();
+  const updateCliente = useUpdateCliente();
+
 
   const [periodo, setPeriodo] = useState<"YTD" | "PREV_YEAR" | "6M" | "ALL">("YTD");
   const [isPModalOpen, setIsPModalOpen] = useState(false);
   const [selectedP, setSelectedP] = useState<Preventivo | undefined>();
   const [isClienteDialogOpen, setIsClienteDialogOpen] = useState(false);
+
+  const chartRef = useRef<HTMLDivElement>(null);
+  const [chartW, setChartW] = useState(0);
+  useEffect(() => {
+    const el = chartRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setChartW(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const filteredCommesse = useMemo(() => {
     const now = new Date();
@@ -107,12 +125,11 @@ export default function ClienteDetailPage() {
   const clientFatture = useMemo(() => fatture.filter(f => f.cliente_id === id), [fatture, id]);
 
   const clientStats = useMemo(() => {
-    const clientFatture = fatture.filter(f => f.cliente_id === id);
     const ltv = commesse.reduce((acc, c) => acc + (c.valore_fatturabile || 0), 0);
     
     const paidFatture = clientFatture.filter(f => 
       (f.stato_pagamento.toLowerCase() === 'pagata' || f.stato_pagamento.toLowerCase() === 'incassata') && 
-      f.data_emissione && f.data_incasso // Assuming we have data_incasso or we use a fallback
+      f.data_emissione && f.data_incasso 
     );
 
     let avgCollectionDays = 0;
@@ -126,7 +143,7 @@ export default function ClienteDetailPage() {
     }
 
     return { ltv, avgCollectionDays };
-  }, [commesse, fatture, id]);
+  }, [commesse, clientFatture]);
 
   const projectionData = useMemo(() => {
     const retainers = progetti.filter(p => p.tipo === "RETAINER" && p.stato === "ATTIVO");
@@ -224,13 +241,56 @@ export default function ClienteDetailPage() {
             </div>
           </div>
         </div>
-        <Button 
-          variant="outline" 
-          onClick={() => setIsClienteDialogOpen(true)}
-          className="bg-card border-border hover:bg-muted"
-        >
-          <Pencil className="w-4 h-4 mr-2 text-primary" /> Modifica Cliente
-        </Button>
+        <div className="flex items-center gap-3">
+          {cliente.google_drive_url && (
+            <Button
+              variant="outline"
+              onClick={() => window.open(cliente.google_drive_url!, "_blank")}
+              className="bg-card border-border hover:bg-muted text-blue-400 border-blue-500/20"
+            >
+              <FolderOpen className="w-4 h-4 mr-2" /> Google Drive
+            </Button>
+          )}
+          <Button 
+            variant="outline" 
+            onClick={() => setIsClienteDialogOpen(true)}
+            className="bg-card border-border hover:bg-muted"
+          >
+            <Pencil className="w-4 h-4 mr-2 text-primary" /> Modifica Cliente
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-4">
+        {cliente.google_drive_url ? (
+          <a
+            href={cliente.google_drive_url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 transition-all group"
+          >
+            <div className="h-10 w-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+              <FolderOpen className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-white leading-none">Google Drive</p>
+              <p className="text-[10px] text-blue-400/70 mt-1 font-medium">Cartella Documenti</p>
+            </div>
+          </a>
+        ) : (
+          <button
+            onClick={() => setIsClienteDialogOpen(true)}
+            className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/[0.03] border border-dashed border-white/10 hover:border-blue-500/30 hover:bg-blue-500/5 transition-all group"
+          >
+            <div className="h-10 w-10 rounded-xl bg-white/5 flex items-center justify-center text-muted-foreground group-hover:text-blue-400 transition-colors">
+              <FolderOpen className="w-5 h-5" />
+            </div>
+            <div className="text-left">
+              <p className="text-xs font-black uppercase tracking-widest text-muted-foreground leading-none group-hover:text-white transition-colors">Collega Drive</p>
+              <p className="text-[10px] text-muted-foreground/50 mt-1 font-medium">Configura cartella</p>
+            </div>
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -343,35 +403,33 @@ export default function ClienteDetailPage() {
           </div>
         </CardHeader>
         <CardContent className="pt-8 h-[300px]">
-          <div style={{ width: '100%', height: '100%', minWidth: 0, minHeight: 0, position: 'relative' }}>
-            {isMounted && (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                <BarChart data={projectionData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                  <XAxis 
-                    dataKey="month" 
-                    stroke="hsl(var(--muted-foreground))" 
-                    fontSize={10} 
-                    fontWeight="bold" 
-                    tickLine={false} 
-                    axisLine={false} 
-                  />
-                  <YAxis 
-                    stroke="hsl(var(--muted-foreground))" 
-                    fontSize={10} 
-                    fontWeight="bold" 
-                    tickLine={false} 
-                    axisLine={false}
-                    tickFormatter={(val) => `€${val/1000}k`}
-                  />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "16px", fontSize: "12px", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)" }}
-                    itemStyle={{ fontWeight: "black", color: "hsl(var(--primary))" }}
-                    cursor={{ fill: "hsl(var(--primary)/0.05)" }}
-                  />
-                  <Bar dataKey="projected" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} barSize={24} />
-                </BarChart>
-              </ResponsiveContainer>
+          <div ref={chartRef} style={{ width: '100%', height: '100%', minWidth: 0, minHeight: 0, position: 'relative' }}>
+            {chartW > 0 && (
+              <BarChart width={chartW} height={240} data={projectionData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis 
+                  dataKey="month" 
+                  stroke="hsl(var(--muted-foreground))" 
+                  fontSize={10} 
+                  fontWeight="bold" 
+                  tickLine={false} 
+                  axisLine={false} 
+                />
+                <YAxis 
+                  stroke="hsl(var(--muted-foreground))" 
+                  fontSize={10} 
+                  fontWeight="bold" 
+                  tickLine={false} 
+                  axisLine={false}
+                  tickFormatter={(val) => `€${val/1000}k`}
+                />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "16px", fontSize: "12px", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)" }}
+                  itemStyle={{ fontWeight: "black", color: "hsl(var(--primary))" }}
+                  cursor={{ fill: "hsl(var(--primary)/0.05)" }}
+                />
+                <Bar dataKey="projected" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} barSize={24} />
+              </BarChart>
             )}
           </div>
         </CardContent>
@@ -608,14 +666,35 @@ export default function ClienteDetailPage() {
                   <Building2 className="w-4 h-4" />
                   Scheda Cliente
                 </CardTitle>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setIsClienteDialogOpen(true)}
-                  className="h-7 px-2 text-[10px] font-black uppercase tracking-wider text-muted-foreground/50 hover:text-primary"
-                >
-                  <Pencil className="w-3 h-3 mr-1" /> Modifica
-                </Button>
+                <div className="flex items-center gap-2">
+                  {cliente.google_drive_url ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open(cliente.google_drive_url!, "_blank")}
+                      className="h-7 px-3 text-[10px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20"
+                    >
+                      <FolderOpen className="w-3 h-3 mr-1" /> Drive
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setIsClienteDialogOpen(true)}
+                      className="h-7 px-3 text-[10px] font-black uppercase tracking-wider text-muted-foreground/30 hover:text-blue-400 hover:bg-blue-500/5"
+                    >
+                      <FolderOpen className="w-3 h-3 mr-1" /> Collega Drive
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setIsClienteDialogOpen(true)}
+                    className="h-7 px-2 text-[10px] font-black uppercase tracking-wider text-muted-foreground/50 hover:text-primary"
+                  >
+                    <Pencil className="w-3 h-3 mr-1" /> Modifica
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-5 text-sm">
@@ -707,6 +786,28 @@ export default function ClienteDetailPage() {
                 </div>
               )}
 
+              {/* Documentazione */}
+              {cliente.google_drive_url && (
+                <div className="space-y-2">
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40">Documentazione</p>
+                  <a 
+                    href={cliente.google_drive_url} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="flex items-center gap-3 p-3 rounded-xl bg-blue-500/5 border border-blue-500/10 hover:bg-blue-500/10 transition-all group/drive"
+                  >
+                    <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover/drive:scale-110 transition-transform">
+                      <FolderOpen className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-bold text-white leading-none">Google Drive</p>
+                      <p className="text-[10px] text-muted-foreground truncate mt-1">Apri cartella condivisa</p>
+                    </div>
+                    <ExternalLink className="w-3 h-3 text-muted-foreground/30 group-hover/drive:text-blue-400 transition-colors" />
+                  </a>
+                </div>
+              )}
+
               {/* Note */}
               {cliente.note && (
                 <div className="space-y-1.5">
@@ -769,6 +870,9 @@ export default function ClienteDetailPage() {
                           <FileText className="w-6 h-6 text-purple-400" />
                           Consolidato: {cliente.ragione_sociale} ({periodoLabel})
                         </DialogTitle>
+                        <DialogDescription className="sr-only">
+                          Anteprima del report consolidato per il cliente {cliente.ragione_sociale}.
+                        </DialogDescription>
                       </DialogHeader>
                       <div className="flex-1 w-full h-full bg-slate-100">
                         <PDFViewer width="100%" height="100%" className="border-none">
@@ -798,43 +902,31 @@ export default function ClienteDetailPage() {
                         className="w-full h-11 bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 gap-2 font-bold"
                       >
                         <Download className="w-4 h-4" />
-                        {loading ? "Generazione..." : "Scarica Report Consolidato"}
+                        Scarica Report PDF
                       </Button>
                     )}
                   </PDFDownloadLink>
                 </div>
-                
-                {filteredCommesse.length === 0 && (
-                  <p className="text-[10px] text-amber-400 text-center italic">
-                    Nessuna commessa trovata per il periodo selezionato.
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-4 pt-4 border-t border-border">
-                 <div className="flex justify-between items-center bg-muted/20 p-3 rounded-lg border border-border/50">
-                    <div>
-                      <p className="text-[10px] text-muted-foreground font-black uppercase">Email Referente</p>
-                      <p className="text-xs font-bold text-white">{cliente.email || "---"}</p>
-                    </div>
-                    <Button variant="ghost" size="sm" className="h-8 text-xs underline" onClick={() => navigate(`/clienti`)}>CRM</Button>
-                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
       </div>
 
-      <PreventivoModal 
-        isOpen={isPModalOpen} 
-        onClose={() => setIsPModalOpen(false)} 
-        preventivo={selectedP} 
+      <ClienteDialog
+        open={isClienteDialogOpen}
+        onOpenChange={setIsClienteDialogOpen}
+        cliente={cliente}
       />
 
-      <ClienteDialog 
-        open={isClienteDialogOpen} 
-        onOpenChange={setIsClienteDialogOpen} 
-        cliente={cliente as any} 
+      <PreventivoModal
+        isOpen={isPModalOpen}
+        onClose={() => {
+          setIsPModalOpen(false);
+          setSelectedP(undefined);
+        }}
+        clienteId={id}
+        preventivo={selectedP}
       />
     </div>
   );
@@ -842,64 +934,56 @@ export default function ClienteDetailPage() {
 
 function FactorCard({ title, score, detail, icon }: { title: string, score: number, detail: string, icon: React.ReactNode }) {
   return (
-    <Card className="bg-card border-border hover:shadow-xl transition-shadow duration-300">
-      <CardContent className="p-6">
-        <div className="flex justify-between items-start mb-4">
-          <div className="p-2 bg-muted/50 rounded-lg border border-border">
-            {icon}
-          </div>
-          <div className="text-right">
-            <div className="text-2xl font-black text-white">{score}</div>
-            <div className="text-[9px] text-muted-foreground uppercase tracking-tighter">Fattore Pt</div>
-          </div>
+    <div className="bg-card border border-border p-5 rounded-2xl space-y-4 hover:border-primary/30 transition-colors group">
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          {icon}
+          <span className="text-xs font-bold text-white uppercase tracking-tight">{title}</span>
         </div>
-        <div className="space-y-3">
-          <p className="text-sm font-bold text-foreground">{title}</p>
-          <Progress value={score} className="h-1 bg-muted" />
-          <p className="text-[10px] text-muted-foreground italic">{detail}</p>
+        <span className="text-lg font-black text-white">{score}</span>
+      </div>
+      <div className="space-y-2">
+        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+          <motion.div 
+            initial={{ width: 0 }}
+            animate={{ width: `${score}%` }}
+            className={`h-full ${score >= 70 ? 'bg-emerald-500' : score >= 40 ? 'bg-amber-500' : 'bg-red-500'}`}
+          />
         </div>
-      </CardContent>
-    </Card>
+        <p className="text-[10px] text-muted-foreground font-medium">{detail}</p>
+      </div>
+    </div>
   );
 }
 
 function StatCard({ title, value, detail, icon }: { title: string, value: string, detail: string, icon: React.ReactNode }) {
   return (
-    <Card className="bg-card/40 border-border/50 hover:border-primary/30 transition-all rounded-2xl overflow-hidden relative group">
-      <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-primary/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-      <CardContent className="p-6">
-        <div className="flex items-center gap-4 mb-4">
-          <div className="p-2 bg-background/50 rounded-xl border border-border group-hover:border-primary/30 transition-colors">
-            {icon}
-          </div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-[#475569]">{title}</p>
-        </div>
-        <div className="space-y-1">
-          <p className="text-2xl font-black text-white tracking-tighter">{value}</p>
-          <p className="text-[10px] text-muted-foreground font-medium italic">{detail}</p>
-        </div>
+    <Card className="bg-card border-border hover:border-primary/20 transition-colors overflow-hidden relative">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center justify-between">
+          {title}
+          {icon}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-2xl font-black text-white tabular-nums">{value}</p>
+        <p className="text-[10px] text-muted-foreground mt-1 font-medium">{detail}</p>
       </CardContent>
     </Card>
   );
 }
 
-const Euro = ({ className }: { className?: string }) => <span className={className}>€</span>;
-
-function InfoRow({ label, value, isLink }: { label: string; value: string; isLink?: string }) {
+function InfoRow({ label, value, isLink, icon }: { label: string, value: string, isLink?: string, icon?: React.ReactNode }) {
   return (
-    <div className="flex justify-between items-center gap-3">
-      <span className="text-muted-foreground/50 text-[11px] shrink-0">{label}</span>
+    <div className="flex justify-between items-center group/info">
+      <span className="text-muted-foreground/50 flex items-center gap-1.5">
+        {icon}
+        {label}
+      </span>
       {isLink ? (
-        <a
-          href={isLink}
-          target={isLink.startsWith("http") ? "_blank" : undefined}
-          rel="noopener noreferrer"
-          className="text-[11px] font-bold text-primary/80 hover:text-primary truncate max-w-[60%] text-right transition-colors"
-        >
-          {value}
-        </a>
+        <a href={isLink} target="_blank" rel="noreferrer" className="font-bold text-white hover:text-primary transition-colors truncate max-w-[160px]">{value}</a>
       ) : (
-        <span className="text-[11px] font-bold text-white/80 truncate max-w-[60%] text-right">{value}</span>
+        <span className="font-bold text-white truncate max-w-[160px]">{value}</span>
       )}
     </div>
   );

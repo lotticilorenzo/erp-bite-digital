@@ -33,7 +33,7 @@ async def api_stop_timer(
         raise HTTPException(status_code=404, detail="Sessione non trovata")
     return session
 
-@router.get("/active", response_model=Optional[TimerSessionOut])
+@router.get("/active")
 async def api_get_active_timer(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)

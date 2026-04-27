@@ -212,16 +212,21 @@ async def create_cliente(db: AsyncSession, data: ClienteCreate) -> Cliente:
     return c
 
 async def update_cliente(db: AsyncSession, cliente_id: uuid.UUID, data: ClienteUpdate, by_user_id: uuid.UUID) -> Optional[Cliente]:
-    c = await get_cliente(db, cliente_id)
-    if not c:
-        return None
-    prima = {"ragione_sociale": c.ragione_sociale, "attivo": c.attivo}
-    for field, val in data.model_dump(exclude_none=True).items():
-        setattr(c, field, val)
-    await write_audit(db, by_user_id, "clienti", cliente_id, "UPDATE", prima)
-    await db.flush()
-    return c
-
+    try:
+        c = await get_cliente(db, cliente_id)
+        if not c:
+            return None
+        prima = {"ragione_sociale": c.ragione_sociale, "attivo": c.attivo}
+        for field, val in data.model_dump(exclude_none=True).items():
+            setattr(c, field, val)
+        await write_audit(db, by_user_id, "clienti", cliente_id, "UPDATE", prima)
+        await db.flush()
+        return c
+    except Exception as e:
+        logger.error(f"DATABASE ERROR updating client {cliente_id}: {str(e)}")
+        if hasattr(e, 'orig'):
+            logger.error(f"Original DB error: {e.orig}")
+        raise e
 
 async def delete_cliente(db: AsyncSession, cliente_id: uuid.UUID, by_user_id: uuid.UUID) -> bool:
     from fastapi import HTTPException
@@ -376,8 +381,25 @@ async def get_progetto(db: AsyncSession, progetto_id: uuid.UUID) -> Optional[Pro
     return result.unique().scalar_one_or_none()
 
 async def create_progetto(db: AsyncSession, data: ProgettoCreate) -> Progetto:
-    p = Progetto(**data.model_dump())
+    # Estrae i dati del team prima di creare l'oggetto Progetto
+    team_data = data.team if data.team is not None else []
+    
+    # Crea il progetto escludendo il team dal dump
+    project_dict = data.model_dump(exclude={'team'})
+    p = Progetto(**project_dict)
     db.add(p)
+    await db.flush()
+    
+    # Aggiunge i membri del team
+    for t_member in team_data:
+        db.add(ProgettoTeam(
+            progetto_id=p.id,
+            user_id=t_member.user_id,
+            ruolo_progetto=t_member.ruolo_progetto,
+            ore_previste=t_member.ore_previste,
+            note=t_member.note
+        ))
+    
     await db.flush()
     
     # Automazione Chat: Crea un canale per il progetto
@@ -414,8 +436,28 @@ async def update_progetto(db: AsyncSession, progetto_id: uuid.UUID, data: Proget
     if not p:
         return None
     prima = {"stato": p.stato, "importo_fisso": str(p.importo_fisso)}
-    for field, val in data.model_dump(exclude_none=True).items():
+    
+    # Estrae il team se presente
+    update_dict = data.model_dump(exclude_none=True)
+    team_data = update_dict.pop('team', None)
+    
+    # Aggiorna i campi base
+    for field, val in update_dict.items():
         setattr(p, field, val)
+    
+    # Aggiorna il team se fornito (sovrascrive il precedente)
+    if team_data is not None:
+        # Rimuove il vecchio team (la relazione ha cascade="all, delete-orphan")
+        p.team = [
+            ProgettoTeam(
+                progetto_id=p.id,
+                user_id=t['user_id'],
+                ruolo_progetto=t.get('ruolo_progetto'),
+                ore_previste=t.get('ore_previste', 0),
+                note=t.get('note')
+            ) for t in team_data
+        ]
+        
     await write_audit(db, by_user_id, "progetti", progetto_id, "UPDATE", prima)
     await db.flush()
     return p

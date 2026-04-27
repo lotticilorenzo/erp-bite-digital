@@ -97,7 +97,7 @@ manager = ConnectionManager()
 # REST API - CHANNELS
 # ═══════════════════════════════════════════════════════
 
-@router.get("/channels", response_model=List[ChatCanaleOut])
+@router.get("/channels")
 async def get_channels(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)

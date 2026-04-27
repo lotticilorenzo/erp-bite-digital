@@ -71,6 +71,7 @@ import { ContenutoDialog } from "@/components/contenuti/ContenutoDialog";
 import { AuditLogTable } from "@/components/audit/AuditLogTable";
 import { AITaskGeneratorDialog } from "@/components/ai/AITaskGeneratorDialog";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 export default function CommessaDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -691,7 +692,7 @@ export default function CommessaDetailPage() {
                   ))}
                   {!commessa.righe_progetto?.length && (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-24 text-center text-[#475569]">Nessun progetto associato</TableCell>
+                      <TableCell colSpan={5} className="h-24 text-center text-[#475569]">Nessun progetto associato</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -739,6 +740,49 @@ export default function CommessaDetailPage() {
         </div>
 
         <div className="space-y-6">
+          <Card className="bg-card border-primary/20 shadow-xl overflow-hidden">
+            <CardHeader className="pb-3 bg-primary/5">
+              <CardTitle className="text-xs font-black uppercase tracking-[0.2em] text-primary flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                Admin Checklist
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-4">
+              <div className="space-y-3">
+                <ChecklistItem 
+                  label="Manodopera (Ore)" 
+                  checked={timesheets.length > 0} 
+                  subtext={timesheets.length > 0 ? `${oreReali.toFixed(1)}h caricate` : "Nessuna ora caricata"}
+                />
+                <ChecklistItem 
+                  label="Costi Diretti" 
+                  checked={(commessa.costi_diretti || 0) > 0} 
+                  subtext={(commessa.costi_diretti || 0) > 0 ? `€${commessa.costi_diretti} inseriti` : "Mancano costi software/ads"}
+                />
+                <ChecklistItem 
+                  label="Team Assegnato" 
+                  checked={(commessa.righe_progetto || []).every(r => !!r.progetto?.team)} 
+                  subtext={(commessa.righe_progetto || []).every(r => !!r.progetto?.team) ? "Team configurato" : "Alcuni progetti senza team"}
+                />
+                <ChecklistItem 
+                  label="Note Progetto" 
+                  checked={!!commessa.note && commessa.note.length > 5} 
+                  subtext={commessa.note ? "Note inserite" : "Mancano riferimenti"}
+                />
+              </div>
+
+              {timesheets.length > 0 && 
+               (commessa.costi_diretti || 0) > 0 && 
+               commessa.note && 
+               (commessa.righe_progetto || []).every(r => !!r.progetto?.team) && (
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-emerald-400" />
+                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-tight">Commessa pronta per chiusura</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card className="bg-card border-border text-white overflow-hidden">
             <div className={`h-1 bg-gradient-to-r from-purple-500 via-blue-500 to-purple-500`} />
             <CardHeader>
@@ -1124,6 +1168,23 @@ export default function CommessaDetailPage() {
         onOpenChange={setIsPlanningDialogOpen}
         plan={commessa?.pianificazione}
       />
+    </div>
+  );
+}
+
+function ChecklistItem({ label, checked, subtext }: { label: string; checked: boolean; subtext: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className={cn(
+        "mt-0.5 rounded-full p-0.5",
+        checked ? "bg-emerald-500/20 text-emerald-500" : "bg-slate-500/20 text-slate-500"
+      )}>
+        {checked ? <CheckCircle2 className="h-3 w-3" /> : <div className="h-3 w-3" />}
+      </div>
+      <div className="flex flex-col">
+        <span className={cn("text-xs font-bold", checked ? "text-foreground" : "text-faint")}>{label}</span>
+        <span className="text-[9px] text-faint uppercase tracking-tighter">{subtext}</span>
+      </div>
     </div>
   );
 }

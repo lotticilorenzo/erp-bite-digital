@@ -319,6 +319,12 @@ class ServizioProgettoOut(OrmBase):
     note: Optional[str] = None
     created_at: Optional[datetime] = None
 
+class ProgettoTeamCreate(BaseModel):
+    user_id: uuid.UUID
+    ruolo_progetto: Optional[str] = None
+    ore_previste: float = 0
+    note: Optional[str] = None
+
 class ProgettoCreate(BaseModel):
     cliente_id: Optional[uuid.UUID] = None
     nome: str
@@ -327,13 +333,17 @@ class ProgettoCreate(BaseModel):
     importo_fisso: Decimal = Decimal("0")
     importo_variabile: Decimal = Decimal("0")
     delivery_attesa: int = 0
-    clickup_list_id: Optional[str] = None
     note: Optional[str] = None
+    data_inizio: Optional[date] = None
+    data_fine: Optional[date] = None
+    team: Optional[List[ProgettoTeamCreate]] = None
 
 class ProgettoTeamOut(OrmBase):
     id: uuid.UUID
     user_id: uuid.UUID
     ruolo_progetto: Optional[str] = None
+    ore_previste: float = 0
+    note: Optional[str] = None
     user: Optional[UserOut] = None
 
 class ProgettoUpdate(BaseModel):
@@ -344,8 +354,10 @@ class ProgettoUpdate(BaseModel):
     importo_fisso: Optional[Decimal] = None
     importo_variabile: Optional[Decimal] = None
     delivery_attesa: Optional[int] = None
-    clickup_list_id: Optional[str] = None
     note: Optional[str] = None
+    data_inizio: Optional[date] = None
+    data_fine: Optional[date] = None
+    team: Optional[List[ProgettoTeamCreate]] = None
 
 class ProgettoOut(OrmBase):
     id: uuid.UUID
@@ -356,9 +368,11 @@ class ProgettoOut(OrmBase):
     importo_fisso: Decimal
     importo_variabile: Decimal
     delivery_attesa: int
-    clickup_list_id: Optional[str]
     note: Optional[str]
+    data_inizio: Optional[date] = None
+    data_fine: Optional[date] = None
     created_at: datetime
+    has_commessa_mese: bool = False
 
     servizi: List[ServizioProgettoOut] = Field(default_factory=list)
     team: List[ProgettoTeamOut] = Field(default_factory=list)

@@ -100,6 +100,15 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": "Internal Server Error"}
     )
 
+from fastapi.exceptions import RequestValidationError
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.error(f"422 Validation Error on {request.method} {request.url.path}: {exc.errors()} - Body: {exc.body}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()},
+    )
+
 @app.get("/")
 async def root():
     return {"message": "Bite ERP API is running"}
@@ -156,8 +165,9 @@ async def ensure_schema_tables_on_startup():
                 await conn.execute(text("ALTER TABLE clienti ADD COLUMN IF NOT EXISTS affidabilita VARCHAR(10) DEFAULT 'MEDIA'"))
                 await conn.execute(text("UPDATE clienti SET affidabilita = 'MEDIA' WHERE affidabilita IS NULL"))
                 
-                # Nuovi campi Pianificazione
+                # Nuovi campi Pianificazione e Drive
                 await conn.execute(text("ALTER TABLE clienti ADD COLUMN IF NOT EXISTS start_day_type client_start_day_type DEFAULT 'STANDARD_1'"))
+                await conn.execute(text("ALTER TABLE clienti ADD COLUMN IF NOT EXISTS google_drive_url VARCHAR(500)"))
                 await conn.execute(text("ALTER TABLE commesse ADD COLUMN IF NOT EXISTS pianificazione_id UUID REFERENCES pianificazioni(id)"))
 
                 # ── Tabelle piano_commessa (non hanno ORM model) ─────────

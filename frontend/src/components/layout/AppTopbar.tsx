@@ -31,7 +31,7 @@ export function AppTopbar() {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const { openNewTask } = useStudio();
+  const { openNewTask, allProgetti, allClienti } = useStudio();
   const pathnames = location.pathname.split("/").filter((x) => x);
   const isStudioOS = location.pathname.startsWith("/studio-os");
 
@@ -53,10 +53,24 @@ export function AppTopbar() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const getBreadcrumbLabel = (path: string) => {
+  const getBreadcrumbLabel = (path: string, index: number) => {
+    // Check if it's a project ID (after 'progetti')
+    if (index > 0 && pathnames[index - 1] === "progetti") {
+      const p = allProgetti.find(x => x.id === path);
+      if (p) return p.nome;
+    }
+    
+    // Check if it's a client ID (after 'clienti')
+    if (index > 0 && pathnames[index - 1] === "clienti") {
+      const c = allClienti.find(x => x.id === path);
+      if (c) return c.ragione_sociale;
+    }
+
     switch (path) {
       case "clienti":
         return "Clienti";
+      case "progetti":
+        return "Progetti";
       case "projects":
         return "Progetti";
       case "planning":
@@ -115,7 +129,7 @@ export function AppTopbar() {
                         i === pathnames.length - 1 ? "text-soft font-semibold" : "text-faint"
                       }`}
                     >
-                      {getBreadcrumbLabel(path)}
+                      {getBreadcrumbLabel(path, i)}
                     </Link>
                   </BreadcrumbLink>
                 </BreadcrumbItem>

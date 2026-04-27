@@ -26,6 +26,7 @@ interface StudioContextType {
   currentFolder: Cliente | null;
   currentList: Progetto | null;
   allProgetti: Progetto[];
+  allClienti: Cliente[];
   getFolderProjects: (folderId: string) => Progetto[];
   folderProjects: Progetto[];
   openNewTask: (folderId?: string | null, listId?: string | null) => void;
@@ -282,6 +283,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     currentFolder,
     currentList,
     allProgetti: progetti,
+    allClienti: clienti,
     getFolderProjects,
     folderProjects,
     timer: {

@@ -26,6 +26,10 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+      "/static": {
+        target: "http://backend:8000",
+        changeOrigin: true,
+      },
     },
   },
   build: {

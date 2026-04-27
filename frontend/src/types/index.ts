@@ -59,6 +59,7 @@ export interface Cliente {
   fic_cliente_id?: string;
   attivo: boolean;
   logo_url?: string | null;
+  google_drive_url?: string | null;
   start_day_type?: ClientStartDayType;
   drive_files?: any[];
   affidabilita?: ClienteAffidabilita | null;
@@ -71,6 +72,7 @@ export interface ProgettoTeam {
   id: string;
   user_id: string;
   ruolo_progetto?: string;
+  ore_previste: number;
   user?: User;
 }
 
@@ -83,8 +85,9 @@ export interface Progetto {
   importo_fisso: number;
   importo_variabile: number;
   delivery_attesa: number;
-  clickup_list_id?: string;
   note?: string;
+  data_inizio?: string;
+  data_fine?: string;
   created_at: string;
   cliente?: Cliente;
   team?: ProgettoTeam[];

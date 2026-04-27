@@ -243,7 +243,9 @@ export function useAnalytics(referenceDate?: Date) {
           .reduce((acc, c) => acc + (c.valore_fatturabile || 0), 0),
         costoStruttura: costiFissiArr.filter(cf => cf.attivo).reduce((acc, cf) => acc + Number(cf.importo || 0), 0),
         marginiSottoSoglia: selectedMonthCommesse.filter((c: Commessa) => (c.margine_percentuale || 0) < 30).length,
-        timesheetPendingCount: pendingTsArr.length
+        timesheetPendingCount: pendingTsArr.length,
+        progettiSenzaCommessaCount: progettiArr.filter(p => p.stato === "ATTIVO" && !p.has_commessa_mese).length,
+        progettiSenzaTeamCount: progettiArr.filter(p => p.stato === "ATTIVO" && (!p.team || p.team.length === 0)).length
       },
       
       // V3 FORECAST

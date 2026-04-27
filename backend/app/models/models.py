@@ -3,7 +3,7 @@ from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, List
 from sqlalchemy import (
-    String, Boolean, Date, DateTime, Numeric, Integer,
+    String, Boolean, Date, DateTime, Numeric, Integer, Float,
     Text, ForeignKey, UniqueConstraint, Enum as SAEnum,
     JSON, func
 )
@@ -42,9 +42,10 @@ class ProjectType(str, enum.Enum):
     ONE_OFF = "ONE_OFF"
 
 class ProjectStatus(str, enum.Enum):
-    ATTESA = "attesa"
-    SFIDA = "sfida"
-    ATTIVO = "attivo"
+    ATTESA = "ATTESA"
+    SFIDA = "SFIDA"
+    ATTIVO = "ATTIVO"
+    CHIUSO = "CHIUSO"
 
 
 class StudioNodeType(str, enum.Enum):
@@ -168,6 +169,7 @@ class Cliente(Base):
     drive_files: Mapped[Optional[list]] = mapped_column(JSON, default=list)
     fic_cliente_id: Mapped[Optional[str]] = mapped_column(String(100))
     logo_url: Mapped[Optional[str]] = mapped_column(String(500))
+    google_drive_url: Mapped[Optional[str]] = mapped_column(String(500))
     affidabilita: Mapped[Optional[str]] = mapped_column(String(10), default="MEDIA", server_default="MEDIA")
     start_day_type: Mapped[ClientStartDayType] = mapped_column(SAEnum(ClientStartDayType, name="client_start_day_type"), default=ClientStartDayType.STANDARD_1, server_default="STANDARD_1")
     attivo: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -192,8 +194,9 @@ class Progetto(Base):
     importo_fisso: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     importo_variabile: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     delivery_attesa: Mapped[int] = mapped_column(Integer, default=0)
-    clickup_list_id: Mapped[Optional[str]] = mapped_column(String(100))
     note: Mapped[Optional[str]] = mapped_column(Text)
+    data_inizio: Mapped[Optional[date]] = mapped_column(Date)
+    data_fine: Mapped[Optional[date]] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -212,6 +215,8 @@ class ProgettoTeam(Base):
     progetto_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id", ondelete="CASCADE"))
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     ruolo_progetto: Mapped[Optional[str]] = mapped_column(String(100))
+    ore_previste: Mapped[float] = mapped_column(Float, default=0)
+    note: Mapped[Optional[str]] = mapped_column(Text)
 
     progetto: Mapped["Progetto"] = relationship(back_populates="team")
     user: Mapped["User"] = relationship()
@@ -251,7 +256,6 @@ class Commessa(Base):
     fattura_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey('fatture_attive.id'), nullable=True)
     costi_diretti: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     pianificazione_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("pianificazioni.id"), nullable=True)
-    piano_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("piano_commessa.id"), nullable=True)
     preventivo: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     data_inizio: Mapped[Optional[date]] = mapped_column(Date)
     data_fine: Mapped[Optional[date]] = mapped_column(Date)

@@ -337,19 +337,9 @@ export function CommessaDialog({
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control as any}
-                  name="costo_manodopera"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-muted-foreground">Costo Manodopera (€)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} className="bg-muted border-border text-white" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="col-span-1 hidden">
+                   {/* Costo Manodopera rimosso - calcolato dal backend */}
+                </div>
 
                 <FormField
                   control={form.control as any}

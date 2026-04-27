@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, parseISO, subMonths } from "date-fns";
 import { it } from "date-fns/locale";
@@ -705,6 +705,66 @@ export default function DashboardPage() {
               >
                 Vai alla revisione <Clock className="h-3 w-3" />
               </button>
+            </CardContent>
+          </Card>
+
+          
+          <Card className="border-border/30 bg-card/60 shadow-xl overflow-hidden">
+            <CardHeader className="pb-2 bg-muted/30">
+              <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] text-primary flex items-center gap-2">
+                <Zap className="h-3 w-3" />
+                Monthly Health Check
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-foreground">Progetti Scoperti</span>
+                  <span className="text-[9px] text-faint uppercase">Senza commessa questo mese</span>
+                </div>
+                <Badge className={cn(
+                  "h-6 min-w-[24px] justify-center rounded-lg",
+                  (analytics?.kpis.progettiSenzaCommessaCount || 0) > 0 
+                    ? "bg-amber-500/20 text-amber-500 border-amber-500/20" 
+                    : "bg-emerald-500/20 text-emerald-500 border-emerald-500/20"
+                )}>
+                  {analytics?.kpis.progettiSenzaCommessaCount || 0}
+                </Badge>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-border/20">
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-foreground">Team Mancante</span>
+                  <span className="text-[9px] text-faint uppercase">Progetti senza personale</span>
+                </div>
+                <Badge className={cn(
+                  "h-6 min-w-[24px] justify-center rounded-lg",
+                  (analytics?.kpis.progettiSenzaTeamCount || 0) > 0 
+                    ? "bg-rose-500/20 text-rose-500 border-rose-500/20" 
+                    : "bg-emerald-500/20 text-emerald-500 border-emerald-500/20"
+                )}>
+                  {analytics?.kpis.progettiSenzaTeamCount || 0}
+                </Badge>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-border/20">
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-foreground">Costi Diretti</span>
+                  <span className="text-[9px] text-faint uppercase">Mancanti in commessa</span>
+                </div>
+                <Badge className="bg-slate-500/20 text-slate-400 border-slate-500/20 h-6">
+                  {currentCommesse.filter(c => !c.costi_diretti || c.costi_diretti.length === 0).length}
+                </Badge>
+              </div>
+
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full mt-2 text-[9px] font-black uppercase tracking-widest h-8 border-primary/20 text-primary hover:bg-primary/10"
+                onClick={() => navigate('/progetti')}
+              >
+                Risolvi Pendenze
+              </Button>
             </CardContent>
           </Card>
 

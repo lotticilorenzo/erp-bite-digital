@@ -14,7 +14,9 @@ import {
   ExternalLink,
   Maximize2,
   LayoutDashboard,
-  MessageSquare
+  MessageSquare,
+  Users,
+  AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +32,9 @@ import { StudioTaskModal } from "@/components/studio/StudioTaskModal";
 import ChatProgetto from "@/components/chat/ChatProgetto";
 import { useCommesse, useUpdateCommessa, useCreateCommessa } from "@/hooks/useCommesse";
 import { toast } from "sonner";
+import { CommessaSelectionDialog } from "@/components/progetti/CommessaSelectionDialog";
+import { ProgettoDialog } from "@/components/progetti/ProgettoDialog";
+import { Pencil } from "lucide-react";
 
 export default function ProgettoDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -46,6 +51,10 @@ export default function ProgettoDetailPage() {
   
   const updateCommessa = useUpdateCommessa();
   const createCommessa = useCreateCommessa();
+  const [isCommessaDialogOpen, setIsCommessaDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = useState(false);
+  const [duplicateData, setDuplicateData] = useState<any>(null);
 
   if (isLoadingProj) {
     return (
@@ -76,52 +85,7 @@ export default function ProgettoDetailPage() {
   const commessaAttiva = commesseMese?.[0];
   const isLinked = commessaAttiva?.righe_progetto?.some(r => r.progetto_id === id);
 
-  const handleLinkToCommessa = async () => {
-    if (!progetto || !id) return;
-    
-    try {
-      if (commessaAttiva) {
-        const currentRows = commessaAttiva.righe_progetto.map(r => ({
-          progetto_id: r.progetto_id,
-          importo_fisso: r.importo_fisso,
-          importo_variabile: r.importo_variabile,
-          delivery_attesa: r.delivery_attesa,
-          delivery_consuntiva: r.delivery_consuntiva
-        }));
-        
-        await updateCommessa.mutateAsync({
-          id: commessaAttiva.id,
-          data: {
-            righe_progetto: [
-              ...currentRows,
-              {
-                progetto_id: id,
-                importo_fisso: progetto.importo_fisso,
-                importo_variabile: progetto.importo_variabile,
-                delivery_attesa: progetto.delivery_attesa,
-                delivery_consuntiva: 0
-              }
-            ]
-          }
-        });
-        toast.success("Progetto aggiunto alla commessa mensile");
-      } else {
-        await createCommessa.mutateAsync({
-          cliente_id: progetto.cliente_id,
-          mese_competenza: currentMonth,
-          righe_progetto: [{
-            progetto_id: id,
-            importo_fisso: progetto.importo_fisso,
-            importo_variabile: progetto.importo_variabile,
-            delivery_attesa: progetto.delivery_attesa
-          }]
-        });
-        toast.success("Nuova commessa mensile creata");
-      }
-    } catch (e) {
-      toast.error("Errore durante il collegamento");
-    }
-  };
+  const handleLinkToCommessa = () => setIsCommessaDialogOpen(true);
 
   return (
     <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 h-screen flex flex-col overflow-hidden">
@@ -150,6 +114,30 @@ export default function ProgettoDetailPage() {
             <ChevronLeft className="w-4 h-4 mr-2" />
             Indietro
           </Button>
+          <Button
+            variant="ghost"
+            onClick={() => setIsEditDialogOpen(true)}
+            className="text-muted-foreground hover:text-white hover:bg-muted rounded-xl"
+          >
+            <Pencil className="w-4 h-4 mr-2" />
+            Modifica
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              // Open creation dialog with current project data (except ID)
+              setDuplicateData({
+                ...progetto,
+                nome: `${progetto.nome} (Copia)`,
+                id: undefined
+              });
+              setIsDuplicateDialogOpen(true);
+            }}
+            className="text-muted-foreground hover:text-white hover:bg-muted rounded-xl"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Duplica
+          </Button>
           <div className="h-4 w-px bg-muted" />
           <div>
             <h1 className="text-3xl font-bold text-foreground tracking-tighter">{progetto.nome}</h1>
@@ -160,6 +148,18 @@ export default function ProgettoDetailPage() {
               <Badge variant="outline" className={progetto.stato === "ATTIVO" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] font-black uppercase" : "bg-slate-500/10 text-slate-400 border-slate-500/20 text-[10px] font-black uppercase"}>
                 {progetto.stato}
               </Badge>
+              {progetto.delivery_attesa > 0 && (!progetto.team || progetto.team.length === 0) && (
+                <Badge variant="destructive" className="bg-red-500/20 text-red-400 border-red-500/50 text-[10px] font-black uppercase animate-pulse flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Team Mancante
+                </Badge>
+              )}
+              {isLinked && (
+                <Badge variant="outline" className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20 text-[10px] font-black uppercase flex items-center gap-1">
+                  <Layers className="w-3 h-3" />
+                  Fatturazione Attiva
+                </Badge>
+              )}
             </div>
           </div>
         </div>
@@ -194,12 +194,12 @@ export default function ProgettoDetailPage() {
             <div className="lg:col-span-2 space-y-8">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatSmallCard 
-                  label="Budget Fisso" 
+                  label="Valore Fisso" 
                   value={`€${progetto.importo_fisso.toLocaleString()}`} 
                   icon={<Euro className="w-4 h-4 text-emerald-400" />} 
                 />
                 <StatSmallCard 
-                  label="Budget Var." 
+                  label="Valore Var." 
                   value={`€${progetto.importo_variabile.toLocaleString()}`} 
                   icon={<Target className="w-4 h-4 text-blue-400" />} 
                 />
@@ -209,9 +209,14 @@ export default function ProgettoDetailPage() {
                   icon={<Clock className="w-4 h-4 text-amber-400" />} 
                 />
                 <StatSmallCard 
-                  label="Data Creazione" 
-                  value={format(new Date(progetto.created_at), "dd MMM yyyy", { locale: it })} 
+                  label="Data Inizio" 
+                  value={progetto.data_inizio ? format(new Date(progetto.data_inizio), "dd MMM yyyy", { locale: it }) : "N/D"} 
                   icon={<Calendar className="w-4 h-4 text-purple-400" />} 
+                />
+                <StatSmallCard 
+                  label="Data Fine" 
+                  value={progetto.data_fine ? format(new Date(progetto.data_fine), "dd MMM yyyy", { locale: it }) : "N/D"} 
+                  icon={<Calendar className="w-4 h-4 text-orange-400" />} 
                 />
               </div>
 
@@ -260,6 +265,55 @@ export default function ProgettoDetailPage() {
               <Card className="bg-card border-border text-white rounded-3xl overflow-hidden shadow-xl">
                 <CardHeader className="border-b border-border/50 py-5 bg-muted/20 flex flex-row items-center justify-between">
                   <CardTitle className="text-lg font-black italic flex items-center gap-2 uppercase tracking-tighter">
+                    <Users className="w-4 h-4 text-blue-400" />
+                    Team Assegnato
+                  </CardTitle>
+                  <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px] font-black uppercase">
+                    {progetto.team?.length || 0} MEMBRI
+                  </Badge>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <div className="space-y-3">
+                    {progetto.team && progetto.team.length > 0 ? (
+                      progetto.team.map((membro) => (
+                        <div key={membro.id} className="space-y-3 p-4 rounded-2xl bg-muted/10 border border-border/30">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center border border-primary/30 text-xs font-bold text-primary">
+                                {membro.user?.nome?.[0]}{membro.user?.cognome?.[0]}
+                              </div>
+                              <div>
+                                <p className="font-bold text-white text-sm">{membro.user?.nome} {membro.user?.cognome}</p>
+                                <p className="text-[10px] font-medium text-muted-foreground uppercase">{membro.ruolo_progetto || "Collaboratore"}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-black text-white">{membro.ore_previste}h</p>
+                              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">ORE PREVISTE</p>
+                            </div>
+                          </div>
+                          {membro.note && (
+                            <div className="pt-3 border-t border-border/20">
+                              <p className="text-[10px] text-muted-foreground italic leading-relaxed">
+                                <span className="font-bold text-primary/70 not-italic uppercase mr-1">Compiti:</span>
+                                {membro.note}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground italic text-sm">
+                        Nessun membro assegnato al team.
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-card border-border text-white rounded-3xl overflow-hidden shadow-xl">
+                <CardHeader className="border-b border-border/50 py-5 bg-muted/20 flex flex-row items-center justify-between">
+                  <CardTitle className="text-lg font-black italic flex items-center gap-2 uppercase tracking-tighter">
                     <Layers className="w-4 h-4 text-purple-400" />
                     Commesse Correlate
                   </CardTitle>
@@ -301,35 +355,61 @@ export default function ProgettoDetailPage() {
             <div className="space-y-8">
               <Card className="bg-card border-border text-white rounded-3xl overflow-hidden shadow-xl border-t-4 border-t-primary/50 relative">
                 <CardHeader className="pb-4">
-                  <CardTitle className="text-lg font-black uppercase tracking-tighter italic">Salute Avanzamento</CardTitle>
+                  <CardTitle className="text-lg font-black uppercase tracking-tighter italic text-primary">Analisi Redditività</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                  {/* Ore Previste vs Reali */}
                   <div className="space-y-3">
                     <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
                       <span className="text-[#475569]">Capacità Utilizzata</span>
-                      <span className="text-white">0 / {progetto.delivery_attesa}h</span>
+                      <span className="text-white">0 / {progetto.delivery_attesa || "N/D"}h</span>
                     </div>
                     <div className="w-full h-3 bg-muted rounded-full overflow-hidden p-0.5 border border-white/5">
                       <div className="w-0 h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)]" />
                     </div>
                   </div>
 
-                  <div className="space-y-4 pt-6 border-t border-border/50">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-[#475569]">ClickUp List</span>
-                      <Badge variant="outline" className="bg-muted text-foreground border-border text-[8px] font-black uppercase">
-                         {progetto.clickup_list_id || "Sincronizzato"}
-                      </Badge>
+                  {/* Calcolo Costo Labor Previsto */}
+                  <div className="p-4 rounded-2xl bg-primary/5 border border-primary/20 space-y-4">
+                    <div className="flex items-center gap-2 mb-2">
+                       <Euro className="w-3.5 h-3.5 text-primary" />
+                       <h4 className="text-[10px] font-black uppercase tracking-widest">Previsione Costi Team</h4>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Efficienza Team</span>
-                      <span className="text-xs font-black text-emerald-400 tracking-tighter">ECCELLENTE</span>
+                    
+                    <div className="flex justify-between items-end">
+                      <div>
+                        <p className="text-2xl font-black text-white tracking-tighter">
+                          €{(progetto.team?.reduce((acc, m) => acc + (m.ore_previste * (m.user?.costo_orario || 0)), 0) || 0).toLocaleString()}
+                        </p>
+                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Costo Manodopera Previsto</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-lg font-black text-emerald-400 tracking-tighter">
+                          €{(progetto.importo_fisso + progetto.importo_variabile).toLocaleString()}
+                        </p>
+                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Valore Progetto</p>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-primary/10 flex justify-between items-center">
+                       <span className="text-[10px] font-bold text-muted-foreground uppercase">Margine Previsto</span>
+                       <span className="text-xs font-black text-emerald-400">
+                         {(() => {
+                           const revenue = progetto.importo_fisso + progetto.importo_variabile;
+                           const cost = progetto.team?.reduce((acc, m) => acc + (m.ore_previste * (m.user?.costo_orario || 0)), 0) || 0;
+                           if (revenue === 0) return "0%";
+                           return `${Math.round(((revenue - cost) / revenue) * 100)}%`;
+                         })()}
+                       </span>
                     </div>
                   </div>
-                  
-                  <Button className="w-full bg-primary hover:scale-[1.02] transition-transform text-white rounded-2xl h-12 font-black uppercase tracking-widest shadow-lg shadow-primary/20">
-                    Sincronizza Progetto
-                  </Button>
+
+                  <div className="space-y-4 pt-4 border-t border-border/50">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Stato Margine</span>
+                      <Badge className="bg-emerald-500/20 text-emerald-400 border-none text-[9px] font-black">OTTIMALE</Badge>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -362,6 +442,27 @@ export default function ProgettoDetailPage() {
       </Tabs>
 
       <StudioTaskModal />
+
+      <CommessaSelectionDialog 
+        progetto={progetto}
+        open={isCommessaDialogOpen}
+        onOpenChange={setIsCommessaDialogOpen}
+      />
+
+      <ProgettoDialog 
+        progetto={progetto}
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+      />
+
+      <ProgettoDialog 
+        progetto={duplicateData}
+        open={isDuplicateDialogOpen}
+        onOpenChange={(open) => {
+          setIsDuplicateDialogOpen(open);
+          if (!open) setDuplicateData(null);
+        }}
+      />
     </div>
   );
 }

@@ -1,9 +1,11 @@
 import React from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -99,10 +101,12 @@ const emptyForm = (): Partial<Cliente> => ({
   note: "",
   attivo: true,
   affidabilita: "MEDIA",
+  google_drive_url: "",
   start_day_type: "STANDARD_1",
 });
 
 export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProps) {
+  const queryClient = useQueryClient();
   const createCliente = useCreateCliente();
   const updateCliente = useUpdateCliente();
   const isEditing = !!cliente;
@@ -178,6 +182,9 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
         } catch (logoErr: any) {
           console.error("Logo operation failed", logoErr);
           toast.warning("Cliente salvato, ma errore durante l'aggiornamento del logo.");
+        } finally {
+          // Refresh client data to show new logo
+          queryClient.invalidateQueries({ queryKey: ["clienti", clienteId] });
         }
       }
 
@@ -199,6 +206,9 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
           <DialogTitle className="text-xl font-black tracking-tight text-foreground">
             {isEditing ? "Modifica cliente" : "Nuovo cliente"}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Gestisci le informazioni anagrafiche, fiscali e commerciali del cliente.
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={onSubmit} className="space-y-0">
@@ -585,31 +595,25 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
             {/* ═══ FILE DRIVE ════════════════════════════════════ */}
             <SectionTitle label="File collegati (Drive)" />
 
-            <div className="col-span-full">
-              <div className="flex items-center gap-3 p-4 rounded-xl border border-dashed border-white/10 bg-white/[0.02] text-muted-foreground/50 hover:border-primary/30 hover:text-primary/50 transition-all cursor-pointer group">
-                <Link2 className="h-4 w-4 group-hover:scale-110 transition-transform" />
-                <span className="text-[11px] font-black uppercase tracking-wider">
-                  + Collega file da Google Drive
+            <Field label="Link Cartella Google Drive" icon={<Link2 className="h-2.5 w-2.5" />} className="col-span-full">
+              <Input
+                className={INPUT_CLS}
+                placeholder="https://drive.google.com/drive/folders/..."
+                value={form.google_drive_url ?? ""}
+                onChange={(e) => set("google_drive_url", e.target.value)}
+              />
+            </Field>
+
+            <div className="col-span-full opacity-50">
+              <div className="flex items-center gap-3 p-4 rounded-xl border border-dashed border-white/5 bg-white/[0.01] text-[10px] text-muted-foreground/30">
+                <Globe className="h-3 w-3" />
+                <span>
+                  Puoi incollare qui il link alla cartella condivisa del cliente per averla sempre a portata di mano.
                 </span>
               </div>
-              {(form.drive_files ?? []).length > 0 && (
-                <div className="mt-2 space-y-1">
-                  {(form.drive_files ?? []).map((f: any, i: number) => (
-                    <div key={i} className="flex items-center gap-2 text-[11px] text-muted-foreground bg-white/5 px-3 py-2 rounded-lg">
-                      <Link2 className="h-3 w-3 text-primary/60" />
-                      <span className="flex-1 truncate">{f.name || f.url || f}</span>
-                      <button
-                        type="button"
-                        onClick={() => set("drive_files", (form.drive_files ?? []).filter((_, j) => j !== i))}
-                        className="text-muted-foreground/40 hover:text-red-400"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
+
+
 
           </div>
 

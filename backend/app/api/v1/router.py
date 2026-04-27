@@ -789,12 +789,17 @@ async def get_progetti(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
-    from app.models.models import Progetto as ProgettoModel
+    from app.models.models import Progetto as ProgettoModel, CommessaRigaProgetto
     from sqlalchemy.orm import selectinload
+    from datetime import date
+    
+    current_month = date.today().replace(day=1)
+    
     q = select(ProgettoModel).options(
         selectinload(ProgettoModel.cliente),
         selectinload(ProgettoModel.servizi),
         selectinload(ProgettoModel.team),
+        selectinload(ProgettoModel.righe_commessa).selectinload(CommessaRigaProgetto.commessa)
     )
     if cliente_id:
         q = q.where(ProgettoModel.cliente_id == cliente_id)
@@ -804,7 +809,15 @@ async def get_progetti(
         q = q.where(ProgettoModel.nome.ilike(f"%{search}%"))
     q = q.order_by(ProgettoModel.nome).offset(skip).limit(limit)
     result = await db.execute(q)
-    return result.scalars().all()
+    progetti = result.scalars().all()
+    
+    for p in progetti:
+        p.has_commessa_mese = any(
+            r.commessa and r.commessa.mese_competenza == current_month 
+            for r in p.righe_commessa
+        )
+        
+    return progetti
 
 @router.get("/progetti/{progetto_id}", response_model=ProgettoWithCliente, tags=["Progetti"])
 async def get_single_progetto(

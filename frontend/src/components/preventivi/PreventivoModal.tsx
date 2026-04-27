@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
   DialogDescription
@@ -9,22 +9,28 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { 
   Plus, Trash2, FileText, 
-  CheckCircle, Loader2, Euro
+  CheckCircle, Loader2, Euro,
+  Calendar, Building2, Hash, Type,
+  AlertCircle
 } from "lucide-react";
 import { usePreventivoMutations } from "@/hooks/usePreventivi";
 import { useClienti } from "@/hooks/useClienti";
 import { 
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
 } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import type { Preventivo } from "@/types/preventivi";
+import { cn } from "@/lib/utils";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  preventivo?: Preventivo; // Se presente, siamo in edit
+  preventivo?: Preventivo;
+  clienteId?: string;
 }
 
-export const PreventivoModal: React.FC<Props> = ({ isOpen, onClose, preventivo }) => {
+export const PreventivoModal: React.FC<Props> = ({ isOpen, onClose, preventivo, clienteId }) => {
   const { createPreventivo, updatePreventivo } = usePreventivoMutations();
   const { data: clienti } = useClienti();
   
@@ -58,17 +64,23 @@ export const PreventivoModal: React.FC<Props> = ({ isOpen, onClose, preventivo }
         ordine: v.ordine
       })));
     } else {
-      // Default numero preventivo? Forse un timestamp o sequenziale
-      setFormData(prev => ({ ...prev, numero: `PRV-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000)}` }));
+      setFormData(prev => ({ 
+        ...prev, 
+        cliente_id: clienteId || "",
+        numero: `PRV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}` 
+      }));
+      setVoci([{ descrizione: "", quantita: 1, prezzo_unitario: 0, ordine: 0 }]);
     }
-  }, [preventivo, isOpen]);
+  }, [preventivo, isOpen, clienteId]);
 
   const addVoce = () => {
     setVoci([...voci, { descrizione: "", quantita: 1, prezzo_unitario: 0, ordine: voci.length }]);
   };
 
   const removeVoce = (index: number) => {
-    setVoci(voci.filter((_, i) => i !== index));
+    if (voci.length > 1) {
+      setVoci(voci.filter((_, i) => i !== index));
+    }
   };
 
   const updateVoce = (index: number, field: string, value: any) => {
@@ -77,141 +89,176 @@ export const PreventivoModal: React.FC<Props> = ({ isOpen, onClose, preventivo }
     setVoci(newVoci);
   };
 
-  const total = voci.reduce((acc, v) => acc + (v.quantita * v.prezzo_unitario), 0);
+  const total = useMemo(() => voci.reduce((acc, v) => acc + (v.quantita * v.prezzo_unitario), 0), [voci]);
+  const iva = total * 0.22;
+  const grandTotal = total + iva;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.cliente_id || !formData.titolo) return;
+    
     const payload = { ...formData, voci };
     
-    if (preventivo) {
-      await updatePreventivo.mutateAsync({ id: preventivo.id, payload });
-    } else {
-      await createPreventivo.mutateAsync(payload);
+    try {
+      if (preventivo) {
+        await updatePreventivo.mutateAsync({ id: preventivo.id, payload });
+      } else {
+        await createPreventivo.mutateAsync(payload);
+      }
+      onClose();
+    } catch (err) {
+      console.error(err);
     }
-    onClose();
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FileText className="w-5 h-5 text-purple-500" />
-            {preventivo ? "Modifica Preventivo" : "Nuovo Preventivo"}
-          </DialogTitle>
-          <DialogDescription>
-            Crea un preventivo professionale per il partner. Voci e totali verranno calcolati automaticamente.
-          </DialogDescription>
+      <DialogContent className="max-w-5xl max-h-[92vh] overflow-hidden bg-[#0a0a0b]/95 backdrop-blur-2xl border-white/5 text-white p-0 rounded-[2rem] shadow-2xl flex flex-col">
+        <DialogHeader className="p-8 pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle className="text-3xl font-black italic tracking-tighter flex items-center gap-3 uppercase">
+                <div className="p-2.5 bg-primary/20 rounded-2xl border border-primary/30">
+                  <FileText className="w-6 h-6 text-primary" />
+                </div>
+                {preventivo ? "Modifica Offerta" : "Nuova Proposta Commerciale"}
+              </DialogTitle>
+              <DialogDescription className="text-muted-foreground font-medium mt-1">
+                Configura i dettagli dell'offerta, le voci di costo e i termini per il partner.
+              </DialogDescription>
+            </div>
+            {!preventivo && (
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 px-3 py-1 text-[10px] font-black uppercase tracking-widest">
+                BOZZA AUTOMATICA
+              </Badge>
+            )}
+          </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-8 space-y-8 scrollbar-thin scrollbar-thumb-white/10 pb-8">
+          {/* SEZIONE 1: INFO GENERALI */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white/5 p-6 rounded-[2rem] border border-white/5">
             <div className="space-y-2">
-              <Label>Cliente</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 ml-1">
+                <Building2 className="w-3 h-3" /> Partner / Cliente
+              </Label>
               <Select 
                 value={formData.cliente_id} 
                 onValueChange={(v) => setFormData({ ...formData, cliente_id: v })}
                 disabled={!!preventivo}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleziona Partner" />
+                <SelectTrigger className="bg-[#0f0f10] border-white/5 h-12 rounded-2xl focus:ring-primary/20 transition-all">
+                  <SelectValue placeholder="Seleziona Partner..." />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-[#0f0f10] border-white/10 text-white">
                   {clienti?.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.ragione_sociale}</SelectItem>
+                    <SelectItem key={c.id} value={c.id} className="focus:bg-primary/20 focus:text-white cursor-pointer">
+                      {c.ragione_sociale}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-2">
-              <Label>Codice Preventivo</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 ml-1">
+                <Hash className="w-3 h-3" /> Codice Preventivo
+              </Label>
               <Input 
                 value={formData.numero} 
                 onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
+                className="bg-[#0f0f10] border-white/5 h-12 rounded-2xl font-mono text-primary font-bold"
                 placeholder="es. PRV-2024-001"
               />
             </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>Oggetto / Titolo</Label>
-              <Input 
-                value={formData.titolo} 
-                onChange={(e) => setFormData({ ...formData, titolo: e.target.value })}
-                placeholder="es. Restyling Sito Web + SEO"
-              />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>Descrizione Breve (opzionale)</Label>
-              <Textarea 
-                value={formData.descrizione} 
-                onChange={(e) => setFormData({ ...formData, descrizione: e.target.value })}
-                placeholder="Descrizione sintetica del progetto..."
-              />
-            </div>
+
             <div className="space-y-2">
-              <Label>Scadenza Validità</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 ml-1">
+                <Calendar className="w-3 h-3" /> Scadenza Offerta
+              </Label>
               <Input 
                 type="date"
                 value={formData.data_scadenza} 
                 onChange={(e) => setFormData({ ...formData, data_scadenza: e.target.value })}
+                className="bg-[#0f0f10] border-white/5 h-12 rounded-2xl"
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-3">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 ml-1">
+                <Type className="w-3 h-3" /> Oggetto dell'Offerta
+              </Label>
+              <Input 
+                value={formData.titolo} 
+                onChange={(e) => setFormData({ ...formData, titolo: e.target.value })}
+                className="bg-[#0f0f10] border-white/5 h-12 rounded-2xl text-lg font-bold"
+                placeholder="Es. Sviluppo E-commerce 2024 - Fase 1"
               />
             </div>
           </div>
 
+          {/* SEZIONE 2: VOCI PREVENTIVO */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between border-b pb-2">
-              <h3 className="font-bold text-sm text-slate-500 uppercase tracking-wider">Voci Preventivo</h3>
-              <Button type="button" variant="outline" size="sm" onClick={addVoce} className="h-8 gap-1">
-                <Plus className="w-4 h-4" /> Aggiungi Riga
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-primary italic">Dettaglio Servizi e Prestazioni</h3>
+                <Badge className="bg-primary/10 text-primary border-none text-[9px] px-1.5">{voci.length} RIGHE</Badge>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={addVoce} className="h-9 gap-1.5 rounded-xl border-dashed border-white/20 hover:border-primary/50 hover:bg-primary/10 transition-all group">
+                <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform" /> 
+                <span className="text-[10px] font-black uppercase">Aggiungi Riga</span>
               </Button>
             </div>
             
             <div className="space-y-3">
               {voci.map((voce, index) => (
-                <div key={index} className="flex gap-3 group animate-in fade-in slide-in-from-top-1">
-                  <div className="flex-[4] space-y-1">
+                <div key={index} className="flex gap-3 items-start animate-in fade-in slide-in-from-top-2 duration-300 group">
+                  <div className="flex-[5] relative">
                     <Input 
-                      placeholder="Descrizione prestazione..." 
+                      placeholder="Descrizione della prestazione o prodotto..." 
                       value={voce.descrizione}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateVoce(index, "descrizione", e.target.value)}
+                      className="bg-[#0f0f10] border-white/5 h-11 rounded-xl text-xs focus:bg-white/5 transition-all"
                       required
                     />
                   </div>
-                  <div className="flex-[1] space-y-1">
+                  <div className="w-24">
                     <Input 
                       type="number" 
                       placeholder="Q.tà" 
                       value={voce.quantita}
-                      onChange={(e) => updateVoce(index, "quantita", parseFloat(e.target.value))}
+                      onChange={(e) => updateVoce(index, "quantita", parseFloat(e.target.value) || 0)}
+                      className="bg-[#0f0f10] border-white/5 h-11 rounded-xl text-center text-xs font-bold"
                       required
                     />
                   </div>
-                  <div className="flex-[1.5] space-y-1">
-                    <div className="relative">
-                      <Euro className="absolute left-2 top-2.5 w-4 h-4 text-slate-400" />
-                      <Input 
-                        type="number" 
-                        className="pl-8"
-                        placeholder="Prezzo" 
-                        value={voce.prezzo_unitario}
-                        onChange={(e) => updateVoce(index, "prezzo_unitario", parseFloat(e.target.value))}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="flex-[1.5] space-y-1">
+                  <div className="w-40 relative">
+                    <Euro className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                     <Input 
-                      className="bg-slate-50 font-bold text-right"
-                      value={new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(voce.quantita * voce.prezzo_unitario)}
-                      readOnly
+                      type="number" 
+                      className="bg-[#0f0f10] border-white/5 h-11 rounded-xl pl-9 text-xs font-bold"
+                      placeholder="0.00" 
+                      value={voce.prezzo_unitario}
+                      onChange={(e) => updateVoce(index, "prezzo_unitario", parseFloat(e.target.value) || 0)}
+                      required
                     />
+                  </div>
+                  <div className="w-44">
+                    <div className="bg-primary/5 border border-primary/10 h-11 rounded-xl flex items-center justify-end px-4">
+                       <span className="text-xs font-black text-white tracking-tighter">
+                         €{(voce.quantita * voce.prezzo_unitario).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                       </span>
+                    </div>
                   </div>
                   <Button 
                     type="button" 
                     variant="ghost" 
                     size="icon" 
                     onClick={() => removeVoce(index)}
-                    className="text-red-400 hover:text-red-600 hover:bg-red-50 mt-1"
-                    disabled={voci.length === 1}
+                    className={cn(
+                      "h-11 w-11 rounded-xl text-red-500/50 hover:text-red-500 hover:bg-red-500/10 transition-all shrink-0",
+                      voci.length === 1 && "opacity-0 pointer-events-none"
+                    )}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -220,47 +267,69 @@ export const PreventivoModal: React.FC<Props> = ({ isOpen, onClose, preventivo }
             </div>
           </div>
 
-          <div className="bg-slate-50 p-4 rounded-xl border border-dashed border-slate-300 flex flex-col items-end gap-2">
-            <div className="flex items-center gap-4 text-slate-500">
-              <span className="text-sm">Imponibile Totale:</span>
-              <span className="text-lg font-mono">
-                {new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(total)}
-              </span>
+          {/* SEZIONE 3: RIEPILOGO FINANZIARIO */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Note, Vincoli e Termini</Label>
+                <Textarea 
+                  value={formData.note} 
+                  onChange={(e) => setFormData({ ...formData, note: e.target.value })}
+                  placeholder="Es. Pagamento 30gg d.f., Consegna stimata in 4 settimane..."
+                  className="bg-white/5 border-white/5 rounded-[1.5rem] min-h-[120px] text-xs leading-relaxed focus:bg-white/10 transition-all"
+                />
+              </div>
+              <div className="flex items-center gap-2 p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10">
+                 <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+                 <p className="text-[10px] text-amber-500/80 leading-tight font-medium italic">
+                   L'imposta IVA (22%) verrà calcolata automaticamente sul totale dell'imponibile.
+                 </p>
+              </div>
             </div>
-            <div className="flex items-center gap-4 text-purple-600">
-              <span className="text-sm font-bold uppercase tracking-tighter">Totale Stimato (IVA Incl.):</span>
-              <span className="text-2xl font-black">
-                {new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(total * 1.22)}
-              </span>
+
+            <div className="bg-primary/5 p-8 rounded-[2.5rem] border border-primary/20 space-y-6 flex flex-col justify-center shadow-[0_20px_50px_rgba(168,85,247,0.1)]">
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span className="text-[10px] font-black uppercase tracking-widest">Imponibile Netto</span>
+                <span className="text-xl font-bold tracking-tighter text-white">€{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex items-center justify-between text-muted-foreground border-t border-primary/10 pt-4">
+                <span className="text-[10px] font-black uppercase tracking-widest">IVA (22%)</span>
+                <span className="text-xl font-bold tracking-tighter text-white">€{iva.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+              <Separator className="bg-primary/20" />
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-primary">Totale Lordo</span>
+                  <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest mt-1">IVA INCLUSA</p>
+                </div>
+                <span className="text-4xl font-black text-white tracking-tighter drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]">
+                  €{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
             </div>
           </div>
+        </form>
 
-          <div className="space-y-2">
-            <Label>Note e Vincoli</Label>
-            <Textarea 
-              value={formData.note} 
-              onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-              placeholder="Inserisci note legali, tempi di esecuzione o vincoli..."
-              rows={3}
-            />
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="ghost" onClick={onClose}>Annulla</Button>
+        <DialogFooter className="p-8 pt-4 bg-[#0f0f10]/50 backdrop-blur-md border-t border-white/5">
+          <div className="flex items-center justify-between w-full">
+            <Button type="button" variant="ghost" onClick={onClose} className="text-muted-foreground hover:text-white rounded-2xl px-6 h-12 font-bold uppercase tracking-widest text-[10px]">
+              Annulla Proposta
+            </Button>
             <Button 
               type="submit" 
-              className="bg-purple-600 hover:bg-purple-700"
+              onClick={handleSubmit}
+              className="bg-primary hover:bg-primary/90 text-white rounded-2xl px-10 h-12 font-black uppercase tracking-widest text-[11px] shadow-[0_10px_20px_rgba(168,85,247,0.3)] transition-all hover:scale-[1.02]"
               disabled={createPreventivo.isPending || updatePreventivo.isPending}
             >
               {createPreventivo.isPending || updatePreventivo.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
               ) : (
-                <CheckCircle className="w-4 h-4 mr-2" />
+                <CheckCircle className="w-5 h-5 mr-2" />
               )}
-              {preventivo ? "Salva Modifiche" : "Crea Preventivo"}
+              {preventivo ? "Salva Modifiche" : "Genera Proposta"}
             </Button>
-          </DialogFooter>
-        </form>
+          </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
