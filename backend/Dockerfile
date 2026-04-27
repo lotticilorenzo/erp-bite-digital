@@ -23,10 +23,9 @@ RUN groupadd -r appgroup && useradd -r -g appgroup -u 1001 appuser
 # Copia codice sorgente
 COPY app/ ./app/
 
-# Crea directory uploads con permessi world-writable per compatibilità
-# con volumi Docker (i named volumes vengono montati come root)
-RUN mkdir -p /app/static/uploads \
-    && chmod 777 /app/static/uploads \
+# Crea directory necessarie con permessi corretti
+RUN mkdir -p /app/static/uploads /app/static/logos /app/static/avatars \
+    && chmod -R 777 /app/static \
     && chown -R appuser:appgroup /app
 
 USER appuser
