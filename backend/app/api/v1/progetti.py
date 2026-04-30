@@ -12,6 +12,7 @@ from app.db.session import get_db
 from app.models.models import (
     CommessaProgetto,
     Progetto as ProgettoModel,
+    ProgettoTeam,
     User,
     UserRole,
 )
@@ -54,7 +55,7 @@ async def get_progetti(
     q = select(ProgettoModel).options(
         selectinload(ProgettoModel.cliente),
         selectinload(ProgettoModel.servizi),
-        selectinload(ProgettoModel.team),
+        selectinload(ProgettoModel.team).selectinload(ProgettoTeam.user),
         selectinload(ProgettoModel.commesse_link).selectinload(CommessaProgetto.commessa),
     )
     if cliente_id:

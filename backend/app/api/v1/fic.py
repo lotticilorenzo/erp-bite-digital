@@ -24,10 +24,10 @@ from app.services.services import (
     update_fattura_passiva,
 )
 
-router = APIRouter(prefix="/fic", tags=["FIC"])
+router = APIRouter(tags=["FIC"])
 
 
-@router.post("/sync", response_model=FicSyncStatusOut)
+@router.post("/fic/sync", response_model=FicSyncStatusOut)
 async def run_fic_sync(
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER)),
 ):
@@ -37,7 +37,7 @@ async def run_fic_sync(
         return await sync_fic_data(db, current_user.id)
 
 
-@router.get("/sync/status", response_model=FicSyncStatusOut)
+@router.get("/fic/sync/status", response_model=FicSyncStatusOut)
 async def fic_sync_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
