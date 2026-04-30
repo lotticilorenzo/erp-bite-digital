@@ -1108,7 +1108,7 @@ async def add_timesheet_manuale(
     db.add(ts)
     await db.commit()
     await db.refresh(ts)
-    await _check_margin_and_notify(db, commessa_id)
+    await timesheet._check_margin_and_notify(db, commessa_id)
     return ts
 
 
