@@ -3,6 +3,16 @@ import api from "@/lib/api";
 import { toast } from "sonner";
 import type { Progetto } from "@/types";
 
+export type ProgettoPayload = Partial<Omit<Progetto, "team">> & {
+  team?: Array<{
+    id?: string;
+    user_id: string;
+    ruolo_progetto?: string;
+    ore_previste?: number;
+    note?: string;
+  }>;
+};
+
 export function useProgetti(clienteId?: string, stato?: string) {
   return useQuery({
     queryKey: ["progetti", { clienteId, stato }],
@@ -40,7 +50,7 @@ const formatError = (err: any, defaultMsg: string) => {
 export function useCreateProgetto() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: Partial<Progetto>) => {
+    mutationFn: async (data: ProgettoPayload) => {
       const { data: response } = await api.post<Progetto>("/progetti", data);
       return response;
     },
@@ -56,7 +66,7 @@ export function useCreateProgetto() {
 export function useUpdateProgetto() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<Progetto> }) => {
+    mutationFn: async ({ id, data }: { id: string; data: ProgettoPayload }) => {
       const { data: response } = await api.patch<Progetto>(`/progetti/${id}`, data);
       return response;
     },

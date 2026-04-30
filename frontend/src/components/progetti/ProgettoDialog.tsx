@@ -33,7 +33,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCreateProgetto, useUpdateProgetto } from "@/hooks/useProgetti";
+import { useCreateProgetto, useUpdateProgetto, type ProgettoPayload } from "@/hooks/useProgetti";
 import { useClienti } from "@/hooks/useClienti";
 import { useUsers } from "@/hooks/useUsers";
 import type { Progetto } from "@/types";
@@ -137,12 +137,19 @@ export function ProgettoDialog({ progetto, open, onOpenChange, onSuccess }: Prog
   const navigate = useNavigate();
   const onSubmit = async (values: ProgettoFormValues) => {
     if (isPending) return;
+
+    const payload: ProgettoPayload = {
+      ...values,
+      data_inizio: values.data_inizio ?? undefined,
+      data_fine: values.data_fine ?? undefined,
+    };
+
     try {
       let result;
       if (isEditing && progetto) {
-        result = await updateProgetto.mutateAsync({ id: progetto.id, data: values });
+        result = await updateProgetto.mutateAsync({ id: progetto.id, data: payload });
       } else {
-        result = await createProgetto.mutateAsync(values);
+        result = await createProgetto.mutateAsync(payload);
         // Navigate to the new project detail page
         if (result?.id) {
           navigate(`/progetti/${result.id}`);
