@@ -319,8 +319,12 @@ async def update_studio_node(
         setattr(node, field, value)
     
     await db.commit()
-    await db.refresh(node)
-    return node
+    result = await db.execute(
+        select(StudioNode)
+        .where(StudioNode.id == node.id)
+        .options(selectinload(StudioNode.children))
+    )
+    return result.scalar_one()
 
 @router.delete("/nodes/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_studio_node(
@@ -392,5 +396,9 @@ async def move_studio_node(
     )
     
     await db.commit()
-    await db.refresh(node)
-    return node
+    result = await db.execute(
+        select(StudioNode)
+        .where(StudioNode.id == node.id)
+        .options(selectinload(StudioNode.children))
+    )
+    return result.scalar_one()
