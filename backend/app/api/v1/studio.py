@@ -15,6 +15,26 @@ import uuid as _uuid
 router = APIRouter(prefix="/studio", tags=["Studio Workspace"])
 
 
+def _node_to_dict(node: "StudioNode") -> dict:
+    return {
+        "id": node.id,
+        "nome": node.nome,
+        "parent_id": node.parent_id,
+        "tipo": node.tipo,
+        "icon": node.icon,
+        "color": node.color,
+        "linked_progetto_id": node.linked_progetto_id,
+        "linked_cliente_id": node.linked_cliente_id,
+        "linked_task_id": node.linked_task_id,
+        "is_private": node.is_private,
+        "order": node.order,
+        "user_id": node.user_id,
+        "created_at": node.created_at,
+        "updated_at": node.updated_at,
+        "children": [],
+    }
+
+
 async def _list_siblings(
     db: AsyncSession,
     parent_id: Optional[uuid.UUID],
@@ -293,38 +313,28 @@ async def create_studio_node(
     )
     return result.scalar_one()
 
-@router.patch("/nodes/{node_id}", response_model=StudioNodeOut)
+@router.patch("/nodes/{node_id}")
 async def update_studio_node(
     node_id: uuid.UUID,
     data: StudioNodeUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    result = await db.execute(
-        select(StudioNode)
-        .where(StudioNode.id == node_id)
-        .options(selectinload(StudioNode.children))
-    )
+    result = await db.execute(select(StudioNode).where(StudioNode.id == node_id))
     node = result.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=404, detail="Nodo non trovato")
-    
-    # Permissions check: only owner or admin can update
-    # (Simple role check for now)
+
     from app.models.models import UserRole
     if node.user_id != current_user.id and current_user.ruolo != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Non hai i permessi per modificare questo nodo")
 
     for field, value in data.model_dump(exclude_none=True).items():
         setattr(node, field, value)
-    
+
     await db.commit()
-    result = await db.execute(
-        select(StudioNode)
-        .where(StudioNode.id == node.id)
-        .options(selectinload(StudioNode.children))
-    )
-    return result.scalar_one()
+    await db.refresh(node)
+    return _node_to_dict(node)
 
 @router.delete("/nodes/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_studio_node(
@@ -348,7 +358,7 @@ async def delete_studio_node(
     await db.commit()
     return None
 
-@router.post("/nodes/move", response_model=StudioNodeOut)
+@router.post("/nodes/move")
 async def move_studio_node(
     node_id: uuid.UUID = Body(...),
     parent_id: Optional[uuid.UUID] = Body(None),
@@ -396,9 +406,5 @@ async def move_studio_node(
     )
     
     await db.commit()
-    result = await db.execute(
-        select(StudioNode)
-        .where(StudioNode.id == node.id)
-        .options(selectinload(StudioNode.children))
-    )
-    return result.scalar_one()
+    await db.refresh(node)
+    return _node_to_dict(node)

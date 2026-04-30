@@ -423,19 +423,23 @@ async def send_message(
     )
     db.add(new_message)
     await db.commit()
-    await db.refresh(new_message)
-    
+
+    result = await db.execute(
+        select(ChatMessaggio)
+        .where(ChatMessaggio.id == new_message.id)
+        .options(selectinload(ChatMessaggio.reazioni))
+    )
+    new_message = result.scalar_one()
     new_message.autore_nome = f"{current_user.nome} {current_user.cognome}"
-    new_message.reazioni = []
-    
+
     msg_dict = ChatMessaggioRead.model_validate(new_message).model_dump()
     msg_dict["created_at"] = new_message.created_at.isoformat()
-    
+
     await manager.broadcast_to_channel(db, message_in.canale_id, {
         "type": "new_message",
         "message": msg_dict
     })
-    
+
     # Mentions & Notifications
     mentions = re.findall(r"@([^ \n\r\t]+ [^ \n\r\t]+)", message_in.contenuto)
     for mention_name in mentions:
@@ -454,7 +458,7 @@ async def send_message(
                 type="MESSAGGIO",
                 link=f"/studio-os?channel={message_in.canale_id}"
             )
-            
+
     return new_message
 
 @router.patch("/messages/{message_id}")
