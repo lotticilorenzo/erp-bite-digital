@@ -146,6 +146,12 @@ async def ensure_schema_tables_on_startup():
     while retries > 0:
         try:
             async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+
+            logger.info("Tabelle ORM verificate con create_all.")
+            return
+
+            async with engine.begin() as conn:
                 # Ensure Enums for Pianificazione & Client Start Day Type
                 await conn.execute(text("""
                     DO $$ 
@@ -234,6 +240,8 @@ async def ensure_schema_tables_on_startup():
 
 @app.on_event("startup")
 async def migrate_userrole_enum():
+    # Legacy no-op: i nuovi valori enum vengono gestiti da run_db_migrations.py.
+    return
     """Aggiunge i nuovi valori DEVELOPER e COLLABORATORE all'enum user_role in PostgreSQL.
     Operazione idempotente: non fa nulla se i valori esistono già."""
     new_roles = ["DEVELOPER", "COLLABORATORE"]

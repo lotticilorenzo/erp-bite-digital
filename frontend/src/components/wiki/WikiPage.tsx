@@ -1,9 +1,13 @@
-import { useState, useEffect } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { WikiSidebar } from "@/components/wiki/WikiSidebar";
 import { WikiHome } from "@/components/wiki/WikiHome";
 import { WikiArticleView } from "@/components/wiki/WikiArticleView";
-import { WikiArticleEditor } from "@/components/wiki/WikiArticleEditor";
+
+const WikiArticleEditor = lazy(async () => {
+  const module = await import("@/components/wiki/WikiArticleEditor");
+  return { default: module.WikiArticleEditor };
+});
 
 export default function WikiPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -46,11 +50,19 @@ export default function WikiPage() {
       
       <div className="flex-1 flex flex-col min-w-0">
         {isEditing ? (
-          <WikiArticleEditor 
-            id={editId} 
-            onClose={handleCloseEditor} 
-            onSaved={handleSaved} 
-          />
+          <Suspense
+            fallback={
+              <div className="flex flex-1 items-center justify-center bg-background text-sm text-muted-foreground">
+                Caricamento editor wiki...
+              </div>
+            }
+          >
+            <WikiArticleEditor
+              id={editId}
+              onClose={handleCloseEditor}
+              onSaved={handleSaved}
+            />
+          </Suspense>
         ) : articleId ? (
           <WikiArticleView onEdit={handleEditArticle} />
         ) : (

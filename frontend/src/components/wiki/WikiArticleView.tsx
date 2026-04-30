@@ -1,12 +1,26 @@
+import { lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useWiki } from "@/hooks/useWiki";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Edit2, Eye, Calendar, User, ChevronRight, Share2, Trash2 } from "lucide-react";
-import MDEditor from "@uiw/react-md-editor";
 import { format } from "date-fns";
 import { it } from 'date-fns/locale';
 import { toast } from "sonner";
+
+interface MarkdownRendererProps {
+  source: string;
+  className?: string;
+}
+
+const MarkdownRenderer = lazy(async () => {
+  const module = await import("@uiw/react-md-editor");
+  return {
+    default: ({ source, className }: MarkdownRendererProps) => (
+      <module.default.Markdown source={source} className={className} />
+    ),
+  };
+});
 
 interface WikiArticleViewProps {
   onEdit: (id: string) => void;
@@ -117,7 +131,12 @@ export function WikiArticleView({ onEdit }: WikiArticleViewProps) {
 
         {/* Content */}
         <div className="prose prose-invert prose-p:text-muted-foreground prose-headings:text-white prose-headings:font-black prose-a:text-primary max-w-none pt-4 bg-card/10 p-8 rounded-3xl border border-border/20 shadow-inner min-h-[400px]">
-          <MDEditor.Markdown source={article.contenuto || "*Nessun contenuto*"} className="bg-transparent text-lg leading-relaxed font-medium" />
+          <Suspense fallback={<div className="text-sm text-muted-foreground">Caricamento contenuto...</div>}>
+            <MarkdownRenderer
+              source={article.contenuto || "*Nessun contenuto*"}
+              className="bg-transparent text-lg leading-relaxed font-medium"
+            />
+          </Suspense>
         </div>
 
         {/* Footer info */}

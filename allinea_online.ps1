@@ -10,6 +10,8 @@ $DoHost = "bite-do"
 $ServerRoot = "/root/mio-gestionale"
 $ServerBackend = "$ServerRoot/backend"
 $ServerFrontend = "$ServerRoot/frontend"
+$LocalComposeFile = Join-Path $RepoRoot "backend\docker-compose.yml"
+$RemoteComposeFile = "docker-compose.prod.yml"
 $RemoteDbDumpPath = "/tmp/bite_erp_local_sync.sql"
 $LocalDbDumpPath = Join-Path $env:TEMP "bite_erp_local_sync.sql"
 $RemoteBackupDir = "/root/manual_db_backups"
@@ -139,13 +141,13 @@ if ($staged) {
 Invoke-RepoCommand "git push origin main" | Out-Null
 
 Write-Step "Allineamento repository sul server"
-Invoke-Native "ssh" @($DoHost, "cd $ServerRoot && git fetch origin && git checkout main && git reset --hard origin/main")
+Invoke-Native "ssh" @($DoHost, "cd $ServerRoot && git checkout main && git pull --ff-only origin main")
 
 Write-Step "Build frontend in produzione"
 Invoke-Native "ssh" @($DoHost, "cd $ServerFrontend && npm ci --legacy-peer-deps && npm run build")
 
 Write-Step "Rebuild backend in produzione"
-Invoke-Native "ssh" @($DoHost, "cd $ServerBackend && docker compose up --build -d backend")
+Invoke-Native "ssh" @($DoHost, "cd $ServerBackend && docker compose -f $RemoteComposeFile up --build -d db backend nginx db_backup")
 
 if ($SyncDb) {
     Write-Step "Backup database produzione"
@@ -168,7 +170,7 @@ docker exec -i bite_erp_db psql -U bite -d bite_erp -c "DROP SCHEMA public CASCA
 cat /tmp/bite_erp_local_sync.sql | docker exec -i bite_erp_db psql -U bite -d bite_erp
 rm -f /tmp/bite_erp_local_sync.sql
 cd /root/mio-gestionale/backend
-docker compose restart backend
+docker compose -f docker-compose.prod.yml restart backend
 '@
     $restoreScript | ssh $DoHost 'bash -s'
     if ($LASTEXITCODE -ne 0) {
@@ -195,7 +197,7 @@ if ($remoteStatus.Trim() -ne "## main...origin/main") {
 
 Write-Step "Verifica health locale e remota"
 $localHealth = Invoke-Native "powershell" @("-NoProfile", "-Command", "Invoke-WebRequest -UseBasicParsing http://localhost:8000/health | Select-Object -ExpandProperty Content") -CaptureOutput
-$remoteHealth = Invoke-Native "ssh" @($DoHost, "cd $ServerBackend && docker compose ps") -CaptureOutput
+$remoteHealth = Invoke-Native "ssh" @($DoHost, "cd $ServerBackend && docker compose -f $RemoteComposeFile ps") -CaptureOutput
 if ($localHealth.Trim() -ne '{"status":"ok"}') {
     throw "Health locale non valida: $localHealth"
 }

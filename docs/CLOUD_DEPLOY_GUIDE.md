@@ -1,4 +1,7 @@
-# Deploy Cloud ERP (staging esplicito)
+# Deploy Cloud ERP su Render (legacy staging)
+
+> Nota operativa: questo file descrive il vecchio flusso staging su Render.
+> La produzione reale gira su DigitalOcean VPS e va gestita con [`DIGITALOCEAN_PRODUCTION.md`](./DIGITALOCEAN_PRODUCTION.md).
 
 ## Decisioni architetturali (scelte definitive)
 
@@ -12,10 +15,10 @@
 
 ## File di riferimento
 
-- Blueprint staging: [`render.staging.yaml`](/Users/aless/Documents/New project/render.staging.yaml)
-- Guida cloud: [`CLOUD_DEPLOY_GUIDE.md`](/Users/aless/Documents/New project/docs/CLOUD_DEPLOY_GUIDE.md)
-- Init DB idempotente: [`init_db.py`](/Users/aless/Documents/New project/backend/scripts/init_db.py)
-- Bootstrap admin idempotente: [`bootstrap_admin.py`](/Users/aless/Documents/New project/backend/scripts/bootstrap_admin.py)
+- Blueprint staging: `render.staging.yaml`
+- Guida cloud: `docs/CLOUD_DEPLOY_GUIDE.md`
+- Init DB idempotente: `backend/scripts/init_db.py`
+- Bootstrap admin idempotente: `backend/scripts/bootstrap_admin.py`
 
 ## Env minime backend (staging)
 

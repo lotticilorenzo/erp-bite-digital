@@ -3,7 +3,7 @@ setlocal
 
 echo Avvio stack locale Bite ERP...
 pushd "%~dp0backend"
-docker compose up -d
+docker compose -f docker-compose.yml up -d --build
 set EXIT_CODE=%ERRORLEVEL%
 popd
 

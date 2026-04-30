@@ -7,6 +7,8 @@ $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $DoHost = "bite-do"
 $ServerRoot = "/root/mio-gestionale"
 $ServerBackend = "$ServerRoot/backend"
+$LocalComposeFile = Join-Path $RepoRoot "backend\docker-compose.yml"
+$RemoteComposeFile = "docker-compose.prod.yml"
 $LocalIndexPath = Join-Path $RepoRoot "frontend\dist\index.html"
 $RemoteIndexTemp = Join-Path $env:TEMP "bite_erp_live_index.html"
 $RemoteAssetTemp = Join-Path $env:TEMP "bite_erp_live_asset.js"
@@ -149,12 +151,12 @@ try {
     Assert-Equal -Expected "## main...origin/main" -Actual $remoteStatus.Trim() -Message "Repository server non pulito."
 
     Write-Step "Verifica runtime locale e server"
-    $localCompose = Invoke-Native "docker" @("compose", "-f", (Join-Path $RepoRoot "backend\docker-compose.yml"), "ps") -CaptureOutput
-    $remoteCompose = Invoke-Native "ssh" @($DoHost, "cd $ServerBackend && docker compose ps") -CaptureOutput
+    $localCompose = Invoke-Native "docker" @("compose", "-f", $LocalComposeFile, "ps") -CaptureOutput
+    $remoteCompose = Invoke-Native "ssh" @($DoHost, "cd $ServerBackend && docker compose -f $RemoteComposeFile ps") -CaptureOutput
     if ($localCompose -notmatch "bite_erp_backend" -or $localCompose -notmatch "bite_erp_db" -or $localCompose -notmatch "bite_erp_frontend" -or $localCompose -notmatch "bite_erp_nginx") {
         throw "Stack locale incompleto o non attivo."
     }
-    if ($remoteCompose -notmatch "bite_erp_backend" -or $remoteCompose -notmatch "bite_erp_db" -or $remoteCompose -notmatch "bite_erp_frontend" -or $remoteCompose -notmatch "bite_erp_nginx") {
+    if ($remoteCompose -notmatch "bite_erp_backend" -or $remoteCompose -notmatch "bite_erp_db" -or $remoteCompose -notmatch "bite_erp_nginx") {
         throw "Stack server incompleto o non attivo."
     }
 
@@ -162,6 +164,17 @@ try {
     $prodApi = Invoke-Native "curl.exe" @("-ksS", "https://178.128.198.11/api/v1/auth/me") -CaptureOutput
     Assert-Equal -Expected '{"status":"ok"}' -Actual $localHealth.Trim() -Message "Backend locale non risponde come previsto."
     Assert-Equal -Expected '{"detail":"Not authenticated"}' -Actual $prodApi.Trim() -Message "API produzione non risponde come previsto."
+
+    $remoteSockets = Invoke-Native "ssh" @($DoHost, "ss -ltn") -CaptureOutput
+    if ($remoteSockets -match "0\.0\.0\.0:8000" -or $remoteSockets -match "\[::\]:8000") {
+        throw "Il backend produzione risulta ancora esposto pubblicamente sulla porta 8000."
+    }
+    if ($remoteSockets -match "5173") {
+        throw "La porta 5173 risulta ancora in ascolto sul server produzione."
+    }
+    if ($remoteSockets -notmatch "127\.0\.0\.1:8000") {
+        throw "Il backend produzione non risulta vincolato su loopback 127.0.0.1:8000."
+    }
 
     Write-Step "Verifica build React locale vs online"
     Invoke-Native "curl.exe" @("-ksS", "https://178.128.198.11/", "-o", $RemoteIndexTemp)
@@ -182,7 +195,7 @@ try {
     Assert-Equal -Expected $localAssetHash -Actual $remoteAssetHash -Message "Bundle JS React non coincide tra locale e online."
 
     Write-Step "Verifica database locale vs server"
-    $remoteComposeConfig = Invoke-Native "ssh" @($DoHost, "cd $ServerBackend && docker compose config") -CaptureOutput
+    $remoteComposeConfig = Invoke-Native "ssh" @($DoHost, "cd $ServerBackend && docker compose -f $RemoteComposeFile config") -CaptureOutput
     if ($remoteComposeConfig -notmatch "DATABASE_URL: postgresql\+asyncpg://") {
         throw "Il backend server non espone una DATABASE_URL PostgreSQL valida."
     }

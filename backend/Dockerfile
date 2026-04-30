@@ -22,6 +22,10 @@ RUN groupadd -r appgroup && useradd -r -g appgroup -u 1001 appuser
 
 # Copia codice sorgente
 COPY app/ ./app/
+COPY scripts/ ./scripts/
+COPY migrations/ ./migrations/
+COPY tests/ ./tests/
+COPY schema.sql ./schema.sql
 
 # Crea directory necessarie con permessi corretti
 RUN mkdir -p /app/static/uploads /app/static/logos /app/static/avatars \
@@ -30,5 +34,5 @@ RUN mkdir -p /app/static/uploads /app/static/logos /app/static/avatars \
 
 USER appuser
 
-# In produzione: senza --reload, con workers configurabili via env
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WORKERS:-2}"]
+# Init schema + migrazioni versionate prima dell'avvio API.
+CMD ["sh", "-c", "python scripts/init_db.py && python scripts/run_db_migrations.py && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WORKERS:-2}"]

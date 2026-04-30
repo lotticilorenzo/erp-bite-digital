@@ -28,10 +28,7 @@ from app.core.content_pipeline_rules import (
     is_limited_content_role,
     template_matches_commessa,
 )
-from app.core.security import (
-    verify_password, create_access_token,
-    get_current_user, require_roles
-)
+from app.core.security import get_current_user, require_roles
 from app.models.models import (
     User, UserRole, ProjectStatus, ProjectType, 
     CommessaStatus, TaskStatus, PreventivoStatus,
@@ -40,7 +37,7 @@ from app.models.models import (
     CRMStage, CRMLead, CRMActivity, Cliente
 )
 from app.schemas.schemas import (
-    LoginRequest, TokenResponse, UserOut, UserCreate, UserUpdate,
+    UserOut, UserCreate, UserUpdate,
     ClienteCreate, ClienteUpdate, ClienteOut,
     ProgettoCreate, ProgettoUpdate, ProgettoOut, ProgettoWithCliente,
     CommessaCreate, CommessaUpdate, CommessaOut,
@@ -75,6 +72,7 @@ from app.services.services import (
 )
 from app.api.v1 import timer
 from app.api.v1 import ai
+from app.api.v1 import auth
 from app.api.v1 import planning
 from app.api.v1 import pianificazioni
 from app.api.v1 import notifications
@@ -104,9 +102,13 @@ def _check_login_rate(ip: str) -> None:
         )
     _login_attempts[ip].append(now)
 
+
+password_reset_history = {}
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 router = APIRouter()
+router.include_router(auth.router)
 router.include_router(timer.router)
 router.include_router(ai.router)
 router.include_router(planning.router)
@@ -124,27 +126,6 @@ router.include_router(documents.router, prefix="/documents", tags=["Documents"])
 # ═══════════════════════════════════════════════════════
 # AUTH
 # ═══════════════════════════════════════════════════════
-@router.post("/auth/login", response_model=TokenResponse, tags=["Auth"])
-async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends(get_db)):
-    _check_login_rate(request.client.host if request.client else "unknown")
-    from app.services.services import get_user_by_identifier
-    user = await get_user_by_identifier(db, data.email)
-    if not user or not verify_password(data.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenziali non valide")
-    if not user.attivo:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account disattivato")
-    token = create_access_token({"sub": str(user.id), "ruolo": user.ruolo})
-    return TokenResponse(access_token=token, user=UserOut.model_validate(user))
-
-@router.get("/auth/me", response_model=UserOut, tags=["Auth"])
-async def me(current_user: User = Depends(get_current_user)):
-    return current_user
-
-@router.delete("/auth/sessions", tags=["Auth"])
-async def logout_all_sessions(current_user: User = Depends(get_current_user)):
-    """Mock endpoint to simulate disconnecting all sessions."""
-    return {"message": "Successo"}
-
 # ═══════════════════════════════════════════════════════
 # PREVENTIVI
 # ═══════════════════════════════════════════════════════
@@ -225,11 +206,9 @@ async def converti_preventivo(
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-# Rate limiting in-memory (semplice)
-password_reset_history = {} # {email: [timestamp1, timestamp2, ...]}
-
-@router.post("/auth/forgot-password", tags=["Auth"])
+@router.post("/__legacy_disabled__/auth/forgot-password", tags=["Auth"], include_in_schema=False)
 async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+    raise HTTPException(status_code=410, detail="Endpoint legacy disattivato")
     from app.services.services import get_user_by_email
     
     # 1. Rate limiting
@@ -322,8 +301,9 @@ async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depend
     
     return {"message": "Se l'email esiste, riceverai un link di reset."}
 
-@router.post("/auth/reset-password", tags=["Auth"])
+@router.post("/__legacy_disabled__/auth/reset-password", tags=["Auth"], include_in_schema=False)
 async def reset_password(data: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    raise HTTPException(status_code=410, detail="Endpoint legacy disattivato")
     from app.core.security import hash_password
     
     # 1. Verifica token
