@@ -39,8 +39,14 @@ export default defineConfig({
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
         manualChunks(id) {
-          if (id.includes('framer-motion') || id.includes('lucide-react') || id.includes('sonner')) return 'vendor-ui';
-          if (id.includes('recharts')) return 'vendor-charts';
+          if (!id.includes('node_modules')) return;
+          if (id.includes('react-pdf') || id.includes('@react-pdf')) return 'vendor-pdf';
+          if (id.includes('@uiw/react-md-editor') || id.includes('remark-') || id.includes('rehype-') || id.includes('micromark')) return 'vendor-editor';
+          if (id.includes('@dnd-kit')) return 'vendor-dnd';
+          if (id.includes('@tanstack/react-query') || id.includes('axios')) return 'vendor-data';
+          if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts';
+          if (id.includes('@radix-ui') || id.includes('framer-motion') || id.includes('lucide-react') || id.includes('sonner')) return 'vendor-ui';
+          if (id.includes('react-router') || id.includes('react-dom') || id.includes('/react/')) return 'vendor-react';
         }
       }
     }

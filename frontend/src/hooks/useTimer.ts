@@ -14,6 +14,17 @@ export function useActiveTimer() {
   });
 }
 
+export function useAllActiveTimers() {
+  return useQuery({
+    queryKey: ["timer", "active", "all"],
+    queryFn: async () => {
+      const { data } = await api.get<any[]>("/timer/active/all");
+      return data;
+    },
+    refetchInterval: 15000, // Più frequente per il team monitoring
+  });
+}
+
 export function useTimerSessions(taskId: string | null) {
   return useQuery({
     queryKey: ["timer", "sessions", taskId],
@@ -34,7 +45,9 @@ export function useStartTimer() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["timer"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["timer"] });
+      queryClient.invalidateQueries({ queryKey: ["studio-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["studio-task"] });
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || "Errore nell'avvio del timer");
@@ -50,7 +63,9 @@ export function useStopTimer() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["timer"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["timer"] });
+      queryClient.invalidateQueries({ queryKey: ["studio-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["studio-task"] });
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || "Errore nella fermata del timer");

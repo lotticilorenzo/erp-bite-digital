@@ -5,9 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import require_roles
+from app.core.security import require_finance_access
 from app.db.session import get_db
-from app.models.models import FatturaAttiva, User, UserRole
+from app.models.models import FatturaAttiva, User
 from app.schemas.schemas import (
     FatturaAttivaOut,
     FatturaAttivaUpdate,
@@ -29,7 +29,7 @@ router = APIRouter(tags=["FIC"])
 
 @router.post("/fic/sync", response_model=FicSyncStatusOut)
 async def run_fic_sync(
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER)),
+    current_user: User = Depends(require_finance_access),
 ):
     from app.db.session import AsyncSessionLocal
 
@@ -40,7 +40,7 @@ async def run_fic_sync(
 @router.get("/fic/sync/status", response_model=FicSyncStatusOut)
 async def fic_sync_status(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_finance_access),
 ):
     status_obj = await get_last_fic_sync_status(db)
     if not status_obj:
@@ -51,7 +51,7 @@ async def fic_sync_status(
 @router.get("/fatture-attive", response_model=List[FatturaAttivaOut])
 async def get_fatture_attive(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_finance_access),
 ):
     return await list_fatture_attive(db)
 
@@ -61,7 +61,7 @@ async def patch_incassa_fattura(
     fattura_id: uuid.UUID,
     body: FatturaIncassaRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_finance_access),
 ):
     fattura = await incassa_fattura(db, fattura_id, body.data_incasso)
     if not fattura:
@@ -74,7 +74,7 @@ async def patch_fattura_attiva(
     fattura_id: uuid.UUID,
     body: FatturaAttivaUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_finance_access),
 ):
     result = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == fattura_id))
     fattura = result.scalar_one_or_none()
@@ -94,7 +94,7 @@ async def patch_fattura_attiva(
 async def delete_fattura_attiva(
     fattura_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER)),
+    current_user: User = Depends(require_finance_access),
 ):
     result = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == fattura_id))
     fattura = result.scalar_one_or_none()
@@ -108,7 +108,7 @@ async def delete_fattura_attiva(
 @router.get("/fatture-passive")
 async def get_fatture_passive(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_finance_access),
 ):
     return await list_fatture_passive(db)
 
@@ -118,7 +118,7 @@ async def patch_fattura_passiva(
     fattura_id: uuid.UUID,
     body: FatturaPassivaUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_finance_access),
 ):
     fattura = await update_fattura_passiva(db, fattura_id, body.model_dump(exclude_none=True))
     if not fattura:
@@ -130,7 +130,7 @@ async def patch_fattura_passiva(
 async def delete_fattura_passive_endpoint(
     fattura_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER)),
+    current_user: User = Depends(require_finance_access),
 ):
     from app.models.models import FatturaPassiva
 

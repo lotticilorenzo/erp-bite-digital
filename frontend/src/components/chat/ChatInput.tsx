@@ -14,14 +14,34 @@ interface ChatInputProps {
   onUpload?: (file: File) => Promise<any>;
 }
 
+interface SelectedUpload {
+  url: string;
+  previewUrl: string | null;
+  name: string;
+  type: string;
+  size: number;
+}
+
 export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTyping, onUpload }: ChatInputProps) {
   const [content, setContent] = useState("");
-  const [selectedFile, setSelectedFile] = useState<any | null>(null);
+  const [selectedFile, setSelectedFile] = useState<SelectedUpload | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showMentions, setShowMentions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const clearSelectedFile = useCallback(() => {
+    setSelectedFile((prev) => {
+      if (prev?.previewUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(prev.previewUrl);
+      }
+      return null;
+    });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }, []);
 
   // ─── Voice Recording State ─────────────────────────────────────
   const [isRecording, setIsRecording] = useState(false);
@@ -110,8 +130,10 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
     try {
       if (onUpload) {
         const res = await onUpload(file);
+        const previewUrl = file.type?.startsWith("image/") ? URL.createObjectURL(file) : null;
         setSelectedFile({
           url: res.url,
+          previewUrl,
           name: res.filename,
           type: res.content_type,
           size: res.size,
@@ -134,7 +156,7 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
     }
 
     setContent("");
-    setSelectedFile(null);
+    clearSelectedFile();
     onCancelReply();
   };
 
@@ -157,6 +179,19 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
   };
 
   const typingTimeoutRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      clearInterval(recordingTimerRef.current);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      mediaRecorderRef.current?.stream?.getTracks().forEach((track) => track.stop());
+      if (selectedFile?.previewUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(selectedFile.previewUrl);
+      }
+    };
+  }, [selectedFile?.previewUrl]);
 
   useEffect(() => {
     const lastChar = content[content.length - 1];
@@ -231,8 +266,8 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
         <div className="mx-4 mb-3 p-2.5 bg-muted/50 rounded-2xl border border-border/50 flex items-center justify-between group animate-in slide-in-from-bottom-2">
           <div className="flex items-center gap-3 truncate">
             <div className="w-12 h-12 rounded-xl bg-background flex items-center justify-center border border-border/50 overflow-hidden shadow-sm">
-              {selectedFile.type?.startsWith("image/") ? (
-                <img src={selectedFile.url} alt="preview" className="w-full h-full object-cover" />
+              {selectedFile.type?.startsWith("image/") && selectedFile.previewUrl ? (
+                <img src={selectedFile.previewUrl} alt="preview" className="w-full h-full object-cover" />
               ) : (
                 <FileIcon className="w-6 h-6 text-primary" />
               )}
@@ -248,7 +283,7 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
             variant="ghost"
             size="icon"
             className="h-8 w-8 rounded-full hover:bg-destructive/10 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={() => setSelectedFile(null)}
+            onClick={clearSelectedFile}
           >
             <X size={14} />
           </Button>

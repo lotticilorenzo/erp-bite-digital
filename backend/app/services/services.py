@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any, Optional, List
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, text
+from sqlalchemy import select, func, and_, or_, text
 from sqlalchemy.orm import selectinload
 
 from app.models.models import (
@@ -30,7 +30,9 @@ from app.schemas.schemas import (
     PreventivoCreate, PreventivoUpdate
 )
 from app.core.config import settings
-from app.core.security import hash_password
+from app.core.security import hash_password, ensure_erp_access_user, has_erp_access
+from app.core.permissions import get_user_access_scope, can_access_project
+from fastapi import HTTPException
 
 DEFAULT_COEFFICIENTE_ALLOCAZIONE = Decimal("0.30")
 FIC_SYNC_LOCK_KEY = "fic_sync_lock_v1"
@@ -629,6 +631,7 @@ async def update_commessa(
     data: CommessaUpdate,
     current_user: User
 ) -> Optional[Commessa]:
+    ensure_erp_access_user(current_user)
     c = await get_commessa(db, commessa_id)
     if not c:
         return None
@@ -760,6 +763,7 @@ async def list_timesheet(
     stato: Optional[TimesheetStatus] = None,
     commessa_id: Optional[uuid.UUID] = None,
     limit: int = 500,
+    skip: int = 0,
 ) -> List[Timesheet]:
     q = select(Timesheet).options(selectinload(Timesheet.user))
     if user_id:
@@ -770,7 +774,7 @@ async def list_timesheet(
         q = q.where(Timesheet.stato == stato)
     if commessa_id:
         q = q.where(Timesheet.commessa_id == commessa_id)
-    result = await db.execute(q.order_by(Timesheet.data_attivita.desc()).limit(limit))
+    result = await db.execute(q.order_by(Timesheet.data_attivita.desc()).offset(skip).limit(limit))
     return result.scalars().all()
 
 async def approva_timesheet(
@@ -943,20 +947,37 @@ async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None)
 # ── TASK SERVICE ──────────────────────────────────────────
 async def list_tasks(
     db: AsyncSession,
+    current_user: User,
     progetto_id: Optional[uuid.UUID] = None,
     commessa_id: Optional[uuid.UUID] = None,
     assegnatario_id: Optional[uuid.UUID] = None,
     stato: Optional[TaskStatus] = None,
     parent_only: bool = False,
     start_date: Optional[date] = None,
-    end_date: Optional[date] = None
+    end_date: Optional[date] = None,
+    limit: int = 200,
+    skip: int = 0,
 ) -> List[Task]:
+    # Restricted roles can see their tasks. Admin sees everything.
+    p_ids, t_ids, _ = await get_user_access_scope(db, current_user)
+    
     q = select(Task).options(
         selectinload(Task.subtasks).selectinload(Task.timer_sessions),
         selectinload(Task.assegnatario),
-        selectinload(Task.revisore),
-        selectinload(Task.timer_sessions)
+        selectinload(Task.revisore)
     )
+    
+    # Apply Security Filters
+    if p_ids is not None:
+        # If user has a limited project scope, they can see tasks in those projects 
+        # OR tasks explicitly assigned to them (t_ids)
+        if t_ids:
+            q = q.where(or_(Task.progetto_id.in_(p_ids), Task.id.in_(t_ids)))
+        else:
+            q = q.where(Task.progetto_id.in_(p_ids))
+    elif t_ids is not None:
+        # If no project scope but has task scope
+        q = q.where(Task.id.in_(t_ids))
     if progetto_id:
         q = q.where(Task.progetto_id == progetto_id)
     if commessa_id:
@@ -971,99 +992,110 @@ async def list_tasks(
         q = q.where(Task.data_scadenza >= start_date)
     if end_date:
         q = q.where(Task.data_scadenza <= end_date)
-    
-    result = await db.execute(q.order_by(Task.created_at.desc()))
+
+    # Filter out deleted tasks
+    q = q.where(Task.is_deleted == False)
+
+    result = await db.execute(q.order_by(Task.created_at.desc()).offset(skip).limit(limit))
     return result.unique().scalars().all()
 
-async def get_project_stats(db: AsyncSession, progetto_id: uuid.UUID) -> dict:
+async def get_project_stats(db: AsyncSession, progetto_id: uuid.UUID, current_user: User) -> dict:
+    if not await can_access_project(db, current_user, progetto_id):
+        raise HTTPException(status_code=403, detail="Non autorizzato ad accedere a questo progetto")
+
     from app.models.models import Task, User, ProgettoTeam, TaskStatus
     from datetime import date, timedelta
-    from sqlalchemy import func
+    from sqlalchemy import func, case
     
     today = date.today()
     next_week = today + timedelta(days=7)
     
-    # 1. Fetch all tasks for the project
-    stmt = select(Task).where(Task.progetto_id == progetto_id).options(selectinload(Task.assegnatario))
-    result = await db.execute(stmt)
-    tasks = result.scalars().all()
+    # 1. Aggregated KPIs and Status Distribution in ONE query
+    stats_stmt = select(
+        func.count(Task.id).label("total"),
+        func.count(case((and_(Task.data_scadenza == today, Task.stato != TaskStatus.PUBBLICATO), 1))).label("today"),
+        func.count(case((and_(Task.data_scadenza < today, Task.stato != TaskStatus.PUBBLICATO), 1))).label("overdue"),
+        func.count(case((and_(Task.data_scadenza > today, Task.data_scadenza <= next_week, Task.stato != TaskStatus.PUBBLICATO), 1))).label("upcoming")
+    ).where(Task.progetto_id == progetto_id)
     
-    # 2. Basic KPIs
-    total = len(tasks)
-    due_today = len([t for t in tasks if t.data_scadenza == today and t.stato != TaskStatus.PUBBLICATO])
-    overdue = len([t for t in tasks if t.data_scadenza and t.data_scadenza < today and t.stato != TaskStatus.PUBBLICATO])
-    upcoming = len([t for t in tasks if t.data_scadenza and today < t.data_scadenza <= next_week and t.stato != TaskStatus.PUBBLICATO])
+    stats_res = await db.execute(stats_stmt)
+    kpis = stats_res.mappings().one()
     
-    # 3. Status Distribution
-    status_counts = {}
-    for t in tasks:
-        status_counts[t.stato] = status_counts.get(t.stato, 0) + 1
+    # Status distribution
+    status_stmt = select(Task.stato, func.count(Task.id)).where(Task.progetto_id == progetto_id).group_by(Task.stato)
+    status_res = await db.execute(status_stmt)
+    status_dist = [{"status": s, "count": c} for s, c in status_res.all()]
     
-    # 4. Team Stats (Tasks and Overdue per member)
-    team_stmt = select(User).join(ProgettoTeam).where(ProgettoTeam.progetto_id == progetto_id)
-    team_result = await db.execute(team_stmt)
-    team_users = team_result.scalars().all()
+    # 2. Team Stats (Optimized)
+    team_stmt = select(
+        User.id, User.nome, User.cognome, User.avatar_url,
+        func.count(Task.id).label("total_tasks"),
+        func.count(case((and_(Task.data_scadenza < today, Task.stato != TaskStatus.PUBBLICATO), 1))).label("overdue_tasks")
+    ).join(ProgettoTeam, ProgettoTeam.user_id == User.id)\
+     .outerjoin(Task, and_(Task.assegnatario_id == User.id, Task.progetto_id == progetto_id))\
+     .where(ProgettoTeam.progetto_id == progetto_id)\
+     .group_by(User.id)
+     
+    team_res = await db.execute(team_stmt)
+    team_stats = [dict(r) for r in team_res.mappings().all()]
     
-    team_stats = []
-    for u in team_users:
-        user_tasks = [t for t in tasks if t.assegnatario_id == u.id]
-        user_overdue = [t for t in user_tasks if t.data_scadenza and t.data_scadenza < today and t.stato != TaskStatus.PUBBLICATO]
-        team_stats.append({
-            "id": u.id,
-            "nome": u.nome,
-            "cognome": u.cognome,
-            "avatar_url": u.avatar_url,
-            "total_tasks": len(user_tasks),
-            "overdue_tasks": len(user_overdue)
-        })
+    # 3. Critical (Overdue) Tasks
+    critical_stmt = select(Task).options(joinedload(Task.assegnatario))\
+        .where(Task.progetto_id == progetto_id, Task.data_scadenza < today, Task.stato != TaskStatus.PUBBLICATO)\
+        .order_by(Task.data_scadenza.asc()).limit(10)
     
-    # 5. Overdue Tasks Details (Limit to 10)
-    critical_tasks = []
-    overdue_list = [t for t in tasks if t.data_scadenza and t.data_scadenza < today and t.stato != TaskStatus.PUBBLICATO]
-    overdue_list.sort(key=lambda x: x.data_scadenza) # Oldest first
-    
-    for t in overdue_list[:10]:
-        critical_tasks.append({
+    critical_res = await db.execute(critical_stmt)
+    critical_tasks = [
+        {
             "id": t.id,
             "titolo": t.titolo,
             "data_scadenza": t.data_scadenza,
             "assegnatario": {
-                "nome": t.assegnatario.nome if t.assegnatario else "Nessuno",
+                "nome": f"{t.assegnatario.nome} {t.assegnatario.cognome}" if t.assegnatario else "Nessuno",
                 "avatar_url": t.assegnatario.avatar_url if t.assegnatario else None
             } if t.assegnatario else None
-        })
+        }
+        for t in critical_res.scalars().all()
+    ]
         
     return {
-        "kpis": {
-            "total": total,
-            "today": due_today,
-            "overdue": overdue,
-            "upcoming": upcoming
-        },
-        "status_distribution": [{"status": s, "count": c} for s, c in status_counts.items()],
+        "kpis": kpis,
+        "status_distribution": status_dist,
         "team_stats": team_stats,
         "critical_tasks": critical_tasks
     }
 
-async def get_task(db: AsyncSession, task_id: uuid.UUID) -> Optional[Task]:
+async def _get_task_record(db: AsyncSession, task_id: uuid.UUID) -> Optional[Task]:
     result = await db.execute(
         select(Task).options(
             selectinload(Task.subtasks).selectinload(Task.timer_sessions),
             selectinload(Task.assegnatario),
             selectinload(Task.revisore),
             selectinload(Task.timer_sessions)
-        ).where(Task.id == task_id)
+        ).where(Task.id == task_id, Task.is_deleted == False)
     )
     return result.unique().scalar_one_or_none()
 
-async def create_task(db: AsyncSession, data: Any) -> Task: # data: TaskCreate
+async def get_task(db: AsyncSession, task_id: uuid.UUID, current_user: User) -> Optional[Task]:
+    ensure_erp_access_user(current_user)
+    return await _get_task_record(db, task_id)
+
+async def create_task(db: AsyncSession, data: Any, current_user: User) -> Task: # data: TaskCreate
+    ensure_erp_access_user(current_user)
     t = Task(**data.model_dump())
     db.add(t)
     await db.flush()
-    return await get_task(db, t.id)
+    return await _get_task_record(db, t.id)
 
-async def update_task(db: AsyncSession, task_id: uuid.UUID, data: Any, by_user_id: uuid.UUID) -> Optional[Task]: # data: TaskUpdate
-    t = await get_task(db, task_id)
+async def update_task(
+    db: AsyncSession,
+    task_id: uuid.UUID,
+    data: Any,
+    by_user_id: uuid.UUID,
+    current_user: User,
+) -> Optional[Task]: # data: TaskUpdate
+    ensure_erp_access_user(current_user)
+    t = await _get_task_record(db, task_id)
     if not t:
         return None
     prima = {"stato": t.stato, "titolo": t.titolo}
@@ -1071,14 +1103,17 @@ async def update_task(db: AsyncSession, task_id: uuid.UUID, data: Any, by_user_i
         setattr(t, field, val)
     await write_audit(db, by_user_id, "tasks", task_id, "UPDATE", prima)
     await db.flush()
-    return await get_task(db, t.id)
+    return await _get_task_record(db, t.id)
 
-async def delete_task(db: AsyncSession, task_id: uuid.UUID, by_user_id: uuid.UUID) -> bool:
-    t = await get_task(db, task_id)
+async def delete_task(db: AsyncSession, task_id: uuid.UUID, by_user_id: uuid.UUID, current_user: User) -> bool:
+    ensure_erp_access_user(current_user)
+    t = await _get_task_record(db, task_id)
     if not t:
         return False
     await write_audit(db, by_user_id, "tasks", task_id, "DELETE", {"titolo": t.titolo})
-    await db.delete(t)
+    t.is_deleted = True
+    t.deleted_at = datetime.now()
+    # await db.delete(t) # Soft-delete instead
     await db.flush()
     return True
 
@@ -1954,10 +1989,10 @@ async def update_fattura_passiva(db: AsyncSession, fattura_id: uuid.UUID, data: 
     return fattura
 
 
-async def list_movimenti_cassa(db: AsyncSession):
+async def list_movimenti_cassa(db: AsyncSession, skip: int = 0, limit: int = 200):
     from app.models.models import MovimentoCassa
     result = await db.execute(
-        select(MovimentoCassa).order_by(MovimentoCassa.data_valuta.desc())
+        select(MovimentoCassa).order_by(MovimentoCassa.data_valuta.desc()).offset(skip).limit(limit)
     )
     rows = result.scalars().all()
     return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
@@ -2490,9 +2525,13 @@ async def delete_risorsa(db: AsyncSession, risorsa_id: uuid.UUID):
 
 async def get_progetto_with_servizi(db: AsyncSession, progetto_id):
     result = await db.execute(
-        select(Progetto).options(selectinload(Progetto.servizi)).where(Progetto.id == progetto_id)
+        select(Progetto).options(
+            selectinload(Progetto.cliente),
+            selectinload(Progetto.servizi),
+            selectinload(Progetto.team).selectinload(ProgettoTeam.user),
+        ).where(Progetto.id == progetto_id)
     )
-    return result.scalar_one_or_none()
+    return result.unique().scalar_one_or_none()
 
 # ── SERVIZI PROGETTO ──────────────────────────────────────
 async def get_servizi_progetto(db: AsyncSession, progetto_id: uuid.UUID):
@@ -2655,6 +2694,24 @@ async def get_active_timer(db: AsyncSession, user_id: uuid.UUID) -> Optional[dic
     d = {c.name: getattr(session, c.name) for c in session.__table__.columns}
     d['task_title'] = task_title
     return d
+
+async def get_all_active_timers(db: AsyncSession) -> List[dict]:
+    result = await db.execute(
+        select(TimerSession, Task.titolo, User.nome, User.cognome)
+        .join(User, TimerSession.user_id == User.id)
+        .outerjoin(Task, TimerSession.task_id == Task.id)
+        .where(TimerSession.stopped_at == None)
+        .order_by(TimerSession.started_at.desc())
+    )
+    rows = result.all()
+    timers = []
+    for row in rows:
+        session, task_title, nome, cognome = row
+        d = {c.name: getattr(session, c.name) for c in session.__table__.columns}
+        d['task_title'] = task_title
+        d['user_name'] = f"{nome} {cognome}"
+        timers.append(d)
+    return timers
 
 async def list_timer_sessions(db: AsyncSession, task_id: uuid.UUID) -> List[TimerSession]:
     result = await db.execute(

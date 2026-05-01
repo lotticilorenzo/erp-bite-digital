@@ -50,11 +50,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { Link, useLocation } from "react-router-dom";
 import { StudioSidebar } from "@/components/studio/StudioSidebar";
+import { hasErpAccess, normalizeRole } from "@/lib/access";
 
-// Ruoli con accesso completo all'ERP
-const FULL_ACCESS_ROLES = ["ADMIN", "DEVELOPER", "PM"];
-// Ruoli con accesso solo allo Studio OS
-const STUDIO_ONLY_ROLES = ["COLLABORATORE", "DIPENDENTE", "FREELANCER"];
+const ERP_ROLES = ["ADMIN", "DEVELOPER"];
 const STUDIO_SIDEBAR_WIDTH_KEY = "studio_os_sidebar_width";
 const STUDIO_SIDEBAR_DEFAULT_WIDTH = 320;
 const STUDIO_SIDEBAR_MIN_WIDTH = 280;
@@ -63,15 +61,22 @@ const STUDIO_SIDEBAR_MAX_WIDTH = 440;
 const navItems = [
   {
     title: "Generale",
-    roles: FULL_ACCESS_ROLES,
+    roles: ERP_ROLES,
     items: [
       { title: "Dashboard", url: "/", icon: LayoutDashboard },
+    ],
+  },
+  {
+    title: "Finance Insights",
+    roles: ERP_ROLES,
+    items: [
       { title: "Analytics", url: "/analytics", icon: PieChart },
+      { title: "Report Mensili", url: "/report", icon: BarChart3 },
     ],
   },
   {
     title: "Gestione",
-    roles: FULL_ACCESS_ROLES,
+    roles: ERP_ROLES,
     items: [
       { title: "Clienti", url: "/clienti", icon: Users },
       { title: "Progetti", url: "/progetti", icon: FolderOpen },
@@ -82,7 +87,7 @@ const navItems = [
   },
   {
     title: "Execution Hub",
-    roles: FULL_ACCESS_ROLES,
+    roles: ERP_ROLES,
     items: [
       { title: "Timesheet", url: "/timesheet", icon: Timer },
       { title: "Planning", url: "/planning", icon: ClipboardList },
@@ -93,7 +98,7 @@ const navItems = [
   },
   {
     title: "Management Console",
-    roles: FULL_ACCESS_ROLES,
+    roles: ERP_ROLES,
     items: [
       { title: "Fatture", url: "/fatture", icon: FileText },
       { title: "Fornitori", url: "/fornitori", icon: ShoppingCart },
@@ -104,9 +109,8 @@ const navItems = [
   },
   {
     title: "Documenti",
-    roles: FULL_ACCESS_ROLES,
+    roles: ERP_ROLES,
     items: [
-      { title: "Report Mensili", url: "/report", icon: BarChart3 },
       { title: "Wiki", url: "/wiki", icon: BookOpen },
     ],
   },
@@ -126,8 +130,8 @@ export function AppSidebar() {
   });
 
   const isStudioOS = location.pathname.startsWith("/studio-os");
-  const userRole = user?.ruolo?.toUpperCase() ?? "";
-  const isStudioOnlyUser = STUDIO_ONLY_ROLES.includes(userRole);
+  const userRole = normalizeRole(user?.ruolo);
+  const canAccessErp = hasErpAccess(userRole);
   
   // Filtra i gruppi di navigazione in base al ruolo
   const visibleNavItems = navItems.filter(group => 
@@ -264,7 +268,7 @@ export function AppSidebar() {
         {state !== "collapsed" && (
           <div className="p-1 gap-1 flex bg-muted/50 border border-sidebar-border rounded-xl shadow-inner">
             {/* Il bottone ERP è visibile solo agli utenti con accesso completo */}
-            {!isStudioOnlyUser && (
+            {canAccessErp && (
               <Link 
                 to="/" 
                 className={`
@@ -297,9 +301,11 @@ export function AppSidebar() {
 
         {state === "collapsed" && (
           <div className="flex flex-col items-center gap-2">
-            <Link to="/" className={`p-2 rounded-lg transition-all ${!isStudioOS ? "bg-primary text-primary-foreground shadow-lg" : "border border-sidebar-border bg-muted/60 text-muted-strong"}`}>
-              <BarChart3 className="h-4 w-4" />
-            </Link>
+            {canAccessErp && (
+              <Link to="/" className={`p-2 rounded-lg transition-all ${!isStudioOS ? "bg-primary text-primary-foreground shadow-lg" : "border border-sidebar-border bg-muted/60 text-muted-strong"}`}>
+                <BarChart3 className="h-4 w-4" />
+              </Link>
+            )}
             <Link to="/studio-os" className={`p-2 rounded-lg transition-all ${isStudioOS ? "bg-primary text-primary-foreground shadow-lg" : "border border-sidebar-border bg-muted/60 text-muted-strong"}`}>
               <Zap className="h-4 w-4" />
             </Link>

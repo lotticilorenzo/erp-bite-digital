@@ -14,6 +14,7 @@ import {
   X,
   Flag,
 } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Table,
   TableBody,
@@ -148,6 +149,18 @@ export function StudioListView() {
     else { setSortKey(key); setSortDir("asc"); }
   };
 
+  // Virtualization
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  // Flatten tasks for virtualization (subtasks are handled separately if not using a flat tree)
+  // For now, virtualization will apply to the top-level tasks.
+  const virtualizer = useVirtualizer({
+    count: tasks.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 48, // Estimated height of a row
+    overscan: 10,
+  });
+
   const activeFilters = [filterAssignee, filterStatus, filterPriority].filter(Boolean).length;
 
   return (
@@ -276,11 +289,44 @@ export function StudioListView() {
         </div>
       )}
 
-      <div className="flex-1 overflow-auto">
-        <Table>
-          <TableHeader className="bg-card/80 sticky top-0 z-10 backdrop-blur-md border-b border-border/30">
-            <TableRow className="hover:bg-transparent border-border/30">
-              <TableHead className="w-full h-10 px-4">
+      {/* Quick Add Bar - Moved to Top for better UX in large lists */}
+      <div className="px-6 py-2 border-b border-border/5 bg-card/5 shrink-0">
+        {quickAddActive ? (
+          <div className="flex items-center gap-3 h-9 bg-primary/5 rounded-lg px-3 animate-in fade-in slide-in-from-top-1 duration-150">
+            <Plus className="h-3.5 w-3.5 text-primary" />
+            <input
+              ref={quickAddRef}
+              autoFocus
+              className="flex-1 bg-transparent border-none outline-none text-[12px] font-bold text-white placeholder:text-muted-foreground/40"
+              placeholder="Cosa devi fare? (Invio per creare)"
+              value={quickAddTitle}
+              onChange={e => setQuickAddTitle(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter") handleQuickAdd();
+                if (e.key === "Escape") { setQuickAddActive(false); setQuickAddTitle(""); }
+              }}
+              onBlur={() => { if (!quickAddTitle.trim()) setQuickAddActive(false); }}
+            />
+          </div>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-full justify-start text-[10px] font-black uppercase tracking-widest text-muted-foreground/30 hover:text-primary hover:bg-primary/5 group rounded-lg"
+            onClick={() => { setQuickAddActive(true); setQuickAddTitle(""); }}
+          >
+            <Plus className="h-3.5 w-3.5 mr-2 group-hover:scale-125 transition-transform" />
+            Nuova Task
+          </Button>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-primary/20 hover:scrollbar-thumb-primary/40 scrollbar-track-transparent" ref={parentRef}>
+        <Table className="border-collapse">
+          <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-md z-10 border-b border-border/10">
+            <TableRow className="hover:bg-transparent border-none h-10">
+              <TableHead className="w-10 h-10 px-4" />
+              <TableHead className="h-10 px-0">
                 <button
                   onClick={() => toggleSort("title")}
                   className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 hover:text-white transition-colors"
@@ -293,10 +339,10 @@ export function StudioListView() {
                   onClick={() => toggleSort("assegnatario")}
                   className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 hover:text-white transition-colors"
                 >
-                  Assegnato <ArrowUpDown className="h-2.5 w-2.5 opacity-50" />
+                  Proprietario <ArrowUpDown className="h-2.5 w-2.5 opacity-50" />
                 </button>
               </TableHead>
-              <TableHead className="h-10 px-4 w-[140px]">
+              <TableHead className="h-10 px-4">
                 <button
                   onClick={() => toggleSort("stato")}
                   className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 hover:text-white transition-colors"
@@ -318,72 +364,39 @@ export function StudioListView() {
               <TableHead className="w-16 h-10 px-2" />
             </TableRow>
           </TableHeader>
-          <TableBody>
+          <TableBody style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
             {tasks.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-48 text-center">
+                <TableCell colSpan={7} className="h-48 text-center">
                   <p className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/30 italic">
                     Nessuna task trovata
                   </p>
                 </TableCell>
               </TableRow>
             ) : (
-              tasks.map((task) => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  depth={0}
-                  utenti={utenti as any[]}
-                  getUserInitials={getUserInitials}
-                  getUserName={getUserName}
-                />
-              ))
+              virtualizer.getVirtualItems().map((virtualRow) => {
+                const task = tasks[virtualRow.index];
+                return (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    depth={0}
+                    utenti={utenti as any[]}
+                    getUserInitials={getUserInitials}
+                    getUserName={getUserName}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  />
+                );
+              })
             )}
-            {/* Inline quick-add row */}
-            <TableRow className="border-border/10 hover:bg-transparent">
-              <TableCell colSpan={6} className="p-0">
-                {quickAddActive ? (
-                  <div className="flex items-center gap-3 px-6 h-12 border-t border-primary/20 bg-primary/5 animate-in fade-in slide-in-from-bottom-1 duration-150">
-                    <div className="h-2 w-2 rounded-full bg-primary/40 shrink-0" />
-                    <input
-                      ref={quickAddRef}
-                      autoFocus
-                      className="flex-1 bg-transparent border-none outline-none text-[13px] font-bold text-white placeholder:text-muted-foreground/40"
-                      placeholder="Nome task... (Invio per creare, Esc per annullare)"
-                      value={quickAddTitle}
-                      onChange={e => setQuickAddTitle(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === "Enter") handleQuickAdd();
-                        if (e.key === "Escape") { setQuickAddActive(false); setQuickAddTitle(""); }
-                      }}
-                      onBlur={() => { if (!quickAddTitle.trim()) setQuickAddActive(false); }}
-                    />
-                    <span className="text-[9px] font-black text-muted-foreground/30 uppercase tracking-wider shrink-0">
-                      Invio ↵
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 border-t border-border/10">
-                    <Button
-                      variant="ghost"
-                      className="flex-1 justify-start h-11 px-6 text-[10px] font-black uppercase tracking-widest text-muted-foreground/30 hover:text-primary hover:bg-transparent group"
-                      onClick={() => { setQuickAddActive(true); setQuickAddTitle(""); }}
-                    >
-                      <Plus className="h-3.5 w-3.5 mr-2 group-hover:scale-125 transition-transform" />
-                      Aggiungi Task
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="h-11 px-4 text-[9px] font-black uppercase tracking-widest text-muted-foreground/20 hover:text-primary/50 hover:bg-transparent"
-                      onClick={() => openNewTask(nav.selectedFolderId, nav.selectedListId)}
-                      title="Apri form completo"
-                    >
-                      Form completo
-                    </Button>
-                  </div>
-                )}
-              </TableCell>
-            </TableRow>
+            )}
           </TableBody>
         </Table>
       </div>
@@ -397,9 +410,10 @@ interface TaskRowProps {
   utenti: any[];
   getUserInitials: (id?: string | null) => string | null;
   getUserName: (id?: string | null) => string | null;
+  style?: React.CSSProperties;
 }
 
-function TaskRow({ task, depth, utenti, getUserInitials, getUserName }: TaskRowProps) {
+function TaskRow({ task, depth, utenti, getUserInitials, getUserName, style }: TaskRowProps) {
   const [expanded, setExpanded] = useState(false);
   const { timer, selectTask, openTab } = useStudio();
   const { updateTask } = useTaskMutations();
@@ -457,13 +471,14 @@ function TaskRow({ task, depth, utenti, getUserInitials, getUserName }: TaskRowP
 
   return (
     <>
-      <TableRow
-        className={cn(
-          "border-b border-border/10 group cursor-pointer transition-all duration-200",
-          isTimerActive ? "bg-primary/[0.08] hover:bg-primary/[0.12]" : "hover:bg-white/[0.04]"
-        )}
-        onClick={handleRowClick}
-      >
+      <tr
+      className={cn(
+        "group border-b border-border/5 hover:bg-white/5 transition-all cursor-pointer select-none",
+        isTimerActive && "bg-primary/5 border-primary/20"
+      )}
+      onClick={handleRowClick}
+      style={style}
+    >
         {/* Name */}
         <TableCell className="py-0 px-4 h-12 w-full">
           <div

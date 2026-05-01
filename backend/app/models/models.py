@@ -120,6 +120,7 @@ class User(Base):
     preferences: Mapped[Optional[dict]] = mapped_column(JSON, default=dict)
     avatar_url: Mapped[Optional[str]] = mapped_column(String(500))
     attivo: Mapped[bool] = mapped_column(Boolean, default=True)
+    token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     data_inizio: Mapped[Optional[date]] = mapped_column(Date)
     data_fine: Mapped[Optional[date]] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -173,6 +174,8 @@ class Cliente(Base):
     affidabilita: Mapped[Optional[str]] = mapped_column(String(10), default="MEDIA", server_default="MEDIA")
     start_day_type: Mapped[ClientStartDayType] = mapped_column(SAEnum(ClientStartDayType, name="client_start_day_type"), default=ClientStartDayType.STANDARD_1, server_default="STANDARD_1")
     attivo: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -199,6 +202,8 @@ class Progetto(Base):
     data_fine: Mapped[Optional[date]] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     cliente: Mapped["Cliente"] = relationship(back_populates="progetti")
     commesse_link: Mapped[List["CommessaProgetto"]] = relationship(back_populates="progetto")
@@ -266,6 +271,8 @@ class Commessa(Base):
     note: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     cliente: Mapped["Cliente"] = relationship(back_populates="commesse")
     pianificazione: Mapped[Optional["Pianificazione"]] = relationship(back_populates="commessa")
@@ -371,6 +378,8 @@ class Task(Base):
     clickup_synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     assegnatario: Mapped[Optional["User"]] = relationship(foreign_keys=[assegnatario_id], back_populates="tasks_assegnati")
     revisore: Mapped[Optional["User"]] = relationship(foreign_keys=[revisore_id])
@@ -385,6 +394,7 @@ class Task(Base):
     )
     timer_sessions: Mapped[List["TimerSession"]] = relationship("TimerSession", back_populates="task", cascade="all, delete-orphan")
     commenti: Mapped[List["TaskComment"]] = relationship("TaskComment", back_populates="task", cascade="all, delete-orphan", order_by="TaskComment.created_at")
+    attachments: Mapped[List["TaskAttachment"]] = relationship("TaskAttachment", back_populates="task", cascade="all, delete-orphan")
 
     @property
     def tempo_trascorso_minuti(self) -> int:
@@ -404,6 +414,22 @@ class TaskComment(Base):
 
     task: Mapped["Task"] = relationship("Task", back_populates="commenti")
     autore: Mapped["User"] = relationship("User", foreign_keys=[autore_id])
+
+# ── TASK ATTACHMENTS ──────────────────────────────────────────
+class TaskAttachment(Base):
+    __tablename__ = "task_attachments"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"))
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    filename: Mapped[str] = mapped_column(String(500))
+    file_path: Mapped[str] = mapped_column(String(1000))
+    file_size: Mapped[int] = mapped_column(Integer) # in bytes
+    content_type: Mapped[Optional[str]] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    task: Mapped["Task"] = relationship("Task", back_populates="attachments")
+    user: Mapped["User"] = relationship("User")
 
 # ── STUDIO NODE (WORKSPACE HIERARCHY) ────────────────────
 class StudioNode(Base):
@@ -426,6 +452,8 @@ class StudioNode(Base):
     order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     parent: Mapped[Optional["StudioNode"]] = relationship("StudioNode", remote_side=[id], back_populates="children")
     children: Mapped[List["StudioNode"]] = relationship("StudioNode", back_populates="parent", cascade="all, delete-orphan", order_by="StudioNode.order")
@@ -1004,6 +1032,7 @@ class ChatMembro(Base):
     canale_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("chat_canali.id", ondelete="CASCADE"))
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
     ruolo: Mapped[str] = mapped_column(String(50), default='MEMBER') # ADMIN, MEMBER
+    last_read_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     canale: Mapped["ChatCanale"] = relationship(back_populates="membri")

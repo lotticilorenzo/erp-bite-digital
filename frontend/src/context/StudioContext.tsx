@@ -89,12 +89,14 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     const tabId = item.id || `${item.type}-${item.linkedId}`;
     setNav(prev => {
       const exists = prev.openTabs.find(t => t.id === tabId);
-      const newTabs = exists ? prev.openTabs : [...prev.openTabs, { ...item, id: tabId }];
+      const newTabs = exists ? prev.openTabs : [...prev.openTabs, { ...item, id: tabId, view: item.view || (item.type === "PROJECT" ? "list" : "dash") }];
+      const currentTab = newTabs.find(t => t.id === tabId);
+
       return {
         ...prev,
         openTabs: newTabs,
         activeTabId: tabId,
-        view: item.type === "PROJECT" ? "list" : prev.view,
+        view: currentTab?.view || (item.type === "PROJECT" ? "list" : prev.view),
         selectedListId: item.type === "PROJECT" ? item.linkedId || null : prev.selectedListId,
         selectedTaskId: item.type === "TASK" ? item.linkedId || null : prev.selectedTaskId,
       };
@@ -123,7 +125,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       return {
         ...prev,
         activeTabId: id,
-        view: tab.type === "PROJECT" ? "list" : prev.view,
+        view: tab.view || (tab.type === "PROJECT" ? "list" : prev.view),
         selectedListId: tab.type === "PROJECT" ? tab.linkedId || null : prev.selectedListId,
         selectedTaskId: tab.type === "TASK" ? tab.linkedId || null : prev.selectedTaskId,
       };
@@ -148,15 +150,22 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
   // Actions
   const setView = useCallback((view: StudioView) => {
-    setNav((prev) => ({ 
-      ...prev, 
-      view,
-      // Clear selections when returning to non-project views
-      selectedFolderId: (view === "home" || view === "chat") ? null : prev.selectedFolderId,
-      selectedListId: (view === "home" || view === "chat") ? null : prev.selectedListId,
-      selectedTaskId: (view === "home" || view === "chat") ? null : prev.selectedTaskId,
-      activeTabId: (view === "home" || view === "chat") ? null : prev.activeTabId
-    }));
+    setNav((prev) => {
+      const newTabs = prev.openTabs.map(t => 
+        t.id === prev.activeTabId ? { ...t, view } : t
+      );
+      
+      return { 
+        ...prev, 
+        view,
+        openTabs: newTabs,
+        // Clear selections when returning to non-project views
+        selectedFolderId: (view === "home" || view === "chat") ? null : prev.selectedFolderId,
+        selectedListId: (view === "home" || view === "chat") ? null : prev.selectedListId,
+        selectedTaskId: (view === "home" || view === "chat") ? null : prev.selectedTaskId,
+        activeTabId: (view === "home" || view === "chat") ? null : prev.activeTabId
+      };
+    });
   }, []);
 
   const selectFolder = useCallback((id: string | null) => {
@@ -228,9 +237,15 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     ];
   }, [clienti]);
 
-  const currentFolder = useMemo(() => 
-    clienti.find(c => c.id === nav.selectedFolderId) || null
-  , [clienti, nav.selectedFolderId]);
+  const currentFolder = useMemo(() => {
+    if (nav.selectedFolderId) {
+      return clienti.find(c => c.id === nav.selectedFolderId) || null;
+    }
+    if (currentList?.cliente_id) {
+      return clienti.find(c => c.id === currentList.cliente_id) || null;
+    }
+    return null;
+  }, [clienti, nav.selectedFolderId, currentList]);
 
   const currentList = useMemo(() => 
     progetti.find(p => p.id === nav.selectedListId) || null

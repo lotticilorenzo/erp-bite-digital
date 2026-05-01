@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.core.security import get_current_user
-from app.models.models import DocumentNode, User
+from app.models.models import DocumentNode, User, UserRole
 from app.schemas.schemas import DocumentNodeCreate, DocumentNodeUpdate, DocumentNodeOut
 
 router = APIRouter()
@@ -35,14 +35,56 @@ def _serialize_node(node: DocumentNode, include_content: bool = False) -> dict:
     return d
 
 
+def _is_document_admin(current_user: User) -> bool:
+    return current_user.ruolo == UserRole.ADMIN
+
+
+def _ensure_document_access(node: DocumentNode, current_user: User) -> None:
+    if _is_document_admin(current_user):
+        return
+    if node.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Non hai i permessi per accedere a questo documento")
+
+
+async def _get_document_node_or_404(db: AsyncSession, node_id: uuid.UUID) -> DocumentNode:
+    res = await db.execute(select(DocumentNode).where(DocumentNode.id == node_id))
+    node = res.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail="Documento non trovato")
+    return node
+
+
+async def _validate_parent_access(
+    db: AsyncSession,
+    parent_id: uuid.UUID,
+    current_user: User,
+) -> DocumentNode:
+    parent = await _get_document_node_or_404(db, parent_id)
+    _ensure_document_access(parent, current_user)
+    if parent.tipo != "FOLDER":
+        raise HTTPException(status_code=400, detail="Il nodo padre deve essere una cartella")
+    return parent
+
+
+async def _assert_not_descendant_parent(
+    db: AsyncSession,
+    node_id: uuid.UUID,
+    parent_id: Optional[uuid.UUID],
+) -> None:
+    curr_parent_id = parent_id
+    while curr_parent_id:
+        if curr_parent_id == node_id:
+            raise HTTPException(status_code=400, detail="Non puoi spostare una cartella dentro se stessa o un suo figlio")
+        res_parent = await db.execute(select(DocumentNode.parent_id).where(DocumentNode.id == curr_parent_id))
+        curr_parent_id = res_parent.scalar_one_or_none()
+
+
 async def _load_tree(db: AsyncSession, current_user: User, parent_id: Optional[uuid.UUID] = None) -> List[DocumentNode]:
     """Load all nodes at one level with their children eagerly loaded (recursive selectinload). Filters by user ownership."""
-    from app.models.models import UserRole
-    
     stmt = select(DocumentNode).where(DocumentNode.parent_id == parent_id)
     
     # Filtro Sicurezza: Se non è ADMIN, vedi solo i tuoi documenti
-    if current_user.ruolo != UserRole.ADMIN:
+    if not _is_document_admin(current_user):
         stmt = stmt.where(DocumentNode.created_by == current_user.id)
     
     stmt = stmt.order_by(DocumentNode.ordine, DocumentNode.nome)
@@ -84,18 +126,8 @@ async def get_node(
     current_user: User = Depends(get_current_user)
 ):
     """Returns a single document/folder with its full content. Includes ownership check."""
-    from app.models.models import UserRole
-    stmt = select(DocumentNode).where(DocumentNode.id == node_id)
-    res = await db.execute(stmt)
-    node = res.scalar_one_or_none()
-    
-    if not node:
-        raise HTTPException(status_code=404, detail="Documento non trovato")
-        
-    # Security Check
-    if current_user.ruolo != UserRole.ADMIN and node.created_by != current_user.id:
-        raise HTTPException(status_code=403, detail="Non hai i permessi per visualizzare questo documento")
-        
+    node = await _get_document_node_or_404(db, node_id)
+    _ensure_document_access(node, current_user)
     return _serialize_node(node, include_content=True)
 
 
@@ -112,17 +144,13 @@ async def create_node(
     """Creates a new document node (file or folder)."""
     # Verify parent exists if specified
     if data.parent_id:
-        parent_res = await db.execute(select(DocumentNode).where(DocumentNode.id == data.parent_id))
-        parent = parent_res.scalar_one_or_none()
-        if not parent:
-            raise HTTPException(status_code=404, detail="Cartella padre non trovata")
-        if parent.tipo != "FOLDER":
-            raise HTTPException(status_code=400, detail="Il nodo padre deve essere una cartella")
+        await _validate_parent_access(db, data.parent_id, current_user)
 
     # Compute next ordine (max sibling ordine + 1)
-    siblings_res = await db.execute(
-        select(DocumentNode).where(DocumentNode.parent_id == data.parent_id)
-    )
+    siblings_stmt = select(DocumentNode).where(DocumentNode.parent_id == data.parent_id)
+    if not _is_document_admin(current_user):
+        siblings_stmt = siblings_stmt.where(DocumentNode.created_by == current_user.id)
+    siblings_res = await db.execute(siblings_stmt)
     siblings = siblings_res.scalars().all()
     next_ordine = max((s.ordine for s in siblings), default=-1) + 1
 
@@ -154,22 +182,15 @@ async def update_node(
     current_user: User = Depends(get_current_user)
 ):
     """Updates a document node — rename, content, move to new parent, icon/color."""
-    res = await db.execute(select(DocumentNode).where(DocumentNode.id == node_id))
-    node = res.scalar_one_or_none()
-    if not node:
-        raise HTTPException(status_code=404, detail="Documento non trovato")
-        
-    # Security Check
-    from app.models.models import UserRole
-    if current_user.ruolo != UserRole.ADMIN and node.created_by != current_user.id:
-        raise HTTPException(status_code=403, detail="Non hai i permessi per modificare questo documento")
+    node = await _get_document_node_or_404(db, node_id)
+    _ensure_document_access(node, current_user)
 
     if data.nome is not None:
         node.nome = data.nome.strip() or node.nome
     if data.contenuto is not None:
         node.contenuto = data.contenuto
     if data.ordine is not None:
-        node.ordine = data.ordine
+        node.ordine = max(0, data.ordine)
     if data.icona is not None:
         node.icona = data.icona
     if data.colore is not None:
@@ -177,13 +198,8 @@ async def update_node(
 
     # Move to new parent (prevent moving into own subtree)
     if data.parent_id is not None and data.parent_id != node.parent_id:
-        # Verify parent exists and is a folder
-        parent_res = await db.execute(select(DocumentNode).where(DocumentNode.id == data.parent_id))
-        parent = parent_res.scalar_one_or_none()
-        if not parent:
-            raise HTTPException(status_code=404, detail="Cartella padre non trovata")
-        if parent.tipo != "FOLDER":
-            raise HTTPException(status_code=400, detail="Il nodo padre deve essere una cartella")
+        await _assert_not_descendant_parent(db, node.id, data.parent_id)
+        await _validate_parent_access(db, data.parent_id, current_user)
         node.parent_id = data.parent_id
 
     node.updated_at = datetime.utcnow()
@@ -203,15 +219,8 @@ async def delete_node(
     current_user: User = Depends(get_current_user)
 ):
     """Deletes a document node and all its descendants (CASCADE)."""
-    res = await db.execute(select(DocumentNode).where(DocumentNode.id == node_id))
-    node = res.scalar_one_or_none()
-    if not node:
-        raise HTTPException(status_code=404, detail="Documento non trovato")
-
-    # Security Check
-    from app.models.models import UserRole
-    if current_user.ruolo != UserRole.ADMIN and node.created_by != current_user.id:
-        raise HTTPException(status_code=403, detail="Non hai i permessi per eliminare questo documento")
+    node = await _get_document_node_or_404(db, node_id)
+    _ensure_document_access(node, current_user)
 
     await db.delete(node)
     await db.commit()
@@ -231,18 +240,15 @@ async def move_node(
     current_user: User = Depends(get_current_user)
 ):
     """Moves a node to a different parent and updates its sort order."""
-    res = await db.execute(select(DocumentNode).where(DocumentNode.id == node_id))
-    node = res.scalar_one_or_none()
-    if not node:
-        raise HTTPException(status_code=404, detail="Documento non trovato")
+    node = await _get_document_node_or_404(db, node_id)
+    _ensure_document_access(node, current_user)
 
-    # Security Check
-    from app.models.models import UserRole
-    if current_user.ruolo != UserRole.ADMIN and node.created_by != current_user.id:
-        raise HTTPException(status_code=403, detail="Non hai i permessi per spostare questo documento")
+    if parent_id is not None:
+        await _assert_not_descendant_parent(db, node.id, parent_id)
+        await _validate_parent_access(db, parent_id, current_user)
 
     node.parent_id = parent_id
-    node.ordine = ordine
+    node.ordine = max(0, ordine)
     node.updated_at = datetime.utcnow()
     await db.commit()
     return {"success": True}

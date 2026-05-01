@@ -7,6 +7,7 @@ export interface TabItem {
   type: "PROJECT" | "TASK" | "DASHBOARD" | "CHAT";
   title: string;
   linkedId?: string;
+  view?: StudioView;
 }
 
 export interface StudioState {

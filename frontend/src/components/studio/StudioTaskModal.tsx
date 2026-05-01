@@ -101,14 +101,15 @@ export function StudioTaskModal() {
     if (timer.active_session && timer.active_session.task_id === task?.id) {
       setLastActiveSessionId(timer.active_session.id);
     } else if (!timer.active_session && lastActiveSessionId && task) {
-             // Timer appena stoppato!
+      // Timer appena stoppato! Mostriamo il toast per il salvataggio
+      const sessionIdToSave = lastActiveSessionId;
       toast("Sessione terminata", {
         description: "Vuoi salvare il tempo nel timesheet?",
         action: {
           label: "SÌ, SALVA",
           onClick: () => {
-                   saveToTimesheetMutation.mutate({ 
-              session_ids: [lastActiveSessionId], 
+            saveToTimesheetMutation.mutate({ 
+              session_ids: [sessionIdToSave], 
               commessa_id: task.commessa_id === "none" ? undefined : task.commessa_id 
             });
           }
@@ -117,7 +118,7 @@ export function StudioTaskModal() {
       });
       setLastActiveSessionId(null);
     }
-  }, [timer.active_session, task?.id]);
+  }, [timer.active_session, task?.id, lastActiveSessionId, task, saveToTimesheetMutation]);
 
   useEffect(() => {
     if (task) {
@@ -150,7 +151,11 @@ export function StudioTaskModal() {
   const isTimerActive = !isNew && task && timer.active_session?.task_id === task.id;
 
   const handleSave = async () => {
-    if (!formData.titolo) return toast.error("Il titolo è obbligatorio");
+    if (formData.data_inizio && formData.data_scadenza) {
+      if (new Date(formData.data_scadenza) < new Date(formData.data_inizio)) {
+        return toast.error("La data di scadenza non può essere antecedente alla data di inizio");
+      }
+    }
 
     const payload = {
       ...formData,
@@ -258,10 +263,14 @@ export function StudioTaskModal() {
             <Button 
               onClick={handleSave} 
               disabled={createTask.isPending || updateTask.isPending}
-              className="h-9 px-6 bg-primary text-white font-black uppercase tracking-widest text-[10px] gap-2"
+              className="h-9 px-6 bg-primary text-white font-black uppercase tracking-widest text-[10px] gap-2 shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all"
             >
-              <Save className="h-3.5 w-3.5" />
-              {isNew ? 'Crea Task' : 'Salva Modifiche'}
+              {(createTask.isPending || updateTask.isPending) ? (
+                <div className="h-3.5 w-3.5 border-2 border-white/30 border-t-white animate-spin rounded-full" />
+              ) : (
+                <Save className="h-3.5 w-3.5" />
+              )}
+              {isNew ? (createTask.isPending ? 'Creazione...' : 'Crea Task') : (updateTask.isPending ? 'Salvataggio...' : 'Salva Modifiche')}
             </Button>
             {!isNew && (
               <Button 
@@ -289,20 +298,20 @@ export function StudioTaskModal() {
                     value={formData.titolo}
                     onChange={(e) => setFormData(prev => ({ ...prev, titolo: e.target.value }))}
                   />
-                  {estimate && (estimate as any).confidenza !== "NESSUNA" && (
+                  {estimate?.confidenza && estimate.confidenza !== "NESSUNA" && (
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
-                        Stima basata sullo storico: ~{(estimate as any).stima_minuti} min
+                        Stima basata sullo storico: ~{estimate.stima_minuti} min
                       </span>
                       <Badge 
                         variant="outline" 
                         className={`text-[8px] font-black h-4 px-1.5 border-none ${
-                          (estimate as any).confidenza === "ALTA" ? "bg-emerald-500/10 text-emerald-500" :
-                          (estimate as any).confidenza === "MEDIA" ? "bg-yellow-500/10 text-yellow-500" :
+                          estimate.confidenza === "ALTA" ? "bg-emerald-500/10 text-emerald-500" :
+                          estimate.confidenza === "MEDIA" ? "bg-yellow-500/10 text-yellow-500" :
                           "bg-orange-500/10 text-orange-500"
                         }`}
                       >
-                        {(estimate as any).confidenza} CONFIDENZA
+                        {estimate.confidenza} CONFIDENZA
                       </Badge>
                     </div>
                   )}

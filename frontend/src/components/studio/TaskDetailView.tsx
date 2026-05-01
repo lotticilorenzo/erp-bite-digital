@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import {
   Play,
   CheckCircle2,
@@ -12,6 +12,12 @@ import {
   BookCheck,
   History,
   Flag,
+  CloudUpload,
+  CloudCheck,
+  Paperclip,
+  File as FileIcon,
+  X,
+  Download,
 } from "lucide-react";
 import { useStudio } from "@/hooks/useStudio";
 import { useTasks, useTaskMutations } from "@/hooks/useTasks";
@@ -83,6 +89,9 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set());
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // ───────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -98,8 +107,33 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
         stima_minuti: task.stima_minuti || 0,
         priorita: task.priorita || "media",
       });
+      setLastSaved(new Date());
     }
   }, [task]);
+
+  // Auto-save logic
+  useEffect(() => {
+    if (!task) return;
+    
+    // Check if anything actually changed compared to the server state
+    const hasChanged = 
+      formData.titolo !== task.title ||
+      formData.descrizione !== (task.desc || "") ||
+      formData.stato !== task.state_id ||
+      formData.assegnatario_id !== (task.assegnatario_id || "none") ||
+      formData.priorita !== (task.priorita || "media") ||
+      formData.stima_minuti !== (task.stima_minuti || 0) ||
+      formData.data_inizio !== (task.data_inizio || "") ||
+      formData.data_scadenza !== (task.due_date || "");
+
+    if (!hasChanged) return;
+
+    const timerId = setTimeout(() => {
+      handleSave();
+    }, 1500);
+
+    return () => clearTimeout(timerId);
+  }, [formData]);
 
   if (!task) {
     return (
@@ -121,7 +155,9 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
   const unsavedSessions = sessions.filter(s => !s.salvato_timesheet);
 
   const handleSave = async () => {
+    if (isSaving) return;
     try {
+      setIsSaving(true);
       const cleanPayload = {
         ...formData,
         commessa_id: formData.commessa_id === "none" ? null : formData.commessa_id,
@@ -132,9 +168,11 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
         priorita: formData.priorita || "media",
       };
       await updateTask.mutateAsync({ id: task.id, data: cleanPayload });
-      toast.success("Task aggiornata");
+      setLastSaved(new Date());
     } catch {
-      toast.error("Errore durante il salvataggio");
+      toast.error("Errore durante l'auto-salvataggio");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -184,6 +222,48 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
     setSelectedSessions(new Set());
   };
 
+  const { data: attachments = [], refetch: refetchAttachments } = useQuery({
+    queryKey: ["task-attachments", taskId],
+    queryFn: async () => {
+      const res = await api.get(`/studio/tasks/${taskId}/attachments`);
+      return res.data;
+    },
+    enabled: !!taskId,
+  });
+
+  const uploadAttachment = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await api.post(`/studio/tasks/${taskId}/attachments`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      refetchAttachments();
+      toast.success("Allegato caricato");
+    },
+    onError: () => toast.error("Errore caricamento file"),
+  });
+
+  const deleteAttachment = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/studio/tasks/${taskId}/attachments/${id}`);
+    },
+    onSuccess: () => {
+      refetchAttachments();
+      toast.success("Allegato rimosso");
+    },
+  });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      uploadAttachment.mutate(file);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-background animate-in fade-in slide-in-from-right-4 duration-500">
       {/* Header */}
@@ -201,14 +281,21 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Button
-            onClick={handleSave}
-            disabled={updateTask.isPending}
-            className="h-8 px-4 bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-widest text-[9px] gap-2 shadow-lg shadow-primary/20"
-          >
-            <Save className="h-3 w-3" />
-            Salva
-          </Button>
+          <div className="flex items-center gap-3 px-3 py-1 bg-white/5 rounded-full border border-white/5">
+            {isSaving ? (
+              <div className="flex items-center gap-2">
+                <CloudUpload className="h-3 w-3 text-primary animate-bounce" />
+                <span className="text-[9px] font-black uppercase tracking-widest text-primary italic">Salvataggio...</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <CloudCheck className="h-3 w-3 text-emerald-500" />
+                <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500/70">
+                  Sincronizzato {lastSaved && format(lastSaved, "HH:mm:ss")}
+                </span>
+              </div>
+            )}
+          </div>
           <Button
             variant="ghost"
             size="icon"
@@ -392,6 +479,68 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
                   </div>
                 </div>
               )}
+
+              {/* Attachments Section */}
+              <div className="space-y-4 pt-6 border-t border-border/30">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-black text-white uppercase tracking-widest">
+                    <Paperclip className="h-4 w-4 text-primary" />
+                    Allegati
+                    <span className="text-[10px] font-mono text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded-md">
+                      {attachments.length}
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadAttachment.isPending}
+                    className="h-7 px-3 text-[9px] font-black uppercase tracking-widest text-primary hover:bg-primary/10 gap-1.5"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Carica File
+                  </Button>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {attachments.map((att: any) => (
+                    <div
+                      key={att.id}
+                      className="flex items-center gap-3 p-3 rounded-xl border border-border/30 bg-white/[0.02] hover:bg-white/[0.05] transition-all group relative overflow-hidden"
+                    >
+                      <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        <FileIcon className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-bold text-white truncate pr-6">{att.filename}</p>
+                        <p className="text-[9px] text-muted-foreground">
+                          {(att.file_size / 1024).toFixed(1)} KB • {format(new Date(att.created_at), "dd/MM HH:mm")}
+                        </p>
+                      </div>
+                      <div className="absolute right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => window.open(`${api.defaults.baseURL?.replace("/api/v1", "")}/${att.file_path}`, "_blank")}
+                          className="p-1.5 hover:text-primary transition-colors"
+                        >
+                          <Download className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={() => deleteAttachment.mutate(att.id)}
+                          className="p-1.5 hover:text-red-500 transition-colors"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               {/* ── Comments Section ── */}
               <div className="pt-6 border-t border-border/30">

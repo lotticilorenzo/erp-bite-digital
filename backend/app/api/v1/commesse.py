@@ -7,9 +7,9 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import get_current_user, require_roles
+from app.core.security import require_erp_access
 from app.db.session import get_db
-from app.models.models import Commessa as CommessaModel, CommessaStatus, FatturaAttiva, User, UserRole
+from app.models.models import Commessa as CommessaModel, CommessaStatus, FatturaAttiva, User
 from app.schemas.schemas import CommessaCreate, CommessaOut, CommessaUpdate
 from app.services.services import (
     calcola_metriche_commessa,
@@ -78,7 +78,7 @@ async def get_commesse(
     cliente_id: Optional[uuid.UUID] = Query(None),
     progetto_id: Optional[uuid.UUID] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_erp_access),
 ):
     commesse = await list_commesse(db, mese, stato, cliente_id, progetto_id)
     coeff_cache: dict[date, Decimal] = {}
@@ -92,7 +92,7 @@ async def get_commesse(
 async def get_single_commessa(
     commessa_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_erp_access),
 ):
     c = await get_commessa(db, commessa_id)
     if not c:
@@ -104,7 +104,7 @@ async def get_single_commessa(
 async def get_commessa_profitability(
     commessa_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_erp_access),
 ):
     c = await get_commessa(db, commessa_id)
     if not c:
@@ -157,7 +157,7 @@ async def get_commessa_profitability(
 async def add_commessa(
     data: CommessaCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_erp_access),
 ):
     c = await create_commessa(db, data)
     c = await get_commessa(db, c.id)
@@ -169,7 +169,7 @@ async def patch_commessa(
     commessa_id: uuid.UUID,
     data: CommessaUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_erp_access),
 ):
     c = await update_commessa(db, commessa_id, data, current_user)
     if not c:
@@ -182,7 +182,7 @@ async def collega_fattura_commessa(
     commessa_id: uuid.UUID,
     body: dict = Body(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_erp_access),
 ):
     """Collega o scollega una fattura da una commessa. body: {fattura_id: uuid | null}"""
     c = await get_commessa(db, commessa_id)
@@ -206,7 +206,7 @@ async def collega_fattura_commessa(
 async def get_commessa_costi_dettaglio(
     commessa_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_erp_access),
 ):
     return await get_costi_dettaglio_commessa(db, commessa_id)
 
@@ -215,11 +215,14 @@ async def get_commessa_costi_dettaglio(
 async def delete_commessa(
     commessa_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_erp_access),
 ):
     result = await db.execute(select(CommessaModel).where(CommessaModel.id == commessa_id))
     c = result.scalar_one_or_none()
     if not c:
         raise HTTPException(status_code=404, detail="Commessa non trovata")
-    await db.delete(c)
+    
+    c.is_deleted = True
+    c.deleted_at = datetime.now()
+    # await db.delete(c) # Soft-delete instead
     await db.commit()

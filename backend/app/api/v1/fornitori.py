@@ -6,9 +6,9 @@ from sqlalchemy import func as sqlfunc
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import get_current_user, require_roles
+from app.core.security import require_finance_access
 from app.db.session import get_db
-from app.models.models import FatturaPassiva, Fornitore, User, UserRole
+from app.models.models import FatturaPassiva, Fornitore, User
 from app.schemas.schemas import (
     CategoriaFornitoreCreate,
     CategoriaFornitoreOut,
@@ -37,7 +37,7 @@ router = APIRouter(prefix="", tags=["Fornitori"])
 @router.get("/categorie-fornitori", response_model=List[CategoriaFornitoreOut])
 async def get_categorie_fornitori(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_finance_access),
 ):
     return await list_categorie_fornitori(db)
 
@@ -46,7 +46,7 @@ async def get_categorie_fornitori(
 async def add_categoria_fornitore(
     data: CategoriaFornitoreCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER)),
+    current_user: User = Depends(require_finance_access),
 ):
     try:
         cat = await create_categoria_fornitore(db, data)
@@ -63,7 +63,7 @@ async def patch_categoria_fornitore(
     cat_id: uuid.UUID,
     data: CategoriaFornitoreUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER)),
+    current_user: User = Depends(require_finance_access),
 ):
     cat = await update_categoria_fornitore(db, cat_id, data)
     if not cat:
@@ -77,7 +77,7 @@ async def patch_categoria_fornitore(
 async def remove_categoria_fornitore(
     cat_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER)),
+    current_user: User = Depends(require_finance_access),
 ):
     ok = await delete_categoria_fornitore(db, cat_id)
     if not ok:
@@ -91,7 +91,7 @@ async def remove_categoria_fornitore(
 @router.get("/fornitori-full")
 async def get_fornitori_full(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_finance_access),
 ):
     return await list_fornitori_full(db)
 
@@ -100,7 +100,7 @@ async def get_fornitori_full(
 async def add_fornitore(
     data: FornitoreCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_finance_access),
 ):
     try:
         forn = await create_fornitore(db, data)
@@ -116,7 +116,7 @@ async def patch_fornitore(
     fornitore_id: uuid.UUID,
     body: FornitoreUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_finance_access),
 ):
     forn = await update_fornitore(db, fornitore_id, body.model_dump(exclude_none=True))
     if not forn:
@@ -128,7 +128,7 @@ async def patch_fornitore(
 @router.get("/fornitori", response_model=List[FornitoreOut], tags=["FIC"])
 async def get_fornitori(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_finance_access),
 ):
     return await list_fornitori(db)
 
@@ -137,7 +137,7 @@ async def get_fornitori(
 async def delete_fornitore_endpoint(
     fornitore_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(require_finance_access),
 ):
     # Verifica fatture collegate
     fp_count = await db.execute(

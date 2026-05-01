@@ -29,8 +29,9 @@ COPY schema.sql ./schema.sql
 
 # Crea directory necessarie con permessi corretti
 RUN mkdir -p /app/static/uploads /app/static/logos /app/static/avatars \
-    && chmod -R 777 /app/static \
-    && chown -R appuser:appgroup /app
+    && chown -R appuser:appgroup /app \
+    && chmod 755 /app /app/static \
+    && chmod 700 /app/static/uploads /app/static/logos /app/static/avatars
 
 USER appuser
 

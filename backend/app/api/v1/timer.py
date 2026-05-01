@@ -8,7 +8,8 @@ from app.models.models import User
 from app.schemas.schemas import TimerSessionOut, TimesheetOut
 from app.services.services import (
     start_timer, stop_timer, get_active_timer, 
-    list_timer_sessions, save_timer_to_timesheet
+    list_timer_sessions, save_timer_to_timesheet,
+    get_all_active_timers
 )
 
 router = APIRouter(prefix="/timer", tags=["Timer"])
@@ -39,6 +40,14 @@ async def api_get_active_timer(
     current_user: User = Depends(get_current_user)
 ):
     return await get_active_timer(db, current_user.id)
+
+@router.get("/active/all")
+async def api_get_all_active_timers(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Restituisce tutti i timer attivi nel team (per Studio OS)"""
+    return await get_all_active_timers(db)
 
 @router.get("/task/{task_id}", response_model=List[TimerSessionOut])
 async def api_list_timer_sessions(

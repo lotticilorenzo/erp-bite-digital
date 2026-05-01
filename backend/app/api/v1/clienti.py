@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import get_current_user, require_roles
 from app.db.session import get_db
+from app.services import audit
 from app.models.models import Progetto, User, UserRole, Cliente as ClienteModel
 from app.schemas.schemas import ClienteCreate, ClienteOut, ClienteUpdate
 from app.services.services import (
@@ -32,7 +33,7 @@ async def get_clienti(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
 ):
-    q = select(ClienteModel)
+    q = select(ClienteModel).where(ClienteModel.is_deleted == False)
     if attivo is not None:
         q = q.where(ClienteModel.attivo == attivo)
     if search:
@@ -71,7 +72,10 @@ async def add_cliente(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
 ):
-    return await create_cliente(db, data)
+    new_c = await create_cliente(db, data)
+    await audit.emit_create(db, tabella="clienti", record_id=new_c.id, user_id=current_user.id, dati=data.model_dump())
+    await db.commit()
+    return new_c
 
 
 @router.patch("/{cliente_id}", response_model=ClienteOut)
@@ -82,6 +86,7 @@ async def patch_cliente(
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
 ):
     c = await update_cliente(db, cliente_id, data, current_user.id)
+    await audit.emit_update(db, tabella="clienti", record_id=cliente_id, user_id=current_user.id, dopo=data.model_dump(exclude_none=True))
     if not c:
         raise HTTPException(status_code=404, detail="Cliente non trovato")
     return c
@@ -177,9 +182,13 @@ async def remove_cliente(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
-    ok = await delete_cliente(db, cliente_id, current_user.id)
-    if not ok:
+    c = await get_cliente(db, cliente_id)
+    if not c:
         raise HTTPException(status_code=404, detail="Cliente non trovato")
+        
+    c.is_deleted = True
+    c.deleted_at = datetime.now()
+    # await delete_cliente(db, cliente_id, current_user.id) # Soft-delete instead
     await db.commit()
 
 

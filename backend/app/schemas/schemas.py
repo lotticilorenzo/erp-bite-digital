@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 import uuid
 import enum
 from datetime import datetime, date
@@ -10,6 +11,17 @@ from app.models.models import (
     TaskStatus, TimesheetStatus, CostoTipo, PreventivoStatus,
     ClientStartDayType, PianificazioneStatus
 )
+
+_PWD_RE = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,128}$")
+
+
+def _validate_password_strength(v: str) -> str:
+    if not _PWD_RE.match(v):
+        raise ValueError(
+            "La password deve contenere almeno 8 caratteri, "
+            "una lettera maiuscola, una minuscola e un numero."
+        )
+    return v
 
 
 # ── BASE ──────────────────────────────────────────────────
@@ -32,6 +44,12 @@ class UserCreate(BaseModel):
     clickup_user_id: Optional[str] = Field(None, max_length=100)
     data_inizio: Optional[date] = None
 
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        return _validate_password_strength(v)
+
+
 class UserUpdate(BaseModel):
     nome: Optional[str] = Field(None, min_length=1, max_length=100)
     cognome: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -44,6 +62,14 @@ class UserUpdate(BaseModel):
     avatar_url: Optional[str] = Field(None, max_length=500)
     attivo: Optional[bool] = None
     data_fine: Optional[date] = None
+
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return _validate_password_strength(v)
+
 
 class UserOut(OrmBase):
     id: uuid.UUID
@@ -58,6 +84,21 @@ class UserOut(OrmBase):
     avatar_url: Optional[str] = None
     attivo: bool
     data_inizio: Optional[date]
+    created_at: datetime
+    deleted_at: Optional[datetime] = None
+
+
+class UserPublicOut(OrmBase):
+    """Vista ridotta per utenti non-admin: no costo_orario."""
+    id: uuid.UUID
+    nome: str
+    cognome: str
+    email: str
+    ruolo: UserRole
+    ore_settimanali: int
+    bio: Optional[str] = None
+    avatar_url: Optional[str] = None
+    attivo: bool
     created_at: datetime
 
 class RisorsaServizioBase(BaseModel):
@@ -276,7 +317,8 @@ class ClienteOut(OrmBase):
     drive_files: Optional[list] = None
     logo_url: Optional[str] = None
     start_day_type: ClientStartDayType = ClientStartDayType.STANDARD_1
-    created_at: Optional[datetime] = None
+    created_at: Optional[datetime]
+    deleted_at: Optional[datetime] = None = None
     updated_at: Optional[datetime] = None
 
 
@@ -372,6 +414,7 @@ class ProgettoOut(OrmBase):
     data_inizio: Optional[date] = None
     data_fine: Optional[date] = None
     created_at: datetime
+    deleted_at: Optional[datetime] = None
     has_commessa_mese: bool = False
 
     servizi: List[ServizioProgettoOut] = Field(default_factory=list)
@@ -494,6 +537,7 @@ class CommessaOut(OrmBase):
     ore_reali: Decimal = Decimal("0")
     note: Optional[str]
     created_at: datetime
+    deleted_at: Optional[datetime] = None
     # Calcolati lato applicazione
     aggiustamenti: Optional[list] = None
     valore_fatturabile: Optional[Decimal] = None
@@ -590,8 +634,20 @@ class TimesheetOut(OrmBase):
     task_display_name: Optional[str] = None
     clickup_task_id: Optional[str] = None
     created_at: datetime
+    deleted_at: Optional[datetime] = None
     user: Optional[UserOut] = None
 
+
+class TaskAttachmentOut(OrmBase):
+    id: uuid.UUID
+    task_id: uuid.UUID
+    user_id: uuid.UUID
+    filename: str
+    file_path: str
+    file_size: int
+    content_type: Optional[str] = None
+    created_at: datetime
+    user: Optional[UserOut] = None
 
 # ── TASK ──────────────────────────────────────────────────
 class TaskCreate(BaseModel):
@@ -620,14 +676,13 @@ class TaskUpdate(BaseModel):
     assegnatario_id: Optional[uuid.UUID] = None
     revisore_id: Optional[uuid.UUID] = None
     parent_id: Optional[uuid.UUID] = None
-    titolo: Optional[str] = None
-    descrizione: Optional[str] = None
+    titolo: Optional[str] = Field(None, min_length=1, max_length=500)
+    descrizione: Optional[str] = Field(None, max_length=10000)
     stato: Optional[TaskStatus] = None
     data_inizio: Optional[date] = None
     data_scadenza: Optional[date] = None
-    stima_minuti: Optional[int] = None
-    priorita: Optional[str] = None
-
+    stima_minuti: Optional[int] = Field(None, ge=0, le=999999)
+    priorita: Optional[str] = Field(None, max_length=20)
 class TaskOut(OrmBase):
     id: uuid.UUID
     clickup_task_id: Optional[str] = None
@@ -646,9 +701,11 @@ class TaskOut(OrmBase):
     tempo_trascorso_minuti: int = 0
     clickup_synced_at: Optional[datetime] = None
     created_at: datetime
+    deleted_at: Optional[datetime] = None
     subtasks: List[TaskOut] = []
     assegnatario: Optional[UserOut] = None
     revisore: Optional[UserOut] = None
+    attachments: List[TaskAttachmentOut] = []
 
 
 # ── TIMER SESSION ─────────────────────────────────────────
@@ -1204,7 +1261,7 @@ class ChatReazioneRead(ChatReazioneBase):
         from_attributes = True
 
 class ChatMessaggioBase(BaseModel):
-    contenuto: str
+    contenuto: str = Field(..., min_length=1, max_length=10000)
     tipo: str = "testo"
     risposta_a: Optional[uuid.UUID] = None
 
@@ -1419,4 +1476,203 @@ class PianificazioneOut(OrmBase, PianificazioneBase):
 CommessaOut.model_rebuild()
 PianificazioneOut.model_rebuild()
 PianificazioneLavorazioneOut.model_rebuild()
+
+
+# ── COSTI FISSI ───────────────────────────────────────────
+class CostoFissoCreate(BaseModel):
+    descrizione: str = Field(..., min_length=1, max_length=200)
+    importo: Decimal = Field(..., gt=0)
+    categoria: Optional[str] = Field(None, max_length=50)
+    periodicita: Optional[str] = Field("mensile", max_length=20)
+    attivo: bool = True
+    data_inizio: Optional[date] = None
+    data_fine: Optional[date] = None
+    note: Optional[str] = Field(None, max_length=1000)
+
+
+class CostoFissoUpdate(BaseModel):
+    descrizione: Optional[str] = Field(None, min_length=1, max_length=200)
+    importo: Optional[Decimal] = Field(None, gt=0)
+    categoria: Optional[str] = Field(None, max_length=50)
+    periodicita: Optional[str] = Field(None, max_length=20)
+    attivo: Optional[bool] = None
+    data_inizio: Optional[date] = None
+    data_fine: Optional[date] = None
+    note: Optional[str] = Field(None, max_length=1000)
+
+
+class CostoFissoOut(OrmBase):
+    id: uuid.UUID
+    descrizione: str
+    importo: Decimal
+    categoria: Optional[str]
+    periodicita: Optional[str]
+    attivo: bool
+    data_inizio: Optional[date]
+    data_fine: Optional[date]
+    note: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+
+# ── REGOLE RICONCILIAZIONE ────────────────────────────────
+class RegolaRiconciliazioneCreate(BaseModel):
+    nome: str = Field(..., min_length=1, max_length=100)
+    pattern: str = Field(..., min_length=1, max_length=200)
+    tipo_match: Optional[str] = Field("contains", max_length=20)
+    categoria: Optional[str] = Field(None, max_length=100)
+    fornitore_id: Optional[uuid.UUID] = None
+    fattura_passiva_id: Optional[uuid.UUID] = None
+    auto_riconcilia: bool = False
+    priorita: int = Field(0, ge=0, le=100)
+    attiva: bool = True
+
+
+class RegolaRiconciliazioneUpdate(BaseModel):
+    nome: Optional[str] = Field(None, min_length=1, max_length=100)
+    pattern: Optional[str] = Field(None, min_length=1, max_length=200)
+    tipo_match: Optional[str] = Field(None, max_length=20)
+    categoria: Optional[str] = Field(None, max_length=100)
+    fornitore_id: Optional[uuid.UUID] = None
+    fattura_passiva_id: Optional[uuid.UUID] = None
+    auto_riconcilia: Optional[bool] = None
+    priorita: Optional[int] = Field(None, ge=0, le=100)
+    attiva: Optional[bool] = None
+
+
+# ── MOVIMENTI CASSA ───────────────────────────────────────
+class MovimentoCassaUpdate(BaseModel):
+    categoria: Optional[str] = Field(None, max_length=100)
+    descrizione: Optional[str] = None
+    riconciliato: Optional[bool] = None
+    fattura_attiva_id: Optional[uuid.UUID] = None
+    fattura_passiva_id: Optional[uuid.UUID] = None
+    note: Optional[str] = Field(None, max_length=1000)
+
+
+class RiconciliaRequest(BaseModel):
+    riconciliato: bool = True
+
+
+# ── IMPUTAZIONI ───────────────────────────────────────────
+class ImputazioneItem(BaseModel):
+    cliente_id: Optional[uuid.UUID] = None
+    progetto_id: Optional[uuid.UUID] = None
+    tipo: str = Field("PROGETTO", max_length=20)
+    percentuale: Decimal = Field(Decimal("100"), ge=0, le=100)
+    importo: Decimal = Field(Decimal("0"), ge=0)
+    note: Optional[str] = Field(None, max_length=500)
+
+
+class ImputazioniRequest(BaseModel):
+    imputazioni: List[ImputazioneItem] = []
+
+
+# ── PIANO COMMESSA ────────────────────────────────────────
+class PianoRiga(BaseModel):
+    risorsa_id: Optional[uuid.UUID] = None
+    lavorazione: str = Field("", max_length=255)
+    ore_pianificate: Decimal = Field(Decimal("0"), ge=0)
+    note: Optional[str] = Field(None, max_length=500)
+
+
+class PianoCreate(BaseModel):
+    cliente_id: uuid.UUID
+    preventivo: Decimal = Field(Decimal("0"), ge=0)
+    margine_target_pct: Decimal = Field(Decimal("40"), ge=0, le=100)
+    budget_produttivo: Optional[Decimal] = None
+    ore_budget: Optional[Decimal] = None
+    costo_orario_snapshot: Optional[Decimal] = None
+    mese_competenza: Optional[date] = None
+    note: Optional[str] = Field(None, max_length=1000)
+    righe: List[PianoRiga] = []
+
+    @field_validator("mese_competenza")
+    @classmethod
+    def force_first_of_month(cls, v: Optional[date]) -> Optional[date]:
+        if v is not None:
+            return v.replace(day=1)
+        return v
+
+
+class PianoUpdate(BaseModel):
+    preventivo: Optional[Decimal] = Field(None, ge=0)
+    margine_target_pct: Optional[Decimal] = Field(None, ge=0, le=100)
+    budget_produttivo: Optional[Decimal] = None
+    ore_budget: Optional[Decimal] = None
+    costo_orario_snapshot: Optional[Decimal] = None
+    mese_competenza: Optional[date] = None
+    note: Optional[str] = Field(None, max_length=1000)
+    righe: List[PianoRiga] = []
+
+    @field_validator("mese_competenza")
+    @classmethod
+    def force_first_of_month(cls, v: Optional[date]) -> Optional[date]:
+        if v is not None:
+            return v.replace(day=1)
+        return v
+
+
+class CollegaCommessaRequest(BaseModel):
+    commessa_id: Optional[uuid.UUID] = None
+
+
+# ── RISORSA HR ────────────────────────────────────────────
+class RisorsaCreate(BaseModel):
+    nome: str = Field(..., min_length=1, max_length=100)
+    cognome: str = Field(..., min_length=1, max_length=100)
+    ruolo: Optional[str] = Field(None, max_length=150)
+    tipo_contratto: str = Field("DIPENDENTE", max_length=30)
+    data_inizio: Optional[date] = None
+    data_fine: Optional[date] = None
+    ore_settimanali: Decimal = Field(Decimal("40"), ge=0, le=168)
+    ral: Optional[Decimal] = None
+    compenso_fisso_mensile: Optional[Decimal] = None
+    compenso_obiettivo: Optional[Decimal] = None
+    contributi_percentuale: Decimal = Field(Decimal("30"), ge=0, le=100)
+    tfr_percentuale: Decimal = Field(Decimal("6.91"), ge=0, le=100)
+    costo_orario_override: Optional[Decimal] = None
+    giorni_ferie: Optional[Decimal] = Field(None, ge=0)
+    giorni_malattia: Optional[Decimal] = Field(None, ge=0)
+    email: Optional[str] = Field(None, max_length=255)
+    telefono: Optional[str] = Field(None, max_length=50)
+    piva: Optional[str] = Field(None, max_length=20)
+    codice_fiscale: Optional[str] = Field(None, max_length=20)
+    indirizzo: Optional[str] = None
+    iban: Optional[str] = Field(None, max_length=50)
+    banca: Optional[str] = Field(None, max_length=100)
+    bic_swift: Optional[str] = Field(None, max_length=20)
+    note: Optional[str] = None
+    user_id: Optional[uuid.UUID] = None
+    attivo: bool = True
+
+
+class RisorsaUpdate(BaseModel):
+    nome: Optional[str] = Field(None, min_length=1, max_length=100)
+    cognome: Optional[str] = Field(None, min_length=1, max_length=100)
+    ruolo: Optional[str] = Field(None, max_length=150)
+    tipo_contratto: Optional[str] = Field(None, max_length=30)
+    data_inizio: Optional[date] = None
+    data_fine: Optional[date] = None
+    ore_settimanali: Optional[Decimal] = Field(None, ge=0, le=168)
+    ral: Optional[Decimal] = None
+    compenso_fisso_mensile: Optional[Decimal] = None
+    compenso_obiettivo: Optional[Decimal] = None
+    contributi_percentuale: Optional[Decimal] = Field(None, ge=0, le=100)
+    tfr_percentuale: Optional[Decimal] = Field(None, ge=0, le=100)
+    costo_orario_override: Optional[Decimal] = None
+    giorni_ferie: Optional[Decimal] = Field(None, ge=0)
+    giorni_malattia: Optional[Decimal] = Field(None, ge=0)
+    email: Optional[str] = Field(None, max_length=255)
+    telefono: Optional[str] = Field(None, max_length=50)
+    piva: Optional[str] = Field(None, max_length=20)
+    codice_fiscale: Optional[str] = Field(None, max_length=20)
+    indirizzo: Optional[str] = None
+    iban: Optional[str] = Field(None, max_length=50)
+    banca: Optional[str] = Field(None, max_length=100)
+    bic_swift: Optional[str] = Field(None, max_length=20)
+    note: Optional[str] = None
+    user_id: Optional[uuid.UUID] = None
+    attivo: Optional[bool] = None
+    costo_orario_calcolato: Optional[Decimal] = None
 

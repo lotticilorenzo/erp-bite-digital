@@ -86,8 +86,9 @@ export function useCreateTask() {
   return useMutation({
     mutationFn: (data: any) => api.post("/tasks", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["studio-tasks"], exact: false });
-      queryClient.invalidateQueries({ queryKey: ["tasks"], exact: false });
+      queryClient.invalidateQueries({ queryKey: ["studio-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["studio-hierarchy"] });
     },
   });
 }
@@ -96,9 +97,11 @@ export function useUpdateTask() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) => api.patch(`/tasks/${id}`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["studio-tasks"], exact: false });
-      queryClient.invalidateQueries({ queryKey: ["tasks"], exact: false });
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["studio-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["studio-task", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["studio-hierarchy"] });
     },
   });
 }
@@ -107,9 +110,11 @@ export function useDeleteTask() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.delete(`/tasks/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["studio-tasks"], exact: false });
-      queryClient.invalidateQueries({ queryKey: ["tasks"], exact: false });
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["studio-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["studio-task", id] });
+      queryClient.invalidateQueries({ queryKey: ["studio-hierarchy"] });
     },
   });
 }

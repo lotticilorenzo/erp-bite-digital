@@ -13,7 +13,7 @@ interface ChatContextType {
   hasMore: boolean;
   typingUsers: string[];
   onlineUsers: Set<string>;
-  channelSeenStatus: Record<string, string>;
+  channelSeenStatus: Record<string, Record<string, string>>;
   unreadCounts: Record<string, number>;
   loadMoreMessages: () => Promise<void>;
   sendMessage: (content: string, type?: string, replyToId?: string) => Promise<void>;
@@ -41,7 +41,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [hasMore, setHasMore] = useState(true);
   const [offset, setOffset] = useState(0);
-  const [channelSeenStatus, setChannelSeenStatus] = useState<Record<string, string>>({});
+  const [channelSeenStatus, setChannelSeenStatus] = useState<Record<string, Record<string, string>>>({});
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 
   const ws = useRef<WebSocket | null>(null);
@@ -104,110 +104,154 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, [activeChannelId, offset, hasMore, queryClient]);
 
   // WebSocket
-  const connectWS = useCallback(() => {
+  const connectWS = useCallback(async () => {
     if (!token || isUnmountedRef.current) return;
+    if (
+      ws.current &&
+      (ws.current.readyState === WebSocket.OPEN || ws.current.readyState === WebSocket.CONNECTING)
+    ) return;
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // token come query param (non nel path) per ridurre esposizione nei log proxy/CDN
-    const wsUrl = `${protocol}//${window.location.host}/api/v1/chat/ws?token=${token}`;
-    const socket = new WebSocket(wsUrl);
-    ws.current = socket;
-
-    socket.onopen = () => {
-      reconnectAttemptsRef.current = 0;
-    };
-
-    socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      const currentChannelId = activeChannelIdRef.current;
-
-      switch (data.type) {
-        case 'new_message': {
-          queryClient.setQueryData(['chat-channels'], (old: any) => {
-            return old?.map((c: any) => c.id === data.message.canale_id ? {
-              ...c,
-              last_message: data.message.tipo !== 'testo' ? '[Allegato]' : data.message.contenuto,
-              last_message_at: data.message.created_at
-            } : c);
-          });
-          if (data.message.canale_id === currentChannelId) {
-            queryClient.setQueryData(['chat-messages', currentChannelId], (prev: any) =>
-              [...(prev || []), data.message]
-            );
-          } else {
-            setUnreadCounts(prev => ({
-              ...prev,
-              [data.message.canale_id]: (prev[data.message.canale_id] || 0) + 1
-            }));
-          }
-          break;
-        }
-        case 'message_edited': {
-          const targetChannel = data.canale_id || currentChannelId;
-          if (targetChannel) {
-            queryClient.setQueryData(['chat-messages', targetChannel], (prev: any) =>
-              prev?.map((m: any) =>
-                m.id === data.message_id
-                  ? { ...m, contenuto: data.contenuto, updated_at: new Date().toISOString(), modificato: true }
-                  : m
-              )
-            );
-          }
-          break;
-        }
-        case 'delete_message': {
-          const targetChannel = data.canale_id || currentChannelId;
-          if (targetChannel) {
-            queryClient.setQueryData(['chat-messages', targetChannel], (prev: any) =>
-              prev?.filter((m: any) => m.id !== data.message_id)
-            );
-          }
-          break;
-        }
-        case 'reaction_added': {
-          const targetChannel = data.canale_id || currentChannelId;
-          if (targetChannel) {
-            queryClient.setQueryData(['chat-messages', targetChannel], (prev: any) =>
-              prev?.map((m: any) => {
-                if (m.id !== data.message_id) return m;
-                const alreadyHas = m.reazioni?.some((r: any) => r.user_id === data.user_id && r.emoji === data.emoji);
-                if (alreadyHas) return m;
-                return {
-                  ...m,
-                  reazioni: [...(m.reazioni || []), { id: crypto.randomUUID(), emoji: data.emoji, user_id: data.user_id, user_nome: data.user_nome, created_at: new Date().toISOString() }]
-                };
-              })
-            );
-          }
-          break;
-        }
-        case 'user_typing':
-          if (data.channel_id === currentChannelId) {
-            setTypingUsers(prev => data.is_typing ? [...new Set([...prev, data.user_nome])] : prev.filter(n => n !== data.user_nome));
-          }
-          break;
-        case 'user_presence':
-          setOnlineUsers(prev => {
-            const next = new Set(prev);
-            if (data.status === 'online') next.add(data.user_id);
-            else next.delete(data.user_id);
-            return next;
-          });
-          break;
-        case 'message_seen':
-          setChannelSeenStatus(prev => ({ ...prev, [data.user_id]: data.last_seen_at }));
-          break;
-      }
-    };
-
-    socket.onclose = () => {
+    const scheduleReconnect = () => {
       if (isUnmountedRef.current) return;
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
       reconnectAttemptsRef.current += 1;
-      reconnectTimeoutRef.current = setTimeout(connectWS, delay);
+      reconnectTimeoutRef.current = setTimeout(() => {
+        void connectWS();
+      }, delay);
     };
 
-    socket.onerror = () => socket.close();
+    try {
+      const ticketResponse = await axios.post('/chat/ws-ticket');
+      if (isUnmountedRef.current) return;
+
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/api/v1/chat/ws?ticket=${encodeURIComponent(ticketResponse.data.ticket)}`;
+      const socket = new WebSocket(wsUrl);
+      ws.current = socket;
+
+      socket.onopen = () => {
+        reconnectAttemptsRef.current = 0;
+      };
+
+      socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        const currentChannelId = activeChannelIdRef.current;
+
+        switch (data.type) {
+          case 'new_message': {
+            queryClient.setQueryData(['chat-channels'], (old: any) => {
+              return old?.map((c: any) => c.id === data.message.canale_id ? {
+                ...c,
+                last_message: data.message.tipo !== 'testo' ? '[Allegato]' : data.message.contenuto,
+                last_message_at: data.message.created_at
+              } : c);
+            });
+            if (data.message.canale_id === currentChannelId) {
+              queryClient.setQueryData(['chat-messages', currentChannelId], (prev: any) =>
+                [...(prev || []), data.message]
+              );
+            } else {
+              setUnreadCounts(prev => ({
+                ...prev,
+                [data.message.canale_id]: (prev[data.message.canale_id] || 0) + 1
+              }));
+            }
+            break;
+          }
+          case 'message_edited': {
+            const targetChannel = data.canale_id || currentChannelId;
+            if (targetChannel) {
+              queryClient.setQueryData(['chat-messages', targetChannel], (prev: any) =>
+                prev?.map((m: any) =>
+                  m.id === data.message_id
+                    ? { ...m, contenuto: data.contenuto, updated_at: new Date().toISOString(), modificato: true }
+                    : m
+                )
+              );
+            }
+            break;
+          }
+          case 'delete_message': {
+            const targetChannel = data.canale_id || currentChannelId;
+            if (targetChannel) {
+              queryClient.setQueryData(['chat-messages', targetChannel], (prev: any) =>
+                prev?.filter((m: any) => m.id !== data.message_id)
+              );
+            }
+            break;
+          }
+          case 'reaction_added': {
+            const targetChannel = data.canale_id || currentChannelId;
+            if (targetChannel) {
+              queryClient.setQueryData(['chat-messages', targetChannel], (prev: any) =>
+                prev?.map((m: any) => {
+                  if (m.id !== data.message_id) return m;
+                  const alreadyHas = m.reazioni?.some((r: any) => r.user_id === data.user_id && r.emoji === data.emoji);
+                  if (alreadyHas) return m;
+                  return {
+                    ...m,
+                    reazioni: [...(m.reazioni || []), { id: crypto.randomUUID(), emoji: data.emoji, user_id: data.user_id, user_nome: data.user_nome, created_at: new Date().toISOString() }]
+                  };
+                })
+              );
+            }
+            break;
+          }
+          case 'reaction_removed': {
+            const targetChannel = data.canale_id || currentChannelId;
+            if (targetChannel) {
+              queryClient.setQueryData(['chat-messages', targetChannel], (prev: any) =>
+                prev?.map((m: any) => {
+                  if (m.id !== data.message_id) return m;
+                  return {
+                    ...m,
+                    reazioni: (m.reazioni || []).filter(
+                      (reaction: any) => !(reaction.user_id === data.user_id && reaction.emoji === data.emoji)
+                    )
+                  };
+                })
+              );
+            }
+            break;
+          }
+          case 'user_typing':
+            if (data.channel_id === currentChannelId) {
+              setTypingUsers(prev => data.is_typing ? [...new Set([...prev, data.user_nome])] : prev.filter(n => n !== data.user_nome));
+            }
+            break;
+          case 'user_presence':
+            setOnlineUsers(prev => {
+              const next = new Set(prev);
+              if (data.status === 'online') next.add(data.user_id);
+              else next.delete(data.user_id);
+              return next;
+            });
+            break;
+          case 'message_seen':
+            setChannelSeenStatus((prev) => ({
+              ...prev,
+              [data.channel_id]: {
+                ...(prev[data.channel_id] || {}),
+                [data.user_id]: data.last_seen_at,
+              },
+            }));
+            break;
+        }
+      };
+
+      socket.onclose = () => {
+        if (ws.current === socket) {
+          ws.current = null;
+        }
+        scheduleReconnect();
+      };
+
+      socket.onerror = () => socket.close();
+    } catch (err) {
+      console.error("WS bootstrap failed", err);
+      scheduleReconnect();
+    }
   }, [token, queryClient]);
 
   useEffect(() => {
@@ -215,7 +259,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     // Don't connect if loading auth, or no token, or no user (e.g. on login page)
     if (isAuthLoading || !token || !user) return;
     
-    connectWS();
+    void connectWS();
     return () => {
       isUnmountedRef.current = true;
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);

@@ -14,6 +14,7 @@ import {
   Lock,
   Plus,
   Circle,
+  Users,
 } from "lucide-react";
 import type { StudioNode } from "@/types/studio";
 import { useStudio } from "@/hooks/useStudio";
@@ -515,6 +516,8 @@ function NodeIcon({ type, isOpen }: { type: string; isOpen?: boolean }) {
       return <Hash className="h-3.5 w-3.5 text-blue-400 shrink-0" />;
     case "task":
       return <ListTodo className="h-3.5 w-3.5 text-emerald-400 shrink-0" />;
+    case "client":
+      return <Users className="h-3.5 w-3.5 text-amber-400 shrink-0" />;
     default:
       return null;
   }

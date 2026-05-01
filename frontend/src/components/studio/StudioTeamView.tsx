@@ -130,6 +130,9 @@ function TeamMemberCard({
 }) {
   const { selectTask, setView } = useStudio();
   const { startDirectChat } = useChat();
+  const { user: currentUser } = useAuth();
+  const isFinanceOrAdmin = currentUser?.ruolo === "ADMIN" || currentUser?.ruolo === "DEVELOPER";
+
   const { data: capacity } = useUserCapacity(user.id);
   const { data: allTasks = [] } = useTasks({ assegnatario_id: user.id, parent_only: false });
 
@@ -279,38 +282,40 @@ function TeamMemberCard({
                 )}
               </div>
 
-              {/* Rich Professional Info */}
-              <div className="grid grid-cols-2 gap-4 pb-4 border-b border-border/10">
-                <div className="space-y-3">
-                   <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
-                      <Mail className="h-3 w-3 text-primary/60" />
-                      {user.email || "—"}
-                   </div>
-                   <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
-                      <Phone className="h-3 w-3 text-primary/60" />
-                      {user.telefono || "—"}
-                   </div>
-                   <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
-                      <Euro className="h-3 w-3 text-primary/60" />
-                      P.IVA: {user.piva || "—"}
-                   </div>
-                </div>
-                <div className="space-y-3">
-                   <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
-                      <CreditCard className="h-3 w-3 text-primary/60" />
-                      IBAN: {user.iban ? `****${user.iban.slice(-4)}` : "—"}
-                   </div>
-                   <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
-                      <MapPin className="h-3 w-3 text-primary/60" />
-                      <span className="truncate">{user.indirizzo || "—"}</span>
-                   </div>
-                   {user.codice_fiscale && (
-                     <div className="text-[9px] font-black text-primary/40 uppercase tracking-widest">
-                       CF: {user.codice_fiscale}
+              {/* Rich Professional Info — Restricted to Admins/Devs */}
+              {isFinanceOrAdmin && (
+                <div className="grid grid-cols-2 gap-4 pb-4 border-b border-border/10">
+                  <div className="space-y-3">
+                     <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                        <Mail className="h-3 w-3 text-primary/60" />
+                        {user.email || "—"}
                      </div>
-                   )}
+                     <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                        <Phone className="h-3 w-3 text-primary/60" />
+                        {user.telefono || "—"}
+                     </div>
+                     <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                        <Euro className="h-3 w-3 text-primary/60" />
+                        P.IVA: {user.piva || "—"}
+                     </div>
+                  </div>
+                  <div className="space-y-3">
+                     <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                        <CreditCard className="h-3 w-3 text-primary/60" />
+                        IBAN: {user.iban ? `****${user.iban.slice(-4)}` : "—"}
+                     </div>
+                     <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                        <MapPin className="h-3 w-3 text-primary/60" />
+                        <span className="truncate">{user.indirizzo || "—"}</span>
+                     </div>
+                     {user.codice_fiscale && (
+                       <div className="text-[9px] font-black text-primary/40 uppercase tracking-widest">
+                         CF: {user.codice_fiscale}
+                       </div>
+                     )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                 {sortedTasks.length > 0 ? (

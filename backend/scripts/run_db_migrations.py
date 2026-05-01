@@ -15,8 +15,6 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
-import psycopg2
-
 if __package__:
     from ._schema_tools import (
         build_database_connection_error,
@@ -131,6 +129,8 @@ def apply_pending_migrations(cur, migration_files: list[MigrationFile]) -> int:
 
 
 def main() -> None:
+    import psycopg2
+
     database_url, source = load_database_url()
     migration_files = discover_migration_files()
 

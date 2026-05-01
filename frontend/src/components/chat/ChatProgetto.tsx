@@ -49,9 +49,11 @@ export function ChatProgetto({ progettoId, teamMembers = [] }: ChatProgettoProps
   }, [progettoId, setActiveChannelId, markAsSeen]);
   
   const allMessages: ChatMessage[] = messages || [];
+  const messagesById = new Map(allMessages.map((message) => [message.id, message]));
   const [replyTo, setReplyTo] = useState<ChatMessage | undefined>();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const onlineMembersCount = teamMembers.filter((member) => onlineUsers.has(member.user_id)).length;
 
   const team = teamMembers.map(m => ({
     id: m.user_id,
@@ -128,7 +130,7 @@ export function ChatProgetto({ progettoId, teamMembers = [] }: ChatProgettoProps
              </div>
              <div>
                 <h3 className="text-sm font-black uppercase tracking-widest text-white">Team Chat</h3>
-                <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-tight">{allMessages.length} messaggi &bull; {onlineUsers.size} online</p>
+                <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-tight">{allMessages.length} messaggi &bull; {onlineMembersCount} online</p>
              </div>
           </div>
           <div className="flex items-center gap-2">
@@ -167,12 +169,12 @@ export function ChatProgetto({ progettoId, teamMembers = [] }: ChatProgettoProps
               const isFirstInGroup = !prev || prev.autore_id !== m.autore_id || 
                 (new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() > 300000); // 5 min group
               
-              const replyToMsg = m.risposta_a ? allMessages.find((am: any) => am.id === m.risposta_a) : undefined;
+              const replyToMsg = m.risposta_a ? messagesById.get(m.risposta_a) : undefined;
 
               // Calcola chi ha visto questo messaggio come ultimo
               const seenBy = teamMembers.filter(member => {
                 if (member.user_id === user?.id) return false; // Non mostrare se stesso
-                const lastSeenAt = channelSeenStatus[member.user_id];
+                const lastSeenAt = channelSeenStatus[progettoId]?.[member.user_id];
                 if (!lastSeenAt) return false;
                 
                 const msgTime = new Date(m.created_at).getTime();

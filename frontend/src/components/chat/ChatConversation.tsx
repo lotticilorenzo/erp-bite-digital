@@ -29,6 +29,7 @@ export function ChatConversation({ channelId, className }: ChatConversationProps
     deleteMessage,
     editMessage,
     uploadFile,
+    channelSeenStatus,
     isLoading,
     hasMore,
     loadMoreMessages,
@@ -52,6 +53,9 @@ export function ChatConversation({ channelId, className }: ChatConversationProps
   
   const allMessages: ChatMessage[] = messages || [];
   const activeChannel = channels?.find((c: any) => c.id === channelId);
+  const members = Array.isArray(activeChannel?.membri) ? activeChannel.membri : [];
+  const onlineMembersCount = members.filter((member: any) => onlineUsers.has(member.user_id)).length;
+  const messagesById = new Map(allMessages.map((chatMessage) => [chatMessage.id, chatMessage]));
 
   useEffect(() => {
     if (!isLoading && isInitialLoading) {
@@ -117,7 +121,7 @@ export function ChatConversation({ channelId, className }: ChatConversationProps
               <h3 className="text-sm font-black uppercase tracking-widest leading-none mb-1">{activeChannel?.nome || "Caricamento..."}</h3>
               <div className="flex items-center gap-2">
                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.5)]"></span>
-                 <span className="text-[10px] font-bold text-muted-foreground uppercase">{onlineUsers.size} membri online</span>
+                 <span className="text-[10px] font-bold text-muted-foreground uppercase">{onlineMembersCount} membri online</span>
               </div>
            </div>
         </div>
@@ -180,9 +184,23 @@ export function ChatConversation({ channelId, className }: ChatConversationProps
                     const isFirstInGroup = !prev || prev.autore_id !== m.autore_id || 
                       (new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() > 300000); // 5 min group
                     
-                    const replyToMsg = m.risposta_a ? allMessages.find((am: any) => am.id === m.risposta_a) : undefined;
-                    
-                    const seenBy: { id: string; nome: string; avatar?: string }[] = [];
+                    const replyToMsg = m.risposta_a ? messagesById.get(m.risposta_a) : undefined;
+                    const seenBy = members.filter((member: any) => {
+                      if (member.user_id === user?.id) return false;
+                      const lastSeenAt = channelSeenStatus[channelId]?.[member.user_id];
+                      if (!lastSeenAt) return false;
+
+                      const msgTime = new Date(m.created_at).getTime();
+                      const seenTime = new Date(lastSeenAt).getTime();
+                      const nextMsg = allMessages[i + 1];
+                      const nextMsgTime = nextMsg ? new Date(nextMsg.created_at).getTime() : Infinity;
+
+                      return seenTime >= msgTime && seenTime < nextMsgTime;
+                    }).map((member: any) => ({
+                      id: member.user_id,
+                      nome: `${member.user?.nome || "User"} ${member.user?.cognome || ""}`.trim(),
+                      avatar: member.user?.avatar_url,
+                    }));
                     
                     return (
                       <ChatMessageBubble
@@ -225,7 +243,11 @@ export function ChatConversation({ channelId, className }: ChatConversationProps
         )}
 
         <ChatInput
-          teamMembers={[]} // In Chat V2 gestiamo le menzioni in modo diverso o lasciamo vuoto se non serve
+          teamMembers={members.map((member: any) => ({
+            id: member.user_id,
+            nome: member.user?.nome || "User",
+            cognome: member.user?.cognome || "",
+          }))}
           replyTo={replyTo}
           onCancelReply={() => setReplyTo(undefined)}
           onTyping={(isTyping) => setTypingStatus(isTyping)}

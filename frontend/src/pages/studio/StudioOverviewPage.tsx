@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import axios from "axios";
+import api from "@/lib/api";
 
 interface ProjectStats {
   kpis: {
@@ -70,7 +70,7 @@ export default function StudioOverviewPage() {
     const fetchStats = async () => {
       setLoading(true);
       try {
-        const res = await axios.get(`/api/v1/${targetType}/${targetId}/stats`);
+        const res = await api.get(`/api/v1/${targetType}/${targetId}/stats`);
         setStats(res.data);
       } catch (err) {
         console.error("Error fetching stats:", err);

@@ -1,4 +1,6 @@
 import logging
+from collections import defaultdict
+import time
 import os
 import sys
 import traceback
@@ -10,6 +12,7 @@ from fastapi import FastAPI, Depends, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import JSONResponse
 from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,30 +33,31 @@ app = FastAPI(
     version=settings.APP_VERSION,
     # Swagger UI e OpenAPI schema disabilitati in produzione (DEBUG=false).
     # Esporre la documentazione pubblica rivela struttura API, tipi e route.
-    docs_url="/docs" if settings.DEBUG else None,
+    docs_url="/docs" if settings.api_docs_enabled else None,
     redoc_url=None,
-    openapi_url="/openapi.json" if settings.DEBUG else None,
+    openapi_url="/openapi.json" if settings.api_docs_enabled else None,
 )
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-def _parse_cors_origins(origins_raw: str) -> list[str]:
-    origins: list[str] = []
-    for raw in origins_raw.split(","):
-        origin = raw.strip()
-        if origin and origin not in origins:
-            origins.append(origin)
-    return origins or ["*"]
+app.mount("/app/uploads", StaticFiles(directory="app/uploads"), name="uploads")
 
 logger = logging.getLogger(__name__)
+# In-memory rate limiting (IP-based)
+_request_history = defaultdict(list)
+_RATE_LIMIT_MAX = 100  # requests per minute
+_RATE_LIMIT_WINDOW = 60.0
+
 scheduler: AsyncIOScheduler | None = None
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+if settings.trusted_hosts_list:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts_list)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_parse_cors_origins(settings.CORS_ORIGINS),
+    allow_origins=settings.cors_origins_list,
     allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
     # Whitelist esplicita — niente wildcard che espone TRACE/CONNECT
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -62,21 +66,55 @@ app.add_middleware(
 )
 
 # ── SECURITY HEADERS MIDDLEWARE ──────────────────────────
+
+@app.middleware("http")
+async def rate_limiting_middleware(request: Request, call_next):
+    # Skip rate limiting for static files
+    if request.url.path.startswith("/static"):
+        return await call_next(request)
+        
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    
+    # Purge old requests
+    _request_history[client_ip] = [t for t in _request_history[client_ip] if now - t < _RATE_LIMIT_WINDOW]
+    
+    if len(_request_history[client_ip]) >= _RATE_LIMIT_MAX:
+        logger.warning(f"Rate limit exceeded for IP: {client_ip}")
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Troppe richieste. Riprova più tardi."},
+            headers={"Retry-After": str(int(_RATE_LIMIT_WINDOW))}
+        )
+        
+    _request_history[client_ip].append(now)
+    return await call_next(request)
+
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
+    script_src = "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " if settings.DEBUG else "script-src 'self'; "
+    connect_src = "connect-src 'self' http: https: ws: wss:; " if settings.DEBUG else "connect-src 'self' https: wss:; "
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if settings.ENABLE_HSTS:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        f"{script_src}"
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: https:; "
-        "connect-src 'self' ws: wss: https:;"
+        f"{connect_src}"
+        "base-uri 'self'; "
+        "frame-ancestors 'none'; "
+        "form-action 'self';"
     )
+    if request.url.path.startswith("/api/v1/auth/") or request.url.path == "/api/v1/users/me/export":
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
     return response
 
 @app.middleware("http")
@@ -136,6 +174,16 @@ async def validate_security_config():
             f"SICUREZZA: JWT_SECRET troppo corto ({len(secret)} caratteri). "
             "Consigliato almeno 32 caratteri casuali."
         )
+    if not settings.DEBUG and not settings.trusted_hosts_list:
+        logger.warning(
+            "SICUREZZA: TRUSTED_HOSTS non configurato. "
+            "Consigliato impostare gli host pubblici consentiti per mitigare host-header attacks."
+        )
+    if not settings.DEBUG and settings.AUTO_CREATE_MISSING_TABLES:
+        logger.warning(
+            "SICUREZZA: AUTO_CREATE_MISSING_TABLES=true in produzione aumenta il rischio di drift schema. "
+            "Consigliato disabilitarlo e usare solo migrazioni versionate."
+        )
 
 @app.on_event("startup")
 async def ensure_schema_tables_on_startup():
@@ -146,13 +194,12 @@ async def ensure_schema_tables_on_startup():
     while retries > 0:
         try:
             async with engine.begin() as conn:
+                # 1. Create ORM tables
                 await conn.run_sync(Base.metadata.create_all)
+                logger.info("Tabelle ORM verificate.")
 
-            logger.info("Tabelle ORM verificate con create_all.")
-            return
-
-            async with engine.begin() as conn:
-                # Ensure Enums for Pianificazione & Client Start Day Type
+                # 2. Ensure Types and Extensions
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\""))
                 await conn.execute(text("""
                     DO $$ 
                     BEGIN
@@ -165,18 +212,15 @@ async def ensure_schema_tables_on_startup():
                     END $$;
                 """))
                 
-                await conn.run_sync(Base.metadata.create_all)
-                
-                # Migrations per tabelle esistenti
+                # 3. Manual Schema Updates (Fallback for missing migrations)
                 await conn.execute(text("ALTER TABLE clienti ADD COLUMN IF NOT EXISTS affidabilita VARCHAR(10) DEFAULT 'MEDIA'"))
-                await conn.execute(text("UPDATE clienti SET affidabilita = 'MEDIA' WHERE affidabilita IS NULL"))
-                
-                # Nuovi campi Pianificazione e Drive
                 await conn.execute(text("ALTER TABLE clienti ADD COLUMN IF NOT EXISTS start_day_type client_start_day_type DEFAULT 'STANDARD_1'"))
                 await conn.execute(text("ALTER TABLE clienti ADD COLUMN IF NOT EXISTS google_drive_url VARCHAR(500)"))
                 await conn.execute(text("ALTER TABLE commesse ADD COLUMN IF NOT EXISTS pianificazione_id UUID REFERENCES pianificazioni(id)"))
+                await conn.execute(text("ALTER TABLE commesse ADD COLUMN IF NOT EXISTS piano_id UUID REFERENCES piano_commessa(id) ON DELETE SET NULL"))
+                await conn.execute(text("ALTER TABLE commesse ADD COLUMN IF NOT EXISTS preventivo NUMERIC(10,2) DEFAULT 0"))
 
-                # ── Tabelle piano_commessa (non hanno ORM model) ─────────
+                # 4. Critical missing tables
                 await conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS piano_commessa (
                         id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -204,13 +248,6 @@ async def ensure_schema_tables_on_startup():
                         created_at      TIMESTAMPTZ DEFAULT NOW()
                     )
                 """))
-                await conn.execute(text("ALTER TABLE commesse ADD COLUMN IF NOT EXISTS piano_id UUID REFERENCES piano_commessa(id) ON DELETE SET NULL"))
-                await conn.execute(text("ALTER TABLE commesse ADD COLUMN IF NOT EXISTS preventivo NUMERIC(10,2) DEFAULT 0"))
-                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_piano_commessa_cliente  ON piano_commessa(cliente_id)"))
-                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_piano_commessa_commessa ON piano_commessa(commessa_id)"))
-                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_piano_righe_piano       ON piano_commessa_righe(piano_id)"))
-
-                # ── Tabella password_reset_tokens (non ha un ORM model) ──
                 await conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS password_reset_tokens (
                         id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -222,20 +259,21 @@ async def ensure_schema_tables_on_startup():
                     )
                 """))
 
-                # ── Indici di performance (idempotenti) ──────────────────
+                # 5. Performance Indexes
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_timesheet_user_stato     ON timesheet(user_id, stato)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_timesheet_commessa_stato ON timesheet(commessa_id, stato)"))
-                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_timesheet_user_mese      ON timesheet(user_id, mese_competenza)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_chat_msg_canale_created  ON chat_messaggi(canale_id, created_at DESC)"))
-                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_chat_msg_autore          ON chat_messaggi(autore_id)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_password_reset_token     ON password_reset_tokens(token)"))
-                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_password_reset_expires   ON password_reset_tokens(expires_at)"))
 
-            logger.info("Schema database garantito.")
-            break
+            logger.info("Schema database garantito su startup.")
+            return
+
         except Exception as e:
             retries -= 1
             logger.warning(f"Database non pronto, riprovo in 2s... ({retries} rimasti). Errore: {e}")
+            if retries == 0:
+                logger.error("Database non disponibile dopo vari tentativi. Esco.")
+                raise e
             await asyncio.sleep(2)
 
 @app.on_event("startup")

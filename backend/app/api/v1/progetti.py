@@ -7,14 +7,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.security import get_current_user, require_roles
+from app.core.security import require_erp_access
 from app.db.session import get_db
 from app.models.models import (
     CommessaProgetto,
     Progetto as ProgettoModel,
     ProgettoTeam,
     User,
-    UserRole,
 )
 from app.schemas.schemas import (
     ProgettoCreate,
@@ -48,11 +47,11 @@ async def get_progetti(
     skip: int = Query(0, ge=0),
     limit: int = Query(200, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_erp_access),
 ):
     current_month = date.today().replace(day=1)
 
-    q = select(ProgettoModel).options(
+    q = select(ProgettoModel).where(ProgettoModel.is_deleted == False).options(
         selectinload(ProgettoModel.cliente),
         selectinload(ProgettoModel.servizi),
         selectinload(ProgettoModel.team).selectinload(ProgettoTeam.user),
@@ -80,7 +79,7 @@ async def get_progetti(
 async def get_single_progetto(
     progetto_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_erp_access),
 ):
     p = await get_progetto(db, progetto_id)
     if not p:
@@ -92,7 +91,7 @@ async def get_single_progetto(
 async def add_progetto(
     data: ProgettoCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_erp_access),
 ):
     p = await create_progetto(db, data)
     await db.commit()
@@ -105,7 +104,7 @@ async def patch_progetto(
     progetto_id: uuid.UUID,
     data: ProgettoUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_erp_access),
 ):
     p = await update_progetto(db, progetto_id, data, current_user.id)
     if not p:
@@ -117,13 +116,16 @@ async def patch_progetto(
 async def delete_progetto(
     progetto_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_erp_access),
 ):
     result = await db.execute(select(ProgettoModel).where(ProgettoModel.id == progetto_id))
     p = result.scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404, detail="Progetto non trovato")
-    await db.delete(p)
+    
+    p.is_deleted = True
+    p.deleted_at = datetime.now()
+    # await db.delete(p) # Soft-delete instead
     await db.commit()
 
 
@@ -131,7 +133,7 @@ async def delete_progetto(
 async def list_servizi_progetto_endpoint(
     progetto_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_erp_access),
 ):
     items = await get_servizi_progetto(db, progetto_id)
     return [ServizioProgettoOut.model_validate(i) for i in items]
@@ -142,7 +144,7 @@ async def create_servizio_progetto_endpoint(
     progetto_id: uuid.UUID,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_erp_access),
 ):
     body = await request.json()
     data = ServizioProgettoCreate(**body)
@@ -156,7 +158,7 @@ async def update_servizio_progetto_endpoint(
     servizio_id: uuid.UUID,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_erp_access),
 ):
     body = await request.json()
     data = ServizioProgettoUpdate(**body)
@@ -169,7 +171,7 @@ async def delete_servizio_progetto_endpoint(
     progetto_id: uuid.UUID,
     servizio_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_erp_access),
 ):
     await delete_servizio_progetto(db, servizio_id)
 
@@ -178,6 +180,6 @@ async def delete_servizio_progetto_endpoint(
 async def get_project_dashboard_stats(
     progetto_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_erp_access),
 ):
-    return await get_project_stats(db, progetto_id)
+    return await get_project_stats(db, progetto_id, current_user)

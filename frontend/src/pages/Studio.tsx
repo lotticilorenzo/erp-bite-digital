@@ -13,6 +13,7 @@ import { WorkspaceTabs } from "@/components/studio/WorkspaceTabs";
 import { TaskDetailView } from "@/components/studio/TaskDetailView";
 import ChatHub from "@/components/chat/ChatHub";
 import { PageTransition } from "@/components/common/PageTransition";
+import { SectionErrorBoundary } from "@/components/common/ErrorBoundary";
 import { X } from "lucide-react";
 import type { TabItem } from "@/types/studio";
 
@@ -111,7 +112,9 @@ export default function StudioPage() {
             className="flex-1 flex flex-col overflow-hidden relative w-full"
             style={{ width: isSplit ? `${leftPct}%` : "100%" }}
           >
-            <PanelContent tab={activeTab} view={nav.view} />
+            <SectionErrorBoundary label="pannello principale">
+              <PanelContent tab={activeTab} view={nav.view} />
+            </SectionErrorBoundary>
           </div>
 
           {/* ── Drag divider ── */}
@@ -154,7 +157,9 @@ export default function StudioPage() {
 
               {/* Split content */}
               <div className="flex-1 overflow-hidden">
-                <PanelContent tab={splitTab} view={nav.view} />
+                <SectionErrorBoundary label="pannello secondario">
+                  <PanelContent tab={splitTab} view={nav.view} />
+                </SectionErrorBoundary>
               </div>
             </div>
           )}

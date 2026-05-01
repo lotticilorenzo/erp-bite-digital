@@ -49,104 +49,119 @@ const PopoutPage = React.lazy(() => import("./pages/PopoutPage"));
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ChatProvider } from "@/context/ChatContext";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
+import { hasFinanceAccess, isStudioOnlyRole, normalizeRole } from "@/lib/access";
 
-// Ruoli con accesso limitato al solo Studio OS
-const STUDIO_ONLY_ROLES = ["COLLABORATORE", "DIPENDENTE", "FREELANCER"];
+const Spinner = () => (
+  <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
+    <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+  </div>
+);
 
 function App() {
   const { user, isLoading } = useAuth();
   const location = useLocation();
 
-  const isStudioOnlyUser = user ? STUDIO_ONLY_ROLES.includes(user.ruolo?.toUpperCase() ?? "") : false;
-  
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
-        <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-      </div>
-    );
-  }
+  if (isLoading) return <Spinner />;
+
+  const role = normalizeRole(user?.ruolo);
+  const isStudioOnlyUser = isStudioOnlyRole(role);
+  const isFinanceUser = hasFinanceAccess(role);
+
+  // Guard: redirige gli utenti studio-only a Studio OS.
+  const renderERPOnly = (element: React.ReactNode) =>
+    isStudioOnlyUser ? <Navigate to="/studio-os" replace /> : element;
+
+  // Guard: redirige i non-admin fuori dalla sezione finanziaria.
+  const renderFinanceOnly = (element: React.ReactNode) =>
+    isFinanceUser ? element : <Navigate to={isStudioOnlyUser ? "/studio-os" : "/"} replace />;
 
   return (
     <ThemeProvider>
       <ChatProvider>
         <ErrorBoundary>
-        <Suspense fallback={
-          <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
-            <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-          </div>
-        }>
-        <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
-            <Route path="/login" element={!user ? <LoginPage /> : <Navigate to={isStudioOnlyUser ? "/studio-os" : "/"} />} />
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-            
-            <Route
-              path="/"
-              element={
-                user ? (
-                  // Redirect automatico: utenti solo-studio vanno a Studio OS
-                  isStudioOnlyUser ? (
-                    <Navigate to="/studio-os" replace />
-                  ) : (
-                    <StudioProvider>
-                      <DashboardLayout />
-                    </StudioProvider>
-                  )
-                ) : (
-                  <Navigate to="/login" />
-                )
-              }
-            >
-              <Route index element={<DashboardPage />} />
-              <Route path="/clienti" element={<ClientiPage />} />
-              <Route path="/clienti/:id" element={<ClienteDetailPage />} />
-              <Route path="/progetti" element={<ProgettiPage />} />
-              <Route path="/progetti/:id" element={<ProgettoDetailPage />} />
-              <Route path="/commesse" element={<CommessePage />} />
-              <Route path="/commesse/:id" element={<CommessaDetailPage />} />
-              <Route path="/pianificazioni/:id" element={<PianificazioneDetailPage />} />
-              <Route path="/preventivi" element={<PreventiviPage />} />
-              <Route path="/timesheet" element={<TimesheetPage />} />
-              <Route path="/fatture" element={<FatturePage />} />
-              <Route path="/cassa" element={<CassaPage />} />
-              <Route path="/cassa/regole" element={<RegoleRiconciliazionePageLazy />} />
-              <Route path="/analytics" element={<AnalyticsPage />} />
-              <Route path="/report" element={<ReportsPage />} />
-              <Route path="/planning" element={<PlanningPage />} />
-              <Route path="/collaboratori" element={<CollaboratoriPage />} />
-              <Route path="/fornitori" element={<Fornitori />} />
-              <Route path="/budget" element={<BudgetPage />} />
-              <Route path="/wiki" element={<WikiPage />} />
-              <Route path="/crm" element={<CRMPage />} />
-              <Route path="/crm/:id" element={<LeadDetailPage />} />
-              <Route path="/contenuti" element={<ContenutiPage />} />
-              <Route path="/admin/categorie-fornitori" element={<SupplierCategoryManager />} />
-              <Route path="/task-templates" element={<TaskTemplatesPage />} />
-              
-              <Route 
-                path="/studio-os/*" 
-                element={<StudioPage />} 
-              />
-  
-              <Route path="/settings" element={<SettingsLayout />}>
-                <Route path="profile" element={<ProfileSettings />} />
-                <Route path="account" element={<AccountSettings />} />
-                <Route path="appearance" element={<AppearanceSettings />} />
-                <Route path="notifications" element={<NotificationSettings />} />
-                <Route path="privacy" element={<PrivacySettings />} />
-                <Route path="audit" element={<AuditSettings />} />
-              </Route>
-            </Route>
-  
-            {/* ── Standalone popout window ── */}
-            <Route path="/popout" element={user ? <PopoutPage /> : <Navigate to="/login" />} />
-  
-            <Route path="*" element={<Navigate to="/" />} />
-          </Routes>
-        </AnimatePresence>
-        </Suspense>
+          <Suspense fallback={<Spinner />}>
+            <AnimatePresence mode="wait">
+              <Routes location={location} key={location.pathname}>
+                {/* Route pubbliche */}
+                <Route
+                  path="/login"
+                  element={!user ? <LoginPage /> : <Navigate to={isStudioOnlyUser ? "/studio-os" : "/"} />}
+                />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+                {/*
+                 * Layout principale: richiede autenticazione e rende il DashboardLayout
+                 * per TUTTI i ruoli (sidebar si adatta via AppSidebar in base al ruolo).
+                 * Fix bug precedente: il parent NON redirige più studio-only a /studio-os
+                 * perché /studio-os/* è un figlio di questo layout — ciò causava un loop
+                 * infinito. Il redirect per studio-only è ora sull'index route e sulle
+                 * singole ERP route via renderERPOnly.
+                 */}
+                <Route
+                  path="/"
+                  element={
+                    user ? (
+                      <StudioProvider>
+                        <DashboardLayout />
+                      </StudioProvider>
+                    ) : (
+                      <Navigate to="/login" />
+                    )
+                  }
+                >
+                  {/* Index: studio-only → Studio OS, tutti gli altri → Dashboard */}
+                  <Route index element={isStudioOnlyUser ? <Navigate to="/studio-os" replace /> : <DashboardPage />} />
+
+                  {/* Studio OS — accessibile a TUTTI gli utenti autenticati */}
+                  <Route path="/studio-os/*" element={<StudioPage />} />
+
+                  {/* Settings — accessibili a TUTTI gli utenti autenticati */}
+                  <Route path="/settings" element={<SettingsLayout />}>
+                    <Route path="profile" element={<ProfileSettings />} />
+                    <Route path="account" element={<AccountSettings />} />
+                    <Route path="appearance" element={<AppearanceSettings />} />
+                    <Route path="notifications" element={<NotificationSettings />} />
+                    <Route path="privacy" element={<PrivacySettings />} />
+                    <Route path="audit" element={<AuditSettings />} />
+                  </Route>
+
+                  {/* ── Route ERP: bloccate per utenti studio-only ─────────── */}
+                  <Route path="/clienti" element={renderERPOnly(<ClientiPage />)} />
+                  <Route path="/clienti/:id" element={renderERPOnly(<ClienteDetailPage />)} />
+                  <Route path="/progetti" element={renderERPOnly(<ProgettiPage />)} />
+                  <Route path="/progetti/:id" element={renderERPOnly(<ProgettoDetailPage />)} />
+                  <Route path="/commesse" element={renderERPOnly(<CommessePage />)} />
+                  <Route path="/commesse/:id" element={renderERPOnly(<CommessaDetailPage />)} />
+                  <Route path="/pianificazioni/:id" element={renderERPOnly(<PianificazioneDetailPage />)} />
+                  <Route path="/preventivi" element={renderERPOnly(<PreventiviPage />)} />
+                  <Route path="/timesheet" element={renderERPOnly(<TimesheetPage />)} />
+                  <Route path="/planning" element={renderERPOnly(<PlanningPage />)} />
+                  <Route path="/collaboratori" element={renderERPOnly(<CollaboratoriPage />)} />
+                  <Route path="/wiki" element={renderERPOnly(<WikiPage />)} />
+                  <Route path="/crm" element={renderERPOnly(<CRMPage />)} />
+                  <Route path="/crm/:id" element={renderERPOnly(<LeadDetailPage />)} />
+                  <Route path="/contenuti" element={renderERPOnly(<ContenutiPage />)} />
+                  <Route path="/task-templates" element={renderERPOnly(<TaskTemplatesPage />)} />
+
+                  {/* ── Route Finance: solo ADMIN e DEVELOPER ──────────────── */}
+                  <Route path="/fatture" element={renderFinanceOnly(<FatturePage />)} />
+                  <Route path="/cassa" element={renderFinanceOnly(<CassaPage />)} />
+                  <Route path="/cassa/regole" element={renderFinanceOnly(<RegoleRiconciliazionePageLazy />)} />
+                  <Route path="/analytics" element={renderFinanceOnly(<AnalyticsPage />)} />
+                  <Route path="/report" element={renderFinanceOnly(<ReportsPage />)} />
+                  <Route path="/fornitori" element={renderFinanceOnly(<Fornitori />)} />
+                  <Route path="/budget" element={renderFinanceOnly(<BudgetPage />)} />
+                  <Route path="/admin/categorie-fornitori" element={renderFinanceOnly(<SupplierCategoryManager />)} />
+                </Route>
+
+                {/* Standalone popout window */}
+                <Route path="/popout" element={user ? <PopoutPage /> : <Navigate to="/login" />} />
+
+                <Route path="*" element={<Navigate to="/" />} />
+              </Routes>
+            </AnimatePresence>
+          </Suspense>
         </ErrorBoundary>
         <Toaster position="top-right" richColors closeButton />
       </ChatProvider>

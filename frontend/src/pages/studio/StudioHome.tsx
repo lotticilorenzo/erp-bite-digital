@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useStudio } from "@/hooks/useStudio";
+import { useAllActiveTimers } from "@/hooks/useTimer";
 import { format, isToday, isBefore, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 
@@ -43,6 +44,7 @@ export default function StudioHome() {
   const { data: utenti = [] } = useUsers();
   const { user } = useAuth();
   const { timer, openNewTask, openTab, setView, selectList } = useStudio();
+  const { data: allActiveTimers = [] } = useAllActiveTimers();
 
   if (isLoading) {
     return (
@@ -387,11 +389,9 @@ export default function StudioHome() {
                     Nessun collaboratore trovato.
                   </p>
                 ) : (
-                  utenti.slice(0, 6).map((u: any) => {
-                    const uTask = allTasks.find(
-                      (t) => t.assegnatario_id === u.id && timer.active_session?.task_id === t.id
-                    );
-                    const isTracking = !!uTask;
+                  utenti.slice(0, 8).map((u: any) => {
+                    const activeTimer = allActiveTimers.find(at => at.user_id === u.id);
+                    const isTracking = !!activeTimer;
 
                     return (
                       <div
@@ -415,7 +415,7 @@ export default function StudioHome() {
                           {isTracking ? (
                             <p className="text-[9px] font-bold text-emerald-400/80 truncate flex items-center gap-1">
                               <Timer className="h-2.5 w-2.5" />
-                              {uTask!.title}
+                              {activeTimer.task_title || "Attività senza titolo"}
                             </p>
                           ) : (
                             <p className="text-[9px] font-bold uppercase tracking-widest text-faint">
@@ -425,7 +425,7 @@ export default function StudioHome() {
                         </div>
                         {isTracking && (
                           <span className="text-[10px] font-black text-emerald-400 tabular-nums shrink-0">
-                            {formatTime(timer.getElapsed(uTask!.id))}
+                            {formatTime(Date.now() - new Date(activeTimer.started_at).getTime())}
                           </span>
                         )}
                       </div>

@@ -8,10 +8,11 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import get_current_user, require_roles
+from app.core.security import get_current_user, require_admin
 from app.db.session import get_db
 from app.models.models import TimesheetStatus, User, UserRole
 from app.schemas.schemas import TimesheetApprova, TimesheetCreate, TimesheetOut
+from app.services import audit
 from app.services.services import (
     approva_timesheet,
     create_timesheet,
@@ -101,6 +102,8 @@ async def get_timesheet(
     mese: Optional[date] = Query(None),
     stato: Optional[TimesheetStatus] = Query(None),
     commessa_id: Optional[uuid.UUID] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -108,7 +111,7 @@ async def get_timesheet(
     user_filter = None
     if current_user.ruolo in (UserRole.DIPENDENTE, UserRole.FREELANCER, UserRole.COLLABORATORE):
         user_filter = current_user.id
-    return await list_timesheet(db, user_filter, mese, stato, commessa_id)
+    return await list_timesheet(db, user_filter, mese, stato, commessa_id, limit=limit, skip=skip)
 
 
 @router.post("", response_model=TimesheetOut, status_code=201)
@@ -126,6 +129,16 @@ async def add_timesheet(
 async def bulk_approva(
     data: TimesheetApprova,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_admin),
 ):
-    return await approva_timesheet(db, data, current_user)
+    results = await approva_timesheet(db, data, current_user)
+    for ts in results:
+        await audit.emit_approve(
+            db,
+            tabella="timesheet",
+            record_id=ts.id,
+            user_id=current_user.id,
+            azione=audit.APPROVE if ts.stato == "APPROVATO" else audit.REJECT,
+        )
+    await db.commit()
+    return results

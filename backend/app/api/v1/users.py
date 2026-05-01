@@ -1,19 +1,28 @@
 import io
 import os
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.encoders import jsonable_encoder
 from PIL import Image
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import get_current_user, require_roles
+from app.core.security import ADMIN_EQUIVALENT_ROLES, get_current_user, require_admin
 from app.db.session import get_db
-from app.models.models import Risorsa, Task, TaskStatus, User, UserRole
-from app.schemas.schemas import UserCreate, UserOut, UserUpdate
+from app.services import audit
+from app.models.models import Progetto, ProgettoTeam, Risorsa, Task, TaskStatus, Timesheet, User, UserRole
+from app.schemas.schemas import UserCreate, UserOut, UserPublicOut, UserUpdate
+
+
+def _serialize_user(user: User, actor_role: UserRole) -> dict:
+    """Restituisce UserOut completo per admin, UserPublicOut (no costo_orario) per tutti gli altri."""
+    if actor_role in ADMIN_EQUIVALENT_ROLES:
+        return UserOut.model_validate(user).model_dump(mode="json")
+    return UserPublicOut.model_validate(user).model_dump(mode="json")
 from app.services.services import (
     create_user,
     get_user_by_email,
@@ -28,7 +37,7 @@ router = APIRouter(prefix="/users", tags=["Users"])
 async def get_users(
     attivo: Optional[bool] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    _auth: User = Depends(require_admin),
 ):
     return await list_users(db, attivo)
 
@@ -37,12 +46,21 @@ async def get_users(
 async def add_user(
     data: UserCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER)),
+    actor: User = Depends(require_admin),
 ):
     existing = await get_user_by_email(db, data.email)
     if existing:
         raise HTTPException(status_code=409, detail="Email già registrata")
-    return await create_user(db, data)
+    new_user = await create_user(db, data)
+    await audit.emit_create(
+        db,
+        tabella="users",
+        record_id=new_user.id,
+        user_id=actor.id,
+        dati={"email": new_user.email, "ruolo": str(new_user.ruolo)},
+    )
+    await db.commit()
+    return new_user
 
 
 @router.patch("/{user_id}", response_model=UserOut)
@@ -69,7 +87,15 @@ async def patch_user(
     user = await update_user(db, user_id, data, current_user.id)
     if not user:
         raise HTTPException(status_code=404, detail="Utente non trovato")
-    return user
+    await audit.emit_update(
+        db,
+        tabella="users",
+        record_id=user_id,
+        user_id=current_user.id,
+        dopo={k: str(v) for k, v in payload.items() if k != "password"},
+    )
+    await db.commit()
+    return _serialize_user(user, current_user.ruolo)
 
 
 @router.patch("/me", response_model=UserOut)
@@ -87,7 +113,10 @@ async def patch_current_user(
         if blocked:
             raise HTTPException(status_code=403, detail="Non autorizzato a modificare campi amministrativi")
 
-    return await update_user(db, current_user.id, data, current_user.id)
+    updated = await update_user(db, current_user.id, data, current_user.id)
+    await db.commit()
+    await db.refresh(updated)
+    return _serialize_user(updated, current_user.ruolo)
 
 
 @router.get("/{user_id}/capacity-today")
@@ -135,14 +164,85 @@ async def get_user_capacity_today(
 
 
 @router.get("/me/export")
-async def export_user_data(current_user: User = Depends(get_current_user)):
-    """Mock endpoint to export user data as JSON."""
-    return {
-        "user": UserOut.model_validate(current_user).model_dump(),
-        "exported_at": datetime.utcnow().isoformat(),
-        "format": "JSON",
-        "message": "Export dei dati completato con successo",
+async def export_user_data(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project_rows = (
+        await db.execute(
+            select(ProgettoTeam, Progetto.nome)
+            .join(Progetto, ProgettoTeam.progetto_id == Progetto.id)
+            .where(ProgettoTeam.user_id == current_user.id)
+            .order_by(Progetto.nome.asc())
+        )
+    ).all()
+    task_rows = (
+        await db.execute(
+            select(Task)
+            .where(Task.assegnatario_id == current_user.id)
+            .order_by(Task.created_at.desc())
+        )
+    ).scalars().all()
+    timesheet_rows = (
+        await db.execute(
+            select(Timesheet)
+            .where(Timesheet.user_id == current_user.id)
+            .order_by(Timesheet.data_attivita.desc(), Timesheet.created_at.desc())
+        )
+    ).scalars().all()
+
+    payload = {
+        "meta": {
+            "format": "bite-erp-user-export",
+            "version": 1,
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+        },
+        "account": UserOut.model_validate(current_user).model_dump(mode="json"),
+        "projects": [
+            {
+                "id": team.id,
+                "progetto_id": team.progetto_id,
+                "progetto_nome": progetto_nome,
+                "ruolo_progetto": team.ruolo_progetto,
+                "ore_previste": team.ore_previste,
+                "note": team.note,
+            }
+            for team, progetto_nome in project_rows
+        ],
+        "tasks": [
+            {
+                "id": task.id,
+                "titolo": task.titolo,
+                "stato": task.stato,
+                "progetto_id": task.progetto_id,
+                "commessa_id": task.commessa_id,
+                "data_inizio": task.data_inizio,
+                "data_scadenza": task.data_scadenza,
+                "stima_minuti": task.stima_minuti,
+                "priorita": task.priorita,
+                "created_at": task.created_at,
+                "updated_at": task.updated_at,
+            }
+            for task in task_rows
+        ],
+        "timesheets": [
+            {
+                "id": row.id,
+                "task_id": row.task_id,
+                "commessa_id": row.commessa_id,
+                "data_attivita": row.data_attivita,
+                "mese_competenza": row.mese_competenza,
+                "servizio": row.servizio,
+                "durata_minuti": row.durata_minuti,
+                "stato": row.stato,
+                "note": row.note,
+                "created_at": row.created_at,
+                "updated_at": row.updated_at,
+            }
+            for row in timesheet_rows
+        ],
     }
+    return jsonable_encoder(payload)
 
 
 @router.post("/me/avatar")

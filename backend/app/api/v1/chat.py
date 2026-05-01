@@ -2,17 +2,20 @@ import logging
 import uuid
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional
+from urllib.parse import urlsplit
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, Body, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, text
 from sqlalchemy.orm import joinedload, selectinload
 
+from app.core.config import settings
 from app.db.session import get_db
-from app.core.security import get_current_user, get_user_from_token
+from app.core.security import CHAT_WS_TICKET_TTL, CHAT_WS_TOKEN_SCOPE, create_chat_ws_ticket, get_current_user, get_user_from_token
 from app.models.models import ChatMessaggio, ChatReazione, User, ChatCanale, ChatMembro, UserRole
 from app.schemas.schemas import ChatMessaggioRead, ChatMessaggioCreate, ChatCanaleOut, UserOut
+from app.services import audit
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +23,23 @@ logger = logging.getLogger(__name__)
 _MSG_MAX_LEN = 10_000  # caratteri massimi per messaggio
 
 router = APIRouter()
+
+
+def _normalize_origin(origin: str | None) -> str | None:
+    if not origin:
+        return None
+    parsed = urlsplit(origin)
+    if not parsed.scheme or not parsed.netloc:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+
+
+def _allowed_websocket_origins() -> set[str]:
+    origins = {
+        _normalize_origin(settings.FRONTEND_BASE_URL),
+        *(_normalize_origin(origin) for origin in settings.cors_origins_list),
+    }
+    return {origin for origin in origins if origin}
 
 # ═══════════════════════════════════════════════════════
 # WEBSOCKET MANAGER
@@ -190,8 +210,19 @@ async def get_channels(
             c_dict["last_message"] = last_msg.contenuto if last_msg.tipo == 'testo' else '[Allegato]'
             c_dict["last_message_at"] = last_msg.created_at
         
-        # Unread count (mocked)
-        c_dict["unread_count"] = 0
+        # Unread count (Real)
+        my_membro = next((m for m in c.membri if m.user_id == current_user.id), None)
+        if my_membro:
+            # Count messages in this channel created after my_membro.last_read_at
+            # Use a safe epoch start if last_read_at is None
+            min_date = datetime(1970, 1, 1, tzinfo=timezone.utc)
+            unread_stmt = select(func.count(ChatMessaggio.id)).where(
+                ChatMessaggio.canale_id == c.id,
+                ChatMessaggio.created_at > (my_membro.last_read_at or min_date)
+            )
+            c_dict["unread_count"] = await db.scalar(unread_stmt)
+        else:
+            c_dict["unread_count"] = 0
         out.append(c_dict)
     
     # Ordina per attività recente (Safe timezone comparison)
@@ -223,56 +254,47 @@ async def get_or_create_direct_channel(
     if other_user_id == current_user.id:
         raise HTTPException(status_code=400, detail="Non puoi iniziare una chat con te stesso")
 
-    # Cerca un canale DIRECT che abbia ENTRAMBI gli utenti come membri
-    # (Metodo robusto: cerca canali DIRECT di cui l'utente corrente è membro, 
-    # poi controlla se l'altro utente è pure membro dello STESSO canale)
-    stmt = text("""
-        SELECT c.id FROM chat_canali c
-        JOIN chat_membri m1 ON c.id = m1.canale_id
-        JOIN chat_membri m2 ON c.id = m2.canale_id
-        WHERE c.tipo = 'DIRECT' 
-        AND m1.user_id = :u1 
-        AND m2.user_id = :u2
-        LIMIT 1
-    """)
-    res = await db.execute(stmt, {"u1": current_user.id, "u2": other_user_id})
-    existing_id = res.scalar()
+    other_user = await db.scalar(select(User).where(User.id == other_user_id, User.attivo == True))
+    if not other_user:
+        raise HTTPException(status_code=404, detail="Utente destinatario non trovato")
 
+    # Search for an existing DIRECT channel between these two users
+    stmt = select(ChatCanale.id).join(ChatMembro).where(
+        ChatCanale.tipo == 'DIRECT'
+    ).where(
+        ChatMembro.user_id.in_([current_user.id, other_user_id])
+    ).group_by(ChatCanale.id).having(func.count(ChatMembro.id) == 2)
+    
+    existing_id = await db.scalar(stmt)
+    
+    channel = None
     if existing_id:
-        # Recupera il canale esistente
-        chan_stmt = select(ChatCanale).where(ChatCanale.id == existing_id)\
-            .options(selectinload(ChatCanale.membri).joinedload(ChatMembro.user))
-        chan_res = await db.execute(chan_stmt)
-        channel = chan_res.scalar_one()
+        channel = await db.scalar(select(ChatCanale).where(ChatCanale.id == existing_id).options(selectinload(ChatCanale.membri).joinedload(ChatMembro.user)))
     else:
-        # Crea nuovo canale DIRECT
-        channel = ChatCanale(
-            id=uuid.uuid4(),
-            nome="Direct Chat",
-            tipo="DIRECT"
-        )
-        db.add(channel)
-        await db.flush()
-        
-        # Aggiungi entrambi i membri
-        db.add(ChatMembro(canale_id=channel.id, user_id=current_user.id, ruolo='MEMBER'))
-        db.add(ChatMembro(canale_id=channel.id, user_id=other_user_id, ruolo='MEMBER'))
-        await db.commit()
-        await db.refresh(channel)
-        
-        # Ricarica con relazioni per la risposta
-        chan_stmt = select(ChatCanale).where(ChatCanale.id == channel.id)\
-            .options(selectinload(ChatCanale.membri).joinedload(ChatMembro.user))
-        chan_res = await db.execute(chan_stmt)
-        channel = chan_res.scalar_one()
+        try:
+            channel = ChatCanale(nome=f"DM: {current_user.nome} & {other_user.nome}", tipo='DIRECT')
+            db.add(channel)
+            await db.flush()
+            db.add(ChatMembro(canale_id=channel.id, user_id=current_user.id))
+            db.add(ChatMembro(canale_id=channel.id, user_id=other_user_id))
+            await db.commit()
+            channel = await db.scalar(select(ChatCanale).where(ChatCanale.id == channel.id).options(selectinload(ChatCanale.membri).joinedload(ChatMembro.user)))
+        except Exception:
+            await db.rollback()
+            existing_id = await db.scalar(stmt)
+            if existing_id:
+                channel = await db.scalar(select(ChatCanale).where(ChatCanale.id == existing_id).options(selectinload(ChatCanale.membri).joinedload(ChatMembro.user)))
+            else:
+                raise
 
-    # Formatta risposta
+    if not channel:
+        raise HTTPException(status_code=500, detail="Errore nella creazione del canale")
+
     c_dict = ChatCanaleOut.model_validate(channel).model_dump()
     other_member = next((m for m in channel.membri if m.user_id != current_user.id), None)
     if other_member and other_member.user:
         c_dict["nome"] = f"{other_member.user.nome} {other_member.user.cognome}"
         c_dict["logo_url"] = other_member.user.avatar_url
-    
     return c_dict
 
 @router.post("/channels/{canal_id}/members", tags=["Admin"])
@@ -296,8 +318,26 @@ async def manage_members(
         for uid in user_ids:
             await db.execute(text("DELETE FROM chat_membri WHERE canale_id = :cid AND user_id = :uid"), {"cid": canal_id, "uid": uid})
     
+    await audit.emit(
+        db,
+        tabella="chat_canali",
+        azione="MANAGE_MEMBERS",
+        record_id=canal_id,
+        user_id=current_user.id,
+        dati_dopo={"user_ids": [str(uid) for uid in user_ids], "action": action}
+    )
     await db.commit()
     return {"success": True}
+
+@router.post("/ws-ticket")
+async def issue_websocket_ticket(current_user: User = Depends(get_current_user)):
+    ticket = create_chat_ws_ticket(
+        {"sub": str(current_user.id), "ruolo": current_user.ruolo, "ver": current_user.token_version}
+    )
+    return {
+        "ticket": ticket,
+        "expires_in_seconds": int(CHAT_WS_TICKET_TTL.total_seconds()),
+    }
 
 # ═══════════════════════════════════════════════════════
 # WEBSOCKET ENDPOINT
@@ -306,16 +346,22 @@ async def manage_members(
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
-    token: str = Query(...),  # query param: /ws?token=xxx (mai nel path per ridurre esposizione nei log)
+    ticket: str = Query(...),
     db: AsyncSession = Depends(get_db)
 ):
     # Accettiamo subito la connessione per stabilità Handshake con Proxy/Nginx
-    await websocket.accept()
+    origin = _normalize_origin(websocket.headers.get("origin"))
+    if origin not in _allowed_websocket_origins():
+        logger.warning("WS origin rifiutato: %s", origin)
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
 
-    user = await get_user_from_token(db, token)
+    user = await get_user_from_token(db, ticket, required_scope=CHAT_WS_TOKEN_SCOPE)
     if not user:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
+
+    await websocket.accept()
 
     try:
         await manager.connect(user.id, websocket)
@@ -340,11 +386,17 @@ async def websocket_endpoint(
             
             elif message["type"] == "message_seen":
                 channel_id = uuid.UUID(message["channel_id"])
-                now = datetime.utcnow().isoformat()
+                # Persist the "Read" state
+                await db.execute(
+                    text("UPDATE chat_membri SET last_read_at = :now WHERE canale_id = :cid AND user_id = :uid"),
+                    {"now": datetime.utcnow(), "cid": channel_id, "uid": user.id}
+                )
+                await db.commit()
+                
                 await manager.broadcast_to_channel(db, channel_id, {
                     "type": "message_seen",
                     "user_id": str(user.id),
-                    "last_seen_at": now,
+                    "last_seen_at": datetime.utcnow().isoformat(),
                     "channel_id": str(channel_id)
                 }, skip_user=user.id)
 
@@ -397,12 +449,24 @@ async def send_message(
     current_user: User = Depends(get_current_user)
 ):
     from app.services.notification_service import create_notification
-    
-    # Verify access
-    stmt_member = select(ChatMembro).where(ChatMembro.canale_id == message_in.canale_id, ChatMembro.user_id == current_user.id)
+
+    channel = await db.scalar(select(ChatCanale).where(ChatCanale.id == message_in.canale_id))
+    if not channel:
+        raise HTTPException(status_code=404, detail="Canale non trovato")
+
+    stmt_member = select(ChatMembro).where(
+        ChatMembro.canale_id == message_in.canale_id,
+        ChatMembro.user_id == current_user.id,
+    )
     res_member = await db.execute(stmt_member)
     if not res_member.scalar_one_or_none() and current_user.ruolo != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Non hai accesso a questo canale")
+
+    if message_in.progetto_id and message_in.progetto_id != channel.progetto_id:
+        raise HTTPException(
+            status_code=422,
+            detail="Il progetto del messaggio non coincide con il canale selezionato",
+        )
 
     # Validazione lunghezza — evita payload giganti che appesantiscono DB e broadcast
     if not message_in.contenuto or not message_in.contenuto.strip():
@@ -415,7 +479,7 @@ async def send_message(
 
     new_message = ChatMessaggio(
         canale_id=message_in.canale_id,
-        progetto_id=message_in.progetto_id,
+        progetto_id=channel.progetto_id,
         autore_id=current_user.id,
         contenuto=message_in.contenuto,
         tipo=message_in.tipo,
@@ -477,9 +541,20 @@ async def edit_message(
     if msg.autore_id != current_user.id:
         raise HTTPException(status_code=403, detail="Non puoi modificare questo messaggio")
         
+    prima = {"contenuto": msg.contenuto}
     msg.contenuto = contenuto
     msg.updated_at = datetime.utcnow()
     msg.modificato = True
+    
+    await db.flush()
+    await audit.emit_update(
+        db,
+        tabella="chat_messaggi",
+        record_id=message_id,
+        user_id=current_user.id,
+        prima=prima,
+        dopo={"contenuto": contenuto}
+    )
     await db.commit()
     
     await manager.broadcast_to_channel(db, msg.canale_id, {
@@ -506,6 +581,13 @@ async def delete_message(
         raise HTTPException(status_code=403, detail="Non autorizzato")
         
     canal_id = msg.canale_id
+    await audit.emit_delete(
+        db,
+        tabella="chat_messaggi",
+        record_id=message_id,
+        user_id=current_user.id,
+        dati={"contenuto": msg.contenuto, "canale_id": str(canal_id)}
+    )
     await db.delete(msg)
     await db.commit()
     
@@ -518,7 +600,7 @@ async def delete_message(
 
 @router.get("/search")
 async def search_messages(
-    q: str = Query(...),
+    q: str = Query(..., min_length=2, max_length=100),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):

@@ -28,7 +28,13 @@ from app.core.content_pipeline_rules import (
     is_limited_content_role,
     template_matches_commessa,
 )
-from app.core.security import get_current_user, require_roles
+from app.core.security import (
+    get_current_user,
+    require_finance_access,
+    require_roles,
+    require_admin,
+    require_erp_access,
+)
 from app.models.models import (
     User, UserRole, ProjectStatus, ProjectType, 
     CommessaStatus, TaskStatus, PreventivoStatus,
@@ -48,7 +54,13 @@ from app.schemas.schemas import (
     BudgetVarianceOut, BudgetTrendOut, BudgetTrendPointOut, BudgetTrendSeriesOut,
     WikiCategoriaCreate, WikiCategoriaOut, WikiArticoloCreate, WikiArticoloUpdate, WikiArticoloOut,
     ChatReazioneBase, ChatReazioneRead, ChatMessaggioCreate, ChatMessaggioUpdate, ChatMessaggioRead,
-    CRMStageOut, CRMLeadCreate, CRMLeadUpdate, CRMLeadOut, CRMActivityCreate, CRMActivityOut, CRMStatsOut
+    CRMStageOut, CRMLeadCreate, CRMLeadUpdate, CRMLeadOut, CRMActivityCreate, CRMActivityOut, CRMStatsOut,
+    CostoFissoCreate, CostoFissoUpdate,
+    RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
+    MovimentoCassaUpdate, RiconciliaRequest,
+    ImputazioniRequest,
+    PianoCreate, PianoUpdate, CollegaCommessaRequest,
+    RisorsaCreate, RisorsaUpdate,
 )
 from app.schemas.auth import ForgotPasswordRequest, ResetPasswordRequest
 import httpx
@@ -303,7 +315,7 @@ async def dashboard_kpi(
     response: Response,
     mese: date = Query(..., description="Formato YYYY-MM-01"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
+    current_user: User = Depends(require_finance_access),
 ):
     response.headers["Cache-Control"] = "private, max-age=120"
     return await get_dashboard_kpi(db, mese)
@@ -312,7 +324,7 @@ async def dashboard_kpi(
 async def get_analytics_forecast(
     mesi: int = Query(3, ge=1, le=12),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
+    current_user: User = Depends(require_finance_access)
 ):
     """Forecast ricavi prossimi N mesi: commesse certe + CRM pipeline + storico."""
     from app.models.models import Commessa, CommessaStatus, CRMLead
@@ -422,7 +434,7 @@ async def report_marginalita(
     response: Response,
     mese: Optional[date] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
+    current_user: User = Depends(require_finance_access)
 ):
     response.headers["Cache-Control"] = "private, max-age=120"
     return await get_marginalita_clienti(db, mese)
@@ -440,28 +452,29 @@ async def report_marginalita(
 
 @router.get("/movimenti-cassa", tags=["Cassa"])
 async def get_movimenti_cassa(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER)),
+    current_user: User = Depends(require_finance_access),
 ):
-    movimenti = await list_movimenti_cassa(db)
+    movimenti = await list_movimenti_cassa(db, skip=skip, limit=limit)
     return {"movimenti_cassa": movimenti}
 
 
 @router.post("/movimenti-cassa/{movimento_id}/riconcilia", tags=["Cassa"])
 async def riconcilia_movimento(
     movimento_id: uuid.UUID,
-    payload: dict,
+    payload: RiconciliaRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER)),
+    current_user: User = Depends(require_finance_access),
 ):
     from app.models.models import MovimentoCassa
     from sqlalchemy import select
-    from fastapi import HTTPException
     result = await db.execute(select(MovimentoCassa).where(MovimentoCassa.id == movimento_id))
     mov = result.scalar_one_or_none()
     if not mov:
         raise HTTPException(status_code=404, detail="Movimento non trovato")
-    mov.riconciliato = payload.get('riconciliato', True)
+    mov.riconciliato = payload.riconciliato
     await db.commit()
     return {"id": str(mov.id), "riconciliato": mov.riconciliato}
 
@@ -469,51 +482,45 @@ async def riconcilia_movimento(
 @router.patch("/movimenti-cassa/{movimento_id}", tags=["Cassa"])
 async def patch_movimento_cassa(
     movimento_id: uuid.UUID,
-    payload: dict,
+    payload: MovimentoCassaUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER)),
+    current_user: User = Depends(require_finance_access),
 ):
-    from app.models.models import MovimentoCassa, FatturaAttiva, FatturaPassiva
-    from sqlalchemy import select
-    from fastapi import HTTPException
+    from app.models.models import MovimentoCassa, FatturaAttiva, FatturaPassiva, Commessa, CommessaStatus
 
     result = await db.execute(select(MovimentoCassa).where(MovimentoCassa.id == movimento_id))
     mov = result.scalar_one_or_none()
     if not mov:
         raise HTTPException(status_code=404, detail="Movimento non trovato")
 
-    # Aggiorna campi movimento
-    for k, v in payload.items():
+    # Aggiorna campi scalari del movimento
+    data = payload.model_dump(exclude_none=True)
+    for k, v in data.items():
         if hasattr(mov, k):
             setattr(mov, k, v)
 
-    # Se si sta riconciliando con fattura attiva -> aggiorna fattura se ancora in ATTESA
-    if payload.get('fattura_attiva_id') and payload.get('riconciliato'):
-        fa_id = uuid.UUID(payload['fattura_attiva_id']) if isinstance(payload['fattura_attiva_id'], str) else payload['fattura_attiva_id']
-        fa_res = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == fa_id))
+    # Riconciliazione con fattura attiva
+    if payload.fattura_attiva_id and payload.riconciliato:
+        fa_res = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == payload.fattura_attiva_id))
         fa = fa_res.scalar_one_or_none()
         if fa and fa.stato_pagamento not in ('INCASSATA', 'paid'):
             fa.stato_pagamento = 'INCASSATA'
             fa.data_ultimo_incasso = mov.data_valuta
-            # Sincronizza stato commessa collegata alla fattura
-            from app.models.models import Commessa, CommessaStatus
-            from sqlalchemy import select as _sel
-            cm_res = await db.execute(_sel(Commessa).where(Commessa.fattura_id == fa.id))
+            cm_res = await db.execute(select(Commessa).where(Commessa.fattura_id == fa.id))
             cm = cm_res.scalar_one_or_none()
             if cm and cm.stato not in (CommessaStatus.INCASSATA,):
                 cm.stato = CommessaStatus.INCASSATA
 
-    # Se si sta riconciliando con fattura passiva -> aggiorna fattura se ancora in ATTESA
-    if payload.get('fattura_passiva_id') and payload.get('riconciliato'):
-        fp_id = uuid.UUID(payload['fattura_passiva_id']) if isinstance(payload['fattura_passiva_id'], str) else payload['fattura_passiva_id']
-        fp_res = await db.execute(select(FatturaPassiva).where(FatturaPassiva.id == fp_id))
+    # Riconciliazione con fattura passiva
+    if payload.fattura_passiva_id and payload.riconciliato:
+        fp_res = await db.execute(select(FatturaPassiva).where(FatturaPassiva.id == payload.fattura_passiva_id))
         fp = fp_res.scalar_one_or_none()
         if fp and fp.stato_pagamento not in ('paid', 'PAGATA'):
             fp.stato_pagamento = 'paid'
             fp.data_ultimo_pagamento = mov.data_valuta
 
-    # Se si sta annullando la riconciliazione -> riporta fattura ad ATTESA solo se era stata marcata da noi
-    if payload.get('riconciliato') == False:
+    # Annullamento riconciliazione
+    if payload.riconciliato is False:
         if mov.fattura_attiva_id:
             fa_res = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == mov.fattura_attiva_id))
             fa = fa_res.scalar_one_or_none()
@@ -535,31 +542,39 @@ async def patch_movimento_cassa(
 @router.get("/costi-fissi", tags=["CostiFissi"])
 async def get_costi_fissi(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
+    current_user: User = Depends(require_finance_access)
 ):
     return {"costi_fissi": await list_costi_fissi(db)}
 
 
 @router.post("/costi-fissi", tags=["CostiFissi"])
 async def post_costo_fisso(
-    payload: dict,
+    payload: CostoFissoCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
+    current_user: User = Depends(require_finance_access),
 ):
-    return await create_costo_fisso(db, payload)
+    return await create_costo_fisso(db, payload.model_dump())
 
 
 @router.patch("/costi-fissi/{costo_id}", tags=["CostiFissi"])
-async def patch_costo_fisso(costo_id: uuid.UUID, payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
-    from fastapi import HTTPException
-    result = await update_costo_fisso(db, costo_id, payload)
+async def patch_costo_fisso(
+    costo_id: uuid.UUID,
+    payload: CostoFissoUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    result = await update_costo_fisso(db, costo_id, payload.model_dump(exclude_none=True))
     if not result:
         raise HTTPException(status_code=404, detail="Costo non trovato")
     return result
 
 
 @router.delete("/costi-fissi/{costo_id}", tags=["CostiFissi"])
-async def delete_costo_fisso_endpoint(costo_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def delete_costo_fisso_endpoint(
+    costo_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
     from fastapi import HTTPException
     ok = await delete_costo_fisso(db, costo_id)
     if not ok:
@@ -571,7 +586,7 @@ async def delete_costo_fisso_endpoint(costo_id: uuid.UUID, db: AsyncSession = De
 @router.get("/regole-riconciliazione", tags=["Regole"])
 async def get_regole(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
+    current_user: User = Depends(require_finance_access)
 ):
     from app.services.services import list_regole
     return {"regole": await list_regole(db)}
@@ -579,25 +594,34 @@ async def get_regole(
 
 @router.post("/regole-riconciliazione", tags=["Regole"])
 async def post_regola(
-    payload: dict,
+    payload: RegolaRiconciliazioneCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
+    current_user: User = Depends(require_finance_access),
 ):
     from app.services.services import create_regola
-    return await create_regola(db, payload)
+    return await create_regola(db, payload.model_dump())
 
 
 @router.patch("/regole-riconciliazione/{regola_id}", tags=["Regole"])
-async def patch_regola(regola_id: uuid.UUID, payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def patch_regola(
+    regola_id: uuid.UUID,
+    payload: RegolaRiconciliazioneUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
     from app.services.services import update_regola
-    from fastapi import HTTPException
-    r = await update_regola(db, regola_id, payload)
-    if not r: raise HTTPException(status_code=404, detail="Regola non trovata")
+    r = await update_regola(db, regola_id, payload.model_dump(exclude_none=True))
+    if not r:
+        raise HTTPException(status_code=404, detail="Regola non trovata")
     return r
 
 
 @router.delete("/regole-riconciliazione/{regola_id}", tags=["Regole"])
-async def delete_regola_endpoint(regola_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def delete_regola_endpoint(
+    regola_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
     from app.services.services import delete_regola
     from fastapi import HTTPException
     ok = await delete_regola(db, regola_id)
@@ -608,7 +632,7 @@ async def delete_regola_endpoint(regola_id: uuid.UUID, db: AsyncSession = Depend
 @router.post("/regole-riconciliazione/applica", tags=["Regole"])
 async def applica_regole(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
+    current_user: User = Depends(require_finance_access)
 ):
     from app.services.services import applica_regole_automatiche
     return await applica_regole_automatiche(db)
@@ -617,7 +641,7 @@ async def applica_regole(
 @router.post("/regole-riconciliazione/dry-run", tags=["Regole"])
 async def dry_run_regole(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
+    current_user: User = Depends(require_finance_access)
 ):
     """Preview di cosa verrebbe riconciliato senza applicare modifiche al DB."""
     from app.services.services import dry_run_regole_automatiche
@@ -628,7 +652,7 @@ async def dry_run_regole(
 async def get_regola_log(
     regola_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
+    current_user: User = Depends(require_finance_access)
 ):
     """Storico applicazioni di una singola regola (da audit_log)."""
     from app.services.services import get_regola_application_log
@@ -636,7 +660,11 @@ async def get_regola_log(
 
 
 @router.get("/movimenti-cassa/{movimento_id}/suggest", tags=["Regole"])
-async def suggest_mov(movimento_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def suggest_mov(
+    movimento_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
     from app.services.services import suggest_riconciliazione
     return await suggest_riconciliazione(db, movimento_id)
 
@@ -646,17 +674,22 @@ async def suggest_mov(movimento_id: uuid.UUID, db: AsyncSession = Depends(get_db
 async def get_imputazioni_fattura(
     fattura_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
+    current_user: User = Depends(require_finance_access)
 ):
     from app.services.services import get_imputazioni
     return await get_imputazioni(db, fattura_id)
 
 
 @router.post("/fatture-passive/{fattura_id}/imputazioni", tags=["Imputazioni"])
-async def save_imputazioni_fattura(fattura_id: uuid.UUID, payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def save_imputazioni_fattura(
+    fattura_id: uuid.UUID,
+    payload: ImputazioniRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
     from app.services.services import save_imputazioni
-    from fastapi import HTTPException
-    result = await save_imputazioni(db, fattura_id, payload.get('imputazioni', []))
+    items = [i.model_dump() for i in payload.imputazioni]
+    result = await save_imputazioni(db, fattura_id, items)
     if result is None:
         raise HTTPException(status_code=404, detail="Fattura non trovata")
     return {"imputazioni": result}
@@ -664,16 +697,25 @@ async def save_imputazioni_fattura(fattura_id: uuid.UUID, payload: dict, db: Asy
 
 # ── IMPUTAZIONI MOVIMENTI CASSA ───────────────────────────
 @router.get("/movimenti-cassa/{movimento_id}/imputazioni", tags=["Imputazioni"])
-async def get_imputazioni_mov(movimento_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def get_imputazioni_mov(
+    movimento_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
     from app.services.services import get_imputazioni_movimento
     return await get_imputazioni_movimento(db, movimento_id)
 
 
 @router.post("/movimenti-cassa/{movimento_id}/imputazioni", tags=["Imputazioni"])
-async def save_imputazioni_mov(movimento_id: uuid.UUID, payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def save_imputazioni_mov(
+    movimento_id: uuid.UUID,
+    payload: ImputazioniRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
     from app.services.services import save_imputazioni_movimento
-    from fastapi import HTTPException
-    result = await save_imputazioni_movimento(db, movimento_id, payload.get('imputazioni', []))
+    items = [i.model_dump() for i in payload.imputazioni]
+    result = await save_imputazioni_movimento(db, movimento_id, items)
     if result is None:
         raise HTTPException(status_code=404, detail="Movimento non trovato")
     return {"imputazioni": result}
@@ -683,7 +725,7 @@ async def save_imputazioni_mov(movimento_id: uuid.UUID, payload: dict, db: Async
 async def delete_imputazioni_fattura(
     fattura_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
+    current_user: User = Depends(require_finance_access)
 ):
     """Elimina tutte le imputazioni di una fattura passiva."""
     from app.models.models import FatturaPassivaImputazione
@@ -698,7 +740,7 @@ async def delete_imputazioni_fattura(
 async def delete_imputazioni_movimento(
     movimento_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
+    current_user: User = Depends(require_finance_access)
 ):
     """Elimina tutte le imputazioni di un movimento cassa."""
     from app.models.models import MovimentoCassaImputazione
@@ -713,32 +755,43 @@ async def delete_imputazioni_movimento(
 @router.get("/risorse", tags=["HR"])
 async def get_risorse(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER))
+    _auth: User = Depends(require_admin),
 ):
     from app.services.services import list_risorse
     return await list_risorse(db)
 
 
 @router.post("/risorse", tags=["HR"])
-async def post_risorsa(payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def post_risorsa(
+    payload: RisorsaCreate,
+    db: AsyncSession = Depends(get_db),
+    _auth: User = Depends(require_admin),
+):
     from app.services.services import create_risorsa
-    return await create_risorsa(db, payload)
+    return await create_risorsa(db, payload.model_dump())
 
 
 @router.patch("/risorse/{risorsa_id}", tags=["HR"])
-async def patch_risorsa(risorsa_id: uuid.UUID, payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def patch_risorsa(
+    risorsa_id: uuid.UUID,
+    payload: RisorsaUpdate,
+    db: AsyncSession = Depends(get_db),
+    _auth: User = Depends(require_admin),
+):
     from app.services.services import update_risorsa
-    from fastapi import HTTPException
-    r = await update_risorsa(db, risorsa_id, payload)
+    r = await update_risorsa(db, risorsa_id, payload.model_dump(exclude_none=True))
     if not r:
         raise HTTPException(status_code=404, detail="Risorsa non trovata")
     return r
 
 
 @router.delete("/risorse/{risorsa_id}", status_code=204, tags=["HR"])
-async def del_risorsa(risorsa_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def del_risorsa(
+    risorsa_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _auth: User = Depends(require_admin),
+):
     from app.services.services import delete_risorsa
-    from fastapi import HTTPException
     ok = await delete_risorsa(db, risorsa_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Risorsa non trovata")
@@ -748,7 +801,7 @@ async def del_risorsa(risorsa_id: uuid.UUID, db: AsyncSession = Depends(get_db),
 @router.get("/piani", tags=["Pianificazione"])
 async def list_piani(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
+    _auth: User = Depends(require_finance_access),
 ):
     from sqlalchemy import text
     rows = await db.execute(text("""
@@ -763,7 +816,7 @@ async def list_piani(
 async def get_piano(
     piano_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
+    _auth: User = Depends(require_finance_access),
 ):
     from sqlalchemy import text
     row = await db.execute(text("SELECT p.*, cl.ragione_sociale as cliente_nome, cl.codice_cliente FROM piano_commessa p JOIN clienti cl ON cl.id=p.cliente_id WHERE p.id=:pid"), {"pid": str(piano_id)})
@@ -775,42 +828,41 @@ async def get_piano(
 
 @router.post("/piani", tags=["Pianificazione"])
 async def create_piano(
-    payload: dict,
+    payload: PianoCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
+    _auth: User = Depends(require_finance_access),
 ):
     from sqlalchemy import text
-    from datetime import date as _date
-    mese_str = payload.get("mese_competenza")
-    mese = None
-    if mese_str:
-        try:
-            parts = str(mese_str).split("-")
-            mese = _date(int(parts[0]), int(parts[1]), 1)
-        except (ValueError, IndexError, TypeError):
-            mese = None
     res = await db.execute(text("""
         INSERT INTO piano_commessa (cliente_id, preventivo, margine_target_pct, budget_produttivo, ore_budget, costo_orario_snapshot, mese_competenza, note)
         VALUES (:cid, :prev, :marg, :budg, :ore, :co, :mese, :note) RETURNING id
     """), {
-        "cid": payload["cliente_id"], "prev": payload.get("preventivo", 0),
-        "marg": payload.get("margine_target_pct", 40), "budg": payload.get("budget_produttivo"),
-        "ore": payload.get("ore_budget"), "co": payload.get("costo_orario_snapshot"),
-        "mese": mese, "note": payload.get("note")
+        "cid": str(payload.cliente_id),
+        "prev": payload.preventivo,
+        "marg": payload.margine_target_pct,
+        "budg": payload.budget_produttivo,
+        "ore": payload.ore_budget,
+        "co": payload.costo_orario_snapshot,
+        "mese": payload.mese_competenza,
+        "note": payload.note,
     })
     piano_id = str(res.fetchone()[0])
-    for riga in payload.get("righe", []):
-        await db.execute(text("INSERT INTO piano_commessa_righe (piano_id, risorsa_id, lavorazione, ore_pianificate, note) VALUES (:pid,:rid,:l,:o,:n)"),
-            {"pid": piano_id, "rid": riga.get("risorsa_id") or None, "l": riga.get("lavorazione",""), "o": riga.get("ore_pianificate", 0), "n": riga.get("note")})
+    for riga in payload.righe:
+        await db.execute(
+            text("INSERT INTO piano_commessa_righe (piano_id, risorsa_id, lavorazione, ore_pianificate, note) VALUES (:pid,:rid,:l,:o,:n)"),
+            {"pid": piano_id, "rid": str(riga.risorsa_id) if riga.risorsa_id else None,
+             "l": riga.lavorazione, "o": riga.ore_pianificate, "n": riga.note},
+        )
     await db.commit()
-    return await get_piano(uuid.UUID(piano_id), db, current_user)
+    return await get_piano(uuid.UUID(piano_id), db, _auth)
+
 
 @router.patch("/piani/{piano_id}", tags=["Pianificazione"])
 async def update_piano(
     piano_id: uuid.UUID,
-    payload: dict,
+    payload: PianoUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
+    _auth: User = Depends(require_finance_access),
 ):
     from sqlalchemy import text
     await db.execute(text("""
@@ -818,32 +870,53 @@ async def update_piano(
         ore_budget=:ore, costo_orario_snapshot=:co, mese_competenza=:mese, note=:note, updated_at=NOW()
         WHERE id=:pid
     """), {
-        "prev": payload.get("preventivo", 0), "marg": payload.get("margine_target_pct", 40),
-        "budg": payload.get("budget_produttivo"), "ore": payload.get("ore_budget"),
-        "co": payload.get("costo_orario_snapshot"), "mese": payload.get("mese_competenza"),
-        "note": payload.get("note"), "pid": str(piano_id)
+        "prev": payload.preventivo or 0,
+        "marg": payload.margine_target_pct or 40,
+        "budg": payload.budget_produttivo,
+        "ore": payload.ore_budget,
+        "co": payload.costo_orario_snapshot,
+        "mese": payload.mese_competenza,
+        "note": payload.note,
+        "pid": str(piano_id),
     })
     await db.execute(text("DELETE FROM piano_commessa_righe WHERE piano_id=:pid"), {"pid": str(piano_id)})
-    for riga in payload.get("righe", []):
-        await db.execute(text("INSERT INTO piano_commessa_righe (piano_id, risorsa_id, lavorazione, ore_pianificate, note) VALUES (:pid,:rid,:l,:o,:n)"),
-            {"pid": str(piano_id), "rid": riga.get("risorsa_id") or None, "l": riga.get("lavorazione",""), "o": riga.get("ore_pianificate", 0), "n": riga.get("note")})
+    for riga in payload.righe:
+        await db.execute(
+            text("INSERT INTO piano_commessa_righe (piano_id, risorsa_id, lavorazione, ore_pianificate, note) VALUES (:pid,:rid,:l,:o,:n)"),
+            {"pid": str(piano_id), "rid": str(riga.risorsa_id) if riga.risorsa_id else None,
+             "l": riga.lavorazione, "o": riga.ore_pianificate, "n": riga.note},
+        )
     await db.commit()
-    return await get_piano(piano_id, db, current_user)
+    return await get_piano(piano_id, db, _auth)
+
 
 @router.patch("/piani/{piano_id}/collega-commessa", tags=["Pianificazione"])
-async def collega_commessa_piano(piano_id: uuid.UUID, payload: dict, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def collega_commessa_piano(
+    piano_id: uuid.UUID,
+    payload: CollegaCommessaRequest,
+    db: AsyncSession = Depends(get_db),
+    _auth: User = Depends(require_finance_access),
+):
     from sqlalchemy import text
-    commessa_id = payload.get("commessa_id")
-    await db.execute(text("UPDATE piano_commessa SET commessa_id=:cid, updated_at=NOW() WHERE id=:pid"),
-        {"cid": commessa_id, "pid": str(piano_id)})
+    commessa_id = str(payload.commessa_id) if payload.commessa_id else None
+    await db.execute(
+        text("UPDATE piano_commessa SET commessa_id=:cid, updated_at=NOW() WHERE id=:pid"),
+        {"cid": commessa_id, "pid": str(piano_id)},
+    )
     if commessa_id:
-        await db.execute(text("UPDATE commesse SET piano_id=:pid, preventivo=COALESCE((SELECT preventivo FROM piano_commessa WHERE id=:pid),0) WHERE id=:cid"),
-            {"pid": str(piano_id), "cid": commessa_id})
+        await db.execute(
+            text("UPDATE commesse SET piano_id=:pid, preventivo=COALESCE((SELECT preventivo FROM piano_commessa WHERE id=:pid),0) WHERE id=:cid"),
+            {"pid": str(piano_id), "cid": commessa_id},
+        )
     await db.commit()
     return {"ok": True}
 
 @router.get("/piani/{piano_id}/consuntivo", tags=["Pianificazione"])
-async def get_consuntivo_piano(piano_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def get_consuntivo_piano(
+    piano_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _auth: User = Depends(require_finance_access),
+):
     from sqlalchemy import text
     piano = await db.execute(text("SELECT commessa_id FROM piano_commessa WHERE id=:pid"), {"pid": str(piano_id)})
     p = piano.fetchone()
@@ -1330,18 +1403,32 @@ async def get_tasks(
     parent_only: bool = Query(False),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_erp_access)
 ):
-    return await list_tasks(db, progetto_id, commessa_id, assegnatario_id, stato, parent_only, start_date, end_date)
+    return await list_tasks(
+        db,
+        current_user,
+        progetto_id,
+        commessa_id,
+        assegnatario_id,
+        stato,
+        parent_only,
+        start_date,
+        end_date,
+        limit=limit,
+        skip=skip,
+    )
 
 @router.get("/tasks/{task_id}", response_model=TaskOut, tags=["Tasks"])
 async def get_single_task(
     task_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_erp_access)
 ):
-    t = await get_task(db, task_id)
+    t = await get_task(db, task_id, current_user)
     if not t:
         raise HTTPException(status_code=404, detail="Task non trovata")
     return t
@@ -1350,18 +1437,18 @@ async def get_single_task(
 async def add_task(
     data: TaskCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_erp_access)
 ):
-    return await create_task(db, data)
+    return await create_task(db, data, current_user)
 
 @router.patch("/tasks/{task_id}", response_model=TaskOut, tags=["Tasks"])
 async def patch_task(
     task_id: uuid.UUID,
     data: TaskUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_erp_access)
 ):
-    t = await update_task(db, task_id, data, current_user.id)
+    t = await update_task(db, task_id, data, current_user.id, current_user)
     if not t:
         raise HTTPException(status_code=404, detail="Task non trovata")
     return t
@@ -1370,9 +1457,9 @@ async def patch_task(
 async def remove_task(
     task_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_erp_access)
 ):
-    ok = await delete_task(db, task_id, current_user.id)
+    ok = await delete_task(db, task_id, current_user.id, current_user)
     if not ok:
         raise HTTPException(status_code=404, detail="Task non trovata")
     await db.commit()
@@ -2321,7 +2408,7 @@ async def _build_budget_variance_rows(
 @router.get("/budget/categorie", response_model=List[BudgetCategoryOut], tags=["Budget"])
 async def list_budget_categories_endpoint(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_finance_access)
 ):
     from app.models.models import BudgetCategory
     result = await db.execute(select(BudgetCategory).order_by(BudgetCategory.nome))
@@ -2331,7 +2418,7 @@ async def list_budget_categories_endpoint(
 async def create_budget_category_endpoint(
     data: BudgetCategoryCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_finance_access)
 ):
     from app.models.models import BudgetCategory
     cat = BudgetCategory(**data.model_dump())
@@ -2344,7 +2431,7 @@ async def create_budget_category_endpoint(
 async def get_budgets_endpoint(
     mese: date = Query(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_finance_access)
 ):
     from app.models.models import BudgetMensile
     from sqlalchemy.orm import selectinload
@@ -2359,7 +2446,7 @@ async def get_budgets_endpoint(
 async def upsert_budget_endpoint(
     data: BudgetMensileCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_finance_access)
 ):
     from app.models.models import BudgetMensile
     mese_start = data.mese_competenza.replace(day=1)
@@ -2393,7 +2480,7 @@ async def upsert_budget_endpoint(
 async def copy_prev_month_budget(
     mese_corrente: date = Query(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_finance_access)
 ):
     from app.models.models import BudgetMensile
     from dateutil.relativedelta import relativedelta
@@ -2429,7 +2516,7 @@ async def copy_prev_month_budget(
 async def get_budget_variance(
     mese: str = Query(..., description="Formato YYYY-MM oppure YYYY-MM-DD"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_finance_access)
 ):
     mese_start = _normalize_budget_month(mese)
     rows = await _build_budget_variance_rows(db, mese_start, notify_admins=True)
@@ -2441,7 +2528,7 @@ async def get_budget_trend(
     mesi: int = Query(6, ge=1, le=12),
     mese_fine: Optional[str] = Query(None, description="Mese finale opzionale, formato YYYY-MM"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_finance_access)
 ):
     from dateutil.relativedelta import relativedelta
 
@@ -2480,7 +2567,7 @@ async def get_budget_trend(
 async def get_budget_consuntivo(
     mese: date = Query(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_finance_access)
 ):
     from app.models.models import BudgetCategory, BudgetMensile, MovimentoCassa, FatturaPassiva, Notification
     from sqlalchemy import and_, or_
@@ -2736,7 +2823,10 @@ async def search_wiki_articles_endpoint(
 # ── CRM ───────────────────────────────────────────────────
 
 @router.get("/crm/stadi", response_model=List[CRMStageOut], tags=["CRM"])
-async def get_crm_stages(db: AsyncSession = Depends(get_db)):
+async def get_crm_stages(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_erp_access),
+):
     from sqlalchemy import select
     res = await db.execute(select(CRMStage).order_by(CRMStage.ordine))
     return res.scalars().all()
