@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Body, File, UploadFile
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, or_
 from sqlalchemy.orm import selectinload
@@ -178,7 +179,7 @@ async def _get_task_or_404(
     db: AsyncSession,
     task_id: _uuid.UUID,
 ) -> Task:
-    task_result = await db.execute(select(Task).where(Task.id == task_id))
+    task_result = await db.execute(select(Task).where(Task.id == task_id, Task.is_deleted == False))
     task = task_result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task non trovato")
@@ -216,7 +217,7 @@ async def _get_node_or_404(
     db: AsyncSession,
     node_id: uuid.UUID,
 ) -> StudioNode:
-    result = await db.execute(select(StudioNode).where(StudioNode.id == node_id))
+    result = await db.execute(select(StudioNode).where(StudioNode.id == node_id, StudioNode.is_deleted == False))
     node = result.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=404, detail="Nodo non trovato")
@@ -613,7 +614,7 @@ async def update_studio_node(
     if node.user_id != current_user.id and current_user.ruolo != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Non hai i permessi per modificare questo nodo")
 
-    update_payload = data.model_dump(exclude_none=True)
+    update_payload = data.model_dump(exclude_unset=True)
     parent_in_payload = "parent_id" in data.model_fields_set
     if parent_in_payload and data.parent_id != node.parent_id:
         if data.parent_id is not None:
@@ -683,40 +684,61 @@ async def delete_studio_node(
     await db.commit()
     return None
 
+class _MoveNodeRequest(BaseModel):
+    node_id: uuid.UUID
+    parent_id: Optional[uuid.UUID] = None
+    order: Optional[int] = None
+
+
 @router.post("/nodes/move")
 async def move_studio_node(
-    node_id: uuid.UUID = Body(...),
-    parent_id: Optional[uuid.UUID] = Body(None),
-    order: Optional[int] = Body(None),
+    payload: _MoveNodeRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
     Endpoint specifico per il drag & drop.
+    Supporta: spostare in ROOT (parent_id=null), in una cartella, o riordinare.
     """
+    node_id = payload.node_id
+    parent_id = payload.parent_id
+    order = payload.order
+
+    # Fetch del nodo – filtriamo i soft-deleted.
+    # NON carichiamo children con selectinload: non servono qui e causano
+    # MissingGreenlet se db.refresh() viene chiamato dopo il commit.
     result = await db.execute(
         select(StudioNode)
-        .where(StudioNode.id == node_id)
-        .options(selectinload(StudioNode.children))
+        .where(StudioNode.id == node_id, StudioNode.is_deleted == False)
     )
     node = result.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=404, detail="Nodo non trovato")
 
-    if node.user_id != current_user.id and current_user.ruolo != UserRole.ADMIN:
+    # Permesso: owner del nodo OPPURE admin.
+    is_owner = (node.user_id == current_user.id)
+    is_admin = (current_user.ruolo == UserRole.ADMIN)
+    if not is_owner and not is_admin:
         raise HTTPException(status_code=403, detail="Non hai i permessi per spostare questo nodo")
 
-    if parent_id:
+    if parent_id is not None:
         parent_node = await _get_node_or_404(db, parent_id)
         await _ensure_node_visible(db, current_user, parent_node)
 
-        # Check if parent is descendant of node (circular dependency)
-        curr_parent_id = parent_id
-        while curr_parent_id:
-            if curr_parent_id == node.id:
-                raise HTTPException(status_code=400, detail="Non puoi spostare una cartella dentro se stessa o un suo figlio")
-            res_parent = await db.execute(select(StudioNode.parent_id).where(StudioNode.id == curr_parent_id))
-            curr_parent_id = res_parent.scalar_one_or_none()
+        # Circular dependency check – scorriamo gli antenati del parent proposto
+        curr_id: Optional[uuid.UUID] = parent_id
+        while curr_id is not None:
+            if curr_id == node_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Non puoi spostare una cartella dentro se stessa o un suo figlio"
+                )
+            res_parent = await db.execute(
+                select(StudioNode.parent_id)
+                .where(StudioNode.id == curr_id, StudioNode.is_deleted == False)
+            )
+            row = res_parent.one_or_none()
+            curr_id = row[0] if row else None
 
     prima = _node_to_dict(node)
     await _place_node(
@@ -725,17 +747,19 @@ async def move_studio_node(
         parent_id=parent_id,
         requested_order=order,
     )
-    
+
     await db.flush()
+    # Costruiamo la risposta PRIMA del commit mentre l'ORM ha ancora i valori aggiornati
+    # in memoria. NON chiamare db.refresh() dopo il commit: causerebbe lazy-load
+    # di 'children' fuori dal contesto greenlet async (MissingGreenlet).
     dopo = _node_to_dict(node)
-    # Arricchiamo il log con info esplicite sullo spostamento di gerarchia
     dopo_extended = {
         **dopo,
         "_meta": {
             "old_parent": str(prima["parent_id"]) if prima["parent_id"] else "ROOT",
             "new_parent": str(dopo["parent_id"]) if dopo["parent_id"] else "ROOT",
-            "node_name": node.nome
-        }
+            "node_name": node.nome,
+        },
     }
 
     await audit.emit_update(
@@ -744,11 +768,11 @@ async def move_studio_node(
         record_id=node_id,
         user_id=current_user.id,
         prima=prima,
-        dopo=dopo_extended
+        dopo=dopo_extended,
     )
     await db.commit()
-    await db.refresh(node)
-    return _node_to_dict(node)
+    # Risposta già pronta, non serve refresh
+    return dopo
 
 # ── ATTACHMENTS ───────────────────────────────────────────
 
@@ -762,9 +786,7 @@ async def upload_task_attachment(
     current_user: User = Depends(get_current_user)
 ):
     # Ensure task exists
-    task = await db.get(Task, task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task non trovata")
+    task = await _get_task_or_404(db, task_id)
     
     await _ensure_task_access(db, current_user, task)
 

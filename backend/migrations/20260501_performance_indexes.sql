@@ -57,7 +57,7 @@ CREATE INDEX IF NOT EXISTS idx_movimenti_cassa_riconciliato
 -- ── NOTIFICHE ─────────────────────────────────────────────
 -- Unread notification badge count (very frequent read)
 CREATE INDEX IF NOT EXISTS idx_notifications_user_letta
-    ON notifications(user_id, letta);
+    ON notifications(user_id, is_read);
 
 -- ── AUDIT LOG ─────────────────────────────────────────────
 -- Filtered audit queries by table + action

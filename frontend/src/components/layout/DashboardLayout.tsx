@@ -5,7 +5,6 @@ import { AppTopbar } from "./AppTopbar";
 import { AIAssistant } from "../ai/AIAssistant";
 import { TimerBar } from "./TimerBar";
 import { StudioTaskModal } from "../studio/StudioTaskModal";
-import { SmartIndicatorBar } from "../shared/SmartIndicatorBar";
 import { cn } from "@/lib/utils";
 
 export function DashboardLayout() {
@@ -32,7 +31,6 @@ export function DashboardLayout() {
           </main>
           <AIAssistant />
           <TimerBar />
-          {!isStudioOS && <SmartIndicatorBar />}
           <StudioTaskModal />
         </SidebarInset>
       </div>

@@ -70,7 +70,7 @@ async def patch_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    payload = data.model_dump(exclude_none=True)
+    payload = data.model_dump(exclude_unset=True)
     is_admin = current_user.ruolo == UserRole.ADMIN
     is_self = current_user.id == user_id
 
@@ -106,7 +106,7 @@ async def patch_current_user(
 ):
     # Shortcut per modificare se stessi senza passare l'ID
     allowed_fields = {"nome", "cognome", "password", "bio", "preferences"}
-    payload = data.model_dump(exclude_none=True)
+    payload = data.model_dump(exclude_unset=True)
 
     if current_user.ruolo != UserRole.ADMIN:
         blocked = [k for k in payload.keys() if k not in allowed_fields]

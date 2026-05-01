@@ -3,7 +3,8 @@ from hashlib import sha256
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
+from fastapi.security.utils import get_authorization_scheme_param
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
@@ -137,7 +138,7 @@ async def get_user_from_token(db: AsyncSession, token: str, required_scope: str 
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     credentials_exception = HTTPException(
@@ -145,6 +146,18 @@ async def get_current_user(
         detail="Token non valido o scaduto",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    
+    token = request.cookies.get("access_token")
+    if not token:
+        authorization = request.headers.get("Authorization")
+        if authorization:
+            scheme, param = get_authorization_scheme_param(authorization)
+            if scheme.lower() == "bearer":
+                token = param
+
+    if not token:
+        raise credentials_exception
+
     user = await get_user_from_token(db, token, required_scope=ACCESS_TOKEN_SCOPE)
     if user is None:
         raise credentials_exception

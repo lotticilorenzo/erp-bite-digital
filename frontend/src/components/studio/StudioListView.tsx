@@ -1,3 +1,4 @@
+// force reload
 import React, { useState, useMemo, useRef } from "react";
 import {
   ChevronRight,
@@ -396,7 +397,6 @@ export function StudioListView() {
                 );
               })
             )}
-            )}
           </TableBody>
         </Table>
       </div>
@@ -699,7 +699,7 @@ function TaskRow({ task, depth, utenti, getUserInitials, getUserName, style }: T
             </DropdownMenu>
           </div>
         </TableCell>
-      </TableRow>
+      </tr>
 
       {expanded &&
         hasSubtasks &&

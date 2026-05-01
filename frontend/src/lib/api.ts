@@ -4,15 +4,7 @@ import { toast } from "sonner";
 const api = axios.create({
   baseURL: "/api/v1",
   timeout: 30000,
-});
-
-// ── REQUEST INTERCEPTOR: inietta JWT ──────────────────────
-api.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem("BITE_ERP_TOKEN");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
+  withCredentials: true,
 });
 
 // ── Previene redirect multipli su 401 simultanei ──────────
@@ -27,7 +19,7 @@ api.interceptors.response.use(
     if (status === 401 && !window.location.pathname.startsWith("/login")) {
       if (!_isRedirectingToLogin) {
         _isRedirectingToLogin = true;
-        sessionStorage.removeItem("BITE_ERP_TOKEN");
+        _isRedirectingToLogin = true;
         // Reset flag after navigation so future logins work
         setTimeout(() => { _isRedirectingToLogin = false; }, 3000);
         window.location.href = "/login";

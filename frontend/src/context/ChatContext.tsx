@@ -31,7 +31,6 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const { user, isLoading: isAuthLoading } = useAuth();
-  const token = sessionStorage.getItem("BITE_ERP_TOKEN");
   const queryClient = useQueryClient();
 
   const [activeChannelId, setActiveChannelId] = useState<string | null>(() => {
@@ -62,7 +61,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const res = await axios.get('/chat/channels');
       return res.data;
     },
-    enabled: !!token,
+    enabled: !!user,
     refetchInterval: 60000,
   });
 
@@ -72,7 +71,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const res = await axios.get('/chat/users');
       return res.data;
     },
-    enabled: !!token,
+    enabled: !!user,
   });
 
   const { data: messages = [], isLoading: isMessagesLoading } = useQuery({
@@ -105,7 +104,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   // WebSocket
   const connectWS = useCallback(async () => {
-    if (!token || isUnmountedRef.current) return;
+    if (!user || isUnmountedRef.current) return;
     if (
       ws.current &&
       (ws.current.readyState === WebSocket.OPEN || ws.current.readyState === WebSocket.CONNECTING)
@@ -148,9 +147,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               } : c);
             });
             if (data.message.canale_id === currentChannelId) {
-              queryClient.setQueryData(['chat-messages', currentChannelId], (prev: any) =>
-                [...(prev || []), data.message]
-              );
+              queryClient.setQueryData(['chat-messages', currentChannelId], (prev: any) => {
+                // Dedup: se il messaggio è già presente non aggiungerlo di nuovo
+                const existing = (prev || []) as any[];
+                if (existing.some((m: any) => m.id === data.message.id)) return existing;
+                return [...existing, data.message];
+              });
             } else {
               setUnreadCounts(prev => ({
                 ...prev,
@@ -252,12 +254,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       console.error("WS bootstrap failed", err);
       scheduleReconnect();
     }
-  }, [token, queryClient]);
+  }, [user, queryClient]);
 
   useEffect(() => {
     isUnmountedRef.current = false;
     // Don't connect if loading auth, or no token, or no user (e.g. on login page)
-    if (isAuthLoading || !token || !user) return;
+    if (isAuthLoading || !user) return;
     
     void connectWS();
     return () => {
@@ -281,7 +283,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         ws.current = null;
       }
     };
-  }, [token, user, isAuthLoading, connectWS]);
+  }, [user, isAuthLoading, connectWS]);
 
   // Actions
   const sendMessage = useCallback(async (content: string, type: string = 'testo', replyToId?: string) => {

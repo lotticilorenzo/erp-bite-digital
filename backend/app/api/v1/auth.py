@@ -4,7 +4,7 @@ import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Response
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,7 +51,7 @@ def _session_user_agent(request: Request) -> str:
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(request: Request, response: Response, data: LoginRequest, db: AsyncSession = Depends(get_db)):
     from app.services.services import get_user_by_identifier
 
     ip = request.client.host if request.client else "unknown"
@@ -68,6 +68,14 @@ async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends
     )
     await audit.emit_login(db, user_id=user.id, email=data.email, success=True, ip=ip)
     await db.commit()
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        samesite="lax",
+        secure=not settings.DEBUG,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
     return TokenResponse(access_token=token, user=UserOut.model_validate(user))
 
 
@@ -100,8 +108,15 @@ async def list_active_sessions(request: Request, current_user: User = Depends(ge
     }
 
 
+@router.post("/logout")
+async def logout(response: Response):
+    response.delete_cookie("access_token", httponly=True, samesite="lax", secure=not settings.DEBUG)
+    return {"message": "Logout effettuato"}
+
+
 @router.delete("/sessions")
 async def logout_all_sessions(
+    response: Response,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -114,6 +129,7 @@ async def logout_all_sessions(
         user_id=current_user.id,
     )
     await db.commit()
+    response.delete_cookie("access_token", httponly=True, samesite="lax", secure=not settings.DEBUG)
     return {
         "message": "Tutte le sessioni attive sono state revocate",
         "revoked": True,

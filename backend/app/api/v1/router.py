@@ -494,7 +494,7 @@ async def patch_movimento_cassa(
         raise HTTPException(status_code=404, detail="Movimento non trovato")
 
     # Aggiorna campi scalari del movimento
-    data = payload.model_dump(exclude_none=True)
+    data = payload.model_dump(exclude_unset=True)
     for k, v in data.items():
         if hasattr(mov, k):
             setattr(mov, k, v)
@@ -563,7 +563,7 @@ async def patch_costo_fisso(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_finance_access),
 ):
-    result = await update_costo_fisso(db, costo_id, payload.model_dump(exclude_none=True))
+    result = await update_costo_fisso(db, costo_id, payload.model_dump(exclude_unset=True))
     if not result:
         raise HTTPException(status_code=404, detail="Costo non trovato")
     return result
@@ -610,7 +610,7 @@ async def patch_regola(
     current_user: User = Depends(require_finance_access),
 ):
     from app.services.services import update_regola
-    r = await update_regola(db, regola_id, payload.model_dump(exclude_none=True))
+    r = await update_regola(db, regola_id, payload.model_dump(exclude_unset=True))
     if not r:
         raise HTTPException(status_code=404, detail="Regola non trovata")
     return r
@@ -779,7 +779,7 @@ async def patch_risorsa(
     _auth: User = Depends(require_admin),
 ):
     from app.services.services import update_risorsa
-    r = await update_risorsa(db, risorsa_id, payload.model_dump(exclude_none=True))
+    r = await update_risorsa(db, risorsa_id, payload.model_dump(exclude_unset=True))
     if not r:
         raise HTTPException(status_code=404, detail="Risorsa non trovata")
     return r

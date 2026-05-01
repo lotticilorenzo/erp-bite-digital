@@ -205,11 +205,19 @@ export function ChatMessageBubble({
       );
     }
 
-    const parts = text.split(/(@[^ \n\r\t]+ [^ \n\r\t]+)/g);
+    const parts = text.split(/(@\S+ \S+)/g);
     return parts.map((part, index) => {
       if (part.startsWith("@")) {
         return (
-          <span key={index} className="rounded-md bg-primary/10 px-1.5 py-0.5 font-black text-primary">
+          <span
+            key={index}
+            className={cn(
+              "rounded-md px-1.5 py-0.5 font-black",
+              isMe
+                ? "bg-white/20 text-white"
+                : "bg-primary/15 text-primary"
+            )}
+          >
             {part}
           </span>
         );
@@ -355,7 +363,7 @@ export function ChatMessageBubble({
             ) : (
               <>
                 {renderContent(message.contenuto)}
-                {message.updated_at && (
+                {message.modificato && (
                   <span className="ml-2 text-[9px] font-bold uppercase tracking-widest opacity-50">(modificato)</span>
                 )}
               </>

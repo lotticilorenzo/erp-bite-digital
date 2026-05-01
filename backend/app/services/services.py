@@ -174,14 +174,14 @@ async def update_user(db: AsyncSession, user_id: uuid.UUID, data: UserUpdate, by
 
 # ── CLIENTE SERVICE ───────────────────────────────────────
 async def list_clienti(db: AsyncSession, attivo: Optional[bool] = None) -> List[Cliente]:
-    q = select(Cliente)
+    q = select(Cliente).where(Cliente.is_deleted == False)
     if attivo is not None:
         q = q.where(Cliente.attivo == attivo)
     result = await db.execute(q.order_by(Cliente.ragione_sociale))
     return result.scalars().all()
 
 async def get_cliente(db: AsyncSession, cliente_id: uuid.UUID) -> Optional[Cliente]:
-    result = await db.execute(select(Cliente).where(Cliente.id == cliente_id))
+    result = await db.execute(select(Cliente).where(Cliente.id == cliente_id, Cliente.is_deleted == False))
     return result.scalar_one_or_none()
 
 async def create_cliente(db: AsyncSession, data: ClienteCreate) -> Cliente:
@@ -363,7 +363,7 @@ async def list_progetti(
         selectinload(Progetto.cliente),
         selectinload(Progetto.team).selectinload(ProgettoTeam.user),
         selectinload(Progetto.servizi)
-    )
+    ).where(Progetto.is_deleted == False)
     if cliente_id:
         q = q.where(Progetto.cliente_id == cliente_id)
     if stato:
@@ -378,7 +378,7 @@ async def get_progetto(db: AsyncSession, progetto_id: uuid.UUID) -> Optional[Pro
             selectinload(Progetto.team).selectinload(ProgettoTeam.user),
             selectinload(Progetto.servizi)
         )
-        .where(Progetto.id == progetto_id)
+        .where(Progetto.id == progetto_id, Progetto.is_deleted == False)
     )
     return result.unique().scalar_one_or_none()
 
@@ -471,7 +471,7 @@ async def get_progetto_with_servizi(db: AsyncSession, progetto_id: uuid.UUID) ->
             selectinload(Progetto.servizi),
             selectinload(Progetto.team).selectinload(ProgettoTeam.user)
         )
-        .where(Progetto.id == progetto_id)
+        .where(Progetto.id == progetto_id, Progetto.is_deleted == False)
     )
     return result.unique().scalar_one_or_none()
 
@@ -490,7 +490,7 @@ async def list_commesse(
         selectinload(Commessa.timesheet),
         selectinload(Commessa.fattura),
         selectinload(Commessa.pianificazione).selectinload(Pianificazione.lavorazioni)
-    )
+    ).where(Commessa.is_deleted == False)
     if mese:
         q = q.where(Commessa.mese_competenza == mese.replace(day=1))
     if stato:
@@ -514,7 +514,7 @@ async def get_commessa(db: AsyncSession, commessa_id: uuid.UUID) -> Optional[Com
             selectinload(Commessa.fattura),
             selectinload(Commessa.pianificazione).selectinload(Pianificazione.lavorazioni)
         )
-        .where(Commessa.id == commessa_id)
+        .where(Commessa.id == commessa_id, Commessa.is_deleted == False)
     )
     return result.unique().scalar_one_or_none()
 

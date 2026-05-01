@@ -237,6 +237,10 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     ];
   }, [clienti]);
 
+  const currentList = useMemo(() => 
+    progetti.find(p => p.id === nav.selectedListId) || null
+  , [progetti, nav.selectedListId]);
+
   const currentFolder = useMemo(() => {
     if (nav.selectedFolderId) {
       return clienti.find(c => c.id === nav.selectedFolderId) || null;
@@ -246,10 +250,6 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     }
     return null;
   }, [clienti, nav.selectedFolderId, currentList]);
-
-  const currentList = useMemo(() => 
-    progetti.find(p => p.id === nav.selectedListId) || null
-  , [progetti, nav.selectedListId]);
 
   const folderProjects = useMemo(() => 
     progetti.filter(p => p.cliente_id === nav.selectedFolderId)

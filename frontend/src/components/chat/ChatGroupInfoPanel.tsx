@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
+import { useChat } from "@/hooks/useChat";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,9 @@ import {
   Info,
   Hash,
   Check,
+  FileImage,
+  FileIcon,
+  Download
 } from "lucide-react";
 
 interface Member {
@@ -42,10 +46,16 @@ interface ChatGroupInfoPanelProps {
 
 export function ChatGroupInfoPanel({ channel, isOpen, onClose }: ChatGroupInfoPanelProps) {
   const { user } = useAuth();
+  const { messages } = useChat();
   const isAdmin = (user as any)?.ruolo === "ADMIN";
   const queryClient = useQueryClient();
   const [addingMode, setAddingMode] = useState(false);
   const [selectedToAdd, setSelectedToAdd] = useState<Set<string>>(new Set());
+
+  // Extract attachments from messages
+  const attachments = (messages || []).filter(m => 
+    m.contenuto.startsWith("/api/v1/uploads/") || m.contenuto.startsWith("/static/uploads/")
+  );
 
   // All users available to add
   const { data: allUsers } = useQuery({
@@ -108,6 +118,22 @@ export function ChatGroupInfoPanel({ channel, isOpen, onClose }: ChatGroupInfoPa
     DIRECT: "Chat Diretta",
   };
 
+  const downloadAttachment = async (path: string, filename: string) => {
+    if (path.startsWith("/api/v1/uploads/")) {
+      const response = await axios.get(path, { responseType: "blob" });
+      const objectUrl = URL.createObjectURL(response.data);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(objectUrl);
+    } else {
+      window.open(path, "_blank");
+    }
+  };
+
   return (
     <div
       className={cn(
@@ -134,7 +160,7 @@ export function ChatGroupInfoPanel({ channel, isOpen, onClose }: ChatGroupInfoPa
       </div>
 
       <ScrollArea className="flex-1">
-        <div className="p-5 space-y-6">
+        <div className="p-5 space-y-8 pb-10">
           {/* Channel Identity */}
           <div className="flex flex-col items-center gap-3 py-2">
             <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center shadow-inner border border-primary/20 text-3xl font-black text-primary">
@@ -174,7 +200,7 @@ export function ChatGroupInfoPanel({ channel, isOpen, onClose }: ChatGroupInfoPa
           {/* Members Section */}
           {channel.tipo !== "DIRECT" && (
             <div>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 border-b border-border/20 pb-2">
                 <div className="flex items-center gap-2">
                   <Users size={14} className="text-primary" />
                   <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
@@ -196,10 +222,10 @@ export function ChatGroupInfoPanel({ channel, isOpen, onClose }: ChatGroupInfoPa
 
               {/* Add members mode */}
               {addingMode && isAdmin && (
-                <div className="mb-4 bg-muted/20 border border-border/30 rounded-2xl overflow-hidden">
+                <div className="mb-4 bg-muted/20 border border-border/30 rounded-2xl overflow-hidden mt-3">
                   <div className="p-3 border-b border-border/20 flex items-center justify-between">
                     <span className="text-[10px] font-black uppercase tracking-widest text-primary">
-                      Seleziona utenti da aggiungere
+                      Seleziona utenti
                     </span>
                     <Button
                       variant="ghost"
@@ -248,7 +274,7 @@ export function ChatGroupInfoPanel({ channel, isOpen, onClose }: ChatGroupInfoPa
                   {selectedToAdd.size > 0 && (
                     <div className="p-3 border-t border-border/20">
                       <Button
-                        className="w-full h-9 text-xs font-black uppercase tracking-widest rounded-xl bg-primary hover:bg-primary/90"
+                        className="w-full h-9 text-xs font-black uppercase tracking-widest rounded-xl bg-primary hover:bg-primary/90 text-white"
                         onClick={() =>
                           addMembersMutation.mutate(Array.from(selectedToAdd))
                         }
@@ -263,7 +289,7 @@ export function ChatGroupInfoPanel({ channel, isOpen, onClose }: ChatGroupInfoPa
               )}
 
               {/* Members list */}
-              <div className="space-y-1">
+              <div className="space-y-1 mt-3">
                 {(channel.membri || []).map((member) => {
                   const u = member.user;
                   const isOwner = member.ruolo === "ADMIN";
@@ -336,6 +362,46 @@ export function ChatGroupInfoPanel({ channel, isOpen, onClose }: ChatGroupInfoPa
               </div>
             </div>
           )}
+
+          {/* Media & Attachments Section */}
+          <div>
+            <div className="flex items-center gap-2 mb-3 border-b border-border/20 pb-2">
+              <FileImage size={14} className="text-primary" />
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+                Media & Allegati · {attachments.length}
+              </span>
+            </div>
+            {attachments.length === 0 ? (
+              <p className="text-[10px] text-muted-foreground text-center py-4 uppercase font-black tracking-widest">
+                Nessun allegato
+              </p>
+            ) : (
+              <div className="space-y-2 mt-3">
+                {attachments.map((m) => {
+                  const filename = m.contenuto.split("/").pop() || "File allegato";
+                  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(m.contenuto);
+                  
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => downloadAttachment(m.contenuto, filename)}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-border/30 bg-muted/10 hover:bg-muted/40 transition-colors text-left group"
+                    >
+                      <div className="h-10 w-10 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                        {isImage ? <FileImage size={18} /> : <FileIcon size={18} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold truncate group-hover:text-primary transition-colors">{filename}</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 mt-0.5 flex items-center gap-1">
+                          Scarica file <Download size={8} />
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* Channel type for DIRECT chats */}
           {channel.tipo === "DIRECT" && (

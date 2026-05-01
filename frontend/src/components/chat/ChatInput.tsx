@@ -161,6 +161,16 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Se il menu mention è aperto, ignora Enter (non inviare)
+    if (e.key === "Enter" && showMentions) {
+      e.preventDefault();
+      return;
+    }
+    if (e.key === "Escape" && showMentions) {
+      e.preventDefault();
+      setShowMentions(false);
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -168,12 +178,17 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
   };
 
   const insertMention = (member: { nome: string; cognome: string }) => {
-    const lastAtPos = content.lastIndexOf("@");
-    const newContent =
-      content.substring(0, lastAtPos) +
-      `@${member.nome} ${member.cognome} ` +
-      content.substring(textareaRef.current?.selectionStart || content.length);
-    setContent(newContent);
+    const cursor = textareaRef.current?.selectionStart || content.length;
+    const textBeforeCursor = content.substring(0, cursor);
+    const lastAtPos = textBeforeCursor.lastIndexOf("@");
+    
+    if (lastAtPos !== -1) {
+      const newContent =
+        content.substring(0, lastAtPos) +
+        `@${member.nome} ${member.cognome} ` +
+        content.substring(cursor);
+      setContent(newContent);
+    }
     setShowMentions(false);
     textareaRef.current?.focus();
   };
@@ -194,13 +209,16 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
   }, [selectedFile?.previewUrl]);
 
   useEffect(() => {
-    const lastChar = content[content.length - 1];
-    if (lastChar === "@") {
+    const cursor = textareaRef.current?.selectionStart || content.length;
+    const textBeforeCursor = content.substring(0, cursor);
+    const match = textBeforeCursor.match(/@([^ \n\r\t]*)$/);
+    
+    if (match) {
       setShowMentions(true);
+      setMentionFilter(match[1].toLowerCase());
+    } else {
+      setShowMentions(false);
       setMentionFilter("");
-    } else if (showMentions) {
-      const lastAtPos = content.lastIndexOf("@");
-      setMentionFilter(content.substring(lastAtPos + 1).toLowerCase());
     }
 
     if (content.length > 0) {
@@ -213,7 +231,7 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
       onTyping?.(false);
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     }
-  }, [content, showMentions, onTyping]);
+  }, [content, onTyping]);
 
   const filteredMembers = teamMembers.filter((m) =>
     `${m.nome} ${m.cognome}`.toLowerCase().includes(mentionFilter)
@@ -222,7 +240,7 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
   const showMicButton = !content.trim() && !selectedFile && !isUploading;
 
   return (
-    <div className="p-4 bg-card/50 border-t border-border/50 backdrop-blur-md relative">
+    <div className="p-4 pr-20 bg-card/50 border-t border-border/50 backdrop-blur-md relative">
 
       {/* Reply Preview */}
       {replyTo && (
@@ -248,7 +266,12 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
             {filteredMembers.map((m) => (
               <button
                 key={m.id}
-                onClick={() => insertMention(m)}
+                type="button"
+                onMouseDown={(e) => {
+                  // Previene il blur del textarea che scatenerebbe un invio spurio
+                  e.preventDefault();
+                  insertMention(m);
+                }}
                 className="w-full text-left px-4 py-2.5 hover:bg-primary/10 hover:text-primary transition-all text-sm font-bold flex items-center gap-3 border-b border-border/30 last:border-0"
               >
                 <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-[10px] shrink-0">

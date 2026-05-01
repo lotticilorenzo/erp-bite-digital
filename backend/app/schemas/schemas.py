@@ -318,7 +318,7 @@ class ClienteOut(OrmBase):
     logo_url: Optional[str] = None
     start_day_type: ClientStartDayType = ClientStartDayType.STANDARD_1
     created_at: Optional[datetime]
-    deleted_at: Optional[datetime] = None = None
+    deleted_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
 

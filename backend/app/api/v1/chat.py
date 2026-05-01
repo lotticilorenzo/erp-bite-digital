@@ -468,7 +468,7 @@ async def send_message(
             detail="Il progetto del messaggio non coincide con il canale selezionato",
         )
 
-    # Validazione lunghezza — evita payload giganti che appesantiscono DB e broadcast
+    # Validazione lunghezza
     if not message_in.contenuto or not message_in.contenuto.strip():
         raise HTTPException(status_code=400, detail="Il messaggio non può essere vuoto")
     if len(message_in.contenuto) > _MSG_MAX_LEN:
@@ -496,8 +496,7 @@ async def send_message(
     new_message = result.scalar_one()
     new_message.autore_nome = f"{current_user.nome} {current_user.cognome}"
 
-    msg_dict = ChatMessaggioRead.model_validate(new_message).model_dump()
-    msg_dict["created_at"] = new_message.created_at.isoformat()
+    msg_dict = ChatMessaggioRead.model_validate(new_message).model_dump(mode='json')
 
     await manager.broadcast_to_channel(db, message_in.canale_id, {
         "type": "new_message",
