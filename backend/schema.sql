@@ -102,7 +102,7 @@ CREATE TABLE commesse (
     stato               commessa_status DEFAULT 'APERTA',
     costo_manodopera    NUMERIC(10,2) DEFAULT 0,
     costi_diretti       NUMERIC(10,2) DEFAULT 0,
-    fattura_id          UUID REFERENCES fatture_attive(id),
+    fattura_id          UUID,
     data_inizio         DATE,
     data_fine           DATE,
     data_chiusura       DATE,
@@ -345,6 +345,10 @@ CREATE INDEX idx_fatture_passive_scadenza ON fatture_passive(data_scadenza);
 CREATE INDEX idx_fatture_passive_fornitore ON fatture_passive(fornitore_id);
 CREATE INDEX idx_commesse_fattura ON commesse(fattura_id);
 CREATE INDEX idx_fic_sync_runs_started_at ON fic_sync_runs(started_at DESC);
+
+ALTER TABLE ONLY commesse
+    ADD CONSTRAINT commesse_fattura_id_fkey
+    FOREIGN KEY (fattura_id) REFERENCES fatture_attive(id);
 
 -- ── PIANO COMMESSA ────────────────────────────────────────
 -- Strumento di pianificazione budget/costi per commessa

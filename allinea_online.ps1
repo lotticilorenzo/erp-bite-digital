@@ -327,11 +327,14 @@ if ($SyncDb) {
     Write-Step "Restore database locale sul server"
     $restoreScript = @'
 set -euo pipefail
-docker exec -i bite_erp_db psql -U bite -d bite_erp -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-cat /tmp/bite_erp_local_sync.sql | docker exec -i bite_erp_db psql -U bite -d bite_erp
-rm -f /tmp/bite_erp_local_sync.sql
 cd /root/mio-gestionale/backend
-docker compose -f docker-compose.prod.yml restart backend
+docker compose -f docker-compose.prod.yml stop backend || true
+docker exec bite_erp_db psql -v ON_ERROR_STOP=1 -U bite -d bite_erp -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+docker cp /tmp/bite_erp_local_sync.sql bite_erp_db:/tmp/bite_erp_local_sync.sql
+docker exec bite_erp_db psql -v ON_ERROR_STOP=1 -U bite -d bite_erp -f /tmp/bite_erp_local_sync.sql
+docker exec bite_erp_db rm -f /tmp/bite_erp_local_sync.sql
+rm -f /tmp/bite_erp_local_sync.sql
+docker compose -f /root/mio-gestionale/backend/docker-compose.prod.yml up --build -d backend
 '@
     ($restoreScript -replace "`r", "") | ssh $DoHost 'bash -s'
     if ($LASTEXITCODE -ne 0) {
