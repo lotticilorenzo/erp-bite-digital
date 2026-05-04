@@ -219,9 +219,6 @@ async def ensure_schema_tables_on_startup():
                 await conn.execute(text("ALTER TABLE clienti ADD COLUMN IF NOT EXISTS affidabilita VARCHAR(10) DEFAULT 'MEDIA'"))
                 await conn.execute(text("ALTER TABLE clienti ADD COLUMN IF NOT EXISTS start_day_type client_start_day_type DEFAULT 'STANDARD_1'"))
                 await conn.execute(text("ALTER TABLE clienti ADD COLUMN IF NOT EXISTS google_drive_url VARCHAR(500)"))
-                await conn.execute(text("ALTER TABLE commesse ADD COLUMN IF NOT EXISTS pianificazione_id UUID REFERENCES pianificazioni(id)"))
-                await conn.execute(text("ALTER TABLE commesse ADD COLUMN IF NOT EXISTS piano_id UUID REFERENCES piano_commessa(id) ON DELETE SET NULL"))
-                await conn.execute(text("ALTER TABLE commesse ADD COLUMN IF NOT EXISTS preventivo NUMERIC(10,2) DEFAULT 0"))
 
                 # 4. Critical missing tables
                 await conn.execute(text("""
@@ -261,6 +258,11 @@ async def ensure_schema_tables_on_startup():
                         created_at  TIMESTAMPTZ DEFAULT NOW()
                     )
                 """))
+
+                # Add foreign keys only after the referenced tables exist.
+                await conn.execute(text("ALTER TABLE commesse ADD COLUMN IF NOT EXISTS pianificazione_id UUID REFERENCES pianificazioni(id)"))
+                await conn.execute(text("ALTER TABLE commesse ADD COLUMN IF NOT EXISTS piano_id UUID REFERENCES piano_commessa(id) ON DELETE SET NULL"))
+                await conn.execute(text("ALTER TABLE commesse ADD COLUMN IF NOT EXISTS preventivo NUMERIC(10,2) DEFAULT 0"))
 
                 # 5. Performance Indexes
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_timesheet_user_stato     ON timesheet(user_id, stato)"))
