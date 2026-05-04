@@ -210,6 +210,8 @@ class Progetto(Base):
     team: Mapped[List["ProgettoTeam"]] = relationship(back_populates="progetto")
     servizi: Mapped[List["ServizioProgetto"]] = relationship(back_populates="progetto", cascade="all, delete-orphan")
     messaggi_chat: Mapped[List["ChatMessaggio"]] = relationship(back_populates="progetto", cascade="all, delete-orphan")
+    milestones: Mapped[List["ProgettoMilestone"]] = relationship(back_populates="progetto", cascade="all, delete-orphan")
+    briefs: Mapped[List["Brief"]] = relationship(back_populates="progetto", cascade="all, delete-orphan")
 
 
 class ProgettoTeam(Base):
@@ -225,6 +227,28 @@ class ProgettoTeam(Base):
 
     progetto: Mapped["Progetto"] = relationship(back_populates="team")
     user: Mapped["User"] = relationship()
+
+class ProgettoMilestone(Base):
+    __tablename__ = "progetto_milestones"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    progetto_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id", ondelete="CASCADE"), index=True)
+    nome: Mapped[str] = mapped_column(String(100), nullable=False)
+    data_scadenza: Mapped[Optional[date]] = mapped_column(Date)
+    completata: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    progetto: Mapped["Progetto"] = relationship(back_populates="milestones")
+
+class Brief(Base):
+    __tablename__ = "briefs"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    progetto_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id", ondelete="CASCADE"), index=True)
+    titolo: Mapped[str] = mapped_column(String(200), nullable=False)
+    domande_risposte: Mapped[dict] = mapped_column(JSON, default=dict)
+    stato: Mapped[str] = mapped_column(String(20), default="BOZZA")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    progetto: Mapped["Progetto"] = relationship(back_populates="briefs")
 
 
 
@@ -375,6 +399,8 @@ class Task(Base):
     data_scadenza: Mapped[Optional[date]] = mapped_column(Date)
     stima_minuti: Mapped[Optional[int]] = mapped_column(Integer)
     priorita: Mapped[Optional[str]] = mapped_column(String(10), default="media")
+    ordine: Mapped[int] = mapped_column(Integer, default=0)
+    categoria: Mapped[Optional[str]] = mapped_column(String(50))
     clickup_synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -1197,6 +1223,44 @@ class TaskTemplateItem(Base):
     ordine: Mapped[int] = mapped_column(Integer, default=0)
 
     template: Mapped["TaskTemplate"] = relationship(back_populates="items")
+
+
+# ── PROGETTO TEMPLATES ───────────────────────────────────────
+class ProgettoTemplate(Base):
+    __tablename__ = "progetto_templates"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    nome: Mapped[str] = mapped_column(String(100), nullable=False)
+    tipo: Mapped[str] = mapped_column(String(50)) # es. "Social", "SEO"
+    descrizione: Mapped[Optional[str]] = mapped_column(Text)
+    icona: Mapped[Optional[str]] = mapped_column(String(50))
+    colore: Mapped[Optional[str]] = mapped_column(String(20))
+    attivo: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    tasks: Mapped[List["ProgettoTemplateTask"]] = relationship(back_populates="template", cascade="all, delete-orphan")
+    milestones: Mapped[List["ProgettoTemplateMilestone"]] = relationship(back_populates="template", cascade="all, delete-orphan")
+
+class ProgettoTemplateTask(Base):
+    __tablename__ = "progetto_template_tasks"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    template_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("progetto_templates.id", ondelete="CASCADE"), index=True)
+    titolo: Mapped[str] = mapped_column(String(200), nullable=False)
+    descrizione: Mapped[Optional[str]] = mapped_column(Text)
+    ordine: Mapped[int] = mapped_column(Integer, default=0)
+    stima_ore: Mapped[Decimal] = mapped_column(Numeric(8, 2), default=0)
+    categoria: Mapped[Optional[str]] = mapped_column(String(50))
+
+    template: Mapped["ProgettoTemplate"] = relationship(back_populates="tasks")
+
+class ProgettoTemplateMilestone(Base):
+    __tablename__ = "progetto_template_milestones"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    template_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("progetto_templates.id", ondelete="CASCADE"), index=True)
+    nome: Mapped[str] = mapped_column(String(100), nullable=False)
+    giorni_dalla_creazione: Mapped[int] = mapped_column(Integer, default=0)
+
+    template: Mapped["ProgettoTemplate"] = relationship(back_populates="milestones")
 
 
 # ── CONTENUTI (Pipeline Approvazione) ────────────────────────

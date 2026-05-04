@@ -41,6 +41,7 @@ export interface CRMLead {
   updated_at: string;
   stadio?: CRMStage;
   attivita?: CRMActivity[];
+  suggerimento_ai?: string;
 }
 
 export interface CRMStats {

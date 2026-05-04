@@ -17,9 +17,11 @@ import {
 import { useUsers } from "@/hooks/useUsers";
 import { useTasks } from "@/hooks/useTasks";
 import { useUserCapacity } from "@/hooks/useML";
+import { useAuth } from "@/hooks/useAuth";
 import { useStudio } from "@/hooks/useStudio";
 import { useChat } from "@/hooks/useChat";
 import { useProgetti } from "@/hooks/useProgetti";
+import { useRisorse } from "@/hooks/useRisorse";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -32,11 +34,14 @@ import { CollaboratorForm } from "@/components/collaboratori/CollaboratorForm";
 import { Button } from "@/components/ui/button";
 
 export function StudioTeamView() {
-  const { data: users = [], isLoading: isLoadingUsers } = useUsers(true);
+  const { user: authUser } = useAuth();
+  const isAdmin = authUser?.ruolo === 'ADMIN';
+  const { data: users = [], isLoading: isLoadingUsers, isError: isUsersError } = useUsers(true);
+  const { data: risorse = [] } = useRisorse();
   const { data: progetti = [] } = useProgetti();
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [isCollaboratorFormOpen, setIsCollaboratorFormOpen] = useState(false);
-  const [selectedCollaborator, setSelectedCollaborator] = useState<User | null>(null);
+  const [selectedCollaborator, setSelectedCollaborator] = useState<any>(null);
 
   if (isLoadingUsers) {
     return (
@@ -47,7 +52,21 @@ export function StudioTeamView() {
     );
   }
 
-  if (users.length === 0) {
+  if (isUsersError || (!isLoadingUsers && users.length === 0 && !isAdmin)) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground p-8 text-center">
+        <div className="h-16 w-16 rounded-full bg-muted/30 flex items-center justify-center">
+          <Users className="h-8 w-8 opacity-20" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-sm font-black uppercase tracking-tight text-white">Accesso limitato</h3>
+          <p className="text-xs">Sono necessari privilegi di amministratore per vedere i membri del team.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isLoadingUsers && users.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground p-8 text-center">
         <div className="h-16 w-16 rounded-full bg-muted/30 flex items-center justify-center">
@@ -75,33 +94,44 @@ export function StudioTeamView() {
                 <Users className="h-3 w-3 mr-2" />
                 {users.length} MEMBRI ATTIVI
               </Badge>
-              <Button 
-                onClick={() => {
-                  setSelectedCollaborator(null);
-                  setIsCollaboratorFormOpen(true);
-                }}
-                className="font-black uppercase tracking-widest text-[10px] gap-2 h-9 px-4 bg-primary hover:bg-primary/90 text-white shadow-[0_0_20px_rgba(var(--primary-rgb),0.3)]"
-              >
-                <UserPlus className="h-3.5 w-3.5" />
-                Nuovo Membro
-              </Button>
+              {isAdmin && (
+                <Button
+                  onClick={() => {
+                    setSelectedCollaborator(null);
+                    setIsCollaboratorFormOpen(true);
+                  }}
+                  className="font-black uppercase tracking-widest text-[10px] gap-2 h-9 px-4 bg-primary hover:bg-primary/90 text-white shadow-[0_0_20px_rgba(var(--primary-rgb),0.3)]"
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  Nuovo Membro
+                </Button>
+              )}
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
-            {users.map((user) => (
-              <TeamMemberCard 
-                key={user.id} 
-                user={user} 
-                progetti={progetti}
-                isExpanded={expandedUserId === user.id}
-                onToggle={() => setExpandedUserId(expandedUserId === user.id ? null : user.id)}
-                onEdit={() => {
-                  setSelectedCollaborator(user);
-                  setIsCollaboratorFormOpen(true);
-                }}
-              />
-            ))}
+            {users.map((user) => {
+              const risorsa = risorse.find(r => r.user_id === user.id);
+              return (
+                <TeamMemberCard
+                  key={user.id}
+                  user={user}
+                  progetti={progetti}
+                  isExpanded={expandedUserId === user.id}
+                  onToggle={() => setExpandedUserId(expandedUserId === user.id ? null : user.id)}
+                  onEdit={isAdmin ? () => {
+                    setSelectedCollaborator(risorsa || { 
+                      user_id: user.id, 
+                      nome: user.nome, 
+                      cognome: user.cognome, 
+                      email: user.email,
+                      ruolo: user.ruolo 
+                    });
+                    setIsCollaboratorFormOpen(true);
+                  } : undefined}
+                />
+              );
+            })}
           </div>
         </div>
       </div>
@@ -115,18 +145,18 @@ export function StudioTeamView() {
   );
 }
 
-function TeamMemberCard({ 
+function TeamMemberCard({
   user,
   progetti,
-  isExpanded, 
+  isExpanded,
   onToggle,
   onEdit
-}: { 
-  user: User; 
+}: {
+  user: User;
   progetti: Progetto[];
-  isExpanded: boolean; 
+  isExpanded: boolean;
   onToggle: () => void;
-  onEdit: () => void;
+  onEdit?: () => void;
 }) {
   const { selectTask, setView } = useStudio();
   const { startDirectChat } = useChat();
@@ -230,18 +260,20 @@ function TeamMemberCard({
         </div>
         
         <div className="mt-4 flex items-center justify-between border-t border-border/10 pt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit();
-              }}
-              className="h-7 text-[9px] font-black uppercase tracking-widest text-primary hover:text-white hover:bg-primary/20"
-            >
-              <Edit2 className="h-3 w-3 mr-1.5" />
-              Modifica
-            </Button>
+            {onEdit && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+                className="h-7 text-[9px] font-black uppercase tracking-widest text-primary hover:text-white hover:bg-primary/20"
+              >
+                <Edit2 className="h-3 w-3 mr-1.5" />
+                Modifica
+              </Button>
+            )}
             <Button 
               variant="ghost" 
               size="sm" 

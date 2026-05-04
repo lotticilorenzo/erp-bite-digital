@@ -124,7 +124,14 @@ export function StudioListView() {
     if (nav.selectedListId) {
       filtered = filtered.filter((t) => t.progetto_id === nav.selectedListId);
     } else if (nav.selectedFolderId) {
-      filtered = filtered.filter((t) => t.commessa_id === nav.selectedFolderId);
+      // selectedFolderId is a cliente_id; filter by progetto.cliente_id if available
+      filtered = filtered.filter((t) => {
+        if (t.progetto && (t.progetto as any).cliente_id) {
+          return (t.progetto as any).cliente_id === nav.selectedFolderId;
+        }
+        // fallback: show all tasks when at client-folder level without deeper data
+        return true;
+      });
     }
 
     if (filterAssignee) filtered = filtered.filter((t) => t.assegnatario_id === filterAssignee);

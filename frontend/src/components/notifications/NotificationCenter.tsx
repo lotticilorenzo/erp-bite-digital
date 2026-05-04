@@ -19,10 +19,11 @@ import { useNotifications, type Notification } from "@/hooks/useNotifications";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 export function NotificationCenter() {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const navigate = useNavigate();
 
   const getIcon = (type: Notification['type']) => {
     switch (type) {
@@ -130,7 +131,7 @@ export function NotificationCenter() {
         
         {notifications.length > 0 && (
           <div className="p-2 border-t border-border/50 bg-muted/10">
-             <Button variant="ghost" className="w-full h-8 text-[11px] font-bold text-muted-foreground hover:text-primary transition-colors">
+             <Button variant="ghost" onClick={() => navigate("/settings/audit")} className="w-full h-8 text-[11px] font-bold text-muted-foreground hover:text-primary transition-colors">
                 Mostra archivio completo
              </Button>
           </div>

@@ -35,6 +35,7 @@ import {
   type RegolaRiconciliazione, type DryRunPreviewItem,
 } from "@/hooks/useRegoleRiconciliazione";
 import { useFornitori } from "@/hooks/useFornitori";
+import { useFatturePassive } from "@/hooks/useFatture";
 
 const EMPTY_REGOLA: Omit<RegolaRiconciliazione, "id" | "contatore_match"> = {
   nome: "",
@@ -56,6 +57,7 @@ const CATEGORIE_PREDEFINITE = [
 export default function RegoleRiconciliazione() {
   const { data: regole = [], isLoading } = useRegoleRiconciliazione();
   const { data: fornitori = [] } = useFornitori();
+  const { data: fatturePassive = [] } = useFatturePassive();
   const createMut = useCreateRegola();
   const updateMut = useUpdateRegola();
   const deleteMut = useDeleteRegola();
@@ -146,6 +148,10 @@ export default function RegoleRiconciliazione() {
   }
 
   const sortedRegole = [...regole].sort((a, b) => b.priorita - a.priorita);
+
+  const filteredFatture = form.fornitore_id 
+    ? (fatturePassive as any[]).filter(f => f.fornitore_id === form.fornitore_id)
+    : [];
 
   return (
     <div className="space-y-6 p-6">
@@ -356,6 +362,24 @@ export default function RegoleRiconciliazione() {
                     <SelectItem value="none">Nessuno</SelectItem>
                     {(fornitori as any[]).map((f: any) => (
                       <SelectItem key={f.id} value={f.id}>{f.ragione_sociale}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-black uppercase tracking-widest">Fattura Passiva (Optional)</Label>
+                <Select
+                  value={form.fattura_passiva_id || "none"}
+                  onValueChange={v => setForm(f => ({ ...f, fattura_passiva_id: v === "none" ? undefined : v }))}
+                  disabled={!form.fornitore_id}
+                >
+                  <SelectTrigger><SelectValue placeholder={form.fornitore_id ? "Seleziona..." : "Seleziona fornitore prima"} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nessuna</SelectItem>
+                    {filteredFatture.map((f: any) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.numero || "Senza Numero"} del {f.data ? new Date(f.data).toLocaleDateString() : "-"} (€{f.importo_totale})
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

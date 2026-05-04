@@ -44,11 +44,13 @@ export function CassaDashboard({ movimenti }: CassaDashboardProps) {
       return acc;
     }, {});
 
-    let balance = 0;
-    return Object.keys(daily).sort().map(date => {
-      balance += daily[date];
-      return { date, balance, amount: daily[date] };
-    });
+    return Object.keys(daily)
+      .sort()
+      .reduce<{ date: string; balance: number; amount: number }[]>((items, date) => {
+        const previousBalance = items[items.length - 1]?.balance ?? 0;
+        const amount = daily[date];
+        return [...items, { date, balance: previousBalance + amount, amount }];
+      }, []);
   }, [movimenti]);
 
   const categoryData = React.useMemo(() => {

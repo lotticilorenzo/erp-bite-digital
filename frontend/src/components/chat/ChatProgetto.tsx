@@ -100,13 +100,25 @@ export function ChatProgetto({ progettoId, teamMembers = [] }: ChatProgettoProps
     if (!searchTerm.trim()) return;
     setIsSearching(true);
     try {
-      const res = await api.get(`/chat/search?q=${searchTerm}`);
+      const res = await api.get(`/chat/search`, { params: { q: searchTerm, channel_id: progettoId } });
       setSearchResults(res.data);
     } catch (err) {
       console.error("Search failed", err);
     } finally {
       setIsSearching(false);
     }
+  };
+
+  const handleJumpToMessage = (msgId: string) => {
+    setShowSearch(false);
+    setTimeout(() => {
+      const el = document.getElementById(`chat-msg-${msgId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("ring-2", "ring-primary", "ring-offset-2");
+        setTimeout(() => el.classList.remove("ring-2", "ring-primary", "ring-offset-2"), 2000);
+      }
+    }, 150);
   };
 
   if (isInitialLoading) {
@@ -192,20 +204,21 @@ export function ChatProgetto({ progettoId, teamMembers = [] }: ChatProgettoProps
               }));
 
               return (
-                <ChatMessageBubble
-                  key={m.id}
-                  message={m}
-                  isMe={m.autore_id === user?.id}
-                  isFirstInGroup={isFirstInGroup}
-                  replyTo={replyToMsg}
-                  isOnline={onlineUsers.has(m.autore_id)}
-                  seenBy={seenBy}
+                <div id={`chat-msg-${m.id}`} key={m.id} className="transition-all duration-300 rounded-xl">
+                  <ChatMessageBubble
+                    message={m}
+                    isMe={m.autore_id === user?.id}
+                    isFirstInGroup={isFirstInGroup}
+                    replyTo={replyToMsg}
+                    isOnline={onlineUsers.has(m.autore_id)}
+                    seenBy={seenBy}
                     onReply={(msg) => setReplyTo(msg)}
                     onDelete={(id) => deleteMessage(id)}
                     onEdit={(id, content) => editMessage(id, content)}
                     onReact={(id, emoji) => addReaction(id, emoji)}
                     onRemoveReact={(id, emoji) => removeReaction(id, emoji)}
                   />
+                </div>
               );
             })}
           </div>
@@ -232,8 +245,8 @@ export function ChatProgetto({ progettoId, teamMembers = [] }: ChatProgettoProps
           onCancelReply={() => setReplyTo(undefined)}
           onTyping={(isTyping) => setTypingStatus(isTyping)}
           onUpload={(file) => uploadFile(file)}
-          onSend={(content, replyId) => {
-            sendMessage(content, 'testo', replyId);
+          onSend={async (content, messageType, replyId) => {
+            await sendMessage(content, messageType, replyId);
           }}
         />
       </div>
@@ -268,9 +281,14 @@ export function ChatProgetto({ progettoId, teamMembers = [] }: ChatProgettoProps
               ) : searchResults.length > 0 ? (
                 <div className="flex flex-col gap-4 pb-10">
                    {searchResults.map(msg => (
-                     <div key={msg.id} className="p-3 rounded-2xl bg-white/5 border border-white/5 hover:border-primary/50 transition-all cursor-pointer group">
+                     <div
+                       key={msg.id}
+                       onClick={() => handleJumpToMessage(msg.id)}
+                       className="p-3 rounded-2xl bg-white/5 border border-white/5 hover:border-primary/50 transition-all cursor-pointer group"
+                       title="Clicca per andare al messaggio"
+                     >
                         <div className="flex items-center justify-between mb-1">
-                           <span className="text-[10px] font-black text-primary uppercase">{msg.autore_nome}</span>
+                           <span className="text-[10px] font-black text-primary uppercase">{(msg as any).autore_nome}</span>
                            <span className="text-[8px] text-muted-foreground">{format(new Date(msg.created_at), "dd MMM HH:mm")}</span>
                         </div>
                         <p className="text-xs text-white/80 line-clamp-3 leading-relaxed">{msg.contenuto}</p>

@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useStudio } from "@/hooks/useStudio";
 import { useAllActiveTimers } from "@/hooks/useTimer";
+import { useEffect, useState } from "react";
 import { format, isToday, isBefore, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 
@@ -43,8 +44,19 @@ export default function StudioHome() {
   const { data, isLoading } = useTasks({ parent_only: true });
   const { data: utenti = [] } = useUsers();
   const { user } = useAuth();
-  const { timer, openNewTask, openTab, setView, selectList } = useStudio();
+  const { timer, openNewTask, openTab, setView } = useStudio();
   const { data: allActiveTimers = [] } = useAllActiveTimers();
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   if (isLoading) {
     return (
@@ -80,7 +92,7 @@ export default function StudioHome() {
 
   const getUserInitials = (id?: string | null) => {
     if (!id) return "?";
-    const u = utenti.find((u: any) => u.id === id);
+    const u = utenti.find((candidate) => candidate.id === id);
     return u ? `${u.nome[0]}${u.cognome[0]}`.toUpperCase() : "?";
   };
 
@@ -389,8 +401,8 @@ export default function StudioHome() {
                     Nessun collaboratore trovato.
                   </p>
                 ) : (
-                  utenti.slice(0, 8).map((u: any) => {
-                    const activeTimer = allActiveTimers.find(at => at.user_id === u.id);
+                  utenti.slice(0, 8).map((u) => {
+                    const activeTimer = allActiveTimers.find((timerEntry) => timerEntry.user_id === u.id);
                     const isTracking = !!activeTimer;
 
                     return (
@@ -425,7 +437,7 @@ export default function StudioHome() {
                         </div>
                         {isTracking && (
                           <span className="text-[10px] font-black text-emerald-400 tabular-nums shrink-0">
-                            {formatTime(Date.now() - new Date(activeTimer.started_at).getTime())}
+                            {formatTime(now - new Date(activeTimer.started_at).getTime())}
                           </span>
                         )}
                       </div>

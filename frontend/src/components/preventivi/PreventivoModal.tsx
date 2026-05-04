@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
   DialogDescription
@@ -30,48 +30,89 @@ interface Props {
   clienteId?: string;
 }
 
-export const PreventivoModal: React.FC<Props> = ({ isOpen, onClose, preventivo, clienteId }) => {
-  const { createPreventivo, updatePreventivo } = usePreventivoMutations();
-  const { data: clienti } = useClienti();
-  
-  const [formData, setFormData] = useState({
-    cliente_id: "",
-    numero: "",
-    titolo: "",
-    descrizione: "",
-    data_scadenza: "",
-    note: "",
-  });
+type PreventivoFormData = {
+  cliente_id: string;
+  numero: string;
+  titolo: string;
+  descrizione: string;
+  data_scadenza: string;
+  note: string;
+};
 
-  const [voci, setVoci] = useState([
-    { descrizione: "", quantita: 1, prezzo_unitario: 0, ordine: 0 }
-  ]);
+type PreventivoVoceForm = {
+  descrizione: string;
+  quantita: number;
+  prezzo_unitario: number;
+  ordine: number;
+};
 
-  useEffect(() => {
-    if (preventivo) {
-      setFormData({
+function createDefaultVoce(): PreventivoVoceForm {
+  return { descrizione: "", quantita: 1, prezzo_unitario: 0, ordine: 0 };
+}
+
+function createDraftPreventivoNumber() {
+  return `PRV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
+function getInitialPreventivoState(
+  preventivo?: Preventivo,
+  clienteId?: string
+): { formData: PreventivoFormData; voci: PreventivoVoceForm[] } {
+  if (preventivo) {
+    return {
+      formData: {
         cliente_id: preventivo.cliente_id,
         numero: preventivo.numero,
         titolo: preventivo.titolo,
         descrizione: preventivo.descrizione || "",
         data_scadenza: preventivo.data_scadenza || "",
         note: preventivo.note || "",
-      });
-      setVoci(preventivo.voci.map(v => ({
-        descrizione: v.descrizione,
-        quantita: v.quantita,
-        prezzo_unitario: v.prezzo_unitario,
-        ordine: v.ordine
-      })));
-    } else {
-      setFormData(prev => ({ 
-        ...prev, 
-        cliente_id: clienteId || "",
-        numero: `PRV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}` 
-      }));
-      setVoci([{ descrizione: "", quantita: 1, prezzo_unitario: 0, ordine: 0 }]);
-    }
-  }, [preventivo, isOpen, clienteId]);
+      },
+      voci: preventivo.voci.map((voce) => ({
+        descrizione: voce.descrizione,
+        quantita: voce.quantita,
+        prezzo_unitario: voce.prezzo_unitario,
+        ordine: voce.ordine,
+      })),
+    };
+  }
+
+  return {
+    formData: {
+      cliente_id: clienteId || "",
+      numero: createDraftPreventivoNumber(),
+      titolo: "",
+      descrizione: "",
+      data_scadenza: "",
+      note: "",
+    },
+    voci: [createDefaultVoce()],
+  };
+}
+
+export const PreventivoModal: React.FC<Props> = ({ isOpen, onClose, preventivo, clienteId }) => {
+  const modalKey = preventivo?.id ? `edit-${preventivo.id}` : `new-${clienteId ?? "default"}`;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      {isOpen ? (
+        <PreventivoModalContent
+          key={modalKey}
+          onClose={onClose}
+          preventivo={preventivo}
+          clienteId={clienteId}
+        />
+      ) : null}
+    </Dialog>
+  );
+};
+
+const PreventivoModalContent: React.FC<Omit<Props, "isOpen">> = ({ onClose, preventivo, clienteId }) => {
+  const { createPreventivo, updatePreventivo } = usePreventivoMutations();
+  const { data: clienti } = useClienti();
+  const initialState = getInitialPreventivoState(preventivo, clienteId);
+  const [formData, setFormData] = useState<PreventivoFormData>(() => initialState.formData);
+  const [voci, setVoci] = useState<PreventivoVoceForm[]>(() => initialState.voci);
 
   const addVoce = () => {
     setVoci([...voci, { descrizione: "", quantita: 1, prezzo_unitario: 0, ordine: voci.length }]);
@@ -83,7 +124,11 @@ export const PreventivoModal: React.FC<Props> = ({ isOpen, onClose, preventivo, 
     }
   };
 
-  const updateVoce = (index: number, field: string, value: any) => {
+  const updateVoce = (
+    index: number,
+    field: keyof PreventivoVoceForm,
+    value: PreventivoVoceForm[keyof PreventivoVoceForm]
+  ) => {
     const newVoci = [...voci];
     newVoci[index] = { ...newVoci[index], [field]: value };
     setVoci(newVoci);
@@ -112,7 +157,6 @@ export const PreventivoModal: React.FC<Props> = ({ isOpen, onClose, preventivo, 
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-5xl max-h-[92vh] overflow-hidden bg-[#0a0a0b]/95 backdrop-blur-2xl border-white/5 text-white p-0 rounded-[2rem] shadow-2xl flex flex-col">
         <DialogHeader className="p-8 pb-4">
           <div className="flex items-center justify-between">
@@ -331,6 +375,5 @@ export const PreventivoModal: React.FC<Props> = ({ isOpen, onClose, preventivo, 
           </div>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
   );
 };

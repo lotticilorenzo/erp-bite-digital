@@ -95,3 +95,46 @@ class CRMService:
             autore_id, 
             activity_metadata={"subject": subject, "status": "SENT"}
         )
+
+    @staticmethod
+    async def get_ai_suggestion(db: AsyncSession, lead_id: uuid.UUID) -> str:
+        """Genera un suggerimento 'Next Move' basato sullo stato del lead."""
+        from sqlalchemy.orm import selectinload
+        # Usiamo selectinload per caricare le attività
+        stmt = select(CRMLead).where(CRMLead.id == lead_id).options(selectinload(CRMLead.attivita))
+        result = await db.execute(stmt)
+        lead = result.scalar_one_or_none()
+        
+        if not lead: return "Dati insufficienti"
+        
+        today = datetime.now().date()
+        
+        # 1. Priorità: Vinto/Perso
+        if lead.probabilita_chiusura == 100:
+            return "✅ Trattativa conclusa. Avvia l'onboarding e richiedi i dati per la fatturazione."
+        if lead.probabilita_chiusura == 0 and lead.note:
+            return "📁 Lead perso. Valuta un re-engagement tra 6 mesi."
+
+        # 2. Urgenza: Follow-up scaduto
+        if lead.data_prossimo_followup and lead.data_prossimo_followup < today:
+            return f"🚨 ATTENZIONE: Follow-up scaduto il {lead.data_prossimo_followup.strftime('%d/%m')}. Contatta il cliente oggi stesso."
+
+        # 3. Opportunità: Score Alto
+        if lead.lead_score > 80:
+            return "🔥 Lead ad alta conversione. Proponi una call di chiusura o un'offerta limitata nel tempo."
+        
+        # 4. Abbandono: Nessuna attività recente
+        if not lead.attivita:
+            return "🆕 Nuovo lead. Invia un'email di presentazione e fissa una discovery call."
+            
+        ultima_attivita = sorted(lead.attivita, key=lambda x: x.created_at, reverse=True)[0]
+        giorni_da_ultima = (datetime.now(ultima_attivita.created_at.tzinfo) - ultima_attivita.created_at).days
+        
+        if giorni_da_ultima > 10:
+            return f"❄️ Lead stagnante ({giorni_da_ultima} giorni di silenzio). Invia un contenuto di valore per riaccendere l'interesse."
+
+        # 5. Prossimo passo standard
+        if not lead.data_prossimo_followup:
+            return "📅 Non hai impostato un follow-up. Definisci subito la prossima data di contatto."
+
+        return "📈 Tutto procede bene. Mantieni la relazione attiva fino alla prossima data concordata."

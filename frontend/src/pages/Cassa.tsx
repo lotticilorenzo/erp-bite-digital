@@ -1,21 +1,58 @@
-import { useState } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   Download,
   ArrowRightLeft,
   Calendar,
-  ShieldCheck
+  ShieldCheck,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useMovimentiCassa } from "@/hooks/useCassa";
 import { CassaDashboard } from "@/components/finance/CassaDashboard";
 import { MovimentiTable } from "@/components/finance/MovimentiTable";
 import { ImputazioneCostiDrawer } from "@/components/finance/ImputazioneCostiDrawer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 
 export default function Cassa() {
   const { data: movimenti, isLoading } = useMovimentiCassa();
   const [imputaMovimento, setImputaMovimento] = useState<any>(null);
+  const [giorniFilter, setGiorniFilter] = useState<number | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const importRef = useRef<HTMLInputElement>(null);
+
+  const filteredMovimenti = useMemo(() => {
+    let list = movimenti || [];
+    if (giorniFilter) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - giorniFilter);
+      list = list.filter((m: any) => m.data_valuta && new Date(m.data_valuta) >= cutoff);
+    }
+    return list;
+  }, [movimenti, giorniFilter]);
+
+  const displayedMovimenti = useMemo(
+    () => (showAll ? filteredMovimenti : filteredMovimenti.slice(0, 20)),
+    [filteredMovimenti, showAll]
+  );
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith(".csv") && !file.name.endsWith(".ofx") && !file.name.endsWith(".qif")) {
+      toast.error("Formato non supportato. Usa CSV, OFX o QIF.");
+      return;
+    }
+    toast.info(`Importazione di "${file.name}" — funzionalità in arrivo. Contatta il team tecnico.`);
+    if (importRef.current) importRef.current.value = "";
+  };
 
   if (isLoading) {
     return (
@@ -48,31 +85,54 @@ export default function Cassa() {
               Regole Matching
             </Button>
           </Link>
-          <Button variant="outline" className="h-10 bg-card/50 border-border text-muted-foreground hover:text-white rounded-xl gap-2 font-bold uppercase text-[10px] tracking-widest">
-            <Calendar className="h-4 w-4" />
-            Ultimi 30 Giorni
-          </Button>
-          <Button className="h-10 bg-primary hover:bg-primary/90 text-white rounded-xl gap-2 font-black uppercase text-[10px] tracking-widest shadow-[0_0_20px_hsl(var(--primary)/0.2)]">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className={`h-10 bg-card/50 border-border rounded-xl gap-2 font-bold uppercase text-[10px] tracking-widest ${giorniFilter ? "text-primary border-primary/40" : "text-muted-foreground hover:text-white"}`}>
+                <Calendar className="h-4 w-4" />
+                {giorniFilter ? `Ultimi ${giorniFilter} Giorni` : "Periodo"}
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44 bg-card/95 backdrop-blur-xl border-border/50 rounded-xl p-1">
+              <DropdownMenuItem onClick={() => setGiorniFilter(null)} className={`text-xs font-bold uppercase tracking-widest cursor-pointer ${!giorniFilter ? "text-primary" : ""}`}>Tutti</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGiorniFilter(30)} className={`text-xs font-bold uppercase tracking-widest cursor-pointer ${giorniFilter === 30 ? "text-primary" : ""}`}>Ultimi 30 giorni</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGiorniFilter(60)} className={`text-xs font-bold uppercase tracking-widest cursor-pointer ${giorniFilter === 60 ? "text-primary" : ""}`}>Ultimi 60 giorni</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGiorniFilter(90)} className={`text-xs font-bold uppercase tracking-widest cursor-pointer ${giorniFilter === 90 ? "text-primary" : ""}`}>Ultimi 90 giorni</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            onClick={() => importRef.current?.click()}
+            className="h-10 bg-primary hover:bg-primary/90 text-white rounded-xl gap-2 font-black uppercase text-[10px] tracking-widest shadow-[0_0_20px_hsl(var(--primary)/0.2)]"
+          >
             <Download className="h-4 w-4" />
             Importa Estratto
           </Button>
+          <input ref={importRef} type="file" accept=".csv,.ofx,.qif" className="hidden" onChange={handleImportFile} />
         </div>
       </div>
 
-      <CassaDashboard movimenti={movimenti || []} />
+      <CassaDashboard movimenti={filteredMovimenti} />
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-black text-white uppercase tracking-tighter flex items-center gap-2">
             <ArrowRightLeft className="h-5 w-5 text-primary" />
-            Movimenti Recenti
+            Movimenti{giorniFilter ? ` — Ultimi ${giorniFilter}gg` : " Recenti"}
           </h2>
-          <Button variant="ghost" className="text-[10px] font-black uppercase tracking-widest text-primary hover:text-white">
-            Vedi Tutti
+          <Button
+            variant="ghost"
+            onClick={() => setShowAll((v) => !v)}
+            className="text-[10px] font-black uppercase tracking-widest text-primary hover:text-white"
+          >
+            {showAll ? "Riduci" : `Vedi Tutti (${filteredMovimenti.length})`}
           </Button>
         </div>
-        
-        <MovimentiTable data={movimenti || []} onImputa={setImputaMovimento} />
+
+        <MovimentiTable
+          data={displayedMovimenti}
+          onImputa={setImputaMovimento}
+          onRiconcilia={(m) => toast.info(`Riconciliazione con fattura per movimento "${m.descrizione}" — seleziona la fattura dalla lista.`)}
+        />
       </div>
 
       {imputaMovimento && (

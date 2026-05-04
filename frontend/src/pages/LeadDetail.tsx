@@ -48,8 +48,23 @@ export default function LeadDetailPage() {
     );
   }
 
-  // HubSpot-style Lead Score Calculation (Mocked for UI)
-  const leadScore = lead.lead_score ?? 78;
+  // Compute lead score from real data when backend doesn't provide it
+  const leadScore = lead.lead_score ?? (() => {
+    let score = 0;
+    if (lead.valore_stimato) score += Math.min(40, Math.round((lead.valore_stimato / 10000) * 40));
+    if (lead.email) score += 10;
+    if (lead.telefono) score += 10;
+    if (lead.sito_web) score += 5;
+    if (lead.settore) score += 5;
+    if (lead.dimensione_azienda) score += 5;
+    if (lead.fonte) score += 5;
+    const stage = stages.find(s => s.id === lead.stadio_id);
+    if (stage) {
+      const stageOrder = stages.findIndex(s => s.id === lead.stadio_id);
+      score += Math.min(20, Math.round((stageOrder / Math.max(stages.length - 1, 1)) * 20));
+    }
+    return Math.min(100, score);
+  })();
 
   const handleStartEdit = () => {
     setFormData({
@@ -409,7 +424,7 @@ export default function LeadDetailPage() {
                      />
                      <div className="flex justify-between items-center pt-4">
                         <div className="flex gap-2">
-                           <Button variant="ghost" size="icon" className="h-10 w-10 text-[#475569] hover:text-white"><FileText className="w-4 h-4" /></Button>
+                           <Button variant="ghost" size="icon" title="Allegati non supportati in questa versione" onClick={() => toast.info("Gli allegati email non sono ancora supportati")} className="h-10 w-10 text-[#475569] hover:text-white"><FileText className="w-4 h-4" /></Button>
                         </div>
                         <Button 
                           onClick={handleSendEmail} 

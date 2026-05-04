@@ -14,7 +14,7 @@ export function useWiki() {
     },
   });
 
-  const articles = (categoria_id?: string) => useQuery({
+  const useArticles = (categoria_id?: string) => useQuery({
     queryKey: ["wiki-articles", categoria_id],
     queryFn: async () => {
       const url = categoria_id ? `/wiki/articoli?categoria_id=${categoria_id}` : "/wiki/articoli";
@@ -23,7 +23,7 @@ export function useWiki() {
     },
   });
 
-  const getArticle = (id: string) => useQuery({
+  const useArticle = (id: string) => useQuery({
     queryKey: ["wiki-article", id],
     queryFn: async () => {
       const res = await api.get<WikiArticle>(`/wiki/articoli/${id}`);
@@ -71,7 +71,7 @@ export function useWiki() {
     },
   });
 
-  const searchArticles = (q: string) => useQuery({
+  const useSearchArticles = (q: string) => useQuery({
     queryKey: ["wiki-search", q],
     queryFn: async () => {
       const res = await api.get<WikiArticle[]>(`/wiki/cerca?q=${q}`);
@@ -82,11 +82,11 @@ export function useWiki() {
 
   return {
     categories,
-    articles,
-    getArticle,
+    articles: useArticles,
+    getArticle: useArticle,
     createArticle,
     updateArticle,
     deleteArticle,
-    searchArticles,
+    searchArticles: useSearchArticles,
   };
 }

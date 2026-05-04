@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Plus, Trash2, Edit2, Check, X, ChevronDown, ChevronUp,
   Layers, Clock, Zap, ToggleLeft, ToggleRight, Copy
@@ -210,7 +211,11 @@ function TemplateEditor({
         </Button>
         <Button
           size="sm"
-          onClick={() => onSave({ nome, descrizione, progetto_tipo: progettoTipo || undefined, attivo, items })}
+          onClick={() => {
+            const emptyIdx = items.findIndex(it => !it.titolo.trim());
+            if (emptyIdx !== -1) { import("sonner").then(m => m.toast.error(`Riga ${emptyIdx + 1}: il titolo del task è obbligatorio`)); return; }
+            onSave({ nome, descrizione, progetto_tipo: progettoTipo || undefined, attivo, items });
+          }}
           disabled={!nome.trim()}
           className="bg-primary hover:bg-primary/90 text-white text-xs font-black uppercase tracking-widest gap-1.5"
         >
@@ -222,6 +227,8 @@ function TemplateEditor({
 }
 
 export default function TaskTemplatesPage() {
+  const { user } = useAuth();
+  const canManage = user?.ruolo === 'ADMIN' || user?.ruolo === 'DEVELOPER' || user?.ruolo === 'PM';
   const { data: templates = [], isLoading } = useTaskTemplates();
   const { mutate: create, isPending: isCreating } = useCreateTaskTemplate();
   const { mutate: update } = useUpdateTaskTemplate();
@@ -244,24 +251,26 @@ export default function TaskTemplatesPage() {
             Crea template riutilizzabili per generare task ricorrenti nelle commesse
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {templates.length === 0 && (
+        {canManage && (
+          <div className="flex items-center gap-2">
+            {templates.length === 0 && (
+              <Button
+                variant="outline"
+                onClick={handleSeedDefaults}
+                disabled={isCreating}
+                className="border-border/50 text-muted-foreground hover:text-foreground text-xs font-black uppercase tracking-widest gap-1.5"
+              >
+                <Copy className="w-3.5 h-3.5" /> Carica Default
+              </Button>
+            )}
             <Button
-              variant="outline"
-              onClick={handleSeedDefaults}
-              disabled={isCreating}
-              className="border-border/50 text-muted-foreground hover:text-foreground text-xs font-black uppercase tracking-widest gap-1.5"
+              onClick={() => { setShowNew(true); setEditingId(null); }}
+              className="bg-primary hover:bg-primary/90 text-white text-xs font-black uppercase tracking-widest gap-1.5 shadow-[0_0_20px_hsl(var(--primary)/0.2)]"
             >
-              <Copy className="w-3.5 h-3.5" /> Carica Default
+              <Plus className="w-3.5 h-3.5" /> Nuovo Template
             </Button>
-          )}
-          <Button
-            onClick={() => { setShowNew(true); setEditingId(null); }}
-            className="bg-primary hover:bg-primary/90 text-white text-xs font-black uppercase tracking-widest gap-1.5 shadow-[0_0_20px_hsl(var(--primary)/0.2)]"
-          >
-            <Plus className="w-3.5 h-3.5" /> Nuovo Template
-          </Button>
-        </div>
+          </div>
+        )}
       </div>
 
       {showNew && (
@@ -327,18 +336,22 @@ export default function TaskTemplatesPage() {
                     >
                       {expandedId === tpl.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </button>
-                    <button
-                      onClick={() => { setEditingId(tpl.id); setExpandedId(null); }}
-                      className="p-1.5 rounded-lg hover:bg-muted/30 text-muted-foreground hover:text-primary transition-colors"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => { if (confirm("Eliminare questo template?")) remove(tpl.id); }}
-                      className="p-1.5 rounded-lg hover:bg-muted/30 text-muted-foreground hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {canManage && (
+                      <>
+                        <button
+                          onClick={() => { setEditingId(tpl.id); setExpandedId(null); }}
+                          className="p-1.5 rounded-lg hover:bg-muted/30 text-muted-foreground hover:text-primary transition-colors"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => { if (confirm("Eliminare questo template?")) remove(tpl.id); }}
+                          className="p-1.5 rounded-lg hover:bg-muted/30 text-muted-foreground hover:text-red-400 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 

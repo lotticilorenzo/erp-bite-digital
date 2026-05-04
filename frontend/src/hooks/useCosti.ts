@@ -17,8 +17,8 @@ export function useCostiFissi() {
   return useQuery({
     queryKey: ["costi-fissi"],
     queryFn: async () => {
-      const { data } = await api.get<CostoFisso[]>("/costi-fissi");
-      return data;
+      const { data } = await api.get<{ costi_fissi?: CostoFisso[] }>("/costi-fissi");
+      return Array.isArray(data.costi_fissi) ? data.costi_fissi : [];
     },
   });
 }

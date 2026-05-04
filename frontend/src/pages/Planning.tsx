@@ -43,6 +43,7 @@ import { AssenzeTeamPanel } from '@/components/assenze/AssenzePanel';
 import { GanttChart } from '@/components/gantt/GanttChart';
 import { useTasks, useTaskMutations } from '@/hooks/useTasks';
 import { useUsers } from '@/hooks/useUsers';
+import { useProgetti } from '@/hooks/useProgetti';
 
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -93,7 +94,8 @@ const PlanningPage: React.FC = () => {
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const { updateTask } = useTaskMutations();
-  
+  const { data: progetti = [] } = useProgetti();
+
   // Sensors for DND
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -187,10 +189,14 @@ const PlanningPage: React.FC = () => {
   };
   
   // Backlog Filtering
-  const backlogTasks = tasks.filter(t => 
-    !t.assegnatario_id && 
-    (t.titolo.toLowerCase().includes(backlogSearch.toLowerCase()))
-  );
+  const backlogTasks = tasks.filter(t => {
+    if (t.assegnatario_id) return false;
+    if (!backlogSearch) return true;
+    const q = backlogSearch.toLowerCase();
+    const matchTitle = t.titolo.toLowerCase().includes(q);
+    const matchProject = t.progetto_id ? (progettiMap[t.progetto_id]?.nome ?? '').toLowerCase().includes(q) : false;
+    return matchTitle || matchProject;
+  });
 
   // Risorse Filtering
   const filteredRisorse = risorse.filter(r => 
@@ -202,8 +208,9 @@ const PlanningPage: React.FC = () => {
   // Smart Allocation Logic
   const handleAutoAllocation = async () => {
     const unassigned = tasks.filter(t => !t.assegnatario_id);
-    if (unassigned.length === 0) {
-      toast.info("Nessuna task nel backlog da assegnare.");
+    const risorseConUser = filteredRisorse.filter(r => !!r.user_id);
+    if (unassigned.length === 0 || risorseConUser.length === 0) {
+      toast.info("Nessuna task nel backlog o nessuna risorsa con account utente.");
       return;
     }
 
@@ -211,16 +218,16 @@ const PlanningPage: React.FC = () => {
       let count = 0;
       for (const task of unassigned) {
         // Find best resource (least loaded this week)
-        const candidates = filteredRisorse.map(r => ({
+        const candidates = risorseConUser.map(r => ({
           ...r,
-          ...getUserWeeklyLoad(r.id)
+          ...getUserWeeklyLoad(r.user_id!)
         })).sort((a, b) => (a.load - a.capacity) - (b.load - b.capacity));
 
         const best = candidates[0];
         if (best && best.load < best.capacity + 8) { // Only if not severely overloaded
           await assignMutation.mutateAsync({
             taskId: task.id,
-            userId: best.id,
+            userId: best.user_id!,
             date: format(monday, 'yyyy-MM-dd') // Assign to Monday by default
           });
           count++;
@@ -272,7 +279,8 @@ const PlanningPage: React.FC = () => {
     };
   };
 
-  const risorsaMap = Object.fromEntries(risorse.map(r => [r.id, r]));
+  const risorsaMap = Object.fromEntries(risorse.map(r => [r.user_id, r]));
+  const progettiMap = Object.fromEntries((progetti as any[]).map((p: any) => [p.id, p]));
 
   // Project color helper
   const getProjectColor = (projectId?: string) => {
@@ -462,29 +470,30 @@ const PlanningPage: React.FC = () => {
                             <div className="space-y-1.5 mt-4">
                               <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest">
                                 <span className="text-[#475569]">Carico sett.</span>
-                                <span className={getUserWeeklyLoad(risorsa.id).load > getUserWeeklyLoad(risorsa.id).capacity ? 'text-destructive' : 'text-primary'}>
-                                  {getUserWeeklyLoad(risorsa.id).load}h / {getUserWeeklyLoad(risorsa.id).capacity}h
+                                <span className={getUserWeeklyLoad(risorsa.user_id).load > getUserWeeklyLoad(risorsa.user_id).capacity ? 'text-destructive' : 'text-primary'}>
+                                  {getUserWeeklyLoad(risorsa.user_id).load}h / {getUserWeeklyLoad(risorsa.user_id).capacity}h
                                 </span>
                               </div>
-                              <Progress 
-                                value={getUserWeeklyLoad(risorsa.id).capacity > 0 ? Math.min((getUserWeeklyLoad(risorsa.id).load / getUserWeeklyLoad(risorsa.id).capacity) * 100, 100) : 100} 
-                                className={`h-1 bg-muted ${getUserWeeklyLoad(risorsa.id).load > getUserWeeklyLoad(risorsa.id).capacity ? '[&>div]:bg-destructive' : '[&>div]:bg-primary'}`}
+                              <Progress
+                                value={getUserWeeklyLoad(risorsa.user_id).capacity > 0 ? Math.min((getUserWeeklyLoad(risorsa.user_id).load / getUserWeeklyLoad(risorsa.user_id).capacity) * 100, 100) : 100}
+                                className={`h-1 bg-muted ${getUserWeeklyLoad(risorsa.user_id).load > getUserWeeklyLoad(risorsa.user_id).capacity ? '[&>div]:bg-destructive' : '[&>div]:bg-primary'}`}
                               />
                             </div>
                           </div>
 
                           {/* Day Cells */}
                           {weekDays.map(day => {
-                            const cellId = `cell|${format(day, 'yyyy-MM-dd')}|${risorsa.id}`;
-                            const cellTasks = getTasksForCell(risorsa.id, day);
-                            const isAbsent = assenze.some((a: any) => 
-                              a.user_id === risorsa.id && 
+                            const canAssign = !!risorsa.user_id;
+                            const cellId = canAssign ? `cell|${format(day, 'yyyy-MM-dd')}|${risorsa.user_id}` : `disabled|${risorsa.id}`;
+                            const cellTasks = canAssign ? getTasksForCell(risorsa.user_id!, day) : [];
+                            const isAbsent = canAssign && assenze.some((a: any) =>
+                              a.user_id === risorsa.user_id &&
                               isSameDay(new Date(a.data_inizio), day)
                             );
-                            const absenceInfo = assenze.find((a: any) => 
-                              a.user_id === risorsa.id && 
+                            const absenceInfo = canAssign ? assenze.find((a: any) =>
+                              a.user_id === risorsa.user_id &&
                               isSameDay(new Date(a.data_inizio), day)
-                            );
+                            ) : null;
 
                             return (
                               <CalendarCell 
@@ -535,7 +544,7 @@ const PlanningPage: React.FC = () => {
                       <div className="space-y-4">
                         {[0, 1, 2, 3].map(weekOffset => {
                           const weekStart = addWeeks(monday, weekOffset);
-                          const weekData = getUserWeeklyLoad(risorsa.id, weekStart);
+                          const weekData = getUserWeeklyLoad(risorsa.user_id, weekStart);
                           const percentage = Math.round((weekData.load / risorsa.ore_settimanali) * 100);
                           
                           return (
@@ -558,7 +567,7 @@ const PlanningPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {getUserWeeklyLoad(risorsa.id, monday).load / risorsa.ore_settimanali > 1.1 && (
+                    {getUserWeeklyLoad(risorsa.user_id, monday).load / risorsa.ore_settimanali > 1.1 && (
                       <div className="bg-destructive/10 border border-destructive/20 p-3 rounded-lg flex items-center gap-3">
                         <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
                         <p className="text-[10px] font-bold text-destructive uppercase tracking-wide">
@@ -644,9 +653,10 @@ const PlanningPage: React.FC = () => {
               <ScrollArea className="flex-1 px-3 pb-4">
                 <div className="space-y-3 pt-1">
                   {backlogTasks.map(task => (
-                    <DraggableTask 
-                      key={task.id} 
-                      task={task} 
+                    <DraggableTask
+                      key={task.id}
+                      task={task}
+                      progettiMap={progettiMap}
                       onEdit={() => {
                         setSelectedTask(task);
                         setIsTaskDialogOpen(true);
@@ -713,7 +723,7 @@ const CalendarCell: React.FC<{
   costs?: Record<string, any>;
   onEditTask: (task: Task) => void;
 }> = ({ id, tasks, isAbsent, absenceType, getProjectColor, costs, onEditTask }) => {
-  const { isOver, setNodeRef } = useDroppable({ id, disabled: isAbsent });
+  const { isOver, setNodeRef } = useDroppable({ id, disabled: isAbsent || id.startsWith('disabled') });
 
   return (
     <div 
@@ -722,6 +732,7 @@ const CalendarCell: React.FC<{
         p-2 min-h-[140px] transition-all duration-300 border-r border-b border-border/20
         ${isOver ? 'bg-primary/10 shadow-[inset_0_0_20px_hsl(var(--primary)/0.2)]' : 'hover:bg-white/[0.01]'}
         ${isAbsent ? 'bg-[#ef4444]/5 border-dashed border-[#ef4444]/20' : ''}
+        ${id.startsWith('disabled') ? 'bg-slate-900/50 cursor-not-allowed opacity-40' : ''}
       `}
     >
       {isAbsent ? (
@@ -749,13 +760,14 @@ const CalendarCell: React.FC<{
   );
 };
 
-const DraggableTask: React.FC<{ 
-  task: Task; 
-  isMini?: boolean; 
+const DraggableTask: React.FC<{
+  task: Task;
+  isMini?: boolean;
   getProjectColor?: (id?: string) => string;
+  progettiMap?: Record<string, any>;
   onEdit?: () => void;
   cost?: any;
-}> = ({ task, isMini, getProjectColor, onEdit, cost }) => {
+}> = ({ task, isMini, getProjectColor, progettiMap, onEdit, cost }) => {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
   });
@@ -818,7 +830,7 @@ const DraggableTask: React.FC<{
           <div className="flex items-center gap-2 mt-1">
             <div className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.2)]" />
             <span className="text-[9px] font-black uppercase text-slate-500 tracking-[0.1em] truncate">
-              {task.progetto_id ? 'Analisi Project X' : 'Backlog Generale'}
+              {task.progetto_id ? (progettiMap?.[task.progetto_id]?.nome ?? 'Progetto') : 'Backlog Generale'}
             </span>
           </div>
         )}

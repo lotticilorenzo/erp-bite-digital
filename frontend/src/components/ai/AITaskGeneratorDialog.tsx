@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useGenerateTasksAI, type AITaskGenerationResponse, type AITaskSuggestion } from "@/hooks/useAITaskGeneration";
 
 type SelectableSuggestion = AITaskSuggestion & { key: string };
@@ -24,7 +25,7 @@ interface AITaskGeneratorDialogProps {
   meseLabel: string;
   projectTypes: string[];
   budgetOre: number;
-  defaultProjectId?: string;
+  progetti: Array<{ id: string; nome: string }>;
 }
 
 function formatHours(minutes: number) {
@@ -40,7 +41,7 @@ export function AITaskGeneratorDialog({
   meseLabel,
   projectTypes,
   budgetOre,
-  defaultProjectId,
+  progetti,
 }: AITaskGeneratorDialogProps) {
   const queryClient = useQueryClient();
   const generateMutation = useGenerateTasksAI();
@@ -50,6 +51,7 @@ export function AITaskGeneratorDialog({
   const [result, setResult] = useState<AITaskGenerationResponse | null>(null);
   const [suggestions, setSuggestions] = useState<SelectableSuggestion[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [suggestionProgetti, setSuggestionProgetti] = useState<Record<string, string>>({});
   const [isCreating, setIsCreating] = useState(false);
   const [createdCount, setCreatedCount] = useState(0);
 
@@ -59,6 +61,7 @@ export function AITaskGeneratorDialog({
       setResult(null);
       setSuggestions([]);
       setSelected({});
+      setSuggestionProgetti({});
       setIsCreating(false);
       setCreatedCount(0);
       setMaxOre(String(Math.max(Math.round(budgetOre || 40), 1)));
@@ -88,10 +91,12 @@ export function AITaskGeneratorDialog({
         key: `${index}-${item.titolo}`,
       }));
       const nextSelected = Object.fromEntries(nextSuggestions.map((item) => [item.key, true]));
-
+      const nextProgetti = Object.fromEntries(nextSuggestions.map((item) => [item.key, progetti[0]?.id || ""]));
+      
       setResult(response);
       setSuggestions(nextSuggestions);
       setSelected(nextSelected);
+      setSuggestionProgetti(nextProgetti);
     } catch {
       // Toast già gestito dal mutation hook.
     }
@@ -117,7 +122,7 @@ export function AITaskGeneratorDialog({
 
         await api.post("/tasks", {
           commessa_id: commessaId,
-          progetto_id: defaultProjectId || undefined,
+          progetto_id: suggestionProgetti[item.key] || undefined,
           assegnatario_id: item.assegnatario_id || undefined,
           titolo: item.titolo,
           descrizione: descrizione || undefined,
@@ -271,6 +276,27 @@ export function AITaskGeneratorDialog({
                             )}
                           </div>
                         </div>
+
+                        {progetti.length > 0 && (
+                          <div className="w-[180px] space-y-1">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Progetto</Label>
+                            <Select
+                              value={suggestionProgetti[item.key] || ""}
+                              onValueChange={(val) => setSuggestionProgetti(prev => ({ ...prev, [item.key]: val }))}
+                            >
+                              <SelectTrigger className="h-8 text-[11px] bg-background/40">
+                                <SelectValue placeholder="Seleziona..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {progetti.map((p) => (
+                                  <SelectItem key={p.id} value={p.id} className="text-[11px]">
+                                    {p.nome}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}

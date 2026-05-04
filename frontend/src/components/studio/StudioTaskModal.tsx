@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { 
   Plus, 
   Play, 
@@ -38,6 +38,49 @@ import {
 import { format } from "date-fns";
 import { toast } from "sonner";
 
+type StudioTaskRecord = NonNullable<ReturnType<typeof useTasks>["data"]>[number];
+
+type TaskFormData = {
+  titolo: string;
+  descrizione: string;
+  commessa_id: string;
+  stato: string;
+  data_inizio: string;
+  data_scadenza: string;
+  assegnatario_id: string;
+  stima_minuti: number | null;
+};
+
+function createEmptyTaskFormData(): TaskFormData {
+  return {
+    titolo: "",
+    descrizione: "",
+    commessa_id: "none",
+    stato: "DA_FARE",
+    data_inizio: "",
+    data_scadenza: "",
+    assegnatario_id: "none",
+    stima_minuti: null,
+  };
+}
+
+function createTaskFormData(task: StudioTaskRecord | null): TaskFormData {
+  if (!task) {
+    return createEmptyTaskFormData();
+  }
+
+  return {
+    titolo: task.title,
+    descrizione: task.desc || "",
+    commessa_id: task.commessa_id || "none",
+    stato: task.state_id,
+    data_inizio: task.data_inizio || "",
+    data_scadenza: task.due_date || "",
+    assegnatario_id: task.assegnatario_id || "none",
+    stima_minuti: task.stima_minuti ?? null,
+  };
+}
+
 export function StudioTaskModal() {
   const { nav, selectTask, timer } = useStudio();
   const { data: tasks } = useTasks({ parent_only: false });
@@ -55,16 +98,21 @@ export function StudioTaskModal() {
   const { data: sessions = [] } = useTimerSessions(task?.id || null);
   const saveToTimesheetMutation = useSaveTimerToTimesheet();
 
-  const [formData, setFormData] = useState({
-    titolo: "",
-    descrizione: "",
-    commessa_id: "none",
-    stato: "DA_FARE",
-    data_inizio: "",
-    data_scadenza: "",
-    assegnatario_id: "none",
-    stima_minuti: 0,
-  });
+  const formSourceId = task?.id ?? `new:${nav.selectedListId ?? "none"}`;
+  const baseFormData = useMemo(() => createTaskFormData(task), [task]);
+  const [formDraft, setFormDraft] = useState<{ sourceId: string; data: TaskFormData } | null>(null);
+  const formData = formDraft?.sourceId === formSourceId ? formDraft.data : baseFormData;
+  const setFormData = (updater: TaskFormData | ((current: TaskFormData) => TaskFormData)) => {
+    setFormDraft((current) => {
+      const currentData = current?.sourceId === formSourceId ? current.data : baseFormData;
+      return {
+        sourceId: formSourceId,
+        data: typeof updater === "function"
+          ? (updater as (current: TaskFormData) => TaskFormData)(currentData)
+          : updater,
+      };
+    });
+  };
 
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
@@ -86,23 +134,16 @@ export function StudioTaskModal() {
   const { data: capacity } = useUserCapacity(
     formData.assegnatario_id !== "none" ? formData.assegnatario_id : null
   ) as { data: UserCapacity | undefined };
-
-  useEffect(() => {
-    // @ts-ignore - estimate logic
-    if (estimate?.stima_minuti && isNew && formData.stima_minuti === 0) {
-      // @ts-ignore
-      setFormData(prev => ({ ...prev, stima_minuti: estimate.stima_minuti }));
-    }
-  }, [estimate, isNew]);
-
-  const [lastActiveSessionId, setLastActiveSessionId] = useState<string | null>(null);
+  const effectiveStimaMinuti =
+    formData.stima_minuti ?? (isNew ? estimate?.stima_minuti ?? null : null);
+  const lastActiveSessionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (timer.active_session && timer.active_session.task_id === task?.id) {
-      setLastActiveSessionId(timer.active_session.id);
-    } else if (!timer.active_session && lastActiveSessionId && task) {
+      lastActiveSessionIdRef.current = timer.active_session.id;
+    } else if (!timer.active_session && lastActiveSessionIdRef.current && task) {
       // Timer appena stoppato! Mostriamo il toast per il salvataggio
-      const sessionIdToSave = lastActiveSessionId;
+      const sessionIdToSave = lastActiveSessionIdRef.current;
       toast("Sessione terminata", {
         description: "Vuoi salvare il tempo nel timesheet?",
         action: {
@@ -116,35 +157,9 @@ export function StudioTaskModal() {
         },
         duration: 10000,
       });
-      setLastActiveSessionId(null);
+      lastActiveSessionIdRef.current = null;
     }
-  }, [timer.active_session, task?.id, lastActiveSessionId, task, saveToTimesheetMutation]);
-
-  useEffect(() => {
-    if (task) {
-      setFormData({
-        titolo: task.title,
-        descrizione: task.desc || "",
-        commessa_id: task.commessa_id || "none",
-        stato: task.state_id,
-        data_inizio: task.data_inizio || "",
-        data_scadenza: task.due_date || "",
-        assegnatario_id: task.assegnatario_id || "none",
-        stima_minuti: task.stima_minuti || 0,
-      });
-    } else {
-      setFormData({
-        titolo: "",
-        descrizione: "",
-        commessa_id: "none",
-        stato: "DA_FARE",
-        data_inizio: "",
-        data_scadenza: "",
-        assegnatario_id: "none",
-        stima_minuti: 0,
-      });
-    }
-  }, [task, nav.selectedTaskId]);
+  }, [timer.active_session, task, saveToTimesheetMutation]);
 
   if (!nav.selectedTaskId) return null;
 
@@ -168,7 +183,7 @@ export function StudioTaskModal() {
       ...payload,
       data_inizio: payload.data_inizio || null,
       data_scadenza: payload.data_scadenza || null,
-      stima_minuti: payload.stima_minuti || null,
+      stima_minuti: effectiveStimaMinuti,
       assegnatario_id: payload.assegnatario_id || null,
       commessa_id: payload.commessa_id || null,
     };
@@ -588,8 +603,13 @@ export function StudioTaskModal() {
                     <input 
                       type="number"
                       className="w-24 bg-muted/30 border border-border h-10 rounded-xl px-4 text-xs font-black text-white"
-                      value={formData.stima_minuti}
-                      onChange={(e) => setFormData(prev => ({ ...prev, stima_minuti: parseInt(e.target.value) || 0 }))}
+                      value={effectiveStimaMinuti ?? ""}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          stima_minuti: e.target.value === "" ? null : parseInt(e.target.value, 10) || 0,
+                        }))
+                      }
                     />
                     <span className="text-[10px] font-bold text-muted-foreground uppercase">minuti</span>
                  </div>

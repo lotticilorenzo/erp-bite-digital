@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { 
   Dialog, 
   DialogContent, 
@@ -23,7 +23,6 @@ import { toast } from "sonner";
 import { 
   Plus, 
   Trash2, 
-  Calculator, 
   FileText, 
   Calendar,
   Building2,
@@ -38,16 +37,29 @@ interface FatturaModalProps {
   fattura?: any; // If provided, we are in edit mode
 }
 
-export function FatturaModal({ open, onOpenChange, type, fattura }: FatturaModalProps) {
-  const isEdit = !!fattura;
-  const isAttiva = type === "attive";
+type FatturaItem = {
+  description: string;
+  qty: number;
+  price: number;
+  amount: number;
+};
 
-  const { data: clienti = [] } = useClienti();
-  const { data: fornitori = [] } = useFornitori();
-  const createMutation = useCreateFattura();
-  const updateMutation = useUpdateFattura();
+type FatturaFormData = {
+  numero: string;
+  data_emissione: string;
+  data_scadenza: string;
+  cliente_id: string;
+  fornitore_id: string;
+  importo_netto: number;
+  importo_iva: number;
+  importo_totale: number;
+  stato_pagamento: string;
+  valuta: string;
+  items: FatturaItem[];
+};
 
-  const [formData, setFormData] = useState<any>({
+function getEmptyFatturaFormData(): FatturaFormData {
+  return {
     numero: "",
     data_emissione: new Date().toISOString().split('T')[0],
     data_scadenza: "",
@@ -58,33 +70,56 @@ export function FatturaModal({ open, onOpenChange, type, fattura }: FatturaModal
     importo_totale: 0,
     stato_pagamento: "ATTESA",
     valuta: "EUR",
-    items: []
-  });
+    items: [],
+  };
+}
 
-  useEffect(() => {
-    if (fattura) {
-      setFormData({
-        ...fattura,
-        data_emissione: fattura.data_emissione ? fattura.data_emissione.split('T')[0] : "",
-        data_scadenza: fattura.data_scadenza ? fattura.data_scadenza.split('T')[0] : "",
-        items: fattura.items || fattura.fic_raw_data?.items || []
-      });
-    } else {
-      setFormData({
-        numero: "",
-        data_emissione: new Date().toISOString().split('T')[0],
-        data_scadenza: "",
-        cliente_id: "",
-        fornitore_id: "",
-        importo_netto: 0,
-        importo_iva: 0,
-        importo_totale: 0,
-        stato_pagamento: "ATTESA",
-        valuta: "EUR",
-        items: []
-      });
-    }
-  }, [fattura, open]);
+function getInitialFatturaFormData(fattura?: any): FatturaFormData {
+  if (!fattura) {
+    return getEmptyFatturaFormData();
+  }
+
+  return {
+    ...getEmptyFatturaFormData(),
+    ...fattura,
+    data_emissione: fattura.data_emissione ? fattura.data_emissione.split('T')[0] : "",
+    data_scadenza: fattura.data_scadenza ? fattura.data_scadenza.split('T')[0] : "",
+    items: (fattura.items || fattura.fic_raw_data?.items || []).map((item: any) => ({
+      description: item.description || "",
+      qty: Number(item.qty || 0),
+      price: Number(item.price || 0),
+      amount: Number(item.amount || 0),
+    })),
+  };
+}
+
+export function FatturaModal({ open, onOpenChange, type, fattura }: FatturaModalProps) {
+  const formKey = fattura?.id ? `edit-${fattura.id}` : `new-${type}`;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open ? (
+        <FatturaModalForm
+          key={formKey}
+          onOpenChange={onOpenChange}
+          type={type}
+          fattura={fattura}
+        />
+      ) : null}
+    </Dialog>
+  );
+}
+
+function FatturaModalForm({ onOpenChange, type, fattura }: Omit<FatturaModalProps, "open">) {
+  const isEdit = !!fattura;
+  const isAttiva = type === "attive";
+
+  const { data: clienti = [] } = useClienti();
+  const { data: fornitori = [] } = useFornitori();
+  const createMutation = useCreateFattura();
+  const updateMutation = useUpdateFattura();
+
+  const [formData, setFormData] = useState<FatturaFormData>(() => getInitialFatturaFormData(fattura));
 
   const handleAddItem = () => {
     const newItems = [...formData.items, { description: "", qty: 1, price: 0, amount: 0 }];
@@ -92,12 +127,12 @@ export function FatturaModal({ open, onOpenChange, type, fattura }: FatturaModal
   };
 
   const handleRemoveItem = (index: number) => {
-    const newItems = formData.items.filter((_: any, i: number) => i !== index);
+    const newItems = formData.items.filter((_, i) => i !== index);
     setFormData({ ...formData, items: newItems });
     recalculateTotals(newItems);
   };
 
-  const handleItemChange = (index: number, field: string, value: any) => {
+  const handleItemChange = (index: number, field: keyof FatturaItem, value: number | string) => {
     const newItems = [...formData.items];
     newItems[index] = { ...newItems[index], [field]: value };
     
@@ -109,10 +144,10 @@ export function FatturaModal({ open, onOpenChange, type, fattura }: FatturaModal
     recalculateTotals(newItems);
   };
 
-  const recalculateTotals = (items: any[]) => {
+  const recalculateTotals = (items: FatturaItem[]) => {
     const netto = items.reduce((acc, item) => acc + (item.amount || 0), 0);
     const iva = netto * 0.22; // Default 22% VAT for simulation
-    setFormData((prev: any) => ({
+    setFormData((prev) => ({
       ...prev,
       importo_netto: netto,
       importo_iva: iva,
@@ -144,8 +179,7 @@ export function FatturaModal({ open, onOpenChange, type, fattura }: FatturaModal
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl bg-card border-border text-white rounded-[32px] overflow-hidden p-0 shadow-2xl">
+    <DialogContent className="max-w-4xl bg-card border-border text-white rounded-[32px] overflow-hidden p-0 shadow-2xl">
         <div className="absolute top-0 left-0 w-full h-[6px] bg-gradient-to-r from-primary via-purple-500 to-blue-500" />
         
         <form onSubmit={handleSubmit}>
@@ -337,7 +371,6 @@ export function FatturaModal({ open, onOpenChange, type, fattura }: FatturaModal
           </DialogFooter>
         </form>
       </DialogContent>
-    </Dialog>
   );
 }
 

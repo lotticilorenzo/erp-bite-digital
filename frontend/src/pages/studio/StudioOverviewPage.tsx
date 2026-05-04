@@ -62,15 +62,19 @@ export default function StudioOverviewPage() {
   const [loading, setLoading] = useState(true);
 
   const targetId = nav.selectedListId || nav.selectedFolderId;
-  const targetType = nav.selectedListId ? "projects" : "clienti";
+  const targetType = nav.selectedListId ? "progetti" : "clienti";
 
   useEffect(() => {
-    if (!targetId) return;
-    
+    if (!targetId) {
+      setLoading(false);
+      setStats(null);
+      return;
+    }
+
     const fetchStats = async () => {
       setLoading(true);
       try {
-        const res = await api.get(`/api/v1/${targetType}/${targetId}/stats`);
+        const res = await api.get(`/${targetType}/${targetId}/stats`);
         setStats(res.data);
       } catch (err) {
         console.error("Error fetching stats:", err);
@@ -94,6 +98,15 @@ export default function StudioOverviewPage() {
     }
     return colors[Math.abs(hash) % colors.length];
   };
+
+  if (!targetId && !loading) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center h-full text-muted-foreground/30 gap-4 py-32">
+        <LayoutDashboard className="w-16 h-16" />
+        <p className="text-xs font-black uppercase tracking-[0.2em]">Seleziona un progetto o un cliente per vedere l'overview</p>
+      </div>
+    );
+  }
 
   if (loading || !stats) {
     return (

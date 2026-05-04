@@ -12,7 +12,8 @@ import {
   Loader2,
   Clock,
   Briefcase,
-  AlertCircle
+  AlertCircle,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +44,44 @@ const defaultPrefs: NotificationPrefs = {
   dnd: { enabled: false, start: "22:00", end: "08:00" }
 };
 
+interface ToggleCardProps {
+  checked: boolean;
+  icon: LucideIcon;
+  label: string;
+  onChange: (checked: boolean) => void;
+}
+
+function ToggleCard({ checked, icon: Icon, label, onChange }: ToggleCardProps) {
+  return (
+    <div className="flex items-center justify-between p-4 rounded-xl bg-background/40 border border-border/50 hover:border-primary/50 transition-colors group">
+      <div className="flex items-center gap-3">
+        <div className={cn(
+          "p-2 rounded-lg transition-colors",
+          checked ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
+        )}>
+          <Icon className="h-4 w-4" />
+        </div>
+        <span className="text-sm font-medium text-white group-hover:text-primary transition-colors">{label}</span>
+      </div>
+      <button
+        type="button"
+        onClick={() => onChange(!checked)}
+        className={cn(
+          "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-1 focus:ring-primary",
+          checked ? "bg-primary" : "bg-muted"
+        )}
+      >
+        <span
+          className={cn(
+            "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+            checked ? "translate-x-6" : "translate-x-1"
+          )}
+        />
+      </button>
+    </div>
+  );
+}
+
 export default function NotificationSettings() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -62,40 +101,13 @@ export default function NotificationSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["auth-me"] });
+      queryClient.invalidateQueries({ queryKey: ["user"] });
       toast.success("Preferenze notifiche salvate");
     },
-    onError: (error: any) => {
+    onError: (error: { response?: { data?: { detail?: string } } }) => {
       toast.error(error.response?.data?.detail || "Errore durante il salvataggio");
     },
   });
-
-  const Toggle = ({ checked, onChange, label, icon: Icon }: any) => (
-    <div className="flex items-center justify-between p-4 rounded-xl bg-background/40 border border-border/50 hover:border-primary/50 transition-colors group">
-      <div className="flex items-center gap-3">
-        <div className={cn(
-          "p-2 rounded-lg transition-colors",
-          checked ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
-        )}>
-          <Icon className="h-4 w-4" />
-        </div>
-        <span className="text-sm font-medium text-white group-hover:text-primary transition-colors">{label}</span>
-      </div>
-      <button
-        onClick={() => onChange(!checked)}
-        className={cn(
-          "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-1 focus:ring-primary",
-          checked ? "bg-primary" : "bg-muted"
-        )}
-      >
-        <span
-          className={cn(
-            "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-            checked ? "translate-x-6" : "translate-x-1"
-          )}
-        />
-      </button>
-    </div>
-  );
 
   return (
     <div className="space-y-10 pb-10">
@@ -117,19 +129,19 @@ export default function NotificationSettings() {
             Notifiche Email
           </label>
           <div className="space-y-2">
-            <Toggle 
+            <ToggleCard
               checked={prefs.email.urgent}
               onChange={(v: boolean) => setPrefs({...prefs, email: {...prefs.email, urgent: v}})}
               label="Task Urgenti"
               icon={AlertCircle}
             />
-            <Toggle 
+            <ToggleCard
               checked={prefs.email.reports}
               onChange={(v: boolean) => setPrefs({...prefs, email: {...prefs.email, reports: v}})}
               label="Report Settimanali"
               icon={Briefcase}
             />
-            <Toggle 
+            <ToggleCard
               checked={prefs.email.mentions}
               onChange={(v: boolean) => setPrefs({...prefs, email: {...prefs.email, mentions: v}})}
               label="Menzioni e Feedback"
@@ -145,19 +157,19 @@ export default function NotificationSettings() {
             Notifiche Push
           </label>
           <div className="space-y-2">
-            <Toggle 
+            <ToggleCard
               checked={prefs.push.urgent}
               onChange={(v: boolean) => setPrefs({...prefs, push: {...prefs.push, urgent: v}})}
               label="Scadenze Imminenti"
               icon={AlertCircle}
             />
-            <Toggle 
+            <ToggleCard
               checked={prefs.push.chat}
               onChange={(v: boolean) => setPrefs({...prefs, push: {...prefs.push, chat: v}})}
               label="Messaggi Chat"
               icon={MessageSquare}
             />
-            <Toggle 
+            <ToggleCard
               checked={prefs.push.reminders}
               onChange={(v: boolean) => setPrefs({...prefs, push: {...prefs.push, reminders: v}})}
               label="Promemoria Timer"
@@ -184,6 +196,7 @@ export default function NotificationSettings() {
               <p className="text-xs text-muted-foreground">Inibisce le notifiche push durante le ore specificate.</p>
             </div>
             <button
+              type="button"
               onClick={() => setPrefs({...prefs, dnd: {...prefs.dnd, enabled: !prefs.dnd.enabled}})}
               className={cn(
                 "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",

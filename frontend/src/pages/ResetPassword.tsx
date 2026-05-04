@@ -60,7 +60,7 @@ export default function ResetPasswordPage() {
     setIsLoading(true);
     setError(null);
     try {
-      await api.post("/api/v1/auth/reset-password", { token, new_password: password });
+      await api.post("/auth/reset-password", { token, new_password: password });
       setIsSuccess(true);
       toast.success("Password reimpostata con successo!");
       setTimeout(() => navigate("/login"), 3000);

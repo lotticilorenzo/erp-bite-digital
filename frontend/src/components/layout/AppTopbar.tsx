@@ -26,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { HelpCenterPanel } from "../common/HelpCenterPanel";
+import { CommandPalette } from "../common/CommandPalette";
 
 export function AppTopbar() {
   const { user } = useAuth();
@@ -36,6 +37,7 @@ export function AppTopbar() {
   const isStudioOS = location.pathname.startsWith("/studio-os");
 
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -140,9 +142,25 @@ export function AppTopbar() {
       </div>
 
       <div className="flex items-center gap-2 md:gap-4">
-        <div className="relative hidden lg:block group">
+        <div 
+          className="relative hidden lg:block group cursor-pointer"
+          onClick={() => {
+            // Open the command palette by dispatching the keydown event
+            const event = new KeyboardEvent('keydown', {
+              key: 'k',
+              ctrlKey: true,
+              bubbles: true,
+              metaKey: true
+            });
+            document.dispatchEvent(event);
+          }}
+        >
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-faint transition-colors group-focus-within:text-primary" />
-          <Input placeholder="Cerca..." className="h-8 w-64 pl-9 text-xs" />
+          <Input 
+            placeholder="Cerca..." 
+            className="h-8 w-64 pl-9 text-xs cursor-pointer bg-muted/20 border-border/50" 
+            readOnly
+          />
           <kbd className="absolute right-2 top-1.5 hidden h-5 select-none items-center rounded border border-border bg-muted/60 px-1.5 font-mono text-[10px] font-medium text-faint opacity-100 sm:flex">
             Ctrl K
           </kbd>
@@ -232,6 +250,7 @@ export function AppTopbar() {
         </div>
       </div>
       <HelpCenterPanel open={isHelpOpen} onOpenChange={setIsHelpOpen} />
+      <CommandPalette />
     </header>
   );
 }

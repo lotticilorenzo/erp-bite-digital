@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Building2,
@@ -160,8 +160,10 @@ export default function Reports() {
   const currentMonthRange = useMemo(() => getRangeForPreset("CURRENT_MONTH", today), [today]);
 
   const [periodPreset, setPeriodPreset] = useState<ReportingPeriodPreset>("CURRENT_MONTH");
-  const [dateFrom, setDateFrom] = useState(formatDateInput(currentMonthRange.from));
-  const [dateTo, setDateTo] = useState(formatDateInput(currentMonthRange.to));
+  const [customRange, setCustomRange] = useState(() => ({
+    from: formatDateInput(currentMonthRange.from),
+    to: formatDateInput(currentMonthRange.to),
+  }));
   const [selectedClientId, setSelectedClientId] = useState("ALL");
   const [previewCommessa, setPreviewCommessa] = useState<Commessa | null>(null);
 
@@ -172,34 +174,37 @@ export default function Reports() {
   const { data: previewTimesheets = [] } = useTimesheets({
     commessa_id: previewCommessa?.id,
   });
-  const commesseList = Array.isArray(commesse) ? commesse : [];
-  const clientiList = Array.isArray(clienti) ? clienti : [];
-  const fattureAttiveList = Array.isArray(fattureAttive) ? fattureAttive : [];
-  const costiFissiList = Array.isArray(costiFissi) ? costiFissi : [];
-  const previewTimesheetsList = Array.isArray(previewTimesheets) ? previewTimesheets : [];
-  const clientById = useMemo(() => buildClientById(clientiList), [clientiList]);
+  const fixedCosts = useMemo(
+    () => (Array.isArray(costiFissi) ? costiFissi : []),
+    [costiFissi]
+  );
+  const clientById = useMemo(() => buildClientById(clienti), [clienti]);
   const commesseWithClienti = useMemo(
-    () => hydrateCommesseWithClienti(commesseList, clientiList),
-    [commesseList, clientiList]
+    () => hydrateCommesseWithClienti(commesse, clienti),
+    [commesse, clienti]
   );
 
-  useEffect(() => {
+  const dateRangeInputs = useMemo(() => {
     if (periodPreset === "CUSTOM") {
-      return;
+      return customRange;
     }
 
     const nextRange = getRangeForPreset(periodPreset, today);
-    setDateFrom(formatDateInput(nextRange.from));
-    setDateTo(formatDateInput(nextRange.to));
-  }, [periodPreset, today]);
+    return {
+      from: formatDateInput(nextRange.from),
+      to: formatDateInput(nextRange.to),
+    };
+  }, [customRange, periodPreset, today]);
+
+  const { from: dateFrom, to: dateTo } = dateRangeInputs;
 
   const range = useMemo(() => {
     return resolveReportingRange(periodPreset, dateFrom, dateTo, today);
   }, [dateFrom, dateTo, periodPreset, today]);
 
   const selectedClient = useMemo(
-    () => clientiList.find((cliente) => cliente.id === selectedClientId) ?? null,
-    [clientiList, selectedClientId]
+    () => clienti.find((cliente) => cliente.id === selectedClientId) ?? null,
+    [clienti, selectedClientId]
   );
 
   const filteredCommesse = useMemo(() => {
@@ -228,7 +233,7 @@ export default function Reports() {
   }, [filteredCommesse]);
 
   const filteredFattureAttive = useMemo(() => {
-    return fattureAttiveList.filter((fattura) => {
+    return fattureAttive.filter((fattura) => {
       if (!fattura.data_emissione) {
         return false;
       }
@@ -241,7 +246,7 @@ export default function Reports() {
       const matchesClient = selectedClientId === "ALL" || fattura.cliente_id === selectedClientId;
       return matchesClient && isWithinInterval(invoiceDate, { start: range.from, end: range.to });
     });
-  }, [fattureAttiveList, range, selectedClientId]);
+  }, [fattureAttive, range, selectedClientId]);
 
   const kpis = useMemo(() => {
     const fatturato = sortedCommesse.reduce(
@@ -252,7 +257,7 @@ export default function Reports() {
       (total, commessa) => total + Number(commessa.margine_euro || 0),
       0
     );
-    const costiStruttura = costiFissiList.reduce(
+    const costiStruttura = fixedCosts.reduce(
       (total, cost) => total + getAllocatedStructureCost(cost, range),
       0
     );
@@ -263,7 +268,7 @@ export default function Reports() {
       costiStruttura,
       margineNetto: margineLordo - costiStruttura,
     };
-  }, [costiFissiList, range, sortedCommesse]);
+  }, [fixedCosts, range, sortedCommesse]);
 
   const reportMeta = useMemo(() => {
     const clientiCoinvolti = new Set(sortedCommesse.map((commessa) => commessa.cliente_id)).size;
@@ -346,8 +351,10 @@ export default function Reports() {
   const handleResetFilters = () => {
     const nextRange = getRangeForPreset("CURRENT_MONTH", today);
     setPeriodPreset("CURRENT_MONTH");
-    setDateFrom(formatDateInput(nextRange.from));
-    setDateTo(formatDateInput(nextRange.to));
+    setCustomRange({
+      from: formatDateInput(nextRange.from),
+      to: formatDateInput(nextRange.to),
+    });
     setSelectedClientId("ALL");
   };
 
@@ -496,7 +503,10 @@ export default function Reports() {
                 value={dateFrom}
                 onChange={(event) => {
                   setPeriodPreset("CUSTOM");
-                  setDateFrom(event.target.value);
+                  setCustomRange((current) => ({
+                    ...current,
+                    from: event.target.value,
+                  }));
                 }}
                 className="h-11 bg-muted/50 border-border rounded-xl text-white"
               />
@@ -511,7 +521,10 @@ export default function Reports() {
                 value={dateTo}
                 onChange={(event) => {
                   setPeriodPreset("CUSTOM");
-                  setDateTo(event.target.value);
+                  setCustomRange((current) => ({
+                    ...current,
+                    to: event.target.value,
+                  }));
                 }}
                 className="h-11 bg-muted/50 border-border rounded-xl text-white"
               />
@@ -527,7 +540,7 @@ export default function Reports() {
                 className="w-full h-11 bg-muted/50 border border-border text-white rounded-xl px-4 appearance-none focus:outline-none focus:border-primary transition-all text-sm font-medium"
               >
                 <option value="ALL">Tutti i clienti</option>
-                {clientiList.map((cliente) => (
+                {clienti.map((cliente) => (
                   <option key={cliente.id} value={cliente.id}>
                     {cliente.ragione_sociale}
                   </option>
@@ -597,7 +610,7 @@ export default function Reports() {
         <ReportKpiCard
           title="Costi Struttura"
           value={formatEuro(kpis.costiStruttura)}
-          subtitle={`${costiFissiList.length} voci costo considerate`}
+          subtitle={`${fixedCosts.length} voci costo considerate`}
           icon={<Wallet className="h-5 w-5 text-amber-400" />}
         />
         <ReportKpiCard
@@ -870,7 +883,7 @@ export default function Reports() {
           <div className="flex-1 bg-white">
             {previewCommessa && (
               <PDFViewer width="100%" height="100%" showToolbar={false} style={{ border: "none" }}>
-                <CommessaReportPDF commessa={previewCommessa} timesheets={previewTimesheetsList} />
+                <CommessaReportPDF commessa={previewCommessa} timesheets={previewTimesheets} />
               </PDFViewer>
             )}
           </div>

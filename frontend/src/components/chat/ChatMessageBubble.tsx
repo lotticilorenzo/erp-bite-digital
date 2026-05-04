@@ -56,24 +56,22 @@ export function ChatMessageBubble({
 }: ChatMessageBubbleProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.contenuto);
-  const [resolvedAttachmentUrl, setResolvedAttachmentUrl] = useState<string | null>(null);
+  const [protectedAttachment, setProtectedAttachment] = useState<{ path: string; url: string } | null>(null);
 
   const attachmentPath = message.contenuto;
+  const isAttachmentMessage = message.tipo === "allegato" || message.tipo === "immagine" || message.tipo === "audio";
   const isProtectedUpload = attachmentPath.startsWith("/api/v1/uploads/");
   const isLegacyUpload = attachmentPath.startsWith("/static/uploads/");
-  const isManagedUpload = isProtectedUpload || isLegacyUpload;
+  const isManagedUpload = isProtectedUpload || isLegacyUpload || isAttachmentMessage;
+  const resolvedAttachmentUrl =
+    isLegacyUpload
+      ? attachmentPath
+      : protectedAttachment?.path === attachmentPath
+        ? protectedAttachment.url
+        : null;
 
   useEffect(() => {
-    setEditContent(message.contenuto);
-  }, [message.contenuto]);
-
-  useEffect(() => {
-    if (isLegacyUpload) {
-      setResolvedAttachmentUrl(attachmentPath);
-      return;
-    }
     if (!isProtectedUpload) {
-      setResolvedAttachmentUrl(null);
       return;
     }
 
@@ -88,11 +86,11 @@ export function ChatMessageBubble({
           URL.revokeObjectURL(objectUrl);
           return;
         }
-        setResolvedAttachmentUrl(objectUrl);
+        setProtectedAttachment({ path: attachmentPath, url: objectUrl });
       })
       .catch(() => {
-        if (active) {
-          setResolvedAttachmentUrl(null);
+        if (active && protectedAttachment?.path === attachmentPath) {
+          setProtectedAttachment(null);
         }
       });
 
@@ -102,7 +100,7 @@ export function ChatMessageBubble({
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [attachmentPath, isLegacyUpload, isProtectedUpload]);
+  }, [attachmentPath, isProtectedUpload, protectedAttachment?.path]);
 
   const downloadProtectedAttachment = async () => {
     const response = await api.get(attachmentPath, { responseType: "blob" });
@@ -118,7 +116,7 @@ export function ChatMessageBubble({
 
   const renderContent = (text: string) => {
     if (isManagedUpload) {
-      const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(text);
+      const isImage = message.tipo === "immagine" || /\.(jpg|jpeg|png|gif|webp)$/i.test(text);
       if (isImage) {
         if (!resolvedAttachmentUrl) {
           return (
@@ -143,7 +141,7 @@ export function ChatMessageBubble({
         );
       }
 
-      const isAudio = /\.(webm|ogg|mp3|wav|m4a|aac)$/i.test(text);
+      const isAudio = message.tipo === "audio" || /\.(webm|ogg|mp3|wav)$/i.test(text);
       if (isAudio) {
         if (!resolvedAttachmentUrl) {
           return (
@@ -299,7 +297,13 @@ export function ChatMessageBubble({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="rounded-xl border-border bg-card">
-                  <DropdownMenuItem className="cursor-pointer font-bold" onClick={() => setIsEditing(true)}>
+                  <DropdownMenuItem
+                    className="cursor-pointer font-bold"
+                    onClick={() => {
+                      setEditContent(message.contenuto);
+                      setIsEditing(true);
+                    }}
+                  >
                     <Edit3 size={14} className="mr-2" /> Modifica
                   </DropdownMenuItem>
                   <DropdownMenuItem

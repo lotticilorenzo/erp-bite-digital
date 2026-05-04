@@ -54,7 +54,8 @@ from app.schemas.schemas import (
     BudgetVarianceOut, BudgetTrendOut, BudgetTrendPointOut, BudgetTrendSeriesOut,
     WikiCategoriaCreate, WikiCategoriaOut, WikiArticoloCreate, WikiArticoloUpdate, WikiArticoloOut,
     ChatReazioneBase, ChatReazioneRead, ChatMessaggioCreate, ChatMessaggioUpdate, ChatMessaggioRead,
-    CRMStageOut, CRMLeadCreate, CRMLeadUpdate, CRMLeadOut, CRMActivityCreate, CRMActivityOut, CRMStatsOut,
+    CRMStageOut, CRMStageCreate, CRMStageUpdate, CRMLeadCreate, CRMLeadUpdate, CRMLeadOut, CRMActivityCreate, CRMActivityOut, CRMStatsOut,
+    ProgettoTemplateOut,
     CostoFissoCreate, CostoFissoUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
     MovimentoCassaUpdate, RiconciliaRequest,
@@ -2831,6 +2832,50 @@ async def get_crm_stages(
     res = await db.execute(select(CRMStage).order_by(CRMStage.ordine))
     return res.scalars().all()
 
+@router.post("/crm/stadi", response_model=CRMStageOut, status_code=201, tags=["CRM"])
+async def add_crm_stage(
+    data: CRMStageCreate,
+    db: AsyncSession = Depends(get_db),
+    _auth: User = Depends(require_admin)
+):
+    stage = CRMStage(**data.model_dump())
+    db.add(stage)
+    await db.commit()
+    await db.refresh(stage)
+    return stage
+
+@router.patch("/crm/stadi/{stage_id}", response_model=CRMStageOut, tags=["CRM"])
+async def update_crm_stage(
+    stage_id: uuid.UUID,
+    data: CRMStageUpdate,
+    db: AsyncSession = Depends(get_db),
+    _auth: User = Depends(require_admin)
+):
+    stage = await db.get(CRMStage, stage_id)
+    if not stage: raise HTTPException(status_code=404)
+    for k, v in data.model_dump(exclude_unset=True).items():
+        setattr(stage, k, v)
+    await db.commit()
+    await db.refresh(stage)
+    return stage
+
+@router.delete("/crm/stadi/{stage_id}", tags=["CRM"])
+async def delete_crm_stage(
+    stage_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _auth: User = Depends(require_admin)
+):
+    stage = await db.get(CRMStage, stage_id)
+    if not stage: raise HTTPException(status_code=404)
+    # Check if any leads are in this stage
+    from sqlalchemy import func
+    res = await db.execute(select(func.count(CRMLead.id)).where(CRMLead.stadio_id == stage_id))
+    if res.scalar_one() > 0:
+        raise HTTPException(status_code=400, detail="Impossibile eliminare uno stadio con lead associati")
+    await db.delete(stage)
+    await db.commit()
+    return {"success": True}
+
 @router.get("/crm/lead", response_model=List[CRMLeadOut], tags=["CRM"])
 async def get_crm_leads(
     db: AsyncSession = Depends(get_db),
@@ -2838,6 +2883,7 @@ async def get_crm_leads(
 ):
     from sqlalchemy import select, or_
     from sqlalchemy.orm import joinedload, selectinload
+    from app.services.crm_service import CRMService
     
     stmt = select(CRMLead).options(
         joinedload(CRMLead.stadio),
@@ -2907,6 +2953,7 @@ async def get_single_crm_lead(
         if author:
             act.autore_nome = f"{author.nome} {author.cognome}"
             
+    lead.suggerimento_ai = await CRMService.get_ai_suggestion(db, lead.id)
     return lead
 
 @router.patch("/crm/lead/{lead_id}", response_model=CRMLeadOut, tags=["CRM"])
@@ -3003,6 +3050,7 @@ async def convert_lead(
         
     # 1. Crea Cliente
     new_client = Cliente(
+        id=uuid.uuid4(),
         ragione_sociale=lead.nome_azienda,
         referente=lead.nome_contatto,
         email=lead.email,
@@ -3010,8 +3058,21 @@ async def convert_lead(
         note=f"Convertito da CRM lead il {date.today()}\n{lead.note or ''}"
     )
     db.add(new_client)
+    await db.flush()
+
+    # 2. Crea Progetto
+    from app.models.models import Progetto, ProjectStatus, ProjectType
+    new_project = Progetto(
+        id=uuid.uuid4(),
+        nome=f"Progetto {lead.nome_azienda}",
+        cliente_id=new_client.id,
+        stato=ProjectStatus.ATTESA,
+        tipo=ProjectType.RETAINER, # Default
+        note=f"Progetto creato automaticamente da conversione lead CRM."
+    )
+    db.add(new_project)
     
-    # 2. Aggiorna Lead Stadio (Vinto)
+    # 3. Aggiorna Lead Stadio (Vinto)
     res_stadi = await db.execute(select(CRMStage).where(CRMStage.nome == 'Chiuso Vinto'))
     stadio_vinto = res_stadi.scalar_one_or_none()
     if stadio_vinto:
@@ -3019,7 +3080,11 @@ async def convert_lead(
         lead.probabilita_chiusura = 100
         
     await db.commit()
-    return {"message": "Lead convertito in cliente con successo", "cliente_id": new_client.id}
+    return {
+        "message": "Lead convertito in cliente e progetto con successo", 
+        "cliente_id": new_client.id,
+        "progetto_id": new_project.id
+    }
 
 @router.get("/crm/statistiche", response_model=CRMStatsOut, tags=["CRM"])
 async def get_crm_stats(
@@ -3050,6 +3115,63 @@ async def get_crm_stats(
         "tasso_conversione": tasso,
         "previsione_ricavi": previsione
     }
+
+
+# ── PROGETTO TEMPLATES ───────────────────────────────────────
+@router.get("/progetto-templates", response_model=List[ProgettoTemplateOut], tags=["ProgettoTemplates"])
+async def list_progetto_templates(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from sqlalchemy.orm import selectinload as sil
+    from app.models.models import ProgettoTemplate
+    result = await db.execute(
+        select(ProgettoTemplate)
+        .options(sil(ProgettoTemplate.tasks), sil(ProgettoTemplate.milestones))
+        .order_by(ProgettoTemplate.nome)
+    )
+    return result.scalars().unique().all()
+
+@router.post("/progetto-templates/{id}/applica", tags=["ProgettoTemplates"])
+async def applica_template_progetto(
+    id: uuid.UUID,
+    progetto_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
+):
+    from app.models.models import Progetto, Task, TaskStatus, ProgettoMilestone, ProgettoTemplate
+    template = await db.get(ProgettoTemplate, id)
+    if not template: raise HTTPException(status_code=404, detail="Template non trovato")
+    progetto = await db.get(Progetto, progetto_id)
+    if not progetto: raise HTTPException(status_code=404, detail="Progetto non trovato")
+    
+    # Crea Task
+    for t_tpl in template.tasks:
+        new_task = Task(
+            id=uuid.uuid4(),
+            progetto_id=progetto_id,
+            titolo=t_tpl.titolo,
+            descrizione=t_tpl.descrizione,
+            stato=TaskStatus.DA_FARE,
+            stima_minuti=int(t_tpl.stima_ore * 60) if t_tpl.stima_ore else 0,
+            ordine=t_tpl.ordine,
+            categoria=t_tpl.categoria
+        )
+        db.add(new_task)
+    
+    # Crea Milestones
+    for m_tpl in template.milestones:
+        new_milestone = ProgettoMilestone(
+            id=uuid.uuid4(),
+            progetto_id=progetto_id,
+            nome=m_tpl.nome,
+            data_scadenza=(date.today() + timedelta(days=m_tpl.giorni_dalla_creazione)) if m_tpl.giorni_dalla_creazione else None,
+            completata=False
+        )
+        db.add(new_milestone)
+    
+    await db.commit()
+    return {"success": True, "message": f"Template '{template.nome}' applicato con successo"}
 
 
 # ── AUDIT LOG ─────────────────────────────────────────────

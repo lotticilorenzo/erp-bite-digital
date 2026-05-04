@@ -53,9 +53,48 @@ export function FatturaDetailDialog({
 
   const isAttiva = type === "attive";
   const entity = isAttiva ? fattura.cliente : fattura.fornitore;
-  
-  // Extract items from fic_raw_data if available
-  const items = fattura.fic_raw_data?.items || fattura.fic_raw_data?.details || [];
+
+  const ficBase = "https://secure.fattureincloud.it";
+  const ficUrl = fattura.fic_id
+    ? `${ficBase}/${isAttiva ? "ar" : "ap"}/doc/${fattura.fic_id}`
+    : null;
+  const ficPdfUrl = fattura.fic_id
+    ? `${ficBase}/${isAttiva ? "ar" : "ap"}/doc/${fattura.fic_id}/pdf`
+    : null;
+
+  const handleDownloadPdf = () => {
+    if (ficPdfUrl) {
+      window.open(ficPdfUrl, "_blank", "noopener,noreferrer");
+    } else {
+      toast.error("ID FIC non disponibile per questo documento");
+    }
+  };
+
+  const handleOpenFic = () => {
+    if (ficUrl) {
+      window.open(ficUrl, "_blank", "noopener,noreferrer");
+    } else {
+      toast.error("ID FIC non disponibile per questo documento");
+    }
+  };
+
+  const handleSollecito = () => {
+    const emailTo = entity?.email || "";
+    const ragione = entity?.ragione_sociale || "Cliente";
+    const importo = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(fattura.importo_residuo || 0);
+    const scadenza = fattura.data_scadenza
+      ? new Date(fattura.data_scadenza).toLocaleDateString("it-IT")
+      : "non definita";
+    const subject = encodeURIComponent(`Sollecito pagamento fattura n. ${fattura.numero || ""}`);
+    const body = encodeURIComponent(
+      `Gentile ${ragione},\n\nLa contattamo per ricordarLe che la fattura n. ${fattura.numero || ""} emessa in data ${fattura.data_emissione ? new Date(fattura.data_emissione).toLocaleDateString("it-IT") : ""} per un importo residuo di ${importo} risulta ancora non saldata.\n\nData scadenza: ${scadenza}\n\nRimaniamo a disposizione per qualsiasi chiarimento.\n\nCordiali saluti,\nBite Digital Studio`
+    );
+    window.location.href = `mailto:${emailTo}?subject=${subject}&body=${body}`;
+  };
+
+  // Extract items from fic_raw_data if available — try multiple field names
+  const rawData = fattura.fic_raw_data || {};
+  const items: any[] = rawData.items ?? rawData.details ?? rawData.goods ?? [];
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(val);
@@ -127,11 +166,11 @@ export function FatturaDetailDialog({
             <div className="flex flex-col items-end gap-3">
               {getStatusBadge(fattura.stato_pagamento)}
               <div className="flex items-center gap-2">
-                 <Button variant="outline" size="sm" className="bg-white/5 border-border/50 text-xs font-bold rounded-xl h-9 hover:bg-white/10">
+                 <Button onClick={handleDownloadPdf} variant="outline" size="sm" className="bg-white/5 border-border/50 text-xs font-bold rounded-xl h-9 hover:bg-white/10">
                     <Download className="h-3.5 w-3.5 mr-2" />
                     Scarica PDF
                  </Button>
-                 <Button size="sm" className="bg-primary text-white text-xs font-bold rounded-xl h-9">
+                 <Button onClick={handleOpenFic} size="sm" className="bg-primary text-white text-xs font-bold rounded-xl h-9">
                     Vai su FIC
                     <ExternalLink className="h-3.5 w-3.5 ml-2" />
                  </Button>
@@ -156,7 +195,7 @@ export function FatturaDetailDialog({
                     </div>
                     <div 
                       className="cursor-pointer group/entity hover:bg-white/10 transition-all"
-                      onClick={() => navigate(isAttiva ? `/clienti/${entity?.id}` : `/fornitori/${entity?.id}`)}
+                      onClick={() => navigate(isAttiva ? `/clienti/${entity?.id}` : `/fornitori?selected_id=${entity?.id}`)}
                     >
                       <h4 className="font-black text-white text-lg leading-tight uppercase group-hover/entity:text-primary transition-colors">
                         {entity?.ragione_sociale || fattura.fornitore_nome || "Dati non disponibili"}
@@ -327,9 +366,9 @@ export function FatturaDetailDialog({
                 Segna come Pagata oggi
               </Button>
               {isAttiva && (
-                <Button 
+                <Button
                   variant="outline"
-                  onClick={() => toast.info("Sollecito inviato via email (Simulato)")}
+                  onClick={handleSollecito}
                   className="flex-1 border-border bg-white/5 text-white font-black uppercase text-[10px] h-12 rounded-2xl gap-2 hover:bg-white/10"
                 >
                   <Mail className="h-4 w-4" />

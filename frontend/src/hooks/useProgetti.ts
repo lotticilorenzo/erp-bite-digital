@@ -94,3 +94,31 @@ export function useDeleteProgetto() {
     },
   });
 }
+
+export function useProgettoTemplates() {
+  return useQuery({
+    queryKey: ["progetto-templates"],
+    queryFn: async () => {
+      const { data } = await api.get("/progetto-templates");
+      return data;
+    },
+  });
+}
+
+export function useApplyTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ progettoId, templateId }: { progettoId: string; templateId: string }) => {
+      const { data } = await api.post(`/progetto-templates/${templateId}/applica`, { progetto_id: progettoId });
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["progetti", variables.progettoId] });
+      queryClient.invalidateQueries({ queryKey: ["tasks", { progetto_id: variables.progettoId }] });
+      toast.success("Template applicato con successo");
+    },
+    onError: (err: any) => {
+      toast.error(formatError(err, "Errore nell'applicazione del template"));
+    },
+  });
+}

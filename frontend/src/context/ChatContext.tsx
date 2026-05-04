@@ -2,11 +2,19 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
+import type { User } from '@/types';
+import type {
+  ChatChannel,
+  ChatMessage,
+  ChatReaction,
+  ChatUploadResponse,
+  CreateGroupChannelInput,
+} from '@/types/chat';
 
 interface ChatContextType {
-  channels: any[];
-  users: any[];
-  messages: any[];
+  channels: ChatChannel[];
+  users: User[];
+  messages: ChatMessage[];
   isLoading: boolean;
   activeChannelId: string | null;
   setActiveChannelId: (id: string | null) => void;
@@ -16,9 +24,10 @@ interface ChatContextType {
   channelSeenStatus: Record<string, Record<string, string>>;
   unreadCounts: Record<string, number>;
   loadMoreMessages: () => Promise<void>;
-  sendMessage: (content: string, type?: string, replyToId?: string) => Promise<void>;
-  uploadFile: (file: File) => Promise<any>;
-  startDirectChat: (userId: string) => Promise<any>;
+  sendMessage: (content: string, type?: ChatMessage['tipo'], replyToId?: string) => Promise<void>;
+  uploadFile: (file: File) => Promise<ChatUploadResponse>;
+  startDirectChat: (userId: string) => Promise<ChatChannel | undefined>;
+  createGroupChannel: (input: CreateGroupChannelInput) => Promise<ChatChannel | undefined>;
   editMessage: (id: string, content: string) => Promise<void>;
   deleteMessage: (id: string) => Promise<void>;
   addReaction: (messageId: string, emoji: string) => Promise<void>;
@@ -45,6 +54,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const ws = useRef<WebSocket | null>(null);
   const activeChannelIdRef = useRef<string | null>(activeChannelId);
+  const connectWSRef = useRef<() => Promise<void>>(async () => {});
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isUnmountedRef = useRef(false);
@@ -54,8 +64,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     activeChannelIdRef.current = activeChannelId;
   }, [activeChannelId]);
 
-  // Data Fetching
-  const { data: channels, isLoading: isChannelsLoading } = useQuery({
+  const { data: channels = [], isLoading: isChannelsLoading } = useQuery<ChatChannel[]>({
     queryKey: ['chat-channels'],
     queryFn: async () => {
       const res = await axios.get('/chat/channels');
@@ -65,7 +74,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     refetchInterval: 60000,
   });
 
-  const { data: users = [] } = useQuery({
+  const { data: users = [] } = useQuery<User[]>({
     queryKey: ['chat-users'],
     queryFn: async () => {
       const res = await axios.get('/chat/users');
@@ -74,7 +83,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     enabled: !!user,
   });
 
-  const { data: messages = [], isLoading: isMessagesLoading } = useQuery({
+  const { data: messages = [], isLoading: isMessagesLoading } = useQuery<ChatMessage[]>({
     queryKey: ['chat-messages', activeChannelId],
     queryFn: async () => {
       if (!activeChannelId) return [];
@@ -93,22 +102,23 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await axios.get(`/chat/channels/${activeChannelId}/messages?limit=${LIMIT}&offset=${offset}`);
       if (res.data.length < LIMIT) setHasMore(false);
-      queryClient.setQueryData(['chat-messages', activeChannelId], (prev: any) => {
+      queryClient.setQueryData<ChatMessage[]>(['chat-messages', activeChannelId], (prev) => {
         return [...res.data, ...(prev || [])];
       });
-      setOffset(prev => prev + res.data.length);
+      setOffset((prev) => prev + res.data.length);
     } catch (err) {
-      console.error("Load more failed", err);
+      console.error('Load more failed', err);
     }
   }, [activeChannelId, offset, hasMore, queryClient]);
 
-  // WebSocket
   const connectWS = useCallback(async () => {
     if (!user || isUnmountedRef.current) return;
     if (
       ws.current &&
       (ws.current.readyState === WebSocket.OPEN || ws.current.readyState === WebSocket.CONNECTING)
-    ) return;
+    ) {
+      return;
+    }
 
     const scheduleReconnect = () => {
       if (isUnmountedRef.current) return;
@@ -116,7 +126,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
       reconnectAttemptsRef.current += 1;
       reconnectTimeoutRef.current = setTimeout(() => {
-        void connectWS();
+        void connectWSRef.current();
       }, delay);
     };
 
@@ -138,37 +148,45 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         const currentChannelId = activeChannelIdRef.current;
 
         switch (data.type) {
-          case 'new_message': {
-            queryClient.setQueryData(['chat-channels'], (old: any) => {
-              return old?.map((c: any) => c.id === data.message.canale_id ? {
-                ...c,
-                last_message: data.message.tipo !== 'testo' ? '[Allegato]' : data.message.contenuto,
-                last_message_at: data.message.created_at
-              } : c);
+          case 'channel_created':
+            queryClient.setQueryData<ChatChannel[]>(['chat-channels'], (old) => {
+              const existingChannels = old || [];
+              if (existingChannels.some((channel) => channel.id === data.channel.id)) {
+                return existingChannels;
+              }
+              return [data.channel, ...existingChannels];
             });
+            break;
+          case 'new_message':
+            queryClient.setQueryData<ChatChannel[]>(['chat-channels'], (old) => {
+              return (old || []).map((channel) => channel.id === data.message.canale_id ? {
+                ...channel,
+                last_message: data.message.tipo !== 'testo' ? '[Allegato]' : data.message.contenuto,
+                last_message_at: data.message.created_at,
+              } : channel);
+            });
+
             if (data.message.canale_id === currentChannelId) {
-              queryClient.setQueryData(['chat-messages', currentChannelId], (prev: any) => {
-                // Dedup: se il messaggio è già presente non aggiungerlo di nuovo
-                const existing = (prev || []) as any[];
-                if (existing.some((m: any) => m.id === data.message.id)) return existing;
+              queryClient.setQueryData<ChatMessage[]>(['chat-messages', currentChannelId], (prev) => {
+                const existing = prev || [];
+                if (existing.some((message) => message.id === data.message.id)) return existing;
                 return [...existing, data.message];
               });
             } else {
-              setUnreadCounts(prev => ({
+              setUnreadCounts((prev) => ({
                 ...prev,
-                [data.message.canale_id]: (prev[data.message.canale_id] || 0) + 1
+                [data.message.canale_id]: (prev[data.message.canale_id] || 0) + 1,
               }));
             }
             break;
-          }
           case 'message_edited': {
             const targetChannel = data.canale_id || currentChannelId;
             if (targetChannel) {
-              queryClient.setQueryData(['chat-messages', targetChannel], (prev: any) =>
-                prev?.map((m: any) =>
-                  m.id === data.message_id
-                    ? { ...m, contenuto: data.contenuto, updated_at: new Date().toISOString(), modificato: true }
-                    : m
+              queryClient.setQueryData<ChatMessage[]>(['chat-messages', targetChannel], (prev) =>
+                (prev || []).map((message) =>
+                  message.id === data.message_id
+                    ? { ...message, contenuto: data.contenuto, updated_at: new Date().toISOString(), modificato: true }
+                    : message
                 )
               );
             }
@@ -177,8 +195,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           case 'delete_message': {
             const targetChannel = data.canale_id || currentChannelId;
             if (targetChannel) {
-              queryClient.setQueryData(['chat-messages', targetChannel], (prev: any) =>
-                prev?.filter((m: any) => m.id !== data.message_id)
+              queryClient.setQueryData<ChatMessage[]>(['chat-messages', targetChannel], (prev) =>
+                (prev || []).filter((message) => message.id !== data.message_id)
               );
             }
             break;
@@ -186,14 +204,26 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           case 'reaction_added': {
             const targetChannel = data.canale_id || currentChannelId;
             if (targetChannel) {
-              queryClient.setQueryData(['chat-messages', targetChannel], (prev: any) =>
-                prev?.map((m: any) => {
-                  if (m.id !== data.message_id) return m;
-                  const alreadyHas = m.reazioni?.some((r: any) => r.user_id === data.user_id && r.emoji === data.emoji);
-                  if (alreadyHas) return m;
+              queryClient.setQueryData<ChatMessage[]>(['chat-messages', targetChannel], (prev) =>
+                (prev || []).map((message) => {
+                  if (message.id !== data.message_id) return message;
+                  const alreadyHas = message.reazioni?.some(
+                    (reaction: ChatReaction) => reaction.user_id === data.user_id && reaction.emoji === data.emoji
+                  );
+                  if (alreadyHas) return message;
                   return {
-                    ...m,
-                    reazioni: [...(m.reazioni || []), { id: crypto.randomUUID(), emoji: data.emoji, user_id: data.user_id, user_nome: data.user_nome, created_at: new Date().toISOString() }]
+                    ...message,
+                    reazioni: [
+                      ...(message.reazioni || []),
+                      {
+                        id: crypto.randomUUID(),
+                        messaggio_id: data.message_id,
+                        emoji: data.emoji,
+                        user_id: data.user_id,
+                        user_nome: data.user_nome,
+                        created_at: new Date().toISOString(),
+                      },
+                    ],
                   };
                 })
               );
@@ -203,14 +233,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           case 'reaction_removed': {
             const targetChannel = data.canale_id || currentChannelId;
             if (targetChannel) {
-              queryClient.setQueryData(['chat-messages', targetChannel], (prev: any) =>
-                prev?.map((m: any) => {
-                  if (m.id !== data.message_id) return m;
+              queryClient.setQueryData<ChatMessage[]>(['chat-messages', targetChannel], (prev) =>
+                (prev || []).map((message) => {
+                  if (message.id !== data.message_id) return message;
                   return {
-                    ...m,
-                    reazioni: (m.reazioni || []).filter(
-                      (reaction: any) => !(reaction.user_id === data.user_id && reaction.emoji === data.emoji)
-                    )
+                    ...message,
+                    reazioni: (message.reazioni || []).filter(
+                      (reaction) => !(reaction.user_id === data.user_id && reaction.emoji === data.emoji)
+                    ),
                   };
                 })
               );
@@ -219,11 +249,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           }
           case 'user_typing':
             if (data.channel_id === currentChannelId) {
-              setTypingUsers(prev => data.is_typing ? [...new Set([...prev, data.user_nome])] : prev.filter(n => n !== data.user_nome));
+              setTypingUsers((prev) =>
+                data.is_typing ? [...new Set([...prev, data.user_nome])] : prev.filter((name) => name !== data.user_nome)
+              );
             }
             break;
           case 'user_presence':
-            setOnlineUsers(prev => {
+            setOnlineUsers((prev) => {
               const next = new Set(prev);
               if (data.status === 'online') next.add(data.user_id);
               else next.delete(data.user_id);
@@ -251,32 +283,31 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       socket.onerror = () => socket.close();
     } catch (err) {
-      console.error("WS bootstrap failed", err);
+      console.error('WS bootstrap failed', err);
       scheduleReconnect();
     }
   }, [user, queryClient]);
 
   useEffect(() => {
+    connectWSRef.current = connectWS;
+  }, [connectWS]);
+
+  useEffect(() => {
     isUnmountedRef.current = false;
-    // Don't connect if loading auth, or no token, or no user (e.g. on login page)
     if (isAuthLoading || !user) return;
-    
+
     void connectWS();
     return () => {
       isUnmountedRef.current = true;
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      
+
       if (ws.current) {
-        // Remove listeners before closing to avoid "closed before established" console noise 
-        // and prevent any further logic from firing during unmount
         const socket = ws.current;
         socket.onopen = null;
         socket.onmessage = null;
         socket.onerror = null;
         socket.onclose = null;
-        
-        // Only close if fully open to avoid "closed before established" warning.
-        // We already cleared listeners, so it won't trigger any logic if it's connecting.
+
         if (socket.readyState === WebSocket.OPEN) {
           socket.close();
         }
@@ -285,20 +316,19 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     };
   }, [user, isAuthLoading, connectWS]);
 
-  // Actions
-  const sendMessage = useCallback(async (content: string, type: string = 'testo', replyToId?: string) => {
+  const sendMessage = useCallback(async (content: string, type: ChatMessage['tipo'] = 'testo', replyToId?: string) => {
     if (!activeChannelId) return;
-    const activeChannel = channels?.find((c: any) => c.id === activeChannelId);
+    const activeChannel = channels.find((channel) => channel.id === activeChannelId);
     await axios.post('/chat/messages', {
       canale_id: activeChannelId,
       progetto_id: activeChannel?.progetto_id,
       contenuto: content,
       tipo: type,
-      risposta_a: replyToId
+      risposta_a: replyToId,
     });
   }, [activeChannelId, channels]);
 
-  const uploadFile = useCallback(async (file: File) => {
+  const uploadFile = useCallback(async (file: File): Promise<ChatUploadResponse> => {
     const formData = new FormData();
     formData.append('file', file);
     const res = await axios.post('/uploads', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
@@ -328,7 +358,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, [activeChannelId]);
 
   const markAsSeen = useCallback((channelId: string) => {
-    setUnreadCounts(prev => prev[channelId] === 0 ? prev : { ...prev, [channelId]: 0 });
+    setUnreadCounts((prev) => prev[channelId] === 0 ? prev : { ...prev, [channelId]: 0 });
     if (ws.current?.readyState === WebSocket.OPEN) {
       ws.current.send(JSON.stringify({ type: 'message_seen', channel_id: channelId }));
     }
@@ -337,20 +367,44 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const startDirectChat = useCallback(async (userId: string) => {
     try {
       const res = await axios.post('/chat/channels/direct', { other_user_id: userId });
-      const newChannel = res.data;
-      queryClient.setQueryData(['chat-channels'], (old: any) => {
-        if (!old?.find((c: any) => c.id === newChannel.id)) return [newChannel, ...(old || [])];
-        return old;
+      const newChannel = res.data as ChatChannel;
+      queryClient.setQueryData<ChatChannel[]>(['chat-channels'], (old) => {
+        const existingChannels = old || [];
+        if (!existingChannels.find((channel) => channel.id === newChannel.id)) {
+          return [newChannel, ...existingChannels];
+        }
+        return existingChannels;
       });
       setActiveChannelId(newChannel.id);
       return newChannel;
     } catch (err) {
-      console.error("Failed to start DM", err);
+      console.error('Failed to start DM', err);
+      throw err;
     }
   }, [queryClient]);
 
-  const value = {
-    channels: channels || [],
+  const createGroupChannel = useCallback(async (input: CreateGroupChannelInput) => {
+    try {
+      const res = await axios.post('/chat/channels/group', input);
+      const newChannel = res.data as ChatChannel;
+      queryClient.setQueryData<ChatChannel[]>(['chat-channels'], (old) => {
+        const existingChannels = old || [];
+        if (!existingChannels.find((channel) => channel.id === newChannel.id)) {
+          return [newChannel, ...existingChannels];
+        }
+        return existingChannels;
+      });
+      queryClient.setQueryData<ChatMessage[]>(['chat-messages', newChannel.id], []);
+      setActiveChannelId(newChannel.id);
+      return newChannel;
+    } catch (err) {
+      console.error('Failed to create group', err);
+      throw err;
+    }
+  }, [queryClient]);
+
+  const value: ChatContextType = {
+    channels,
     users,
     messages,
     isLoading: isAuthLoading || isChannelsLoading || isMessagesLoading,
@@ -365,12 +419,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     sendMessage,
     uploadFile,
     startDirectChat,
+    createGroupChannel,
     editMessage,
     deleteMessage,
     addReaction,
     removeReaction,
     setTypingStatus,
-    markAsSeen
+    markAsSeen,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

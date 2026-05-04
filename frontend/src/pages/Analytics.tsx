@@ -1665,9 +1665,9 @@ export default function Analytics() {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {alerts.map((alert: any) => (
+          {alerts.map((alert: any, index: number) => (
             <div 
-              key={alert.title} 
+              key={`${alert.type}-${alert.title}-${alert.value}-${index}`}
               className="flex items-center gap-4 p-5 rounded-[2rem] bg-card border border-border/50 hover:border-primary/40 transition-all cursor-pointer group active:scale-[0.98] shadow-lg shadow-black/5"
               onClick={() => {
                 if (alert.title.includes("Sforamento") || alert.title.includes("Margine basso")) {
@@ -1676,6 +1676,10 @@ export default function Analytics() {
                    navigate("/clienti");
                 } else if (alert.title.includes("Scaduto")) {
                    navigate("/fatture");
+                } else if (alert.type === "MARGIN") {
+                   navigate("/reports");
+                } else {
+                   navigate("/analytics");
                 }
               }}
             >

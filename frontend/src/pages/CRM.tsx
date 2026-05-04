@@ -1,4 +1,5 @@
-import { useState } from "react";
+import React, { useState } from "react";
+import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { 
   Plus, 
@@ -24,6 +25,7 @@ import { useCRM } from "@/hooks/useCRM";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { CRMBoard } from "@/components/crm/CRMBoard";
 import { CRMStats } from "@/components/crm/CRMStats";
 import { CRMLeadModal } from "@/components/crm/CRMLeadModal";
@@ -36,12 +38,32 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export default function CRM() {
-  const { leads, stages, stats, isLoading, createLead, convertLeadToClient, deleteLead } = useCRM();
+  const { 
+    leads, stages, stats, isLoading, 
+    createLead, convertLeadToClient, deleteLead,
+    addStage, updateStage, deleteStage
+  } = useCRM();
   const navigate = useNavigate();
   const [view, setView] = useState<"kanban" | "list" | "automations" | "settings">("kanban");
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<"all" | "hot" | "no_activity" | "high_value">("all");
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+
+  const exportCsv = () => {
+    const headers = ["Azienda","Contatto","Email","Telefono","Stadio","Valore","Score"];
+    const rows = filteredLeads.map((l) => [
+      l.nome_azienda, l.nome_contatto || "", l.email || "", l.telefono || "",
+      l.stadio || "", l.valore_stimato || 0, l.lead_score || 0,
+    ]);
+    const csv = [headers, ...rows].map((r) => r.join(";")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `leads-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const filteredLeads = leads.filter(l => {
     const matchesSearch = l.nome_azienda.toLowerCase().includes(search.toLowerCase()) ||
@@ -136,7 +158,7 @@ export default function CRM() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="h-12 rounded-2xl bg-white/5 border-white/5 text-[#475569] font-black uppercase text-[10px] tracking-widest px-6 hover:bg-white/10">
+          <Button onClick={exportCsv} variant="outline" className="h-12 rounded-2xl bg-white/5 border-white/5 text-[#475569] font-black uppercase text-[10px] tracking-widest px-6 hover:bg-white/10">
             <Download className="h-4 w-4 mr-2" />
             Esporta CSV
           </Button>
@@ -309,10 +331,67 @@ export default function CRM() {
 
       {view === "settings" && (
         <div className="flex-1 overflow-y-auto space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-500 pb-8 pr-1 custom-scrollbar">
-           <div className="p-12 text-center bg-white/5 border border-white/10 rounded-[2.5rem] flex flex-col items-center justify-center">
-              <Settings2 className="w-12 h-12 text-[#1e293b] mb-4" />
-              <h3 className="text-xl font-bold text-white uppercase italic tracking-tighter">CRM <span className="text-primary not-italic">Setup</span></h3>
-              <p className="text-[#475569] text-sm max-w-md mx-auto mt-2 font-medium">Coming soon: Personalizza stadi del funnel, campi custom e permessi di accesso per il tuo team sales.</p>
+           <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-12">
+              <div className="flex items-center justify-between mb-12">
+                <div>
+                  <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white">Pipeline <span className="text-primary not-italic">Stages</span></h3>
+                  <p className="text-xs text-[#475569] font-medium mt-1 uppercase tracking-widest">Configura gli stadi del tuo funnel di vendita</p>
+                </div>
+                <Button 
+                  onClick={() => addStage.mutate({ nome: "Nuovo Stadio", ordine: stages.length, colore: "#7c3aed", probabilita: 10 })}
+                  className="bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 h-10 px-6 rounded-xl font-black uppercase text-[10px] tracking-widest"
+                >
+                  <Plus className="w-4 h-4 mr-2" /> Aggiungi Stadio
+                </Button>
+              </div>
+
+              <div className="space-y-4 max-w-4xl">
+                {stages.map((stage) => (
+                  <div key={stage.id} className="group p-6 rounded-3xl bg-white/5 border border-white/5 hover:border-primary/30 transition-all flex items-center gap-6">
+                    <div className="h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 border border-white/10" style={{ backgroundColor: `${stage.colore}20` }}>
+                      <div className="h-3 w-3 rounded-full" style={{ backgroundColor: stage.colore }} />
+                    </div>
+                    
+                    <div className="flex-1 grid grid-cols-4 gap-6">
+                      <div className="col-span-2">
+                        <Label className="text-[9px] font-black uppercase tracking-widest text-[#475569] mb-1.5 block">Nome Stadio</Label>
+                        <Input 
+                          value={stage.nome} 
+                          onChange={(e) => updateStage.mutate({ id: stage.id, data: { nome: e.target.value } })}
+                          className="bg-transparent border-none p-0 h-auto text-sm font-bold text-white focus-visible:ring-0"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[9px] font-black uppercase tracking-widest text-[#475569] mb-1.5 block">Probabilità</Label>
+                        <Input 
+                          type="number"
+                          value={stage.probabilita} 
+                          onChange={(e) => updateStage.mutate({ id: stage.id, data: { probabilita: parseInt(e.target.value) } })}
+                          className="bg-transparent border-none p-0 h-auto text-sm font-bold text-white focus-visible:ring-0"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[9px] font-black uppercase tracking-widest text-[#475569] mb-1.5 block">Colore</Label>
+                        <Input 
+                          type="color"
+                          value={stage.colore} 
+                          onChange={(e) => updateStage.mutate({ id: stage.id, data: { colore: e.target.value } })}
+                          className="bg-transparent border-none p-0 h-6 w-12 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => deleteStage.mutate(stage.id)}
+                      className="text-red-500/50 hover:text-red-500 hover:bg-red-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
            </div>
         </div>
       )}
@@ -360,7 +439,8 @@ function FilterBtn({ active, onClick, icon, label, color = "text-white" }: any) 
   );
 }
 
-function AutomationCard({ title, description, icon, enabled, badge }: any) {
+function AutomationCard({ title, description, icon, enabled: initialEnabled, badge }: any) {
+  const [enabled, setEnabled] = React.useState(initialEnabled);
   return (
     <div className="bg-white/5 border border-white/10 p-8 rounded-[2.5rem] hover:bg-white/[0.07] transition-all group relative overflow-hidden">
         <div className="absolute top-6 right-6">
@@ -377,8 +457,13 @@ function AutomationCard({ title, description, icon, enabled, badge }: any) {
         <p className="text-xs text-[#475569] font-medium leading-relaxed mb-8">{description}</p>
         <div className="flex items-center justify-between">
             <span className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Stato: <span className={enabled ? 'text-emerald-400' : ''}>{enabled ? 'Attivo' : 'Inattivo'}</span></span>
-            <Button 
-                variant="ghost" 
+            <Button
+                variant="ghost"
+                onClick={() => {
+                  const next = !enabled;
+                  setEnabled(next);
+                  toast.success(`${title} ${next ? 'attivata' : 'disattivata'}`);
+                }}
                 className={`h-8 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest ${enabled ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-primary/10 text-primary hover:bg-primary/20'}`}
             >
                 {enabled ? 'Disattiva' : 'Attiva'}

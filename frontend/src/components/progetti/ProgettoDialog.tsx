@@ -35,7 +35,8 @@ import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCreateProgetto, useUpdateProgetto, type ProgettoPayload } from "@/hooks/useProgetti";
 import { useClienti } from "@/hooks/useClienti";
-import { useUsers } from "@/hooks/useUsers";
+import { useQuery } from "@tanstack/react-query";
+import api from "@/lib/api";
 import type { Progetto } from "@/types";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useFieldArray } from "react-hook-form";
@@ -70,7 +71,18 @@ interface ProgettoDialogProps {
 
 export function ProgettoDialog({ progetto, open, onOpenChange, onSuccess }: ProgettoDialogProps) {
   const { data: clienti } = useClienti();
-  const { data: collaborators } = useUsers();
+  const { data: risorse = [] } = useQuery<any[]>({
+    queryKey: ['risorse'],
+    queryFn: async () => { const res = await api.get('/risorse'); return res.data; }
+  });
+  // Map risorse by user_id for quick lookup; collaborators variable keeps UI compatibility
+  const collaborators = risorse.map(r => ({
+    id: r.user_id,
+    nome: r.nome,
+    cognome: r.cognome,
+    ruolo: r.ruolo || '',
+    costo_orario: r.servizi?.[0]?.costo_orario ?? 0,
+  }));
   const createProgetto = useCreateProgetto();
   const updateProgetto = useUpdateProgetto();
   const isEditing = !!(progetto && progetto.id);

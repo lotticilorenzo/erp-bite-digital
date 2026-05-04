@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import type { Fornitore, CategoriaFornitore } from "@/types";
@@ -28,12 +29,16 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
 
 export default function Fornitori() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const [filterAttivo, setFilterAttivo] = useState<"all" | "attivo" | "inattivo">("all");
+  const [filterCategoria, setFilterCategoria] = useState<string>("all");
+  const [searchParams] = useSearchParams();
+  const selectedIdFromUrl = searchParams.get("selected_id");
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedFornitore, setSelectedFornitore] = useState<Partial<Fornitore> | null>(null);
 
@@ -85,11 +90,18 @@ export default function Fornitori() {
     }
   });
 
-  const filteredFornitori = fornitori.filter(f => 
-    f.ragione_sociale.toLowerCase().includes(search.toLowerCase()) ||
-    f.piva?.includes(search) ||
-    f.email?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredFornitori = fornitori.filter(f => {
+    const matchSearch =
+      f.ragione_sociale.toLowerCase().includes(search.toLowerCase()) ||
+      f.piva?.includes(search) ||
+      f.email?.toLowerCase().includes(search.toLowerCase());
+    const matchAttivo =
+      filterAttivo === "all" ||
+      (filterAttivo === "attivo" && f.attivo) ||
+      (filterAttivo === "inattivo" && !f.attivo);
+    const matchCategoria = filterCategoria === "all" || f.categoria_id === filterCategoria;
+    return matchSearch && matchAttivo && matchCategoria;
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,9 +153,38 @@ export default function Fornitori() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Button variant="ghost" size="icon" className="text-muted-foreground">
-          <Filter className="w-4 h-4" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className={`gap-2 ${filterAttivo !== "all" ? "text-primary" : "text-muted-foreground"}`}>
+              <Filter className="w-4 h-4" />
+              <span className="text-[10px] font-black uppercase tracking-widest">{filterAttivo === "all" ? "Stato" : filterAttivo}</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-36 bg-card/95 backdrop-blur-xl border-border/50 rounded-xl p-1">
+            <DropdownMenuItem onClick={() => setFilterAttivo("all")} className={`text-xs font-bold uppercase cursor-pointer ${filterAttivo === "all" ? "text-primary" : ""}`}>Tutti</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setFilterAttivo("attivo")} className={`text-xs font-bold uppercase cursor-pointer ${filterAttivo === "attivo" ? "text-primary" : ""}`}>Attivi</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setFilterAttivo("inattivo")} className={`text-xs font-bold uppercase cursor-pointer ${filterAttivo === "inattivo" ? "text-primary" : ""}`}>Inattivi</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <div className="w-px h-6 bg-white/5" />
+
+        <Select value={filterCategoria} onValueChange={setFilterCategoria}>
+          <SelectTrigger className="w-[180px] h-9 bg-transparent border-none text-xs font-black uppercase tracking-widest text-muted-foreground focus:ring-0">
+            <SelectValue placeholder="Categoria" />
+          </SelectTrigger>
+          <SelectContent className="bg-card/95 backdrop-blur-xl border-border/50 rounded-xl">
+            <SelectItem value="all" className="text-xs font-bold uppercase">Tutte Categorie</SelectItem>
+            {categorie.map(c => (
+              <SelectItem key={c.id} value={c.id} className="text-xs font-bold uppercase">
+                <div className="flex items-center gap-2">
+                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: c.colore }} />
+                   {c.nome}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="rounded-xl border border-white/5 bg-card/30 overflow-hidden backdrop-blur-md">
@@ -243,7 +284,7 @@ export default function Fornitori() {
                         <DropdownMenuItem onClick={() => openEdit(f)}>
                           <Edit2 className="w-4 h-4 mr-2" /> Modifica
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => navigate(`/finanza/fatture?fornitore=${f.id}`)}>
+                        <DropdownMenuItem onClick={() => navigate(`/fatture?fornitore_id=${f.id}&type=passive`)}>
                           <FileText className="w-4 h-4 mr-2" /> Vedi Fatture
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Plus, Trash2, Save, AlertCircle, CheckCircle2 } from "lucide-react";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
@@ -6,7 +6,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -47,19 +46,30 @@ const emptyRow = (): ImputazioneForm => ({
   tipo: "PROGETTO", cliente_id: "", progetto_id: "", percentuale: "", note: "",
 });
 
+function getInitialRows(existing: Imputazione[]) {
+  if (existing.length === 0) {
+    return [emptyRow()];
+  }
+
+  return existing.map((imputazione) => ({
+    tipo: imputazione.tipo,
+    cliente_id: imputazione.cliente_id ?? "",
+    progetto_id: imputazione.progetto_id ?? "",
+    percentuale: String(imputazione.percentuale),
+    note: imputazione.note ?? "",
+  }));
+}
+
 export function ImputazioneCostiDrawer({
   open, onClose, sourceType, sourceId, importoTotale, sourceLabel,
 }: ImputazioneCostiDrawerProps) {
-  const queryClient = useQueryClient();
-  const [rows, setRows] = useState<ImputazioneForm[]>([emptyRow()]);
-
   const apiBase = sourceType === "fattura_passiva"
     ? `/fatture-passive/${sourceId}/imputazioni`
     : `/movimenti-cassa/${sourceId}/imputazioni`;
 
   const queryKey = [sourceType, sourceId, "imputazioni"];
 
-  const { data: existing = [] } = useQuery<Imputazione[]>({
+  const { data: existingData } = useQuery<Imputazione[]>({
     queryKey,
     queryFn: async () => {
       const { data } = await api.get(apiBase);
@@ -68,19 +78,44 @@ export function ImputazioneCostiDrawer({
     enabled: open && !!sourceId,
   });
 
-  useEffect(() => {
-    if (existing.length > 0) {
-      setRows(existing.map(i => ({
-        tipo: i.tipo,
-        cliente_id: i.cliente_id ?? "",
-        progetto_id: i.progetto_id ?? "",
-        percentuale: String(i.percentuale),
-        note: i.note ?? "",
-      })));
-    } else {
-      setRows([emptyRow()]);
-    }
-  }, [existing, open]);
+  const existing = existingData ?? [];
+  const drawerKey = existing
+    .map((imputazione) => `${imputazione.id}:${imputazione.percentuale}:${imputazione.note ?? ""}`)
+    .join("|") || "empty";
+
+  return (
+    <Sheet open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      {open ? (
+        <ImputazioneCostiDrawerContent
+          key={`${sourceType}:${sourceId}:${drawerKey}`}
+          onClose={onClose}
+          sourceType={sourceType}
+          sourceId={sourceId}
+          importoTotale={importoTotale}
+          sourceLabel={sourceLabel}
+          existing={existing}
+        />
+      ) : null}
+    </Sheet>
+  );
+}
+
+function ImputazioneCostiDrawerContent({
+  onClose,
+  sourceType,
+  sourceId,
+  importoTotale,
+  sourceLabel,
+  existing,
+}: Omit<ImputazioneCostiDrawerProps, "open"> & { existing: Imputazione[] }) {
+  const queryClient = useQueryClient();
+  const [rows, setRows] = useState<ImputazioneForm[]>(() => getInitialRows(existing));
+
+  const apiBase = sourceType === "fattura_passiva"
+    ? `/fatture-passive/${sourceId}/imputazioni`
+    : `/movimenti-cassa/${sourceId}/imputazioni`;
+
+  const queryKey = [sourceType, sourceId, "imputazioni"];
 
   const { data: clienti = [] } = useClienti();
   const { data: progetti = [] } = useProgetti();
@@ -129,7 +164,6 @@ export function ImputazioneCostiDrawer({
   }
 
   return (
-    <Sheet open={open} onOpenChange={v => { if (!v) onClose(); }}>
       <SheetContent className="w-[560px] sm:max-w-[560px] flex flex-col">
         <SheetHeader>
           <SheetTitle className="font-black">Imputa Costi</SheetTitle>
@@ -219,6 +253,15 @@ export function ImputazioneCostiDrawer({
                   </Select>
                 </div>
               </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] font-black uppercase tracking-widest">Note (opzionale)</Label>
+                <Input
+                  className="h-8 text-xs"
+                  placeholder="Descrizione imputazione..."
+                  value={row.note || ""}
+                  onChange={e => updateRow(i, { note: e.target.value })}
+                />
+              </div>
               {row.percentuale && parseFloat(row.percentuale) > 0 && (
                 <div className="text-right text-xs font-mono text-primary font-bold">
                   = €{(importoTotale * parseFloat(row.percentuale) / 100).toFixed(2)}
@@ -233,13 +276,12 @@ export function ImputazioneCostiDrawer({
 
         <div className="pt-4 border-t border-border flex gap-2">
           <Button variant="outline" onClick={onClose} className="flex-1">Annulla</Button>
-          <Button onClick={handleSave} disabled={saveMut.isPending || rows.length === 0} className="flex-1">
+          <Button onClick={handleSave} disabled={saveMut.isPending || rows.length === 0 || !isComplete} className="flex-1" title={!isComplete ? "La somma deve essere esattamente 100%" : undefined}>
             <Save className="h-4 w-4 mr-1.5" />
             {saveMut.isPending ? "Salvando..." : "Salva Imputazioni"}
           </Button>
         </div>
       </SheetContent>
-    </Sheet>
   );
 }
 

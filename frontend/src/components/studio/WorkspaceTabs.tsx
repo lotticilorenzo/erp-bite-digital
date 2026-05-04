@@ -74,8 +74,8 @@ export function WorkspaceTabs() {
                   </button>
                 )}
 
-                {/* Open in window button — hover to reveal */}
-                {tab.linkedId && (
+                {/* Open in window button — only for supported types */}
+                {tab.linkedId && tab.type === 'TASK' && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

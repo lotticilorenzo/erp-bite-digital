@@ -107,6 +107,41 @@ export function useCRM() {
     },
   });
 
+  const addStage = useMutation({
+    mutationFn: async (data: Partial<CRMStage>) => {
+      const res = await api.post("/crm/stadi", data);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["crm", "stages"] });
+      toast.success("Stadio aggiunto");
+    },
+  });
+
+  const updateStage = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<CRMStage> }) => {
+      const res = await api.patch(`/crm/stadi/${id}`, data);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["crm", "stages"] });
+      toast.success("Stadio aggiornato");
+    },
+  });
+
+  const deleteStage = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/crm/stadi/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["crm", "stages"] });
+      toast.success("Stadio eliminato");
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.detail || "Errore nell'eliminazione dello stadio");
+    },
+  });
+
   return {
     stages: stagesQuery.data || [],
     leads: leadsQuery.data || [],
@@ -118,6 +153,9 @@ export function useCRM() {
     addActivity,
     deleteLead,
     convertLeadToClient,
+    addStage,
+    updateStage,
+    deleteStage,
     refresh: () => queryClient.invalidateQueries({ queryKey: ["crm"], exact: false })
   };
 }

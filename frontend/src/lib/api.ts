@@ -16,11 +16,11 @@ api.interceptors.response.use(
   (error: AxiosError<{ detail?: string | { msg: string }[] }>) => {
     const status = error.response?.status;
 
-    if (status === 401 && !window.location.pathname.startsWith("/login")) {
+    const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password"];
+    const isPublicPath = PUBLIC_PATHS.some((p) => window.location.pathname.startsWith(p));
+    if (status === 401 && !isPublicPath) {
       if (!_isRedirectingToLogin) {
         _isRedirectingToLogin = true;
-        _isRedirectingToLogin = true;
-        // Reset flag after navigation so future logins work
         setTimeout(() => { _isRedirectingToLogin = false; }, 3000);
         window.location.href = "/login";
       }

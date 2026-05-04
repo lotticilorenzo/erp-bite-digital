@@ -521,6 +521,14 @@ class CommessaUpdate(BaseModel):
         elif self.data_fine:
             self.mese_competenza = self.data_fine.replace(day=1)
         return self
+class CommessaProfitabilityOut(BaseModel):
+    margine_pct: float
+    ore_budget: float
+    ore_consumate: float
+    ore_rimanenti: float
+    costo_manodopera: float
+    valore_fatturabile: float
+    alert_level: str # OK | WARNING | CRITICAL
 
 class CommessaOut(OrmBase):
     id: uuid.UUID
@@ -857,6 +865,15 @@ class FornitoreWithStats(FornitoreOut):
     spesa_totale: float = 0
     ultima_fattura: Optional[str] = None
 
+class _EntityNested(OrmBase):
+    id: uuid.UUID
+    ragione_sociale: str = ''
+    piva: Optional[str] = None
+    email: Optional[str] = None
+    pec: Optional[str] = None
+    sdi: Optional[str] = None
+    indirizzo: Optional[str] = None
+
 class FatturaAttivaOut(OrmBase):
     id: uuid.UUID
     fic_id: str
@@ -873,6 +890,8 @@ class FatturaAttivaOut(OrmBase):
     stato_pagamento: str
     data_ultimo_incasso: Optional[date]
     valuta: Optional[str]
+    fic_raw_data: Optional[dict] = None
+    cliente: Optional[_EntityNested] = None
     created_at: datetime
     updated_at: datetime
 
@@ -905,6 +924,9 @@ class FatturaPassivaOut(OrmBase):
     data_ultimo_pagamento: Optional[date]
     valuta: Optional[str]
     categoria: Optional[str] = None
+    fic_raw_data: Optional[dict] = None
+    fornitore_nome: Optional[str] = None
+    fornitore: Optional[_EntityNested] = None
     created_at: datetime
     updated_at: datetime
 
@@ -1269,6 +1291,11 @@ class ChatMessaggioCreate(ChatMessaggioBase):
     canale_id: uuid.UUID
     progetto_id: Optional[uuid.UUID] = None
 
+class ChatCanaleCreate(BaseModel):
+    nome: str = Field(..., min_length=1, max_length=255)
+    member_ids: List[uuid.UUID] = Field(default_factory=list)
+    logo_url: Optional[str] = Field(None, max_length=500)
+
 class ChatCanaleOut(OrmBase):
     id: uuid.UUID
     nome: str
@@ -1319,6 +1346,17 @@ class ChatMessaggioRead(ChatMessaggioBase):
 
 
 # ── CRM SCHEMAS ──────────────────────────────────────────
+class CRMStageCreate(BaseModel):
+    nome: str
+    colore: str = "#7c3aed"
+    ordine: int = 0
+    probabilita: int = 0
+
+class CRMStageUpdate(BaseModel):
+    nome: Optional[str] = None
+    colore: Optional[str] = None
+    ordine: Optional[int] = None
+    probabilita: Optional[int] = None
 
 class CRMStageOut(BaseModel):
     id: uuid.UUID
@@ -1393,6 +1431,7 @@ class CRMLeadOut(CRMLeadBase):
     assegnato_a_nome: Optional[str] = None
     stadio: Optional[CRMStageOut] = None
     attivita: List[CRMActivityOut] = []
+    suggerimento_ai: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -1675,4 +1714,34 @@ class RisorsaUpdate(BaseModel):
     user_id: Optional[uuid.UUID] = None
     attivo: Optional[bool] = None
     costo_orario_calcolato: Optional[Decimal] = None
+
+
+# ── PROGETTO TEMPLATE ─────────────────────────────────────
+class ProgettoTemplateTaskOut(BaseModel):
+    id: uuid.UUID
+    titolo: str
+    descrizione: Optional[str] = None
+    ordine: int
+    stima_ore: Decimal
+    categoria: Optional[str] = None
+    class Config: from_attributes = True
+
+class ProgettoTemplateMilestoneOut(BaseModel):
+    id: uuid.UUID
+    nome: str
+    giorni_dalla_creazione: int
+    class Config: from_attributes = True
+
+class ProgettoTemplateOut(BaseModel):
+    id: uuid.UUID
+    nome: str
+    tipo: Optional[str] = None
+    descrizione: Optional[str] = None
+    icona: Optional[str] = None
+    colore: Optional[str] = None
+    attivo: bool
+    created_at: datetime
+    tasks: List[ProgettoTemplateTaskOut]
+    milestones: List[ProgettoTemplateMilestoneOut]
+    class Config: from_attributes = True
 

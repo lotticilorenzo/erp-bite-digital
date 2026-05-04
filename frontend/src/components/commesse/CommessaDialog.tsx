@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { useCreateCommessa, useUpdateCommessa } from "@/hooks/useCommesse";
 import { useClienti, useCreateCliente } from "@/hooks/useClienti";
+import { useNavigate } from "react-router-dom";
 import type { Commessa } from "@/types";
 import { Loader2, Plus, Trash2, Layers, UserPlus } from "lucide-react";
 import { format, startOfMonth } from "date-fns";
@@ -73,6 +74,7 @@ export function CommessaDialog({
   const { data: clienti } = useClienti();
   const createCommessa = useCreateCommessa();
   const updateCommessa = useUpdateCommessa();
+  const navigate = useNavigate();
   const createProgetto = useCreateProgetto();
   const createCliente = useCreateCliente();
   const isEditing = !!commessa;
@@ -201,8 +203,11 @@ export function CommessaDialog({
         await updateCommessa.mutateAsync({ id: commessa.id, data: values });
         toast.success("Commessa aggiornata con successo");
       } else {
-        await createCommessa.mutateAsync(values);
+        const nuova = await createCommessa.mutateAsync(values);
         toast.success("Commessa creata con successo");
+        onOpenChange(false);
+        navigate(`/commesse/${nuova.id}`);
+        return;
       }
       onOpenChange(false);
     } catch (error: any) {

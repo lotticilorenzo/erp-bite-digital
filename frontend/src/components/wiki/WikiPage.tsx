@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { WikiSidebar } from "@/components/wiki/WikiSidebar";
 import { WikiHome } from "@/components/wiki/WikiHome";
@@ -15,13 +15,7 @@ export default function WikiPage() {
   const [editId, setEditId] = useState<string | undefined>(undefined);
 
   const articleId = searchParams.get("id");
-
-  useEffect(() => {
-    if (isEditing && !editId && articleId) {
-      // If we are editing but have an articleId, it means we clicked edit on an existing one
-      setEditId(articleId);
-    }
-  }, [isEditing, editId, articleId]);
+  const activeEditId = editId ?? (isEditing ? articleId ?? undefined : undefined);
 
   const handleNewArticle = () => {
     setEditId(undefined);
@@ -58,7 +52,7 @@ export default function WikiPage() {
             }
           >
             <WikiArticleEditor
-              id={editId}
+              id={activeEditId}
               onClose={handleCloseEditor}
               onSaved={handleSaved}
             />

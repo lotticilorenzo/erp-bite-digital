@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Plus } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ProgettoTable } from "@/components/progetti/ProgettoTable";
 import { ProgettoDialog } from "@/components/progetti/ProgettoDialog";
@@ -22,6 +23,15 @@ export default function ProgettiPage() {
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
   const [selectedProgetto, setSelectedProgetto] = React.useState<Progetto | null>(null);
   const [progettoToDelete, setProgettoToDelete] = React.useState<Progetto | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get("action") === "new") {
+      setSelectedProgetto(null);
+      setIsDialogOpen(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const handleEdit = (progetto: Progetto) => {
     setSelectedProgetto(progetto);

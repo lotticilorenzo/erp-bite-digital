@@ -9,7 +9,7 @@ import { Loader2, MessageSquareOff, History, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import type { ChatMessage } from "@/types/chat";
+import type { ChatChannel, ChatMember, ChatMessage } from "@/types/chat";
 
 interface ChatConversationProps {
   channelId: string | null;
@@ -41,7 +41,6 @@ export function ChatConversation({ channelId, className }: ChatConversationProps
   const [replyTo, setReplyTo] = useState<ChatMessage | undefined>();
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   // Sync active channel
   useEffect(() => {
@@ -51,17 +50,11 @@ export function ChatConversation({ channelId, className }: ChatConversationProps
     }
   }, [channelId, setActiveChannelId, markAsSeen]);
   
-  const allMessages: ChatMessage[] = messages || [];
-  const activeChannel = channels?.find((c: any) => c.id === channelId);
-  const members = Array.isArray(activeChannel?.membri) ? activeChannel.membri : [];
-  const onlineMembersCount = members.filter((member: any) => onlineUsers.has(member.user_id)).length;
+  const allMessages = messages || [];
+  const activeChannel = channels.find((channel): channel is ChatChannel => channel.id === channelId);
+  const members: ChatMember[] = Array.isArray(activeChannel?.membri) ? activeChannel.membri : [];
+  const onlineMembersCount = members.filter((member) => onlineUsers.has(member.user_id)).length;
   const messagesById = new Map(allMessages.map((chatMessage) => [chatMessage.id, chatMessage]));
-
-  useEffect(() => {
-    if (!isLoading && isInitialLoading) {
-       setIsInitialLoading(false);
-    }
-  }, [isLoading, isInitialLoading]);
 
   // Handle auto-scroll
   useEffect(() => {
@@ -99,7 +92,7 @@ export function ChatConversation({ channelId, className }: ChatConversationProps
     );
   }
 
-  if (isInitialLoading && !activeChannel) {
+  if (isLoading && !activeChannel) {
     return (
       <div className={cn("flex-1 flex flex-col items-center justify-center gap-4 text-muted-foreground", className)}>
         <Loader2 className="w-10 h-10 animate-spin text-primary opacity-50" />
@@ -172,20 +165,20 @@ export function ChatConversation({ channelId, className }: ChatConversationProps
                 </div>
               )}
               
-              {!isInitialLoading && allMessages.length === 0 ? (
+              {!isLoading && allMessages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center opacity-20 py-32">
                   <MessageSquareOff size={64} className="mb-4" />
                   <p className="text-xs font-black uppercase tracking-[0.3em]">Nessun messaggio in questa chat</p>
                 </div>
               ) : (
                 <div className="flex flex-col gap-1">
-                  {allMessages.map((m: any, i: number) => {
+                  {allMessages.map((m, i) => {
                     const prev = allMessages[i - 1];
                     const isFirstInGroup = !prev || prev.autore_id !== m.autore_id || 
                       (new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() > 300000); // 5 min group
                     
                     const replyToMsg = m.risposta_a ? messagesById.get(m.risposta_a) : undefined;
-                    const seenBy = members.filter((member: any) => {
+                    const seenBy = members.filter((member) => {
                       if (member.user_id === user?.id) return false;
                       const lastSeenAt = channelSeenStatus[channelId]?.[member.user_id];
                       if (!lastSeenAt) return false;
@@ -196,10 +189,10 @@ export function ChatConversation({ channelId, className }: ChatConversationProps
                       const nextMsgTime = nextMsg ? new Date(nextMsg.created_at).getTime() : Infinity;
 
                       return seenTime >= msgTime && seenTime < nextMsgTime;
-                    }).map((member: any) => ({
+                    }).map((member) => ({
                       id: member.user_id,
                       nome: `${member.user?.nome || "User"} ${member.user?.cognome || ""}`.trim(),
-                      avatar: member.user?.avatar_url,
+                      avatar: member.user?.avatar_url || undefined,
                     }));
                     
                     return (
@@ -243,7 +236,7 @@ export function ChatConversation({ channelId, className }: ChatConversationProps
         )}
 
         <ChatInput
-          teamMembers={members.map((member: any) => ({
+          teamMembers={members.map((member) => ({
             id: member.user_id,
             nome: member.user?.nome || "User",
             cognome: member.user?.cognome || "",
@@ -252,8 +245,8 @@ export function ChatConversation({ channelId, className }: ChatConversationProps
           onCancelReply={() => setReplyTo(undefined)}
           onTyping={(isTyping) => setTypingStatus(isTyping)}
           onUpload={(file) => uploadFile(file)}
-          onSend={(content, replyId) => {
-            sendMessage(content, 'testo', replyId);
+          onSend={async (content, messageType, replyId) => {
+            await sendMessage(content, messageType, replyId);
             setReplyTo(undefined);
           }}
         />
@@ -262,7 +255,25 @@ export function ChatConversation({ channelId, className }: ChatConversationProps
       {/* Group Info Slide-in Panel */}
       {activeChannel && (
         <ChatGroupInfoPanel
-          channel={activeChannel as any}
+          channel={{
+            ...activeChannel,
+            nome: activeChannel.nome ?? "Canale",
+            logo_url: activeChannel.logo_url || undefined,
+            descrizione: activeChannel.descrizione || undefined,
+            membri: (activeChannel.membri ?? []).map((member) => ({
+              ...member,
+              ruolo: member.ruolo ?? "MEMBRO",
+              user: member.user
+                ? {
+                    id: member.user_id,
+                    nome: member.user.nome ?? "User",
+                    cognome: member.user.cognome ?? "",
+                    ruolo: member.ruolo ?? "MEMBRO",
+                    avatar_url: member.user.avatar_url || undefined,
+                  }
+                : undefined,
+            })),
+          }}
           isOpen={isInfoOpen}
           onClose={() => setIsInfoOpen(false)}
         />

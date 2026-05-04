@@ -151,6 +151,7 @@ function App() {
                   <Route path="/analytics" element={renderFinanceOnly(<AnalyticsPage />)} />
                   <Route path="/report" element={renderFinanceOnly(<ReportsPage />)} />
                   <Route path="/fornitori" element={renderFinanceOnly(<Fornitori />)} />
+                  <Route path="/fornitori/:id" element={renderFinanceOnly(<Fornitori />)} />
                   <Route path="/budget" element={renderFinanceOnly(<BudgetPage />)} />
                   <Route path="/admin/categorie-fornitori" element={renderFinanceOnly(<SupplierCategoryManager />)} />
                 </Route>

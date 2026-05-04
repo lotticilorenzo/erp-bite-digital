@@ -44,10 +44,9 @@ export default function AccountSettings() {
 
   const changePasswordMutation = useMutation({
     mutationFn: async (data: any) => {
-      // In un backend reale verificheremmo anche la password corrente
-      // Per ora usiamo PATCH /users/me
       const response = await axios.patch("/api/v1/users/me", {
-        password: data.new
+        current_password: data.current,
+        password: data.new,
       });
       return response.data;
     },
@@ -62,6 +61,10 @@ export default function AccountSettings() {
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!passwords.current) {
+      toast.error("Inserisci la password corrente");
+      return;
+    }
     if (passwords.new !== passwords.confirm) {
       toast.error("Le password non coincidono");
       return;

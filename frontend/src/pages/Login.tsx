@@ -88,6 +88,7 @@ export default function LoginPage() {
                 <Input
                   type="text"
                   placeholder="Email o Username"
+                  autoComplete="username"
                   className="pl-10 bg-background/50"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -101,6 +102,7 @@ export default function LoginPage() {
                 <Input
                   type="password"
                   placeholder="Password"
+                  autoComplete="current-password"
                   className="pl-10 bg-white/[0.03] border-white/10 rounded-xl focus:border-primary/40 focus:ring-primary/20 transition-all"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}

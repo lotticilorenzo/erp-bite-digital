@@ -127,7 +127,7 @@ export function NotificationDropdown() {
 
         <DropdownMenuSeparator className="bg-muted m-0" />
         <div className="p-3 bg-[#111827]/30 text-center">
-          <Button variant="link" className="text-[10px] h-auto p-0 font-black uppercase tracking-widest text-primary hover:text-primary/80">
+          <Button variant="link" onClick={() => navigate("/settings/audit")} className="text-[10px] h-auto p-0 font-black uppercase tracking-widest text-primary hover:text-primary/80">
             Vedi tutte le attivita
           </Button>
         </div>

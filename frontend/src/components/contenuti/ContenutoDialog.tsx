@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsers } from "@/hooks/useUsers";
 import { useCommesse } from "@/hooks/useCommesse";
+import { useProgetti } from "@/hooks/useProgetti";
 import { toast } from "sonner";
 import {
   useCambiaStatoContenuto,
@@ -46,6 +47,7 @@ type FormState = {
   titolo: string;
   tipo: ContenutoTipo;
   commessa_id: string;
+  progetto_id: string;
   assegnatario_id: string;
   data_consegna_prevista: string;
   url_preview: string;
@@ -58,6 +60,7 @@ function makeForm(contenuto?: Contenuto | null, defaultCommessaId?: string): For
     titolo: contenuto?.titolo || "",
     tipo: contenuto?.tipo || "POST_SOCIAL",
     commessa_id: contenuto?.commessa_id || defaultCommessaId || "",
+    progetto_id: (contenuto as any)?.progetto_id || "",
     assegnatario_id: contenuto?.assegnatario_id || "",
     data_consegna_prevista: contenuto?.data_consegna_prevista || "",
     url_preview: contenuto?.url_preview || "",
@@ -82,6 +85,7 @@ function ContenutoDialogBody({
   const [form, setForm] = useState<FormState>(() => makeForm(contenuto, defaultCommessaId));
   const { data: users = [] } = useUsers(true, canManageContent);
   const { data: commesse = [] } = useCommesse(undefined, canManageContent);
+  const { data: progetti = [] } = useProgetti();
   const createContenuto = useCreateContenuto();
   const updateContenuto = useUpdateContenuto();
   const deleteContenuto = useDeleteContenuto();
@@ -97,7 +101,9 @@ function ContenutoDialogBody({
       url_preview: form.url_preview || null,
       testo: form.testo || null,
       note_revisione: form.note_revisione || null,
-      ...((canManageContent || isEditing) ? { commessa_id: form.commessa_id || null } : {}),
+      // Always send commessa_id if set (from context or manager selection)
+      commessa_id: form.commessa_id || null,
+      progetto_id: form.progetto_id || null,
       ...(canManageContent ? { assegnatario_id: form.assegnatario_id || null } : {}),
     };
 
@@ -166,18 +172,26 @@ function ContenutoDialogBody({
               )}
             </div>
 
-            <div className="md:col-span-2 space-y-2">
+            <div className="space-y-2">
               <Label>Commessa</Label>
               {canManageContent ? (
                 <select value={form.commessa_id || "NONE"} onChange={(e) => setForm((p) => ({ ...p, commessa_id: e.target.value === "NONE" ? "" : e.target.value }))} className="flex h-10 w-full rounded-md border border-border/50 bg-muted/20 px-3 text-sm">
                   <option value="NONE">Nessuna commessa</option>
-                  {commesse.map((commessa) => <option key={commessa.id} value={commessa.id}>{commessa.cliente?.ragione_sociale || "Cliente"} - {commessa.mese_competenza}</option>)}
+                  {commesse.map((commessa) => <option key={commessa.id} value={commessa.id}>{(commessa as any).cliente?.ragione_sociale || "Cliente"} - {commessa.mese_competenza}</option>)}
                 </select>
               ) : (
                 <div className="flex h-10 items-center rounded-md border border-border/50 bg-muted/10 px-3 text-sm text-muted-foreground">
                   {contenuto?.cliente_nome || (form.commessa_id ? "Commessa impostata dal contesto corrente" : "Nessuna commessa collegata")}
                 </div>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Progetto</Label>
+              <select value={form.progetto_id || "NONE"} onChange={(e) => setForm((p) => ({ ...p, progetto_id: e.target.value === "NONE" ? "" : e.target.value }))} className="flex h-10 w-full rounded-md border border-border/50 bg-muted/20 px-3 text-sm">
+                <option value="NONE">Nessun progetto</option>
+                {(progetti as any[]).map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+              </select>
             </div>
 
             <div className="space-y-2">

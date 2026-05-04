@@ -1,17 +1,18 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Send, X, AtSign, Paperclip, FileIcon, Loader2, Mic, Square } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import type { ChatMessage } from "@/types/chat";
+import type { ChatMessage, ChatMessageType, ChatUploadResponse } from "@/types/chat";
 import { cn } from "@/lib/utils";
 
 interface ChatInputProps {
-  onSend: (content: string, replyToId?: string) => void;
+  onSend: (content: string, messageType: ChatMessageType, replyToId?: string) => Promise<void>;
   replyTo?: ChatMessage;
   onCancelReply: () => void;
   teamMembers: { id: string; nome: string; cognome: string }[];
   onTyping?: (isTyping: boolean) => void;
-  onUpload?: (file: File) => Promise<any>;
+  onUpload?: (file: File) => Promise<ChatUploadResponse>;
 }
 
 interface SelectedUpload {
@@ -20,6 +21,28 @@ interface SelectedUpload {
   name: string;
   type: string;
   size: number;
+  messageType: ChatMessageType;
+}
+
+const MAX_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024;
+const ALLOWED_UPLOAD_EXTENSIONS = new Set([
+  ".jpg", ".jpeg", ".png", ".gif", ".webp",
+  ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+  ".txt", ".md", ".csv", ".json",
+  ".zip", ".rar",
+  ".mp4", ".mov", ".avi",
+  ".webm", ".ogg", ".wav", ".mp3",
+]);
+
+function getFileExtension(filename: string): string {
+  const lastDotIndex = filename.lastIndexOf(".");
+  return lastDotIndex >= 0 ? filename.slice(lastDotIndex).toLowerCase() : "";
+}
+
+function resolveUploadMessageType(file: File): ChatMessageType {
+  if (file.type.startsWith("image/")) return "immagine";
+  if (file.type.startsWith("audio/")) return "audio";
+  return "allegato";
 }
 
 export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTyping, onUpload }: ChatInputProps) {
@@ -69,11 +92,12 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
           setIsUploading(true);
           try {
             const res = await onUpload(file);
-            // Send immediately as voice message
-            onSend(res.url, replyTo?.id);
+            await onSend(res.url, "audio", replyTo?.id);
             onCancelReply();
+            toast.success("Vocale inviato");
           } catch (err) {
             console.error("Voice upload failed", err);
+            toast.error("Impossibile inviare il vocale");
           } finally {
             setIsUploading(false);
           }
@@ -92,7 +116,7 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
       }, 1000);
     } catch (err) {
       console.error("Microphone access denied", err);
-      alert("Accesso al microfono negato. Controlla le autorizzazioni del browser.");
+      toast.error("Accesso al microfono negato. Controlla i permessi del browser.");
     }
   }, [onUpload, onSend, replyTo, onCancelReply]);
 
@@ -125,6 +149,18 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const fileExtension = getFileExtension(file.name);
+
+    if (!ALLOWED_UPLOAD_EXTENSIONS.has(fileExtension)) {
+      toast.error("Tipo di file non supportato in chat");
+      e.target.value = "";
+      return;
+    }
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      toast.error("File troppo grande. Limite massimo 50 MB.");
+      e.target.value = "";
+      return;
+    }
 
     setIsUploading(true);
     try {
@@ -137,31 +173,42 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
           name: res.filename,
           type: res.content_type,
           size: res.size,
+          messageType: resolveUploadMessageType(file),
         });
+        toast.success("File pronto per l'invio");
       }
     } catch (err) {
       console.error("Upload failed", err);
+      toast.error("Impossibile caricare il file");
     } finally {
       setIsUploading(false);
     }
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if ((!content.trim() && !selectedFile) || isUploading) return;
 
-    if (selectedFile) {
-      onSend(selectedFile.url, replyTo?.id);
-    } else {
-      onSend(content, replyTo?.id);
-    }
+    try {
+      if (selectedFile) {
+        await onSend(selectedFile.url, selectedFile.messageType, replyTo?.id);
+        if (content.trim()) {
+          await onSend(content.trim(), "testo");
+        }
+      } else {
+        await onSend(content.trim(), "testo", replyTo?.id);
+      }
 
-    setContent("");
-    clearSelectedFile();
-    onCancelReply();
+      setContent("");
+      clearSelectedFile();
+      onCancelReply();
+    } catch (err) {
+      console.error("Send failed", err);
+      toast.error("Il messaggio non e' stato inviato");
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Se il menu mention è aperto, ignora Enter (non inviare)
+    // Se il menu mention e' aperto, ignora Enter (non inviare)
     if (e.key === "Enter" && showMentions) {
       e.preventDefault();
       return;
@@ -173,7 +220,7 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
     }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      void handleSend();
     }
   };
 
@@ -398,8 +445,8 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
             </Button>
           ) : (
             <Button
-              onClick={handleSend}
-              disabled={!content.trim() && !selectedFile}
+              onClick={() => void handleSend()}
+              disabled={(!content.trim() && !selectedFile) || isUploading}
               className="h-12 w-12 rounded-2xl bg-primary text-white shadow-lg shadow-primary/20 hover:scale-110 active:scale-95 transition-all shrink-0"
             >
               <Send size={20} className={cn("transition-transform", content.trim() && "translate-x-0.5 -translate-y-0.5")} />
@@ -410,7 +457,7 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
 
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-muted-foreground/30 mt-2 text-center">
         Enter per inviare &bull; Shift+Enter per andare a capo
-        {showMicButton && " · Microfono per vocale"}
+        {showMicButton && " - Microfono per vocale"}
       </p>
 
       {/* Keyframes for waveform */}

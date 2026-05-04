@@ -16,7 +16,9 @@ import {
   LayoutDashboard,
   MessageSquare,
   Users,
-  AlertCircle
+  AlertCircle,
+  Zap,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,8 +35,8 @@ import ChatProgetto from "@/components/chat/ChatProgetto";
 import { useCommesse, useUpdateCommessa, useCreateCommessa } from "@/hooks/useCommesse";
 import { toast } from "sonner";
 import { CommessaSelectionDialog } from "@/components/progetti/CommessaSelectionDialog";
+import { TemplateSelectionDialog } from "@/components/progetti/TemplateSelectionDialog";
 import { ProgettoDialog } from "@/components/progetti/ProgettoDialog";
-import { Pencil } from "lucide-react";
 
 export default function ProgettoDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -44,14 +46,14 @@ export default function ProgettoDetailPage() {
   const { selectTask } = useStudio();
   const [activeTab, setActiveTab] = useState("overview");
   const currentMonth = format(startOfMonth(new Date()), "yyyy-MM-dd");
-  const { data: commesseMese } = useCommesse({ 
-    cliente_id: progetto?.cliente_id, 
-    mese: currentMonth 
+  const { data: allCommesse } = useCommesse({ 
+    cliente_id: progetto?.cliente_id
   });
   
   const updateCommessa = useUpdateCommessa();
   const createCommessa = useCreateCommessa();
   const [isCommessaDialogOpen, setIsCommessaDialogOpen] = useState(false);
+  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = useState(false);
   const [duplicateData, setDuplicateData] = useState<any>(null);
@@ -82,7 +84,13 @@ export default function ProgettoDetailPage() {
     );
   }
 
-  const commessaAttiva = commesseMese?.[0];
+  const commesseCorrelate = allCommesse?.filter(c => 
+    c.righe_progetto?.some(r => r.progetto_id === id)
+  ) || [];
+  
+  const commessaAttiva = allCommesse?.find(c => 
+    format(new Date(c.mese_competenza), "yyyy-MM-dd") === currentMonth
+  );
   const isLinked = commessaAttiva?.righe_progetto?.some(r => r.progetto_id === id);
 
   const handleLinkToCommessa = () => setIsCommessaDialogOpen(true);
@@ -125,7 +133,6 @@ export default function ProgettoDetailPage() {
           <Button
             variant="ghost"
             onClick={() => {
-              // Open creation dialog with current project data (except ID)
               setDuplicateData({
                 ...progetto,
                 nome: `${progetto.nome} (Copia)`,
@@ -317,37 +324,69 @@ export default function ProgettoDetailPage() {
                     <Layers className="w-4 h-4 text-purple-400" />
                     Commesse Correlate
                   </CardTitle>
-                  {!isLinked && (
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      onClick={handleLinkToCommessa}
-                      disabled={updateCommessa.isPending || createCommessa.isPending}
-                      className="h-8 bg-primary/10 text-purple-400 border-purple-500/20 hover:bg-primary/20 rounded-xl text-[10px] font-black uppercase tracking-widest"
-                    >
-                      <Plus className="w-3 h-3 mr-1" /> 
-                      {commessaAttiva ? `Aggiungi a Commessa ${format(new Date(currentMonth), "MMM")}` : `Crea Commessa ${format(new Date(currentMonth), "MMM")}`}
-                    </Button>
-                  )}
-                  {isLinked && (
+                  <div className="flex items-center gap-2">
                     <Button 
                       size="sm" 
                       variant="ghost" 
-                      onClick={() => commessaAttiva && navigate(`/commesse/${commessaAttiva.id}`)}
-                      className="h-8 text-emerald-400 text-[10px] font-black uppercase tracking-widest"
+                      onClick={() => setIsTemplateDialogOpen(true)}
+                      className="h-8 text-primary hover:bg-primary/10 rounded-xl text-[10px] font-black uppercase tracking-widest"
                     >
-                      In Commessa Attiva <ExternalLink className="w-3 h-3 ml-1" />
+                      <Zap className="w-3 h-3 mr-1" /> Template
                     </Button>
-                  )}
+                    {!isLinked && (
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={handleLinkToCommessa}
+                        disabled={updateCommessa.isPending || createCommessa.isPending}
+                        className="h-8 bg-primary/10 text-purple-400 border-purple-500/20 hover:bg-primary/20 rounded-xl text-[10px] font-black uppercase tracking-widest"
+                      >
+                        <Plus className="w-3 h-3 mr-1" /> 
+                        {commessaAttiva ? `Aggiungi a Commessa ${format(new Date(currentMonth), "MMM")}` : `Crea Commessa ${format(new Date(currentMonth), "MMM")}`}
+                      </Button>
+                    )}
+                    {isLinked && (
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        onClick={() => commessaAttiva && navigate(`/commesse/${commessaAttiva.id}`)}
+                        className="h-8 text-emerald-400 text-[10px] font-black uppercase tracking-widest"
+                      >
+                        In Commessa Attiva <ExternalLink className="w-3 h-3 ml-1" />
+                      </Button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent className="pt-6">
-                  <div className="text-center py-16 border-2 border-dashed border-border rounded-2xl bg-muted/5">
-                    <div className="w-12 h-12 bg-muted/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                       <Layers className="w-6 h-6 text-[#475569]" />
+                  {commesseCorrelate.length > 0 ? (
+                    <div className="space-y-3">
+                      {commesseCorrelate.map(c => (
+                        <div
+                          key={c.id}
+                          className="p-4 rounded-2xl bg-white/5 border border-border/50 cursor-pointer hover:bg-white/10 transition-colors flex items-center justify-between"
+                          onClick={() => navigate(`/commesse/${c.id}`)}
+                        >
+                          <div>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-primary">
+                              {format(new Date(c.mese_competenza), "MMMM yyyy", { locale: it })}
+                            </span>
+                            <p className="text-sm font-black text-white mt-1">€{(c.valore_fatturabile || 0).toLocaleString()}</p>
+                          </div>
+                          <Badge className={c.stato === "CHIUSA" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[9px] font-black" : "bg-amber-500/10 text-amber-400 border-amber-500/20 text-[9px] font-black"}>
+                            {c.stato}
+                          </Badge>
+                        </div>
+                      ))}
                     </div>
-                    <p className="text-sm font-bold text-slate-400 uppercase tracking-tight">Nessuna commessa registrata</p>
-                    <p className="text-[10px] text-[#475569] mt-1 font-black uppercase tracking-widest">Inizia a generare commesse per questo progetto</p>
-                  </div>
+                  ) : (
+                    <div className="text-center py-16 border-2 border-dashed border-border rounded-2xl bg-muted/5">
+                      <div className="w-12 h-12 bg-muted/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Layers className="w-6 h-6 text-[#475569]" />
+                      </div>
+                      <p className="text-sm font-bold text-slate-400 uppercase tracking-tight">Nessuna commessa registrata</p>
+                      <p className="text-[10px] text-[#475569] mt-1 font-black uppercase tracking-widest">Inizia a generare commesse per questo progetto</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -359,15 +398,25 @@ export default function ProgettoDetailPage() {
                 </CardHeader>
                 <CardContent className="space-y-6">
                   {/* Ore Previste vs Reali */}
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
-                      <span className="text-[#475569]">Capacità Utilizzata</span>
-                      <span className="text-white">0 / {progetto.delivery_attesa || "N/D"}h</span>
-                    </div>
-                    <div className="w-full h-3 bg-muted rounded-full overflow-hidden p-0.5 border border-white/5">
-                      <div className="w-0 h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)]" />
-                    </div>
-                  </div>
+                  {(() => {
+                    const oreUsate = tasks.reduce((acc, t: any) => acc + (t.tempo_trascorso_minuti || 0), 0) / 60;
+                    const oreMax = progetto.delivery_attesa || 0;
+                    const pct = oreMax > 0 ? Math.min(100, Math.round((oreUsate / oreMax) * 100)) : 0;
+                    return (
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                          <span className="text-[#475569]">Capacità Utilizzata</span>
+                          <span className="text-white">{oreUsate} / {oreMax || "N/D"}h</span>
+                        </div>
+                        <div className="w-full h-3 bg-muted rounded-full overflow-hidden p-0.5 border border-white/5">
+                          <div
+                            className={`h-full bg-gradient-to-r rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)] transition-all duration-700 ${pct > 90 ? "from-red-500 to-rose-500" : pct > 70 ? "from-amber-500 to-yellow-500" : "from-purple-500 to-indigo-500"}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Calcolo Costo Labor Previsto */}
                   <div className="p-4 rounded-2xl bg-primary/5 border border-primary/20 space-y-4">
@@ -407,7 +456,14 @@ export default function ProgettoDetailPage() {
                   <div className="space-y-4 pt-4 border-t border-border/50">
                     <div className="flex justify-between items-center">
                       <span className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Stato Margine</span>
-                      <Badge className="bg-emerald-500/20 text-emerald-400 border-none text-[9px] font-black">OTTIMALE</Badge>
+                      {(() => {
+                        const revenue = progetto.importo_fisso + progetto.importo_variabile;
+                        const cost = progetto.team?.reduce((acc: number, m: any) => acc + (m.ore_previste * (m.user?.costo_orario || 0)), 0) || 0;
+                        const pct = revenue > 0 ? ((revenue - cost) / revenue) * 100 : 0;
+                        if (pct > 30) return <Badge className="bg-emerald-500/20 text-emerald-400 border-none text-[9px] font-black">OTTIMALE</Badge>;
+                        if (pct > 0) return <Badge className="bg-amber-500/20 text-amber-400 border-none text-[9px] font-black">BASSO</Badge>;
+                        return <Badge className="bg-red-500/20 text-red-400 border-none text-[9px] font-black">NEGATIVO</Badge>;
+                      })()}
                     </div>
                   </div>
                 </CardContent>
@@ -447,6 +503,12 @@ export default function ProgettoDetailPage() {
         progetto={progetto}
         open={isCommessaDialogOpen}
         onOpenChange={setIsCommessaDialogOpen}
+      />
+
+      <TemplateSelectionDialog
+        progettoId={id!}
+        open={isTemplateDialogOpen}
+        onOpenChange={setIsTemplateDialogOpen}
       />
 
       <ProgettoDialog 

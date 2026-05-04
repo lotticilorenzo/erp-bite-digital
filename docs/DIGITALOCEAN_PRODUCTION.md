@@ -18,12 +18,22 @@
 
 ## Deploy standard
 
-1. Aggiorna il repository locale e verifica build/test.
-2. Esegui push su `main`.
-3. Sulla VPS: `git pull --ff-only origin main`.
-4. Nel backend: `docker compose -f docker-compose.prod.yml up --build -d db backend nginx db_backup`.
-5. Nel frontend: `npm ci --legacy-peer-deps && npm run build`.
-6. Verifica `http://localhost:8000/health` dalla VPS e il dominio pubblico via nginx.
+1. Esegui `deploy.bat` dalla root del repository.
+2. Lo script avvia Docker Desktop locale se serve, esegue `pytest` backend, builda il frontend locale e riallinea lo stack `localhost`.
+3. Lo script committa e pusha su `main`.
+4. Sulla VPS riallinea il repository, pulisce il drift noto di `frontend/package-lock.json`, builda il frontend e rialza `db`, `backend`, `nginx`, `db_backup`.
+5. Infine verifica:
+   - `localhost` backend sano
+   - asset React online identici alla build locale
+   - API pubblica raggiungibile
+   - backend produzione vincolato su `127.0.0.1:8000`
+   - assenza del dev server Vite sulla VPS
+
+Comando opzionale con sync completo DB locale -> produzione:
+
+```powershell
+.\deploy.bat -SyncDb
+```
 
 ## Check rapidi sulla VPS
 

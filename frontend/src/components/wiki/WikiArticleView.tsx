@@ -8,6 +8,15 @@ import { format } from "date-fns";
 import { it } from 'date-fns/locale';
 import { toast } from "sonner";
 
+const handleShare = (title: string) => {
+  const url = window.location.href;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() => toast.success(`Link copiato: "${title}"`));
+  } else {
+    toast.info(`Copia questo link: ${url}`);
+  }
+};
+
 interface MarkdownRendererProps {
   source: string;
   className?: string;
@@ -27,7 +36,7 @@ interface WikiArticleViewProps {
 }
 
 export function WikiArticleView({ onEdit }: WikiArticleViewProps) {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const id = searchParams.get("id");
   const { getArticle, deleteArticle } = useWiki();
   const { data: article, isLoading } = getArticle(id || "");
@@ -40,7 +49,7 @@ export function WikiArticleView({ onEdit }: WikiArticleViewProps) {
     try {
       await deleteArticle.mutateAsync(id);
       toast.success("Articolo eliminato");
-      window.location.href = "/wiki";
+      window.location.assign("/wiki");
     } catch (error) {
       toast.error("Errore durante l'eliminazione");
     }
@@ -74,9 +83,19 @@ export function WikiArticleView({ onEdit }: WikiArticleViewProps) {
         
         {/* Breadcrumb */}
         <nav className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border/50 pb-4 mb-8">
-          <span className="hover:text-primary transition-colors cursor-pointer">Wiki</span>
+          <span
+            className="hover:text-primary transition-colors cursor-pointer"
+            onClick={() => setSearchParams({})}
+          >
+            Wiki
+          </span>
           <ChevronRight size={12} />
-          <span className="hover:text-primary transition-colors cursor-pointer">{article.categoria?.nome}</span>
+          <span
+            className="hover:text-primary transition-colors cursor-pointer"
+            onClick={() => setSearchParams(article.categoria_id ? { cat: String(article.categoria_id) } : {})}
+          >
+            {article.categoria?.nome}
+          </span>
           <ChevronRight size={12} />
           <span className="text-white truncate max-w-[200px]">{article.titolo}</span>
         </nav>
@@ -88,7 +107,7 @@ export function WikiArticleView({ onEdit }: WikiArticleViewProps) {
               {article.titolo}
             </h1>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" className="rounded-xl border-border hover:bg-muted text-muted-foreground hover:text-white">
+              <Button onClick={() => handleShare(article.titolo)} variant="outline" size="icon" className="rounded-xl border-border hover:bg-muted text-muted-foreground hover:text-white" title="Copia link articolo">
                 <Share2 size={18} />
               </Button>
               {canEdit && (

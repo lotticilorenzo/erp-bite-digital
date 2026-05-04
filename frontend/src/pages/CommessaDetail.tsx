@@ -34,7 +34,7 @@ import { ProgettoDialog } from "@/components/progetti/ProgettoDialog";
 import { useProgetti } from "@/hooks/useProgetti";
 import { format, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
@@ -96,16 +96,14 @@ export default function CommessaDetailPage() {
   const [isPlanningDialogOpen, setIsPlanningDialogOpen] = useState(false);
   const [isContenutoDialogOpen, setIsContenutoDialogOpen] = useState(false);
   
-  const [editOreContratto, setEditOreContratto] = useState<string>("0");
+  const [scopeDraft, setScopeDraft] = useState<{ commessaId: string; value: string } | null>(null);
   const [isAddingProject, setIsAddingProject] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [searchProject, setSearchProject] = useState("");
-
-  useEffect(() => {
-    if (commessa) {
-      setEditOreContratto(commessa.ore_contratto.toString());
-    }
-  }, [commessa]);
+  const editOreContratto =
+    scopeDraft && scopeDraft.commessaId === commessa?.id
+      ? scopeDraft.value
+      : String(commessa?.ore_contratto ?? 0);
 
   const oreReali = useMemo(() => {
     const totalMinutes = timesheets.reduce((acc, ts) => acc + ts.durata_minuti, 0);
@@ -146,6 +144,7 @@ export default function CommessaDetailPage() {
       data: { ore_contratto: Number(editOreContratto) } 
     }, {
       onSuccess: () => {
+        setScopeDraft(null);
         toast.success("Ore contratto aggiornate con successo");
       },
       onError: () => {
@@ -577,6 +576,34 @@ export default function CommessaDetailPage() {
         />
       </div>
 
+      {profitability && profitability.alert_level !== "OK" && profitability.alert_level !== "NO_DATA" && (
+        <div className={`p-6 rounded-[2.5rem] flex items-start gap-5 animate-in slide-in-from-top-4 duration-500 border shadow-2xl ${
+          profitability.alert_level === "CRITICAL" 
+            ? "bg-red-500/10 border-red-500/30 text-red-500 shadow-red-500/5" 
+            : "bg-amber-500/10 border-amber-500/30 text-amber-500 shadow-amber-500/5"
+        }`}>
+          <div className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 ${
+            profitability.alert_level === "CRITICAL" ? "bg-red-500/20" : "bg-amber-500/20"
+          }`}>
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-black uppercase italic tracking-tight mb-1">
+              {profitability.alert_level === "CRITICAL" ? "Allarme Marginalità Critica" : "Attenzione: Erosione Margine"}
+            </h3>
+            <p className="text-sm font-medium opacity-90 leading-relaxed max-w-3xl">
+              Il margine attuale è sceso al <span className="font-black">{profitability.margine_percentuale}%</span>. 
+              {profitability.alert_level === "CRITICAL" 
+                ? " La commessa è in grave perdita o vicina alla soglia minima di sostenibilità. Revisione immediata richiesta." 
+                : " Il margine è sotto la soglia di sicurezza del 30%. Monitora attentamente le prossime ore loggate."}
+            </p>
+          </div>
+          <Button variant="ghost" className="h-10 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest border border-current hover:bg-current hover:text-white transition-all">
+            Analisi Costi
+          </Button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
           <Card className="bg-card border-border text-white">
@@ -677,7 +704,7 @@ export default function CommessaDetailPage() {
                       <TableCell className="text-right text-purple-400 font-black tabular-nums">{riga.delivery_consuntiva} / {riga.delivery_attesa}h</TableCell>
                       <TableCell className="pr-6 text-right">
                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-white/5 text-[#475569] hover:text-white">
+                            <Button onClick={() => navigate(`/progetti/${riga.progetto_id}`)} variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-white/5 text-[#475569] hover:text-white">
                                <Edit2 className="w-3.5 h-3.5" />
                             </Button>
                             <Button 
@@ -813,7 +840,7 @@ export default function CommessaDetailPage() {
                 <div className="p-8 text-center space-y-4 border-2 border-dashed border-border rounded-xl">
                   <FileText className="w-8 h-8 text-[#1e293b] mx-auto" />
                   <p className="text-xs text-muted-foreground">Nessuna fattura collegata.</p>
-                  <Button size="sm" variant="outline" className="w-full bg-primary/10 text-purple-400 border-purple-500/20 hover:bg-primary/20">
+                  <Button size="sm" variant="outline" onClick={() => navigate("/fatture")} className="w-full bg-primary/10 text-purple-400 border-purple-500/20 hover:bg-primary/20">
                     Collega ora
                   </Button>
                 </div>
@@ -985,7 +1012,13 @@ export default function CommessaDetailPage() {
                      type="number" 
                      disabled={!canEdit}
                      value={editOreContratto}
-                     onChange={(e) => setEditOreContratto(e.target.value)}
+                     onChange={(e) => {
+                       if (!commessa) {
+                         return;
+                       }
+
+                       setScopeDraft({ commessaId: commessa.id, value: e.target.value });
+                     }}
                      className="bg-muted border-border text-white text-sm h-9 focus-visible:ring-purple-500/50"
                   />
                   {canEdit && commessa.ore_contratto !== Number(editOreContratto) && (
@@ -1153,7 +1186,7 @@ export default function CommessaDetailPage() {
           meseLabel={commessa.mese_competenza ? format(parseISO(String(commessa.mese_competenza)), "MMMM yyyy", { locale: it }) : "Mese corrente"}
           projectTypes={projectTypes}
           budgetOre={aiBudgetOre}
-          defaultProjectId={commessa.righe_progetto?.[0]?.progetto_id}
+          progetti={commessa.righe_progetto?.map((r: any) => r.progetto).filter(Boolean) || []}
         />
       )}
 

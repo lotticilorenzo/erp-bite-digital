@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import date, datetime
+from enum import Enum
 from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +30,33 @@ EXPORT = "EXPORT"
 PERMISSION_DENIED = "PERMISSION_DENIED"
 
 
+def _json_safe(value: Any) -> Any:
+    """Convert common Python/ORM values to JSON-safe primitives."""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+
+    if isinstance(value, uuid.UUID):
+        return str(value)
+
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+
+    if isinstance(value, Enum):
+        return value.value
+
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item) for item in value]
+
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        return _json_safe(model_dump())
+
+    return str(value)
+
+
 async def emit(
     db: AsyncSession,
     *,
@@ -46,8 +75,8 @@ async def emit(
             tabella=tabella,
             record_id=record_id or uuid.uuid4(),
             azione=azione,
-            dati_prima=dati_prima,
-            dati_dopo=dati_dopo,
+            dati_prima=_json_safe(dati_prima),
+            dati_dopo=_json_safe(dati_dopo),
         )
         db.add(log_entry)
         # flush without committing so the audit row goes in the same transaction

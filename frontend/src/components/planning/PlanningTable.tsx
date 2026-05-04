@@ -41,7 +41,7 @@ interface PlanningTableProps {
   onOpen: (plan: Pianificazione) => void;
   onEdit: (plan: Pianificazione) => void;
   onApprove: (plan: Pianificazione) => void;
-  onDelete: (plan: Pianificazione) => void;
+  onDelete?: (plan: Pianificazione) => void;
   onConvert: (plan: Pianificazione) => void;
   isLoading: boolean;
 }
@@ -198,7 +198,7 @@ export function PlanningTable({ plans, onOpen, onEdit, onApprove, onDelete, onCo
                               <Pencil className="mr-2 h-4 w-4" /> Modifica
                             </DropdownMenuItem>
                           )}
-                          {plan.stato !== "CONVERTED" && (
+                          {plan.stato !== "CONVERTED" && onDelete && (
                             <DropdownMenuItem onClick={() => onDelete(plan)} className="text-red-400 hover:bg-red-500/10 focus:bg-red-500/10 cursor-pointer">
                               <Trash2 className="mr-2 h-4 w-4" /> Elimina
                             </DropdownMenuItem>

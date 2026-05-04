@@ -5,6 +5,7 @@ import { useChat } from "@/hooks/useChat";
 import { useSearchParams } from "react-router-dom";
 import { useStudio } from "@/hooks/useStudio";
 import { Loader2 } from "lucide-react";
+import type { ChatChannel } from "@/types/chat";
 
 export function ChatHub() {
   const {
@@ -30,20 +31,34 @@ export function ChatHub() {
   // Sync URL with global active channel state
   useEffect(() => {
     const channelFromUrl = searchParams.get("channel");
-    
-    // Priority 1: URL has a channel -> update global state
-    if (channelFromUrl && channelFromUrl !== activeChannelId) {
-      setActiveChannelId(channelFromUrl);
-    } 
-    // Priority 2: Global state has a channel but URL doesn't -> update URL
-    else if (!channelFromUrl && activeChannelId) {
-      setSearchParams({ channel: activeChannelId }, { replace: true });
+
+    if (!channels || channels.length === 0) return;
+
+    const defaultChannel = channels.find((channel: ChatChannel) => channel.tipo === "GENERAL") || channels[0];
+    const hasUrlChannel = !!channelFromUrl && channels.some((channel: ChatChannel) => channel.id === channelFromUrl);
+    const hasActiveChannel = !!activeChannelId && channels.some((channel: ChatChannel) => channel.id === activeChannelId);
+
+    if (channelFromUrl && hasUrlChannel) {
+      if (channelFromUrl !== activeChannelId) {
+        setActiveChannelId(channelFromUrl);
+      }
+      return;
     }
-    // Priority 3: Neither has a channel -> default to General
-    else if (!channelFromUrl && !activeChannelId && channels && channels.length > 0) {
-      const general = channels.find((c: any) => c.tipo === 'GENERAL') || channels[0];
-      setActiveChannelId(general.id);
-      setSearchParams({ channel: general.id }, { replace: true });
+
+    if (channelFromUrl && !hasUrlChannel) {
+      setActiveChannelId(defaultChannel.id);
+      setSearchParams({ channel: defaultChannel.id }, { replace: true });
+      return;
+    }
+
+    if (!channelFromUrl && hasActiveChannel && activeChannelId) {
+      setSearchParams({ channel: activeChannelId }, { replace: true });
+      return;
+    }
+
+    if (!hasActiveChannel) {
+      setActiveChannelId(defaultChannel.id);
+      setSearchParams({ channel: defaultChannel.id }, { replace: true });
     }
   }, [channels, activeChannelId, setActiveChannelId, searchParams, setSearchParams]);
 
@@ -54,9 +69,13 @@ export function ChatHub() {
   };
 
   const handleStartDirectChat = async (userId: string) => {
-    const channel = await startDirectChat(userId);
-    if (channel) {
-      setSearchParams({ channel: channel.id });
+    try {
+      const channel = await startDirectChat(userId);
+      if (channel) {
+        setSearchParams({ channel: channel.id });
+      }
+    } catch (error) {
+      console.error("Unable to start direct chat", error);
     }
   };
 

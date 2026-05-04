@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { ClienteTable } from "@/components/clienti/ClienteTable";
 import { ClienteDialog } from "@/components/clienti/ClienteDialog";
 import { useClienti } from "@/hooks/useClienti";
@@ -11,6 +11,7 @@ export default function ClientiPage() {
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
   const [selectedCliente, setSelectedCliente] = React.useState<Cliente | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const isUrlNewIntent = searchParams.get("action") === "new";
 
   const handleEdit = (cliente: Cliente) => {
     setSelectedCliente(cliente);
@@ -22,14 +23,21 @@ export default function ClientiPage() {
     setIsDialogOpen(true);
   };
 
-  useEffect(() => {
-    if (searchParams.get("action") === "new") {
-      handleNew();
-      // Remove param after triggering
-      searchParams.delete("action");
-      setSearchParams(searchParams, { replace: true });
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    setIsDialogOpen(nextOpen);
+
+    if (nextOpen) {
+      return;
     }
-  }, [searchParams]);
+
+    setSelectedCliente(null);
+
+    if (isUrlNewIntent) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("action");
+      setSearchParams(nextParams, { replace: true });
+    }
+  };
 
   return (
     <PageTransition>
@@ -51,9 +59,9 @@ export default function ClientiPage() {
         />
 
         <ClienteDialog 
-          open={isDialogOpen} 
-          onOpenChange={setIsDialogOpen} 
-          cliente={selectedCliente} 
+          open={isDialogOpen || isUrlNewIntent} 
+          onOpenChange={handleDialogOpenChange} 
+          cliente={isUrlNewIntent ? null : selectedCliente} 
         />
       </div>
     </PageTransition>

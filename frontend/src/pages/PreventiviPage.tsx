@@ -4,11 +4,18 @@ import { PreventiviTable } from "@/components/preventivi/PreventiviTable";
 import { PreventivoModal } from "@/components/preventivi/PreventivoModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Plus, Search, Filter, FileText, 
+import {
+  Plus, Search, Filter, FileText,
   ArrowRight, Loader2, TrendingUp,
-  FileCheck2, FileWarning
+  FileCheck2, FileWarning, ChevronDown
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { Preventivo, PreventivoStatus } from "@/types/preventivi";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -21,6 +28,7 @@ export const PreventiviPage: React.FC = () => {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPreventivo, setSelectedPreventivo] = useState<Preventivo | undefined>();
+  const [filtroStato, setFiltroStato] = useState<string>("all");
 
   const handleEdit = (p: Preventivo) => {
     setSelectedPreventivo(p);
@@ -54,11 +62,14 @@ export const PreventiviPage: React.FC = () => {
     }
   };
 
-  const filteredData = preventivi?.filter(p => 
-    p.titolo.toLowerCase().includes(search.toLowerCase()) || 
-    p.numero.toLowerCase().includes(search.toLowerCase()) ||
-    p.cliente?.ragione_sociale.toLowerCase().includes(search.toLowerCase())
-  ) || [];
+  const filteredData = preventivi?.filter(p => {
+    const matchSearch =
+      p.titolo.toLowerCase().includes(search.toLowerCase()) ||
+      p.numero.toLowerCase().includes(search.toLowerCase()) ||
+      (p.cliente?.ragione_sociale ?? "").toLowerCase().includes(search.toLowerCase());
+    const matchStato = filtroStato === "all" || p.stato === filtroStato;
+    return matchSearch && matchStato;
+  }) || [];
 
   const stats = {
     totale: preventivi?.reduce((acc, p) => acc + p.importo_totale, 0) || 0,
@@ -138,9 +149,24 @@ export const PreventiviPage: React.FC = () => {
             />
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="h-10 rounded-xl text-muted-foreground border-border hover:bg-muted">
-              <Filter className="w-4 h-4 mr-2" /> Filtri Avanzati
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className={`h-10 rounded-xl border-border hover:bg-muted ${filtroStato !== "all" ? "text-primary border-primary/40" : "text-muted-foreground"}`}>
+                  <Filter className="w-4 h-4 mr-2" />
+                  {filtroStato === "all" ? "Filtri Avanzati" : filtroStato}
+                  <ChevronDown className="w-3 h-3 ml-2" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40 bg-card/95 backdrop-blur-xl border-border/50 rounded-xl p-1">
+                <DropdownMenuItem onClick={() => setFiltroStato("all")} className={`text-xs font-bold uppercase cursor-pointer ${filtroStato === "all" ? "text-primary" : ""}`}>Tutti</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setFiltroStato("BOZZA")} className={`text-xs font-bold uppercase cursor-pointer ${filtroStato === "BOZZA" ? "text-primary" : ""}`}>Bozza</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setFiltroStato("INVIATO")} className={`text-xs font-bold uppercase cursor-pointer ${filtroStato === "INVIATO" ? "text-primary" : ""}`}>Inviato</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setFiltroStato("ACCETTATO")} className={`text-xs font-bold uppercase cursor-pointer ${filtroStato === "ACCETTATO" ? "text-primary" : ""}`}>Accettato</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setFiltroStato("RIFIUTATO")} className={`text-xs font-bold uppercase cursor-pointer ${filtroStato === "RIFIUTATO" ? "text-primary" : ""}`}>Rifiutato</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setFiltroStato("SCADUTO")} className={`text-xs font-bold uppercase cursor-pointer ${filtroStato === "SCADUTO" ? "text-primary" : ""}`}>Scaduto</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 

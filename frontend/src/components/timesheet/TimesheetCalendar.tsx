@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, parseISO, addWeeks, subWeeks } from "date-fns";
+import { useMemo, useState } from "react";
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, parseISO, addWeeks } from "date-fns";
 import { it } from "date-fns/locale";
 import { Plus, Briefcase, CheckCircle2, User as UserIcon, ChevronLeft, ChevronRight, LayoutGrid, LayoutList } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,18 +21,16 @@ const formatDuration = (minutes: number) => {
 
 export function TimesheetCalendar({ timesheets, currentMonth, onView, onAdd }: TimesheetCalendarProps) {
   const [viewType, setViewType] = useState<"month" | "week">("month");
-  const [currentWeek, setCurrentWeek] = useState(() => startOfWeek(currentMonth, { weekStartsOn: 1 }));
-
-  // Keep currentWeek in sync if currentMonth changes from parent
-  useEffect(() => {
-    if (viewType === "week" && !isSameMonth(currentWeek, currentMonth)) {
-      setCurrentWeek(startOfWeek(currentMonth, { weekStartsOn: 1 }));
-    }
-  }, [currentMonth, viewType]);
-
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(monthStart);
-  
+  const monthKey = format(monthStart, "yyyy-MM");
+  const [weekState, setWeekState] = useState(() => ({ monthKey, offset: 0 }));
+  const effectiveWeekOffset = weekState.monthKey === monthKey ? weekState.offset : 0;
+  const currentWeek = useMemo(
+    () => addWeeks(startOfWeek(currentMonth, { weekStartsOn: 1 }), effectiveWeekOffset),
+    [currentMonth, effectiveWeekOffset]
+  );
+
   const getCalendarDays = () => {
     if (viewType === "month") {
       return eachDayOfInterval({
@@ -49,9 +47,27 @@ export function TimesheetCalendar({ timesheets, currentMonth, onView, onAdd }: T
 
   const calendarDays = getCalendarDays();
 
-  const handlePrevWeek = () => setCurrentWeek(subWeeks(currentWeek, 1));
-  const handleNextWeek = () => setCurrentWeek(addWeeks(currentWeek, 1));
-  const handleTodayWeek = () => setCurrentWeek(startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const handlePrevWeek = () => {
+    setWeekState((current) => ({
+      monthKey,
+      offset: current.monthKey === monthKey ? current.offset - 1 : -1,
+    }));
+  };
+
+  const handleNextWeek = () => {
+    setWeekState((current) => ({
+      monthKey,
+      offset: current.monthKey === monthKey ? current.offset + 1 : 1,
+    }));
+  };
+
+  const handleTodayWeek = () => {
+    const thisMonthKey = format(startOfMonth(new Date()), "yyyy-MM");
+    setWeekState({
+      monthKey: thisMonthKey,
+      offset: 0,
+    });
+  };
 
   return (
     <div className="flex flex-col h-full bg-background/50 rounded-xl overflow-hidden">

@@ -120,6 +120,25 @@ export function TaskPlanningDialog({ open, onOpenChange, task }: TaskPlanningDia
               )}
             />
 
+            <FormField
+              control={form.control}
+              name="descrizione"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-[10px] font-black uppercase tracking-widest text-slate-500">Descrizione (opzionale)</FormLabel>
+                  <FormControl>
+                    <textarea
+                      {...field}
+                      rows={2}
+                      className="w-full rounded-md border border-border bg-muted px-3 py-2 text-sm font-medium resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      placeholder="Aggiungi dettagli o note sul task..."
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}

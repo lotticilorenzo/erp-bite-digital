@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.core.security import CHAT_WS_TICKET_TTL, CHAT_WS_TOKEN_SCOPE, create_chat_ws_ticket, get_current_user, get_user_from_token
 from app.models.models import ChatMessaggio, ChatReazione, User, ChatCanale, ChatMembro, UserRole
-from app.schemas.schemas import ChatMessaggioRead, ChatMessaggioCreate, ChatCanaleOut, UserOut
+from app.schemas.schemas import ChatMessaggioRead, ChatMessaggioCreate, ChatCanaleCreate, ChatCanaleOut, UserOut
 from app.services import audit
 
 logger = logging.getLogger(__name__)
@@ -296,6 +296,88 @@ async def get_or_create_direct_channel(
         c_dict["nome"] = f"{other_member.user.nome} {other_member.user.cognome}"
         c_dict["logo_url"] = other_member.user.avatar_url
     return c_dict
+
+@router.post("/channels/group", response_model=ChatCanaleOut, status_code=201)
+async def create_group_channel(
+    channel_in: ChatCanaleCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    group_name = channel_in.nome.strip()
+    if not group_name:
+        raise HTTPException(status_code=400, detail="Il nome del gruppo è obbligatorio")
+
+    member_ids = {current_user.id, *channel_in.member_ids}
+    if len(member_ids) < 2:
+        raise HTTPException(status_code=400, detail="Seleziona almeno un altro membro per creare il gruppo")
+
+    users_stmt = select(User).where(User.id.in_(member_ids), User.attivo == True)
+    users = (await db.execute(users_stmt)).scalars().all()
+    found_ids = {user.id for user in users}
+    if found_ids != member_ids:
+        raise HTTPException(status_code=404, detail="Uno o più membri selezionati non sono disponibili")
+
+    channel = ChatCanale(
+        nome=group_name,
+        tipo='GROUP',
+        logo_url=channel_in.logo_url,
+    )
+    db.add(channel)
+    await db.flush()
+
+    for user_id in member_ids:
+        db.add(
+            ChatMembro(
+                canale_id=channel.id,
+                user_id=user_id,
+                ruolo='ADMIN' if user_id == current_user.id else 'MEMBER'
+            )
+        )
+
+    system_message_content = f"{current_user.nome} {current_user.cognome} ha creato il gruppo."
+    db.add(
+        ChatMessaggio(
+            canale_id=channel.id,
+            autore_id=current_user.id,
+            contenuto=system_message_content,
+            tipo='sistema'
+        )
+    )
+
+    await audit.emit_create(
+        db,
+        tabella="chat_canali",
+        record_id=channel.id,
+        user_id=current_user.id,
+        dati={
+            "nome": group_name,
+            "tipo": "GROUP",
+            "logo_url": channel_in.logo_url,
+            "member_ids": [str(member_id) for member_id in sorted(member_ids, key=str)],
+        },
+    )
+    await db.commit()
+
+    channel = await db.scalar(
+        select(ChatCanale)
+        .where(ChatCanale.id == channel.id)
+        .options(selectinload(ChatCanale.membri).joinedload(ChatMembro.user))
+    )
+    if not channel:
+        raise HTTPException(status_code=500, detail="Errore nella creazione del gruppo")
+
+    channel_payload = ChatCanaleOut.model_validate(channel).model_dump(mode="json")
+    channel_payload["last_message"] = system_message_content
+    channel_payload["last_message_at"] = datetime.now(timezone.utc).isoformat()
+    await manager.broadcast_to_channel(
+        db,
+        channel.id,
+        {
+            "type": "channel_created",
+            "channel": channel_payload,
+        },
+    )
+    return channel
 
 @router.post("/channels/{canal_id}/members", tags=["Admin"])
 async def manage_members(

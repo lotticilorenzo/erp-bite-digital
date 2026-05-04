@@ -58,15 +58,20 @@ const item = {
 export function ProgettoTable({ progetti, onEdit, onDelete, isLoading }: ProgettoTableProps) {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = React.useState("");
+  const [filterTipo, setFilterTipo] = React.useState<string>("all");
+  const [filterStato, setFilterStato] = React.useState<string>("all");
 
   const filteredProgetti = useMemo(
     () =>
-      progetti.filter(
-        (p) =>
+      progetti.filter((p) => {
+        const matchSearch =
           p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.cliente?.ragione_sociale.toLowerCase().includes(searchTerm.toLowerCase())
-      ),
-    [progetti, searchTerm]
+          (p.cliente?.ragione_sociale ?? "").toLowerCase().includes(searchTerm.toLowerCase());
+        const matchTipo = filterTipo === "all" || p.tipo === filterTipo;
+        const matchStato = filterStato === "all" || p.stato === filterStato;
+        return matchSearch && matchTipo && matchStato;
+      }),
+    [progetti, searchTerm, filterTipo, filterStato]
   );
 
   if (isLoading) {
@@ -92,10 +97,32 @@ export function ProgettoTable({ progetti, onEdit, onDelete, isLoading }: Progett
             className="pl-10 bg-card border-border text-white focus:ring-purple-500"
           />
         </div>
-        <Button variant="outline" className="bg-card border-border text-muted-foreground hover:text-white hover:bg-muted">
-          <Filter className="w-4 h-4 mr-2" />
-          Filtri
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className={`bg-card border-border text-muted-foreground hover:text-white hover:bg-muted ${filterTipo !== "all" || filterStato !== "all" ? "border-primary/50 text-primary" : ""}`}>
+              <Filter className="w-4 h-4 mr-2" />
+              Filtri{(filterTipo !== "all" || filterStato !== "all") ? " •" : ""}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48 bg-card/95 backdrop-blur-xl border-border/50 rounded-xl p-2">
+            <DropdownMenuLabel className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Tipo</DropdownMenuLabel>
+            <DropdownMenuItem onClick={() => setFilterTipo("all")} className={`text-xs cursor-pointer ${filterTipo === "all" ? "text-primary" : ""}`}>Tutti</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setFilterTipo("RETAINER")} className={`text-xs cursor-pointer ${filterTipo === "RETAINER" ? "text-primary" : ""}`}>Retainer</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setFilterTipo("ONE_OFF")} className={`text-xs cursor-pointer ${filterTipo === "ONE_OFF" ? "text-primary" : ""}`}>One-off</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Stato</DropdownMenuLabel>
+            <DropdownMenuItem onClick={() => setFilterStato("all")} className={`text-xs cursor-pointer ${filterStato === "all" ? "text-primary" : ""}`}>Tutti</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setFilterStato("ATTIVO")} className={`text-xs cursor-pointer ${filterStato === "ATTIVO" ? "text-primary" : ""}`}>Attivo</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setFilterStato("SOSPESO")} className={`text-xs cursor-pointer ${filterStato === "SOSPESO" ? "text-primary" : ""}`}>Sospeso</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setFilterStato("CONCLUSO")} className={`text-xs cursor-pointer ${filterStato === "CONCLUSO" ? "text-primary" : ""}`}>Concluso</DropdownMenuItem>
+            {(filterTipo !== "all" || filterStato !== "all") && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => { setFilterTipo("all"); setFilterStato("all"); }} className="text-xs cursor-pointer text-destructive">Rimuovi filtri</DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="rounded-xl border border-border bg-card shadow-2xl overflow-hidden">

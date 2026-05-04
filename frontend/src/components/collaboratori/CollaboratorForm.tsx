@@ -12,8 +12,17 @@ import {
   Clock, 
   Euro,
   Loader2,
-  X
+  X,
+  UserCheck
 } from "lucide-react";
+import { useUsers } from "@/hooks/useUsers";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
 import { 
   Dialog, 
   DialogContent, 
@@ -55,6 +64,7 @@ const collaboratorSchema = z.object({
   banca: z.string().optional(),
   bic_swift: z.string().optional(),
   note: z.string().optional(),
+  user_id: z.string().uuid().optional().nullable(),
 });
 
 type CollaboratorFormValues = z.infer<typeof collaboratorSchema>;
@@ -107,6 +117,7 @@ export function CollaboratorForm({ open, onOpenChange, collaborator }: Collabora
         banca: collaborator.banca || "",
         bic_swift: collaborator.bic_swift || "",
         note: collaborator.note || "",
+        user_id: collaborator?.user_id || null,
       });
     } else if (!collaborator && open) {
       form.reset({
@@ -124,16 +135,29 @@ export function CollaboratorForm({ open, onOpenChange, collaborator }: Collabora
         banca: "",
         bic_swift: "",
         note: "",
+        user_id: null,
       });
     }
   }, [collaborator, open, form]);
 
+  const { data: users = [] } = useUsers();
+  
+  // Trova utenti che non sono ancora legati a una risorsa
+  // (In un caso reale dovremmo filtrare lato server o avere un flag, 
+  // qui facciamo una logica semplice per l'utente)
+  const unlinkedUsers = users.filter(u => u.attivo);
+
   const mutation = useMutation({
     mutationFn: async (values: CollaboratorFormValues) => {
-      if (isEdit) {
+      if (isEdit && collaborator.id) {
         return api.patch(`/risorse/${collaborator.id}`, values);
       } else {
-        return api.post("/risorse", values);
+        // Se stiamo creando da un utente esistente, passiamo il suo user_id
+        const payload = { ...values };
+        if (!payload.user_id && collaborator?.user_id) {
+          payload.user_id = collaborator.user_id;
+        }
+        return api.post("/risorse", payload);
       }
     },
     onSuccess: () => {
@@ -148,7 +172,11 @@ export function CollaboratorForm({ open, onOpenChange, collaborator }: Collabora
   });
 
   const onSubmit = (values: CollaboratorFormValues) => {
-    mutation.mutate(values);
+    const payload = { ...values };
+    if (payload.user_id === "none") {
+      payload.user_id = null;
+    }
+    mutation.mutate(payload);
   };
 
   return (
@@ -251,6 +279,40 @@ export function CollaboratorForm({ open, onOpenChange, collaborator }: Collabora
                     />
                     <FormField
                       control={form.control}
+                      name="user_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Account Utente Collegato</FormLabel>
+                          <Select 
+                            onValueChange={field.onChange} 
+                            defaultValue={field.value || undefined}
+                            value={field.value || "none"}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="bg-background border-border h-10 rounded-xl">
+                                <SelectValue placeholder="Seleziona utente..." />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="bg-card border-border">
+                              <SelectItem value="none">Nessun Account</SelectItem>
+                              {unlinkedUsers.map(u => (
+                                <SelectItem key={u.id} value={u.id}>
+                                  <div className="flex items-center gap-2">
+                                     <UserCheck className="h-3 w-3 text-primary" />
+                                     {u.nome} {u.cognome} ({u.email})
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
                       name="tipo_contratto"
                       render={({ field }) => (
                         <FormItem>
@@ -262,6 +324,7 @@ export function CollaboratorForm({ open, onOpenChange, collaborator }: Collabora
                         </FormItem>
                       )}
                     />
+                    <div />
                   </div>
                 </div>
 

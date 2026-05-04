@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { 
   Users, 
   Search, 
@@ -72,11 +73,13 @@ interface Risorsa {
 
 const CollaboratoriPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const highlightUserId = searchParams.get('id');
   const [searchTerm, setSearchTerm] = useState('');
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [isCollaboratorFormOpen, setIsCollaboratorFormOpen] = useState(false);
   const [selectedRisorsa, setSelectedRisorsa] = useState<Risorsa | null>(null);
-  
+
   // Queries
   const { data: risorse = [], isLoading } = useQuery<Risorsa[]>({
     queryKey: ['risorse-full'],
@@ -85,6 +88,19 @@ const CollaboratoriPage: React.FC = () => {
       return res.data;
     }
   });
+
+  // Scroll to highlighted collaborator from dashboard nav
+  useEffect(() => {
+    if (!highlightUserId || risorse.length === 0) return;
+    const target = risorse.find(r => r.user_id === highlightUserId);
+    if (!target) return;
+    const el = document.getElementById(`collab-card-${target.id}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
+      setTimeout(() => el.classList.remove('ring-2', 'ring-primary', 'ring-offset-2'), 2500);
+    }
+  }, [highlightUserId, risorse]);
 
   // Mutation to deactivate
   const deactivateMutation = useMutation({
@@ -292,14 +308,15 @@ const ServiceDialog = ({ open, onOpenChange, risorsa }: { open: boolean, onOpenC
 
 // --- Sub-components ---
 
-const CollaboratorCard: React.FC<{ 
-  risorsa: Risorsa; 
+const CollaboratorCard: React.FC<{
+  risorsa: Risorsa;
   onEdit: (r: Risorsa) => void;
   onAddService: (r: Risorsa) => void;
   onDeactivate: (id: string) => void;
 }> = ({ risorsa, onEdit, onAddService, onDeactivate }) => {
+  const navigate = useNavigate();
   return (
-    <Card className={`group bg-card/50 border-border hover:border-primary/50 transition-all duration-500 backdrop-blur-xl shadow-lg hover:shadow-primary/5 overflow-hidden ${!risorsa.attivo ? 'opacity-50 grayscale' : ''}`}>
+    <Card id={`collab-card-${risorsa.id}`} className={`group bg-card/50 border-border hover:border-primary/50 transition-all duration-500 backdrop-blur-xl shadow-lg hover:shadow-primary/5 overflow-hidden ${!risorsa.attivo ? 'opacity-50 grayscale' : ''}`}>
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
       
       <CardHeader className="pb-4">
@@ -395,7 +412,7 @@ const CollaboratorCard: React.FC<{
         </div>
 
         {/* Action Button */}
-        <Button variant="outline" className="w-full h-11 bg-white/[0.02] border-border hover:bg-primary/5 hover:border-primary/30 transition-all font-black uppercase tracking-widest text-[10px] gap-2">
+        <Button variant="outline" onClick={() => navigate(`/analytics?collaboratore=${risorsa.id}`)} className="w-full h-11 bg-white/[0.02] border-border hover:bg-primary/5 hover:border-primary/30 transition-all font-black uppercase tracking-widest text-[10px] gap-2">
           Vedi Analisi Costi
           <ExternalLink className="h-3 w-3" />
         </Button>

@@ -28,7 +28,8 @@ import {
 } from "@/components/ui/select";
 import { useCreatePianificazione, useUpdatePianificazione } from "@/hooks/usePianificazioni";
 import { useClienti } from "@/hooks/useClienti";
-import { useUsers } from "@/hooks/useUsers";
+import { useQuery } from "@tanstack/react-query";
+import api from "@/lib/api";
 import type { Pianificazione } from "@/types";
 import { 
   Loader2, 
@@ -72,7 +73,16 @@ export function PlanningDialog({
   onOpenChange,
 }: PlanningDialogProps) {
   const { data: clienti } = useClienti();
-  const { data: users = [] } = useUsers(true);
+  const { data: risorse = [] } = useQuery<any[]>({
+    queryKey: ['risorse'],
+    queryFn: async () => { const res = await api.get('/risorse'); return res.data; }
+  });
+  const users = risorse.map(r => ({ 
+    id: r.user_id, 
+    nome: r.nome, 
+    cognome: r.cognome,
+    costo_orario: r.servizi?.[0]?.costo_orario ?? 0
+  }));
   const createPlan = useCreatePianificazione();
   const updatePlan = useUpdatePianificazione();
   const isEditing = !!plan;

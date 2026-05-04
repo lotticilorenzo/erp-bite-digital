@@ -69,6 +69,9 @@ app.add_middleware(
 
 @app.middleware("http")
 async def rate_limiting_middleware(request: Request, call_next):
+    if not settings.is_production:
+        return await call_next(request)
+
     # Skip rate limiting for static files
     if request.url.path.startswith("/static"):
         return await call_next(request)

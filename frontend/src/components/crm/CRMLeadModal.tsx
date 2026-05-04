@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   X, 
   Calendar, 
@@ -8,7 +9,8 @@ import {
   CheckCircle2,
   Activity,
   History,
-  Briefcase
+  Briefcase,
+  Zap
 } from "lucide-react";
 import type { CRMLead } from "@/types/crm";
 import { useCRM } from "@/hooks/useCRM";
@@ -29,31 +31,34 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export function CRMLeadModal({ 
-  leadId, 
-  onClose 
-}: { 
-  leadId: string; 
-  onClose: () => void 
-}) {
-  const { leads, stages, updateLead, addActivity, deleteLead, convertLeadToClient } = useCRM();
-  const { data: users } = useUsers();
-  const lead = leads.find(l => l.id === leadId);
+type CRMLeadModalProps = {
+  leadId: string;
+  onClose: () => void;
+};
 
-  const [editData, setEditData] = useState<Partial<CRMLead>>({});
-  const [newActivity, setNewActivity] = useState({ tipo: 'Nota', descrizione: '' });
-
-  useEffect(() => {
-    if (lead) {
-      setEditData(lead);
-    }
-  }, [lead]);
+export function CRMLeadModal({ leadId, onClose }: CRMLeadModalProps) {
+  const crm = useCRM();
+  const lead = crm.leads.find((item) => item.id === leadId);
 
   if (!lead) return null;
 
+  return <CRMLeadModalContent key={lead.id} lead={lead} leadId={leadId} onClose={onClose} crm={crm} />;
+}
+
+function CRMLeadModalContent({
+  lead,
+  leadId,
+  onClose,
+  crm,
+}: CRMLeadModalProps & { lead: CRMLead; crm: ReturnType<typeof useCRM> }) {
+  const { data: users } = useUsers();
+  const navigate = useNavigate();
+  const [editData, setEditData] = useState<Partial<CRMLead>>(() => lead);
+  const [newActivity, setNewActivity] = useState({ tipo: 'Nota', descrizione: '' });
+
   const handleSave = async () => {
     try {
-      await updateLead.mutateAsync({ id: leadId, data: editData });
+      await crm.updateLead.mutateAsync({ id: leadId, data: editData });
       toast.success("Lead aggiornato");
     } catch (err) {
       toast.error("Errore durante il salvataggio");
@@ -63,7 +68,7 @@ export function CRMLeadModal({
   const handleAddActivity = async () => {
     if (!newActivity.descrizione) return;
     try {
-      await addActivity.mutateAsync({ lead_id: leadId, data: newActivity });
+      await crm.addActivity.mutateAsync({ lead_id: leadId, data: newActivity });
       setNewActivity({ tipo: 'Nota', descrizione: '' });
     } catch (err) {
       toast.error("Errore durante l'invio dell'attività");
@@ -98,10 +103,18 @@ export function CRMLeadModal({
               <Button 
                 variant="outline" 
                 className="bg-emerald-500/10 hover:bg-emerald-500 hover:text-white border-emerald-500/20 text-emerald-500 font-black uppercase text-[10px] tracking-widest px-4"
-                onClick={() => convertLeadToClient.mutate(leadId)}
+                onClick={async () => {
+                   try {
+                     const res = await crm.convertLeadToClient.mutateAsync(leadId);
+                     if (res.progetto_id) {
+                         navigate(`/progetti/${res.progetto_id}`);
+                     }
+                     onClose();
+                   } catch (e) {}
+                }}
               >
                 <CheckCircle2 className="h-3.5 w-3.5 mr-2" />
-                Converti in Cliente
+                Converti in Cliente/Progetto
               </Button>
             ) : (
               <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 font-black uppercase text-[10px] px-3 h-8">
@@ -153,7 +166,7 @@ export function CRMLeadModal({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-[#0f172a] border-white/10 rounded-xl">
-                      {stages.map(s => (
+                      {crm.stages.map(s => (
                         <SelectItem key={s.id} value={s.id} className="text-white hover:bg-primary/10">
                           {s.nome} ({s.probabilita}%)
                         </SelectItem>
@@ -227,6 +240,25 @@ export function CRMLeadModal({
                   placeholder="Dettagli sulle necessità del cliente, budget, tempistiche..."
                 />
               </div>
+
+              {lead.suggerimento_ai && (
+                <div className="col-span-2 p-6 rounded-[2rem] bg-primary/5 border border-primary/20 relative overflow-hidden group">
+                  <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-500">
+                    <Zap className="h-32 w-32 text-primary" />
+                  </div>
+                  <div className="flex items-start gap-4 relative z-10">
+                    <div className="h-10 w-10 rounded-2xl bg-primary/20 flex items-center justify-center shrink-0">
+                      <Zap className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <h4 className="text-[10px] font-black uppercase tracking-widest text-primary mb-1">AI Next Move Suggestion</h4>
+                      <p className="text-sm text-white font-medium leading-relaxed">
+                        {lead.suggerimento_ai}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mt-12 pt-8 border-t border-white/5 flex items-center justify-between">
@@ -235,7 +267,7 @@ export function CRMLeadModal({
                 className="text-red-500 hover:text-red-600 hover:bg-red-500/10 font-bold px-6 h-12 rounded-xl"
                 onClick={() => {
                   if (confirm("Eliminare definitivamente questo lead?")) {
-                    deleteLead.mutate(leadId);
+                    crm.deleteLead.mutate(leadId);
                     onClose();
                   }
                 }}

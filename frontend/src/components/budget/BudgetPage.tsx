@@ -62,14 +62,6 @@ export default function BudgetPage() {
   const prevMonth = () => setMese((current) => subMonths(current, 1));
   const nextMonth = () => setMese((current) => addMonths(current, 1));
 
-  useEffect(() => {
-    if (!trend.data?.series?.length) return;
-    const stillExists = trend.data.series.some((serie) => serie.categoria_id === selectedCategoryId);
-    if (!selectedCategoryId || !stillExists) {
-      setSelectedCategoryId(trend.data.series[0].categoria_id);
-    }
-  }, [selectedCategoryId, trend.data]);
-
   async function handleCopy() {
     try {
       const res = await copyBudget.mutateAsync(format(mese, "yyyy-MM-01"));
@@ -304,7 +296,13 @@ export default function BudgetPage() {
                           tickFormatter={(value) => compactEuro(Number(value))}
                         />
                         <Tooltip
-                          formatter={(value: any, name: any) => [euro(Number(value)), name === "budget" ? "Budget" : "Speso"]}
+                          formatter={(value, name) => {
+                            const normalizedValue = Array.isArray(value) ? value[0] : value;
+                            return [
+                              euro(Number(normalizedValue ?? 0)),
+                              name === "budget" ? "Budget" : "Speso",
+                            ] as [string, string];
+                          }}
                           contentStyle={{
                             borderRadius: 18,
                             background: "rgba(15, 23, 42, 0.96)",

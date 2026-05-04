@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { useAuth } from "@/hooks/useAuth";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,8 +27,12 @@ import {
 } from "@/components/ui/dialog";
 
 export default function CommessePage() {
+  const { user } = useAuth();
+  const canManagePlanificazioni = user?.ruolo === 'ADMIN' || user?.ruolo === 'DEVELOPER' || user?.ruolo === 'PM';
+  const canDeletePlanificazioni = user?.ruolo === 'ADMIN' || user?.ruolo === 'DEVELOPER';
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const isUrlNewIntent = searchParams.get("action") === "new";
   const clienteIdFilter = searchParams.get("cliente_id") || undefined;
   const clienteNomeFilter = searchParams.get("cliente_nome") || undefined;
   const meseFilter = searchParams.get("mese") || undefined;
@@ -72,13 +77,6 @@ export default function CommessePage() {
   };
 
   useEffect(() => {
-    if (searchParams.get("action") === "new") {
-      handleNew();
-      const nextParams = new URLSearchParams(searchParams);
-      nextParams.delete("action");
-      setSearchParams(nextParams, { replace: true });
-    }
-
     const openPlanningListener = () => {
       setSelectedPlanning(null);
       setIsPlanningDialogOpen(true);
@@ -88,7 +86,23 @@ export default function CommessePage() {
     return () => {
       window.removeEventListener('open-new-planning-dialog', openPlanningListener);
     };
-  }, [searchParams, setSearchParams]);
+  }, []);
+
+  const handleCommessaDialogOpenChange = (nextOpen: boolean) => {
+    setIsDialogOpen(nextOpen);
+
+    if (nextOpen) {
+      return;
+    }
+
+    setSelectedCommessa(null);
+
+    if (isUrlNewIntent) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("action");
+      setSearchParams(nextParams, { replace: true });
+    }
+  };
 
   const clearClienteFilter = () => {
     const nextParams = new URLSearchParams(searchParams);
@@ -150,17 +164,19 @@ export default function CommessePage() {
             <Plus className="w-4 h-4 mr-2" />
             Nuova Commessa
           </Button>
-          <Button 
-            onClick={() => {
-              setSelectedPlanning(null);
-              setIsPlanningDialogOpen(true);
-            }}
-            variant="outline"
-            className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10 hover:text-white transition-all shadow-[0_0_15px_hsl(var(--purple-500)/0.1)]"
-          >
-            <Calculator className="w-4 h-4 mr-2" />
-            Nuova Pianificazione
-          </Button>
+          {canManagePlanificazioni && (
+            <Button
+              onClick={() => {
+                setSelectedPlanning(null);
+                setIsPlanningDialogOpen(true);
+              }}
+              variant="outline"
+              className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10 hover:text-white transition-all shadow-[0_0_15px_hsl(var(--purple-500)/0.1)]"
+            >
+              <Calculator className="w-4 h-4 mr-2" />
+              Nuova Pianificazione
+            </Button>
+          )}
         </div>
       </div>
 
@@ -173,41 +189,45 @@ export default function CommessePage() {
           <TabsTrigger value="commesse" className="data-[state=active]:bg-primary data-[state=active]:text-white">
             Esecuzione (Commesse)
           </TabsTrigger>
-          <TabsTrigger value="pianificazioni" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white">
-            Pianificazione
-          </TabsTrigger>
+          {canManagePlanificazioni && (
+            <TabsTrigger value="pianificazioni" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white">
+              Pianificazione
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="commesse" className="mt-6 space-y-6">
-          <CommessaTable 
-            commesse={commesse} 
-            isLoading={isLoading} 
+          <CommessaTable
+            commesse={commesse}
+            isLoading={isLoading}
             onEdit={handleEdit}
             onDelete={(c) => setCommessaToDelete(c)}
           />
         </TabsContent>
 
-        <TabsContent value="pianificazioni" className="mt-6 space-y-6">
-          <PlanningTable 
-            plans={pianificazioni}
-            isLoading={isPlanningLoading}
-            onOpen={(p) => navigate(`/pianificazioni/${p.id}`)}
-            onEdit={(p) => {
-              setSelectedPlanning(p);
-              setIsPlanningDialogOpen(true);
-            }}
-            onApprove={(p) => setPlanningToApprove(p)}
-            onDelete={(p) => setPlanningToDelete(p)}
-            onConvert={(p) => setPlanningToConvert(p)}
-          />
-        </TabsContent>
+        {canManagePlanificazioni && (
+          <TabsContent value="pianificazioni" className="mt-6 space-y-6">
+            <PlanningTable
+              plans={pianificazioni}
+              isLoading={isPlanningLoading}
+              onOpen={(p) => navigate(`/pianificazioni/${p.id}`)}
+              onEdit={(p) => {
+                setSelectedPlanning(p);
+                setIsPlanningDialogOpen(true);
+              }}
+              onApprove={(p) => setPlanningToApprove(p)}
+              onDelete={canDeletePlanificazioni ? (p) => setPlanningToDelete(p) : undefined}
+              onConvert={(p) => setPlanningToConvert(p)}
+            />
+          </TabsContent>
+        )}
       </Tabs>
 
 
       <CommessaDialog 
-        open={isDialogOpen} 
-        onOpenChange={setIsDialogOpen} 
-        commessa={selectedCommessa} 
+        open={isDialogOpen || isUrlNewIntent} 
+        onOpenChange={handleCommessaDialogOpenChange} 
+        commessa={isUrlNewIntent ? null : selectedCommessa} 
       />
 
       <PlanningDialog

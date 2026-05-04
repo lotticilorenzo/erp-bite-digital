@@ -64,10 +64,6 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function ClienteDetailPage() {
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
   const { user } = useAuth();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -470,7 +466,7 @@ export default function ClienteDetailPage() {
                      </tr>
                    </thead>
                    <tbody>
-                     {commesse.map((c) => {
+                     {filteredCommesse.map((c) => {
                         const creep = c.ore_contratto > 0 ? (c.ore_reali / c.ore_contratto) : 1;
                         return (
                           <tr 
