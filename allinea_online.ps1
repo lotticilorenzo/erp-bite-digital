@@ -333,7 +333,7 @@ rm -f /tmp/bite_erp_local_sync.sql
 cd /root/mio-gestionale/backend
 docker compose -f docker-compose.prod.yml restart backend
 '@
-    $restoreScript | ssh $DoHost 'bash -s'
+    ($restoreScript -replace "`r", "") | ssh $DoHost 'bash -s'
     if ($LASTEXITCODE -ne 0) {
         throw "Impossibile ripristinare il database sul server."
     }
