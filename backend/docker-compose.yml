@@ -45,6 +45,8 @@ services:
       - ./scripts:/app/scripts
       - ./migrations:/app/migrations
       - uploads_data:/app/private_uploads
+      - uploads_data:/app/app/uploads
+      - uploads_data:/app/static/uploads
       - logos_data:/app/static/logos
       - avatars_data:/app/static/avatars
     networks:

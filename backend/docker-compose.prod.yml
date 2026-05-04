@@ -44,6 +44,8 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
+      - uploads_data:/app/private_uploads
+      - uploads_data:/app/app/uploads
       - uploads_data:/app/static/uploads
       - logos_data:/app/static/logos
       - avatars_data:/app/static/avatars

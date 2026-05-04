@@ -28,10 +28,10 @@ COPY tests/ ./tests/
 COPY schema.sql ./schema.sql
 
 # Crea directory necessarie con permessi corretti
-RUN mkdir -p /app/static/uploads /app/static/logos /app/static/avatars \
+RUN mkdir -p /app/private_uploads /app/app/uploads/task_attachments /app/static/uploads /app/static/logos /app/static/avatars \
     && chown -R appuser:appgroup /app \
     && chmod 755 /app /app/static \
-    && chmod 700 /app/static/uploads /app/static/logos /app/static/avatars
+    && chmod 700 /app/private_uploads /app/app/uploads /app/app/uploads/task_attachments /app/static/uploads /app/static/logos /app/static/avatars
 
 USER appuser
 
