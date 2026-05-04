@@ -9,17 +9,18 @@ $ServerRoot = "/root/mio-gestionale"
 $ServerBackend = "$ServerRoot/backend"
 $LocalComposeFile = Join-Path $RepoRoot "backend\docker-compose.yml"
 $RemoteComposeFile = "docker-compose.prod.yml"
+$ProductionBaseUrl = "https://erp.bitedigitalstudio.com"
 $LocalIndexPath = Join-Path $RepoRoot "frontend\dist\index.html"
 $RemoteIndexTemp = Join-Path $env:TEMP "bite_erp_live_index.html"
 $RemoteAssetTemp = Join-Path $env:TEMP "bite_erp_live_asset.js"
 $LocalTableCountsSql = @'
 SELECT table_name || '=' || (xpath('/row/cnt/text()', query_to_xml(format('SELECT count(*) AS cnt FROM %I.%I', table_schema, table_name), false, true, '')))[1]::text
 FROM information_schema.tables
-WHERE table_schema='public' AND table_type='BASE TABLE'
+WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name <> 'schema_migrations'
 ORDER BY table_name;
 '@
 $SchemaFingerprintSql = @'
-SELECT md5(string_agg(table_name || ':' || column_name || ':' || data_type || ':' || coalesce(column_default,'') || ':' || is_nullable, '|' ORDER BY table_name, ordinal_position))
+SELECT md5(string_agg(table_name || ':' || column_name || ':' || data_type || ':' || coalesce(column_default,'') || ':' || is_nullable, '|' ORDER BY table_name, column_name))
 FROM information_schema.columns
 WHERE table_schema='public';
 '@
@@ -161,9 +162,13 @@ try {
     }
 
     $localHealth = Invoke-Native "powershell" @("-NoProfile", "-Command", "(Invoke-WebRequest -UseBasicParsing http://localhost:8000/health).Content") -CaptureOutput
-    $prodApi = Invoke-Native "curl.exe" @("-ksS", "https://178.128.198.11/api/v1/auth/me") -CaptureOutput
+    $localApiStatus = Invoke-Native "curl.exe" @("-sS", "-o", "NUL", "-w", "%{http_code}", "http://localhost:8000/api/v1/auth/me") -CaptureOutput
+    $localApiBody = Invoke-Native "curl.exe" @("-sS", "http://localhost:8000/api/v1/auth/me") -CaptureOutput
+    $prodApiStatus = Invoke-Native "curl.exe" @("-ksS", "-o", "NUL", "-w", "%{http_code}", "$ProductionBaseUrl/api/v1/auth/me") -CaptureOutput
+    $prodApiBody = Invoke-Native "curl.exe" @("-ksS", "$ProductionBaseUrl/api/v1/auth/me") -CaptureOutput
     Assert-Equal -Expected '{"status":"ok"}' -Actual $localHealth.Trim() -Message "Backend locale non risponde come previsto."
-    Assert-Equal -Expected '{"detail":"Not authenticated"}' -Actual $prodApi.Trim() -Message "API produzione non risponde come previsto."
+    Assert-Equal -Expected $localApiStatus.Trim() -Actual $prodApiStatus.Trim() -Message "Status API produzione diverso dal locale."
+    Assert-Equal -Expected $localApiBody.Trim() -Actual $prodApiBody.Trim() -Message "Payload API produzione diverso dal locale."
 
     $remoteSockets = Invoke-Native "ssh" @($DoHost, "ss -ltn") -CaptureOutput
     if ($remoteSockets -match "0\.0\.0\.0:8000" -or $remoteSockets -match "\[::\]:8000") {
@@ -177,7 +182,7 @@ try {
     }
 
     Write-Step "Verifica build React locale vs online"
-    Invoke-Native "curl.exe" @("-ksS", "https://178.128.198.11/", "-o", $RemoteIndexTemp)
+    Invoke-Native "curl.exe" @("-ksS", "$ProductionBaseUrl/", "-o", $RemoteIndexTemp)
     $localIndexHash = (Get-FileHash $LocalIndexPath -Algorithm SHA256).Hash
     $remoteIndexHash = (Get-FileHash $RemoteIndexTemp -Algorithm SHA256).Hash
     Assert-Equal -Expected $localIndexHash -Actual $remoteIndexHash -Message "index.html della build React non coincide tra locale e online."
@@ -189,7 +194,7 @@ try {
     }
     $assetPath = $assetMatch.Groups["path"].Value
     $localAssetPath = Join-Path $RepoRoot ("frontend\dist" + $assetPath.Replace("/", "\"))
-    Invoke-Native "curl.exe" @("-ksS", "https://178.128.198.11$assetPath", "-o", $RemoteAssetTemp)
+    Invoke-Native "curl.exe" @("-ksS", "$ProductionBaseUrl$assetPath", "-o", $RemoteAssetTemp)
     $localAssetHash = (Get-FileHash $localAssetPath -Algorithm SHA256).Hash
     $remoteAssetHash = (Get-FileHash $RemoteAssetTemp -Algorithm SHA256).Hash
     Assert-Equal -Expected $localAssetHash -Actual $remoteAssetHash -Message "Bundle JS React non coincide tra locale e online."

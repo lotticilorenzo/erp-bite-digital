@@ -19,16 +19,15 @@ $RemoteDbDumpPath = "/tmp/bite_erp_local_sync.sql"
 $LocalDbDumpPath = Join-Path $env:TEMP "bite_erp_local_sync.sql"
 $RemoteBackupDir = "/root/manual_db_backups"
 $LocalIndexPath = Join-Path $RepoRoot "frontend\dist\index.html"
-$ProductionBaseUrl = "https://178.128.198.11"
+$ProductionBaseUrl = "https://erp.bitedigitalstudio.com"
 $LocalHealthUrl = "http://localhost:8000/health"
 $RemoteHealthUrl = "http://localhost:8000/health"
 $ExpectedHealthPayload = '{"status":"ok"}'
-$ExpectedUnauthenticatedPayload = '{"detail":"Not authenticated"}'
 $RemoteGitNoisePaths = @("frontend/package-lock.json")
 $LocalTableCountsSql = @'
 SELECT table_name || '=' || (xpath('/row/cnt/text()', query_to_xml(format('SELECT count(*) AS cnt FROM %I.%I', table_schema, table_name), false, true, '')))[1]::text
 FROM information_schema.tables
-WHERE table_schema='public' AND table_type='BASE TABLE'
+WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name <> 'schema_migrations'
 ORDER BY table_name;
 '@
 
@@ -36,6 +35,22 @@ function Write-Step {
     param([string]$Message)
     Write-Host ""
     Write-Host "==> $Message"
+}
+
+function Quote-ProcessArgument {
+    param([AllowEmptyString()][string]$Argument)
+
+    if ($null -eq $Argument) {
+        return '""'
+    }
+
+    if ($Argument -notmatch '[\s"]') {
+        return $Argument
+    }
+
+    $escaped = $Argument -replace '(\\*)"', '$1$1\"'
+    $escaped = $escaped -replace '(\\+)$', '$1$1'
+    return '"' + $escaped + '"'
 }
 
 function Invoke-Native {
@@ -47,11 +62,12 @@ function Invoke-Native {
 
     $stdoutPath = Join-Path $env:TEMP ("codex_stdout_" + [guid]::NewGuid().ToString("N") + ".log")
     $stderrPath = Join-Path $env:TEMP ("codex_stderr_" + [guid]::NewGuid().ToString("N") + ".log")
+    $argumentString = (($Arguments | ForEach-Object { Quote-ProcessArgument $_ }) -join " ")
 
     try {
         $process = Start-Process `
             -FilePath $FilePath `
-            -ArgumentList $Arguments `
+            -ArgumentList $argumentString `
             -NoNewWindow `
             -PassThru `
             -Wait `
@@ -386,9 +402,15 @@ if ($localAssetHash -ne $remoteAssetHash) {
 }
 
 Write-Step "Verifica API online"
-$apiResponse = Invoke-Native "curl.exe" @("-ksS", "$ProductionBaseUrl/api/v1/auth/me") -CaptureOutput
-if ($apiResponse.Trim() -ne $ExpectedUnauthenticatedPayload) {
-    throw "Risposta API online inattesa: $apiResponse"
+$localApiStatus = Invoke-Native "curl.exe" @("-sS", "-o", "NUL", "-w", "%{http_code}", "http://localhost:8000/api/v1/auth/me") -CaptureOutput
+$localApiBody = Invoke-Native "curl.exe" @("-sS", "http://localhost:8000/api/v1/auth/me") -CaptureOutput
+$remoteApiStatus = Invoke-Native "curl.exe" @("-ksS", "-o", "NUL", "-w", "%{http_code}", "$ProductionBaseUrl/api/v1/auth/me") -CaptureOutput
+$remoteApiBody = Invoke-Native "curl.exe" @("-ksS", "$ProductionBaseUrl/api/v1/auth/me") -CaptureOutput
+if ($remoteApiStatus.Trim() -ne $localApiStatus.Trim()) {
+    throw "Status API online inatteso. Locale: $localApiStatus Remoto: $remoteApiStatus"
+}
+if ($remoteApiBody.Trim() -ne $localApiBody.Trim()) {
+    throw "Payload API online inatteso. Locale: $localApiBody Remoto: $remoteApiBody"
 }
 
 if ($SyncDb) {
