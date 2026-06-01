@@ -3,18 +3,11 @@ import uuid
 from collections import defaultdict
 from datetime import datetime, date, timedelta
 from decimal import Decimal
-from pathlib import Path
 from typing import Optional, List
-import secrets
 import time
 
 logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, Query, Body, File, UploadFile
-from fastapi_mail import FastMail, ConnectionConfig, MessageSchema, MessageType
-import os
-import shutil
-import io
-from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, select, func, and_, or_
 
@@ -67,7 +60,6 @@ from app.schemas.auth import ForgotPasswordRequest, ResetPasswordRequest
 import httpx
 from app.services.services import (
     list_tasks, get_task, create_task, update_task, delete_task,
-    list_users, get_user_by_email, create_user, update_user,
     list_timesheet, create_timesheet, approva_timesheet,
     get_dashboard_kpi, get_marginalita_clienti,
     sync_fic_data, get_last_fic_sync_status, list_fatture_attive, incassa_fattura,
@@ -117,7 +109,6 @@ def _check_login_rate(ip: str) -> None:
     _login_attempts[ip].append(now)
 
 
-password_reset_history = {}
 
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -155,142 +146,11 @@ router.include_router(documents.router, prefix="/documents", tags=["Documents"])
 @router.post("/__legacy_disabled__/auth/forgot-password", tags=["Auth"], include_in_schema=False)
 async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
     raise HTTPException(status_code=410, detail="Endpoint legacy disattivato")
-    from app.services.services import get_user_by_email
-    
-    # 1. Rate limiting
-    now = datetime.utcnow()
-    history = password_reset_history.get(data.email, [])
-    history = [t for t in history if now - t < timedelta(hours=1)]
-    if len(history) >= 3:
-        # In produzione eviteremmo di dire ESATTAMENTE che è rate limited per sicurezza, 
-        # ma qui seguiamo la logica richiesta.
-        raise HTTPException(status_code=429, detail="Troppe richieste. Riprova tra un'ora.")
-    
-    password_reset_history[data.email] = history + [now]
-    
-    # 2. Cerca utente
-    user = await get_user_by_email(db, data.email)
-    if not user:
-        # Per sicurezza non diciamo se l'email esiste
-        return {"message": "Se l'email esiste, riceverai un link di reset."}
-    
-    # 3. Genera token
-    token = secrets.token_urlsafe(32)
-    expires_at = now + timedelta(hours=1)
-    
-    # 4. Salva token (SQL diretto per velocità)
-    await db.execute(
-        text("INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (:u, :t, :e)"),
-        {"u": user.id, "t": token, "e": expires_at}
-    )
-    await db.commit()
-    
-    # 5. Invia email
-    conf = ConnectionConfig(
-        MAIL_USERNAME=settings.MAIL_USERNAME,
-        MAIL_PASSWORD=settings.MAIL_PASSWORD,
-        MAIL_FROM=settings.MAIL_FROM,
-        MAIL_PORT=settings.MAIL_PORT,
-        MAIL_SERVER=settings.MAIL_SERVER,
-        MAIL_STARTTLS=settings.MAIL_TLS,
-        MAIL_SSL_TLS=settings.MAIL_SSL,
-        USE_CREDENTIALS=True,
-        VALIDATE_CERTS=True
-    )
-    
-    reset_link = f"{settings.FRONTEND_BASE_URL}/reset-password?token={token}"
-    
-    html = f"""
-    <html>
-    <body style="font-family: sans-serif; background-color: #f8f9fa; padding: 40px;">
-        <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
-            <div style="background: #1e293b; padding: 30px; text-align: center;">
-                <h1 style="color: white; margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -0.02em;">BITE DIGITAL</h1>
-            </div>
-            <div style="padding: 40px; text-align: center;">
-                <h2 style="color: #1e293b; margin-top: 0;">Hai richiesto il reset della password</h2>
-                <p style="color: #64748b; line-height: 1.6; font-size: 16px;">
-                    Clicca il pulsante qui sotto per impostare una nuova password per il tuo account Bite ERP.
-                </p>
-                <div style="margin: 40px 0;">
-                    <a href="{reset_link}" style="background: #8b5cf6; color: white; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);">
-                        Reimposta Password
-                    </a>
-                </div>
-                <p style="color: #94a3b8; font-size: 13px; margin-bottom: 0;">
-                    Il link scade tra 1 ora.
-                </p>
-            </div>
-            <div style="background: #f1f5f9; padding: 20px; text-align: center;">
-                <p style="color: #94a3b8; font-size: 12px; margin: 0;">
-                    Se non hai richiesto questo reset, ignora pure questa email.
-                </p>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-    
-    message = MessageSchema(
-        subject="Reset Password - Bite ERP",
-        recipients=[data.email],
-        body=html,
-        subtype=MessageType.html
-    )
-    
-    fm = FastMail(conf)
-    try:
-        await fm.send_message(message)
-    except Exception as e:
-        logger.error("Errore invio email reset password: %s", e)
-        # In produzione loggheresti l'errore ma all'utente diciamo comunque successo per non dare info
-    
-    return {"message": "Se l'email esiste, riceverai un link di reset."}
+
 
 @router.post("/__legacy_disabled__/auth/reset-password", tags=["Auth"], include_in_schema=False)
 async def reset_password(data: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
     raise HTTPException(status_code=410, detail="Endpoint legacy disattivato")
-    from app.core.security import hash_password
-    
-    # 1. Verifica token
-    now = datetime.utcnow()
-    result = await db.execute(
-        text("SELECT user_id, expires_at, used FROM password_reset_tokens WHERE token = :t"),
-        {"t": data.token}
-    )
-    row = result.fetchone()
-    
-    if not row:
-        raise HTTPException(status_code=400, detail="Token non valido")
-
-    user_id, expires_at, used = row
-
-    if now > expires_at:
-        raise HTTPException(status_code=400, detail="Token scaduto")
-
-    # 2. Marca token come usato in modo ATOMICO (anti-race-condition).
-    #    Se il token è già stato usato da una richiesta concorrente, RETURNING
-    #    non restituisce righe e blocchiamo l'operazione prima di toccare la password.
-    mark_result = await db.execute(
-        text(
-            "UPDATE password_reset_tokens SET used = true "
-            "WHERE token = :t AND used = false RETURNING user_id"
-        ),
-        {"t": data.token}
-    )
-    if not mark_result.fetchone():
-        raise HTTPException(status_code=400, detail="Token già utilizzato")
-
-    # 3. Aggiorna password solo dopo aver acquisito il lock sul token
-    hashed_pwd = hash_password(data.new_password)
-    await db.execute(
-        text("UPDATE users SET password_hash = :h WHERE id = :u"),
-        {"h": hashed_pwd, "u": user_id}
-    )
-
-    await db.commit()
-    
-    return {"message": "Password aggiornata con successo", "success": True}
 
 
 # ═══════════════════════════════════════════════════════
@@ -517,7 +377,7 @@ async def patch_movimento_cassa(
         fp_res = await db.execute(select(FatturaPassiva).where(FatturaPassiva.id == payload.fattura_passiva_id))
         fp = fp_res.scalar_one_or_none()
         if fp and fp.stato_pagamento not in ('paid', 'PAGATA'):
-            fp.stato_pagamento = 'paid'
+            fp.stato_pagamento = 'PAGATA'
             fp.data_ultimo_pagamento = mov.data_valuta
 
     # Annullamento riconciliazione
@@ -531,7 +391,7 @@ async def patch_movimento_cassa(
         if mov.fattura_passiva_id:
             fp_res = await db.execute(select(FatturaPassiva).where(FatturaPassiva.id == mov.fattura_passiva_id))
             fp = fp_res.scalar_one_or_none()
-            if fp and fp.stato_pagamento in ('paid', 'PAGATA'):
+            if fp and fp.stato_pagamento in ('paid', 'PAGATA'):  # 'paid' per retro-compatibilità dati esistenti
                 fp.stato_pagamento = 'ATTESA'
                 fp.data_ultimo_pagamento = None
 
@@ -974,17 +834,13 @@ async def bulk_cambia_mese(
 # CLICKUP — task lookup per timer
 # ═══════════════════════════════════════════════════════
 
-CLICKUP_BASE = "https://api.clickup.com/api/v2"
-CLICKUP_TEAM_ID = "9015889235"
-
 async def _cu_get(path: str) -> dict:
-    import os
-    token = os.getenv("CLICKUP_TOKEN", "")
+    token = settings.CLICKUP_API_TOKEN
     if not token:
-        raise HTTPException(status_code=500, detail="CLICKUP_TOKEN non configurato")
+        raise HTTPException(status_code=500, detail="CLICKUP_API_TOKEN non configurato")
     async with httpx.AsyncClient(timeout=15) as client:
         r = await client.get(
-            f"{CLICKUP_BASE}{path}",
+            f"{settings.CLICKUP_BASE_URL}{path}",
             headers={"Authorization": token}
         )
         r.raise_for_status()
@@ -996,7 +852,7 @@ async def get_clickup_members(
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM))
 ):
     """Lista membri workspace ClickUp con ID — per configurare clickup_user_id su users"""
-    data = await _cu_get(f"/team/{CLICKUP_TEAM_ID}/member")
+    data = await _cu_get(f"/team/{settings.CLICKUP_TEAM_ID}/member")
     members = []
     for m in data.get("members", []):
         u = m.get("user", {})
@@ -1036,7 +892,7 @@ async def get_clickup_tasks_per_utente(
     page = 0
     while True:
         data = await _cu_get(
-            f"/team/{CLICKUP_TEAM_ID}/task"
+            f"/team/{settings.CLICKUP_TEAM_ID}/task"
             f"?assignees[]={cu_user_id}"
             f"&include_closed=false&subtasks=true"
             f"&page={page}&order_by=due_date&reverse=true"
@@ -2265,10 +2121,9 @@ async def _build_budget_variance_rows(
 
     res_costi_fissi = await db.execute(
         select(CostoFisso).where(
-            or_(
+            and_(
                 CostoFisso.attivo == True,
-                CostoFisso.data_fine == None,
-                CostoFisso.data_fine >= mese_start,
+                or_(CostoFisso.data_fine == None, CostoFisso.data_fine >= mese_start),
             )
         )
     )

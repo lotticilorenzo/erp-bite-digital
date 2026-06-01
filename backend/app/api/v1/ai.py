@@ -42,8 +42,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["AI"])
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-CLAUDE_CHAT_MODEL = os.getenv("ANTHROPIC_CHAT_MODEL", "claude-3-5-sonnet-20240620")
+CLAUDE_CHAT_MODEL = os.getenv("ANTHROPIC_CHAT_MODEL", "claude-sonnet-4-6")
 CLAUDE_TASK_MODEL = os.getenv("ANTHROPIC_TASK_MODEL", CLAUDE_CHAT_MODEL)
+
+if not ANTHROPIC_API_KEY:
+    logger.warning("ANTHROPIC_API_KEY non configurata — le funzionalità AI non saranno disponibili")
 
 
 def _normalize_service(value: str | None) -> str:
