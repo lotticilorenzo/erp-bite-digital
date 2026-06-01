@@ -23,7 +23,7 @@ from app.services.services import (
 router = APIRouter(prefix="/commesse", tags=["Commesse"])
 
 
-async def _enrich_commessa(db: AsyncSession, c, coeff_cache: Optional[dict[date, Decimal]] = None) -> dict:
+async def _enrich_commessa(db: AsyncSession, c, coeff_cache: Optional[dict[date, Decimal]] = None, quota_cache: Optional[dict] = None) -> dict:
     """Aggiunge i campi calcolati alla commessa prima della serializzazione."""
     minuti_totali = 0
     costo_manodopera_calc = Decimal("0")
@@ -37,17 +37,18 @@ async def _enrich_commessa(db: AsyncSession, c, coeff_cache: Optional[dict[date,
     d["ore_reali"] = float(ore_reali)
 
     # FONTE UNICA del margine (brief §4.2): canonico = LORDO su base snapshot approvati.
-    m = await calcola_margine_commessa(db, c, coeff_cache=coeff_cache)
+    m = await calcola_margine_commessa(db, c, coeff_cache=coeff_cache, quota_cache=quota_cache)
     d["costo_manodopera"] = float(m["costo_manodopera"])  # snapshot (Decisione 2)
     d["valore_fatturabile"] = float(m["ricavo"])
     d["coefficiente_allocazione"] = float(m["coefficiente_allocazione"])
     d["costi_indiretti_allocati"] = float(m["costi_indiretti"])
-    d["margine_euro"] = float(m["margine_lordo_euro"])          # LORDO (numero-titolo)
+    d["quota_luca"] = float(m["quota_luca"])  # pro-forma allocata (Prompt 4), gia sottratta dal margine
+    d["margine_euro"] = float(m["margine_lordo_euro"])          # LORDO (numero-titolo, al netto quota Luca)
     d["margine_percentuale"] = m["margine_lordo_pct"]
     d["margine_operativo_euro"] = float(m["margine_operativo_euro"])  # separato, per P&L Fase 3
     d["semaforo"] = m["semaforo"]
     # Stima "live" (tutti i timesheet, non solo approvati): campo SEPARATO ed etichettato, non canonico.
-    m_live = await calcola_margine_commessa(db, c, coeff_cache=coeff_cache, costo_manodopera_override=costo_manodopera_calc)
+    m_live = await calcola_margine_commessa(db, c, coeff_cache=coeff_cache, quota_cache=quota_cache, costo_manodopera_override=costo_manodopera_calc)
     d["margine_lordo_stima_live"] = float(m_live["margine_lordo_euro"])
 
     d["aggiustamenti"] = c.aggiustamenti or []
@@ -81,9 +82,10 @@ async def get_commesse(
 ):
     commesse = await list_commesse(db, mese, stato, cliente_id, progetto_id)
     coeff_cache: dict[date, Decimal] = {}
+    quota_cache: dict = {}
     enriched = []
     for c in commesse:
-        enriched.append(await _enrich_commessa(db, c, coeff_cache))
+        enriched.append(await _enrich_commessa(db, c, coeff_cache, quota_cache))
     return enriched
 
 
@@ -131,7 +133,8 @@ async def get_commessa_profitability(
         "valore_fatturabile": float(m["ricavo"]),
         "costo_manodopera": round(float(m["costo_manodopera"]), 2),  # snapshot (Decisione 2)
         "costi_diretti": float(m["costi_diretti_totali"]),
-        "margine_euro": round(float(m["margine_lordo_euro"]), 2),    # LORDO (numero-titolo)
+        "quota_luca": round(float(m["quota_luca"]), 2),              # pro-forma allocata (Prompt 4)
+        "margine_euro": round(float(m["margine_lordo_euro"]), 2),    # LORDO (numero-titolo, al netto quota Luca)
         "margine_percentuale": margine_percentuale,
         "costi_indiretti": float(m["costi_indiretti"]),               # separato (P&L Fase 3)
         "margine_operativo_euro": round(float(m["margine_operativo_euro"]), 2),

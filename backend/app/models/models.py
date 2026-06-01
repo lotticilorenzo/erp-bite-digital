@@ -844,6 +844,7 @@ class Risorsa(Base):
     costo_orario_lordo: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))  # Input grezzo (non fully-loaded); la verità per il costing è costo_orario_calcolato
     costo_orario_override: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
     costo_orario_calcolato: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    quota_proforma_mensile: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))  # Quota Luca pro-forma/mese (Prompt 4): destinataria=questa risorsa
     giorni_ferie: Mapped[Optional[Decimal]] = mapped_column(Numeric(4, 1), default=Decimal('26'))
     giorni_malattia: Mapped[Optional[Decimal]] = mapped_column(Numeric(4, 1), default=Decimal('3'))
     attivo: Mapped[bool] = mapped_column(Boolean, default=True)

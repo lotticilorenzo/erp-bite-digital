@@ -78,11 +78,77 @@ def semaforo_margine_lordo(pct: Optional[float]) -> str:
     return "verde"
 
 
+# ── QUOTA LUCA: allocazione pro-forma per output (Prompt 4, brief §2.6) ────
+async def _build_quota_cache_mese(db: AsyncSession, mese_norm: date) -> dict:
+    """Aggregato pro-mese per la quota pro-forma (1 query). Evita N+1 nell'helper margine.
+
+    proforma = Σ risorse attive con quota_proforma_mensile configurata (destinatari).
+    totale/per_cliente = contenuti del mese con cliente RISOLVIBILE
+    (commessa→cliente, fallback progetto→cliente). I contenuti senza cliente sono esclusi,
+    così Σ quote sui clienti == proforma (ripartizione al 100%).
+    Mese contenuto = COALESCE(pubblicato_at, data_consegna_prevista, created_at).
+    """
+    pf = await db.execute(text(
+        "SELECT COALESCE(SUM(quota_proforma_mensile), 0) FROM risorse "
+        "WHERE attivo = true AND quota_proforma_mensile IS NOT NULL"
+    ))
+    proforma = Decimal(str(pf.scalar() or 0))
+
+    rows = await db.execute(text(
+        """
+        SELECT COALESCE(comm.cliente_id, prog.cliente_id) AS cliente_id, COUNT(*) AS n
+        FROM contenuti ct
+        LEFT JOIN commesse comm ON comm.id = ct.commessa_id
+        LEFT JOIN progetti prog ON prog.id = ct.progetto_id
+        WHERE date_trunc('month', COALESCE(ct.pubblicato_at, ct.data_consegna_prevista::timestamptz, ct.created_at))::date = :mese
+          AND COALESCE(comm.cliente_id, prog.cliente_id) IS NOT NULL
+        GROUP BY 1
+        """
+    ), {"mese": mese_norm})
+    per_cliente: dict = {}
+    totale = 0
+    for r in rows.all():
+        per_cliente[r.cliente_id] = int(r.n)
+        totale += int(r.n)
+    return {"proforma": proforma, "totale": totale, "per_cliente": per_cliente}
+
+
+async def calcola_quota_luca(
+    db: AsyncSession,
+    cliente_id: Optional[uuid.UUID],
+    mese: date,
+    *,
+    quota_cache: Optional[dict] = None,
+) -> Decimal:
+    """Quota pro-forma allocata a un cliente nel mese = proforma × (contenuti_cliente / contenuti_totali).
+
+    Robustezza: se nessun contenuto allocabile nel mese (totale==0) o nessun pro-forma
+    configurato → 0 (niente divisione per zero). Cliente con 0 contenuti → 0.
+    """
+    mese_norm = mese.replace(day=1)
+    entry = quota_cache.get(mese_norm) if quota_cache is not None else None
+    if entry is None:
+        entry = await _build_quota_cache_mese(db, mese_norm)
+        if quota_cache is not None:
+            quota_cache[mese_norm] = entry
+
+    if entry["proforma"] == 0:
+        return Decimal("0")
+    if entry["totale"] == 0:
+        logger.info("quota Luca: nessun contenuto allocabile nel mese %s, quota=0", mese_norm)
+        return Decimal("0")
+    n = entry["per_cliente"].get(cliente_id, 0)
+    if n == 0:
+        return Decimal("0")
+    return (entry["proforma"] * Decimal(n) / Decimal(entry["totale"])).quantize(Decimal("0.01"))
+
+
 async def calcola_margine_commessa(
     db: AsyncSession,
     commessa: Commessa,
     *,
     coeff_cache: Optional[dict[date, Decimal]] = None,
+    quota_cache: Optional[dict] = None,
     costo_manodopera_override: Optional[Decimal] = None,
 ) -> dict:
     """FONTE UNICA del margine commessa (brief §4.2).
@@ -108,11 +174,11 @@ async def calcola_margine_commessa(
         costo_manodopera = commessa.costo_manodopera or Decimal("0")  # snapshot approvati (Decisione 2)
     costi_diretti_totali = commessa.costi_diretti_totali  # manuali + imputati (R3)
 
+    # Quota Luca pro-forma allocata per output (Prompt 4): voce di costo nel margine lordo.
+    quota_luca = await calcola_quota_luca(db, commessa.cliente_id, mese_norm, quota_cache=quota_cache)
+
     # MARGINE LORDO canonico — NON include gli indiretti (Decisione 1, brief §4.2)
-    margine_lordo_euro = ricavo - costo_manodopera - costi_diretti_totali
-    # TODO(Prompt 4 — Quota Luca): qui andrà sottratta la quota_luca dal margine
-    #   es. margine_dopo_quota = margine_lordo_euro - quota_luca
-    quota_luca = Decimal("0")  # placeholder: implementazione nel task successivo
+    margine_lordo_euro = ricavo - costo_manodopera - costi_diretti_totali - quota_luca
 
     # Campi SEPARATI per il P&L di Fase 3 (non sono il numero-titolo)
     costi_indiretti = costo_manodopera * coefficiente
@@ -1008,10 +1074,11 @@ async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None)
     """
     commesse = await list_commesse(db, mese)
     coeff_cache: dict[date, Decimal] = {}
+    quota_cache: dict = {}
 
     acc: dict[uuid.UUID, dict] = {}
     for c in commesse:
-        m = await calcola_margine_commessa(db, c, coeff_cache=coeff_cache)
+        m = await calcola_margine_commessa(db, c, coeff_cache=coeff_cache, quota_cache=quota_cache)
         agg = acc.get(c.cliente_id)
         if agg is None:
             agg = {
@@ -1021,7 +1088,8 @@ async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None)
                 "costo_manodopera": Decimal("0"),
                 "costi_diretti": Decimal("0"),
                 "costi_indiretti_allocati": Decimal("0"),
-                "margine_euro": Decimal("0"),           # lordo (canonico)
+                "quota_luca": Decimal("0"),
+                "margine_euro": Decimal("0"),           # lordo (canonico, al netto quota Luca)
                 "margine_operativo_euro": Decimal("0"),
                 "num_commesse": 0,
             }
@@ -1030,6 +1098,7 @@ async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None)
         agg["costo_manodopera"] += m["costo_manodopera"]
         agg["costi_diretti"] += m["costi_diretti_totali"]
         agg["costi_indiretti_allocati"] += m["costi_indiretti"]
+        agg["quota_luca"] += m["quota_luca"]
         agg["margine_euro"] += m["margine_lordo_euro"]
         agg["margine_operativo_euro"] += m["margine_operativo_euro"]
         agg["num_commesse"] += 1
@@ -1046,6 +1115,7 @@ async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None)
             "costo_manodopera": float(agg["costo_manodopera"]),
             "costi_diretti": float(agg["costi_diretti"]),
             "costi_indiretti_allocati": float(agg["costi_indiretti_allocati"]),
+            "quota_luca": float(agg["quota_luca"]),
             "margine_euro": margine_euro,
             "margine_operativo_euro": float(agg["margine_operativo_euro"]),
             "margine_percentuale": pct,
@@ -2655,6 +2725,7 @@ async def create_risorsa(db: AsyncSession, payload: dict):
         tfr_percentuale=Decimal(str(payload.get('tfr_percentuale', 6.91))),
         costo_orario_override=Decimal(str(payload['costo_orario_override'])) if payload.get('costo_orario_override') else None,
         costo_orario_calcolato=Decimal(str(costo)),
+        quota_proforma_mensile=Decimal(str(payload['quota_proforma_mensile'])) if payload.get('quota_proforma_mensile') else None,
         attivo=payload.get('attivo', True),
         note=payload.get('note'),
         user_id=uuid.UUID(payload['user_id']) if payload.get('user_id') else None,

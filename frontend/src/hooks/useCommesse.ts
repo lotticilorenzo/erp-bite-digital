@@ -92,8 +92,9 @@ export interface ProfitabilityData {
   valore_fatturabile: number;
   costo_manodopera: number;
   costi_diretti: number;
-  margine_euro: number;            // MARGINE LORDO (brief §4.2)
+  margine_euro: number;            // MARGINE LORDO (brief §4.2), al netto quota Luca
   margine_percentuale: number | null;
+  quota_luca?: number;             // pro-forma allocata per output (Prompt 4)
   costi_indiretti?: number;        // separato (P&L Fase 3)
   margine_operativo_euro?: number; // lordo − overhead
   semaforo?: "verde" | "giallo" | "arancio" | "rosso" | "grigio";

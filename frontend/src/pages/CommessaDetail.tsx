@@ -545,6 +545,11 @@ export default function CommessaDetailPage() {
                   </p>
                 </div>
               </div>
+              {(profitability.quota_luca ?? 0) > 0 && (
+                <p className="text-[10px] text-muted-foreground pt-1">
+                  Quota Luca (pro-forma): <span className="font-black text-amber-400">−€{(profitability.quota_luca ?? 0).toLocaleString("it-IT", { minimumFractionDigits: 0 })}</span> già detratta dal margine
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>

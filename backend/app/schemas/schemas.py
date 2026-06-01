@@ -1684,6 +1684,7 @@ class RisorsaCreate(BaseModel):
     note: Optional[str] = None
     user_id: Optional[uuid.UUID] = None
     attivo: bool = True
+    quota_proforma_mensile: Optional[Decimal] = None  # Quota Luca pro-forma/mese (Prompt 4)
 
 
 class RisorsaUpdate(BaseModel):
@@ -1713,6 +1714,7 @@ class RisorsaUpdate(BaseModel):
     note: Optional[str] = None
     user_id: Optional[uuid.UUID] = None
     attivo: Optional[bool] = None
+    quota_proforma_mensile: Optional[Decimal] = None  # Quota Luca pro-forma/mese (Prompt 4)
     costo_orario_calcolato: Optional[Decimal] = None
 
 
