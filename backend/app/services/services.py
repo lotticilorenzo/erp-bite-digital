@@ -9,7 +9,7 @@ from typing import Any, Optional, List
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, text
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 
 from app.models.models import (
     User, Cliente, Progetto, Commessa, CommessaProgetto, Timesheet, Task,
@@ -251,7 +251,9 @@ async def delete_cliente(db: AsyncSession, cliente_id: uuid.UUID, by_user_id: uu
         )
 
     await write_audit(db, by_user_id, "clienti", cliente_id, "DELETE", {"ragione_sociale": c.ragione_sociale})
-    await db.delete(c)
+    from datetime import datetime, timezone
+    c.is_deleted = True
+    c.deleted_at = datetime.now(timezone.utc)
     await db.flush()
     return True
 
@@ -298,7 +300,7 @@ async def get_client_health_score(db: AsyncSession, cliente_id: uuid.UUID) -> di
     fatture = f_res.scalars().all()
     
     total_f = len(fatture)
-    paid_f = len([f for f in fatture if f.stato_pagamento == "PAGATA"])
+    paid_f = len([f for f in fatture if f.stato_pagamento == "INCASSATA"])
     payment_score = (paid_f / total_f * 100) if total_f > 0 else 100 # Se no fatture, assumiamo buono
 
     # --- 3. REVISIONI / SCOPE CREEP (20%) ---
@@ -608,6 +610,10 @@ async def create_commessa(db: AsyncSession, data: CommessaCreate) -> Commessa:
         cliente_id=data.cliente_id,
         mese_competenza=mese_norm,
         costi_diretti=data.costi_diretti,
+        ore_contratto=data.ore_contratto,
+        data_inizio=data.data_inizio,
+        data_fine=data.data_fine,
+        pianificazione_id=data.pianificazione_id,
         note=data.note,
     )
     db.add(c)
@@ -782,10 +788,10 @@ async def approva_timesheet(
     data: TimesheetApprova,
     approver: User
 ) -> List[Timesheet]:
-    """Approva o rifiuta un batch di timesheet. Solo PM e ADMIN."""
-    if approver.ruolo not in (UserRole.ADMIN, UserRole.PM):
+    """Approva o rifiuta un batch di timesheet. Solo ADMIN, DEVELOPER e COLLABORATORE."""
+    if approver.ruolo not in (UserRole.ADMIN, UserRole.DEVELOPER, UserRole.COLLABORATORE):
         from fastapi import HTTPException
-        raise HTTPException(status_code=403, detail="Solo PM e ADMIN possono approvare le ore")
+        raise HTTPException(status_code=403, detail="Solo ADMIN, DEVELOPER e COLLABORATORE possono approvare le ore")
 
     if data.azione == "APPROVA":
         nuovo_stato = TimesheetStatus.APPROVATO
@@ -803,9 +809,13 @@ async def approva_timesheet(
     )
     entries = result.scalars().all()
 
-    # Pre-carica costi orari utente per snapshot all'approvazione.
-    user_cost_map: dict[uuid.UUID, Decimal] = {}
+    # Pre-carica i costi orari per lo snapshot all'approvazione.
+    # Sorgente primaria: costo orario fully-loaded della risorsa collegata all'utente
+    # (risorse.user_id -> users.id). Fallback: users.costo_orario (campo piatto).
+    user_cost_map: dict[uuid.UUID, Decimal] = {}      # fallback: users.costo_orario
+    risorsa_cost_map: dict[uuid.UUID, Decimal] = {}   # fully-loaded per user_id
     if nuovo_stato == TimesheetStatus.APPROVATO and entries:
+        from app.models.models import Risorsa
         user_ids = {t.user_id for t in entries}
         users_result = await db.execute(
             select(User.id, User.costo_orario).where(User.id.in_(user_ids))
@@ -813,12 +823,36 @@ async def approva_timesheet(
         for row in users_result.all():
             user_cost_map[row.id] = Decimal(row.costo_orario or 0)
 
+        # costo_orario_effettivo = override se presente, altrimenti calcolato (fully-loaded)
+        risorse_result = await db.execute(
+            select(
+                Risorsa.user_id,
+                Risorsa.costo_orario_override,
+                Risorsa.costo_orario_calcolato,
+            ).where(Risorsa.user_id.in_(user_ids))
+        )
+        for row in risorse_result.all():
+            fl = row.costo_orario_override or row.costo_orario_calcolato
+            if row.user_id is not None and fl and Decimal(fl) > 0:
+                risorsa_cost_map[row.user_id] = Decimal(fl)
+
+    commesse_da_ricalcolare: set[uuid.UUID] = set()
     for t in entries:
         t.stato = nuovo_stato
         t.approvato_da = approver.id
         t.approvato_at = datetime.utcnow()
+        if t.commessa_id is not None:
+            commesse_da_ricalcolare.add(t.commessa_id)
         if nuovo_stato == TimesheetStatus.APPROVATO:
-            costo_orario = user_cost_map.get(t.user_id, Decimal("0"))
+            costo_orario = risorsa_cost_map.get(t.user_id)
+            if costo_orario is None:
+                # Fallback robusto: risorsa mancante o costo FL nullo/zero.
+                costo_orario = user_cost_map.get(t.user_id, Decimal("0"))
+                logger.warning(
+                    "approva_timesheet: costo fully-loaded assente per user_id=%s; "
+                    "uso fallback users.costo_orario=%s",
+                    t.user_id, costo_orario,
+                )
             costo_lavoro = (Decimal(t.durata_minuti) / Decimal("60")) * costo_orario
             t.costo_orario_snapshot = costo_orario
             t.costo_lavoro = costo_lavoro
@@ -830,6 +864,29 @@ async def approva_timesheet(
                 t.approvato_at = None
 
     await db.flush()
+
+    # R5: ricalcola e PERSISTE commessa.costo_manodopera come snapshot all'approvazione.
+    # Solo le commesse toccate dal batch; somma dei costo_lavoro dei timesheet APPROVATI.
+    if commesse_da_ricalcolare:
+        from app.models.models import Commessa
+        sums_result = await db.execute(
+            select(
+                Timesheet.commessa_id,
+                func.coalesce(func.sum(Timesheet.costo_lavoro), 0),
+            )
+            .where(
+                Timesheet.commessa_id.in_(commesse_da_ricalcolare),
+                Timesheet.stato == TimesheetStatus.APPROVATO,
+            )
+            .group_by(Timesheet.commessa_id)
+        )
+        nuovi_costi = {row[0]: Decimal(row[1] or 0) for row in sums_result.all()}
+        commesse_result = await db.execute(
+            select(Commessa).where(Commessa.id.in_(commesse_da_ricalcolare))
+        )
+        for commessa in commesse_result.scalars().all():
+            commessa.costo_manodopera = nuovi_costi.get(commessa.id, Decimal("0"))
+
     await db.commit()
     ids = [t.id for t in entries]
     result2 = await db.execute(select(Timesheet).options(selectinload(Timesheet.user)).where(Timesheet.id.in_(ids)))
@@ -903,26 +960,26 @@ async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None)
             COALESCE(SUM(cv.valore_fatturabile), 0) AS fatturato,
             COALESCE(SUM(c.costo_manodopera), 0)    AS costo_manodopera,
             COALESCE(SUM(c.costi_diretti), 0)       AS costi_diretti,
-            COALESCE(SUM(c.costo_manodopera * COALESCE(ca.coefficiente, :default_coeff)), 0) AS costi_indiretti_allocati,
+            COALESCE(SUM(c.costo_manodopera * COALESCE(ca.stipendi_operativi / NULLIF(ca.overhead_produttivo, 0), :default_coeff)), 0) AS costi_indiretti_allocati,
             COALESCE(SUM(
                 COALESCE(cv.valore_fatturabile, 0)
                 - c.costo_manodopera
                 - c.costi_diretti
-                - (c.costo_manodopera * COALESCE(ca.coefficiente, :default_coeff))
+                - (c.costo_manodopera * COALESCE(ca.stipendi_operativi / NULLIF(ca.overhead_produttivo, 0), :default_coeff))
             ), 0) AS margine_euro,
             COUNT(c.id) AS num_commesse
         FROM clienti cl
         JOIN commesse c ON cl.id = c.cliente_id
         LEFT JOIN commessa_valori cv ON c.id = cv.commessa_id
-        LEFT JOIN collaboratore_anagrafica ca ON c.responsabile_id = ca.user_id
-        WHERE (:mese IS NULL OR c.mese_competenza = :mese)
+        LEFT JOIN coefficienti_allocazione ca ON ca.mese_competenza = c.mese_competenza
+        WHERE (CAST(:mese AS DATE) IS NULL OR c.mese_competenza = CAST(:mese AS DATE))
         GROUP BY cl.id, cl.ragione_sociale
         ORDER BY margine_euro DESC
     """
-    
+
     params = {
         "mese": mese.replace(day=1) if mese else None,
-        "default_coeff": 0.2
+        "default_coeff": float(DEFAULT_COEFFICIENTE_ALLOCAZIONE),
     }
     
     r = await db.execute(text(query_str), params)
@@ -2907,7 +2964,7 @@ async def converti_preventivo_in_commessa(db: AsyncSession, preventivo_id: uuid.
             cliente_id=p.cliente_id,
             mese_competenza=today,
             stato=CommessaStatus.APERTA,
-            note=f"Aperta da preventivo {p.numero}"
+            note=f"Aperta da preventivo {p.numero}",
         )
         db.add(commessa)
         await db.flush()

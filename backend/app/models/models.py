@@ -835,6 +835,7 @@ class Risorsa(Base):
     compenso_obiettivo: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
     contributi_percentuale: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=30)
     tfr_percentuale: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("6.91"))
+    costo_orario_lordo: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))  # Input grezzo (non fully-loaded); la verità per il costing è costo_orario_calcolato
     costo_orario_override: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
     costo_orario_calcolato: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
     giorni_ferie: Mapped[Optional[Decimal]] = mapped_column(Numeric(4, 1), default=Decimal('26'))
