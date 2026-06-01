@@ -3,6 +3,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
 
+MARGINE_CRITICAL_PCT = 15
+MARGINE_WARNING_PCT = 30
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,21 +38,22 @@ async def _enrich_commessa(db: AsyncSession, c, coeff_cache: Optional[dict[date,
     ore_reali = minuti_totali / 60.0
     d = CommessaOut.model_validate(c, from_attributes=True, strict=False).model_dump(warnings=False)
     d["ore_reali"] = float(ore_reali)
+    # Tutti i valori economici usano lo stesso costo_manodopera_calc (tutti i timesheet)
+    # così margine_euro è sempre coerente con il costo_manodopera visualizzato.
     d["costo_manodopera"] = float(costo_manodopera_calc)
 
-    try:
-        fattCalc = sum(r.valore_fatturabile_calc for r in c.righe_progetto)
-        for ag in (c.aggiustamenti or []):
-            from decimal import Decimal as _D
-            fattCalc += _D(str(ag.get("importo", 0)))
-        d["margine_euro"] = float(fattCalc - costo_manodopera_calc - (c.costi_diretti or Decimal("0")))
-        d["margine_percentuale"] = round(d["margine_euro"] / float(fattCalc) * 100, 1) if fattCalc > 0 else None
-    except Exception:
-        d["margine_euro"] = None
-        d["margine_percentuale"] = None
-
     metriche = await calcola_metriche_commessa(db, c, coeff_cache)
-    d.update(metriche)
+    valore_fatturabile = metriche["valore_fatturabile"]
+    coefficiente = metriche["coefficiente_allocazione"]
+    costi_diretti = c.costi_diretti_totali  # manuali + imputati (R3)
+    costi_indiretti = costo_manodopera_calc * coefficiente
+    margine = valore_fatturabile - costo_manodopera_calc - costi_diretti - costi_indiretti
+
+    d["valore_fatturabile"] = float(valore_fatturabile)
+    d["coefficiente_allocazione"] = float(coefficiente)
+    d["costi_indiretti_allocati"] = float(costi_indiretti)
+    d["margine_euro"] = float(margine)
+    d["margine_percentuale"] = round(float(margine / valore_fatturabile * 100), 1) if valore_fatturabile > 0 else None
 
     d["aggiustamenti"] = c.aggiustamenti or []
     d["data_inizio"] = str(c.data_inizio) if c.data_inizio else None
@@ -122,7 +126,7 @@ async def get_commessa_profitability(
     except Exception:
         valore_fatturabile = 0.0
 
-    costi_diretti = float(c.costi_diretti or 0)
+    costi_diretti = float(c.costi_diretti_totali)  # manuali + imputati (R3)
     margine_euro = valore_fatturabile - costo_manodopera - costi_diretti
     margine_percentuale = (
         round(margine_euro / valore_fatturabile * 100, 1) if valore_fatturabile > 0 else None
@@ -132,9 +136,9 @@ async def get_commessa_profitability(
 
     if margine_percentuale is None:
         alert_level = "NO_DATA"
-    elif margine_percentuale < 15:
+    elif margine_percentuale < MARGINE_CRITICAL_PCT:
         alert_level = "CRITICAL"
-    elif margine_percentuale < 30:
+    elif margine_percentuale < MARGINE_WARNING_PCT:
         alert_level = "WARNING"
     else:
         alert_level = "OK"

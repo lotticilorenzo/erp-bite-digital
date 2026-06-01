@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.commesse import MARGINE_CRITICAL_PCT, MARGINE_WARNING_PCT
 from app.core.security import get_current_user, require_admin
 from app.db.session import get_db
 from app.models.models import TimesheetStatus, User, UserRole
@@ -58,20 +59,23 @@ async def _check_margin_and_notify(db: AsyncSession, commessa_id: Optional[uuid.
         if valore_fatturabile <= 0:
             return
 
-        costi_diretti = float(c.costi_diretti or 0)
-        margine_euro = valore_fatturabile - costo_manodopera - costi_diretti
+        from app.services.services import get_coefficiente_allocazione
+        coefficiente = float(await get_coefficiente_allocazione(db, c.mese_competenza))
+        costi_diretti = float(c.costi_diretti_totali)  # manuali + imputati (R3)
+        costi_indiretti = costo_manodopera * coefficiente
+        margine_euro = valore_fatturabile - costo_manodopera - costi_diretti - costi_indiretti
         margine_pct = round(margine_euro / valore_fatturabile * 100, 1)
         cliente_nome = c.cliente.ragione_sociale if c.cliente else "?"
         mese_str = c.mese_competenza.strftime("%B %Y") if c.mese_competenza else "?"
 
-        if margine_pct < 15:
+        if margine_pct < MARGINE_CRITICAL_PCT:
             alert_type = "CRITICAL"
             title = f"Margine critico - {cliente_nome}"
-            message = f"Commessa {mese_str}: margine sceso al {margine_pct}% (soglia critica: 15%)"
-        elif margine_pct < 30:
+            message = f"Commessa {mese_str}: margine sceso al {margine_pct}% (soglia critica: {MARGINE_CRITICAL_PCT}%)"
+        elif margine_pct < MARGINE_WARNING_PCT:
             alert_type = "WARNING"
             title = f"Attenzione margine - {cliente_nome}"
-            message = f"Commessa {mese_str}: margine al {margine_pct}% (soglia warning: 30%)"
+            message = f"Commessa {mese_str}: margine al {margine_pct}% (soglia warning: {MARGINE_WARNING_PCT}%)"
         else:
             return  # Tutto OK, nessuna notifica
 
