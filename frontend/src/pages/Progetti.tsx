@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,7 @@ export default function ProgettiPage() {
         setProgettoToDelete(null);
       } catch (error) {
         console.error("Errore durante l'eliminazione del progetto:", error);
+        toast.error("Errore durante l'eliminazione del progetto");
       }
     }
   };

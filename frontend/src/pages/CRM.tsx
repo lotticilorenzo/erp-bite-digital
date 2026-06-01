@@ -298,32 +298,16 @@ export default function CRM() {
               <div className="flex items-center justify-between mb-8">
                  <div>
                     <h3 className="text-xl font-black italic uppercase tracking-tighter text-white">Cronologia <span className="text-primary not-italic">Automazioni</span></h3>
-                    <p className="text-xs text-[#475569] font-medium mt-1 uppercase tracking-widest">Azioni eseguite dal Sales Engine nelle ultime 24 ore</p>
+                    <p className="text-xs text-[#475569] font-medium mt-1 uppercase tracking-widest">Log automazioni — funzionalità in arrivo</p>
                  </div>
-                 <Button variant="outline" className="h-10 rounded-xl bg-white/5 border-white/10 text-[10px] font-black uppercase tracking-widest text-[#475569]">
-                    Vedi Log Completi
-                 </Button>
               </div>
 
-              <div className="space-y-4">
-                 {[
-                    { time: '10:45', action: 'Lead Assigned', target: 'Digital Edge SRL', by: 'Smart Routing' },
-                    { time: '09:12', action: 'Score Updated', target: 'TechFlow Co.', by: 'Auto-Scoring' },
-                    { time: 'Ieri 18:30', action: 'Alert Sent', target: 'Marco Rossi', by: 'Stagnazione' },
-                 ].map((log, i) => (
-                    <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition-all">
-                       <div className="flex items-center gap-4">
-                          <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center">
-                             <CheckCircle2 className="w-4 h-4 text-primary" />
-                          </div>
-                          <div>
-                             <div className="text-sm font-bold text-white">{log.action}: {log.target}</div>
-                             <div className="text-[10px] text-[#475569] font-medium uppercase tracking-widest">Eseguito da: {log.by}</div>
-                          </div>
-                       </div>
-                       <div className="text-[10px] font-black tabular-nums text-[#475569]">{log.time}</div>
-                    </div>
-                 ))}
+              <div className="flex flex-col items-center justify-center py-12 text-center gap-3">
+                 <div className="h-14 w-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                    <Zap className="w-6 h-6 text-primary/50" />
+                 </div>
+                 <p className="text-sm font-bold text-white/60">Nessun log disponibile</p>
+                 <p className="text-[10px] text-[#475569] uppercase tracking-widest max-w-xs">Il sistema di automazione non è ancora attivo. I log appariranno qui quando le automazioni saranno operative.</p>
               </div>
            </div>
         </div>

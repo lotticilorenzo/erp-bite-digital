@@ -79,6 +79,8 @@ export function StudioGanttView() {
     [tasks]
   );
 
+  const unscheduledCount = tasks.length - ganttTasks.length;
+
   const activeAssenze = React.useMemo(
     () => assenze.filter((item) => item.stato !== "RIFIUTATA"),
     [assenze]
@@ -207,7 +209,14 @@ export function StudioGanttView() {
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">
               Task in timeline
             </p>
-            <p className="mt-2 text-3xl font-black text-white">{ganttTasks.length}</p>
+            <div className="mt-2 flex items-baseline gap-3">
+              <p className="text-3xl font-black text-white">{ganttTasks.length}</p>
+              {unscheduledCount > 0 && (
+                <span className="text-[10px] font-black uppercase tracking-widest text-amber-400">
+                  +{unscheduledCount} non pianificati
+                </span>
+              )}
+            </div>
           </Card>
           <Card className="border-border bg-card/50 p-4">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">

@@ -95,11 +95,15 @@ export default function CommessaDetailPage() {
 
   const [isPlanningDialogOpen, setIsPlanningDialogOpen] = useState(false);
   const [isContenutoDialogOpen, setIsContenutoDialogOpen] = useState(false);
+  const [isEditingNote, setIsEditingNote] = useState(false);
+  const [noteDraft, setNoteDraft] = useState("");
   
   const [scopeDraft, setScopeDraft] = useState<{ commessaId: string; value: string } | null>(null);
   const [isAddingProject, setIsAddingProject] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [searchProject, setSearchProject] = useState("");
+  const [pendingProject, setPendingProject] = useState<{ id: string; nome: string } | null>(null);
+  const [progettoAmounts, setProgettoAmounts] = useState({ importo_fisso: "", importo_variabile: "0", delivery_attesa: "" });
   const editOreContratto =
     scopeDraft && scopeDraft.commessaId === commessa?.id
       ? scopeDraft.value
@@ -115,7 +119,7 @@ export default function CommessaDetailPage() {
     return (oreReali / commessa.ore_contratto) * 100;
   }, [oreReali, commessa]);
 
-  const canEdit = user?.ruolo === "ADMIN" || user?.ruolo === "DEVELOPER" || user?.ruolo === "PM";
+  const canEdit = user?.ruolo === "ADMIN" || user?.ruolo === "DEVELOPER" || user?.ruolo === "COLLABORATORE";
   const { data: profitability } = useProfitability(id);
   const { data: taskTemplates = [] } = useTaskTemplates();
   const { data: contenutiCommessa = [] } = useContenuti(id ? { commessa_id: id } : undefined);
@@ -153,40 +157,40 @@ export default function CommessaDetailPage() {
     });
   };
 
-  const handleAddProject = async (progettoId: string) => {
+  const handleAddProject = async (
+    progettoId: string,
+    amounts?: { importo_fisso?: number; importo_variabile?: number; delivery_attesa?: number }
+  ) => {
     if (!commessa || !id) return;
-    
-    // Check if project already associated
     if (commessa.righe_progetto?.some(r => r.progetto_id === progettoId)) {
         toast.error("Progetto già associato a questa commessa");
         return;
     }
-
-    try {
-        const currentRighe = (commessa.righe_progetto || []).map(r => ({
-            progetto_id: r.progetto_id,
-            importo_fisso: r.importo_fisso,
-            importo_variabile: r.importo_variabile,
-            delivery_attesa: r.delivery_attesa
-        }));
-
-        updateCommessa({
-            id: id,
-            data: {
-                righe_progetto: [...currentRighe, { progetto_id: progettoId }]
-            }
-        }, {
-            onSuccess: () => {
-                toast.success("Progetto associato con successo");
-                setIsAddingProject(false);
-            },
-            onError: () => {
-                toast.error("Errore durante l'associazione");
-            }
-        });
-    } catch (e) {
-        toast.error("Errore imprevisto");
-    }
+    const currentRighe = (commessa.righe_progetto || []).map(r => ({
+        progetto_id: r.progetto_id,
+        importo_fisso: r.importo_fisso,
+        importo_variabile: r.importo_variabile,
+        delivery_attesa: r.delivery_attesa
+    }));
+    updateCommessa({
+        id,
+        data: {
+            righe_progetto: [...currentRighe, {
+                progetto_id: progettoId,
+                importo_fisso: amounts?.importo_fisso ?? 0,
+                importo_variabile: amounts?.importo_variabile ?? 0,
+                delivery_attesa: amounts?.delivery_attesa,
+            }]
+        }
+    }, {
+        onSuccess: () => {
+            toast.success("Progetto associato con successo");
+            setIsAddingProject(false);
+            setPendingProject(null);
+            setProgettoAmounts({ importo_fisso: "", importo_variabile: "0", delivery_attesa: "" });
+        },
+        onError: () => toast.error("Errore durante l'associazione"),
+    });
   };
 
   const handleRemoveProject = async (progettoId: string) => {
@@ -520,7 +524,7 @@ export default function CommessaDetailPage() {
                       style={{ width: `${Math.min(profitability.perc_ore_consumate ?? 0, 100)}%` }}
                     />
                   </div>
-                  <p className="text-[10px] text-muted-foreground text-right">{profitability.perc_ore_consumate}% del budget ore utilizzato</p>
+                  <p className="text-[10px] text-muted-foreground text-right">{profitability.perc_ore_consumate?.toFixed(1)}% del budget ore utilizzato</p>
                 </div>
               )}
 
@@ -598,7 +602,11 @@ export default function CommessaDetailPage() {
                 : " Il margine è sotto la soglia di sicurezza del 30%. Monitora attentamente le prossime ore loggate."}
             </p>
           </div>
-          <Button variant="ghost" className="h-10 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest border border-current hover:bg-current hover:text-white transition-all">
+          <Button
+            variant="ghost"
+            onClick={() => document.getElementById('costi-sezione')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+            className="h-10 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest border border-current hover:bg-current hover:text-white transition-all"
+          >
             Analisi Costi
           </Button>
         </div>
@@ -620,54 +628,121 @@ export default function CommessaDetailPage() {
                 </DialogTrigger>
                 <DialogContent className="bg-card/95 border-white/10 backdrop-blur-xl p-0 overflow-hidden max-w-md">
                   <DialogHeader className="p-6 pb-0">
-                    <DialogTitle className="text-xl font-black italic uppercase italic tracking-tighter">Associa <span className="text-primary not-italic">Progetto</span></DialogTitle>
+                    <DialogTitle className="text-xl font-black italic uppercase tracking-tighter">
+                      {pendingProject ? (
+                        <>Budget <span className="text-primary not-italic">{pendingProject.nome}</span></>
+                      ) : (
+                        <>Associa <span className="text-primary not-italic">Progetto</span></>
+                      )}
+                    </DialogTitle>
                   </DialogHeader>
-                  <div className="p-6 space-y-4">
-                    <div className="relative group">
-                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#475569] group-focus-within:text-primary transition-colors" />
-                       <Input 
-                        placeholder="Cerca progetti del cliente..." 
-                        value={searchProject}
-                        onChange={e => setSearchProject(e.target.value)}
-                        className="pl-10 bg-white/5 border-white/5 h-10 rounded-xl"
-                       />
+
+                  {pendingProject ? (
+                    /* Step 2 — inserimento importi */
+                    <div className="p-6 space-y-4">
+                      <p className="text-xs text-muted-foreground">Definisci il budget per questo progetto nella commessa. Puoi modificarlo in seguito dalla tabella.</p>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground block mb-1">Budget Fisso (€) *</label>
+                          <Input
+                            type="number"
+                            min="0"
+                            placeholder="es. 2500"
+                            value={progettoAmounts.importo_fisso}
+                            onChange={e => setProgettoAmounts(a => ({ ...a, importo_fisso: e.target.value }))}
+                            className="bg-white/5 border-white/5 h-10 rounded-xl"
+                            autoFocus
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground block mb-1">Budget Variabile (€)</label>
+                          <Input
+                            type="number"
+                            min="0"
+                            placeholder="es. 0"
+                            value={progettoAmounts.importo_variabile}
+                            onChange={e => setProgettoAmounts(a => ({ ...a, importo_variabile: e.target.value }))}
+                            className="bg-white/5 border-white/5 h-10 rounded-xl"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground block mb-1">Ore Previste (h)</label>
+                          <Input
+                            type="number"
+                            min="0"
+                            placeholder="es. 40"
+                            value={progettoAmounts.delivery_attesa}
+                            onChange={e => setProgettoAmounts(a => ({ ...a, delivery_attesa: e.target.value }))}
+                            className="bg-white/5 border-white/5 h-10 rounded-xl"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2 pt-2">
+                        <Button variant="ghost" size="sm" onClick={() => setPendingProject(null)} className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex-1">
+                          ← Indietro
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={!progettoAmounts.importo_fisso || isUpdating}
+                          onClick={() => handleAddProject(pendingProject.id, {
+                            importo_fisso: Number(progettoAmounts.importo_fisso),
+                            importo_variabile: Number(progettoAmounts.importo_variabile) || 0,
+                            delivery_attesa: progettoAmounts.delivery_attesa ? Number(progettoAmounts.delivery_attesa) : undefined,
+                          })}
+                          className="bg-primary hover:bg-primary/90 text-white text-[10px] font-black uppercase tracking-widest flex-1 h-9"
+                        >
+                          {isUpdating ? "..." : "Conferma"}
+                        </Button>
+                      </div>
                     </div>
-                    <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                       {progettiCliente?.filter(p => p.nome.toLowerCase().includes(searchProject.toLowerCase())).map(p => {
-                         const isAssociated = commessa.righe_progetto?.some(r => r.progetto_id === p.id);
-                         return (
-                           <div 
-                            key={p.id} 
-                            onClick={() => !isAssociated && handleAddProject(p.id)}
-                            className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
-                              isAssociated ? 'bg-emerald-500/10 border-emerald-500/20 opacity-60' : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-primary/40'
-                            }`}
-                           >
-                             <div className="flex flex-col">
-                               <span className="text-xs font-bold text-white">{p.nome}</span>
-                               <span className="text-[9px] text-[#475569] font-medium uppercase tracking-widest">{p.tipo}</span>
-                             </div>
-                             {isAssociated ? <Check className="w-4 h-4 text-emerald-400" /> : <Plus className="w-4 h-4 text-primary" />}
-                           </div>
-                         );
-                       })}
-                       {progettiCliente?.length === 0 && (
-                         <div className="text-center py-8 text-[#475569] text-xs font-medium italic">Nessun progetto trovato per questo cliente</div>
-                       )}
-                    </div>
-                  </div>
-                  <DialogFooter className="p-6 pt-0 flex items-center justify-between gap-4">
-                    <Button 
-                      onClick={() => {
-                        setIsAddingProject(false);
-                        setIsCreatingProject(true);
-                      }}
-                      className="bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 text-[10px] font-black uppercase tracking-widest px-4 h-10 rounded-xl"
-                    >
-                      <Plus className="w-3.5 h-3.5 mr-2" /> Crea Nuovo Progetto
-                    </Button>
-                    <Button variant="ghost" onClick={() => setIsAddingProject(false)} className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Chiudi</Button>
-                  </DialogFooter>
+                  ) : (
+                    /* Step 1 — selezione progetto */
+                    <>
+                      <div className="p-6 space-y-4">
+                        <div className="relative group">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#475569] group-focus-within:text-primary transition-colors" />
+                          <Input
+                            placeholder="Cerca progetti del cliente..."
+                            value={searchProject}
+                            onChange={e => setSearchProject(e.target.value)}
+                            className="pl-10 bg-white/5 border-white/5 h-10 rounded-xl"
+                          />
+                        </div>
+                        <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                          {progettiCliente?.filter(p => p.nome.toLowerCase().includes(searchProject.toLowerCase())).map(p => {
+                            const isAssociated = commessa.righe_progetto?.some(r => r.progetto_id === p.id);
+                            return (
+                              <div
+                                key={p.id}
+                                onClick={() => !isAssociated && setPendingProject({ id: p.id, nome: p.nome })}
+                                className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
+                                  isAssociated ? 'bg-emerald-500/10 border-emerald-500/20 opacity-60 cursor-default' : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-primary/40'
+                                }`}
+                              >
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-bold text-white">{p.nome}</span>
+                                  <span className="text-[9px] text-[#475569] font-medium uppercase tracking-widest">{p.tipo}</span>
+                                </div>
+                                {isAssociated ? <Check className="w-4 h-4 text-emerald-400" /> : <Plus className="w-4 h-4 text-primary" />}
+                              </div>
+                            );
+                          })}
+                          {progettiCliente?.length === 0 && (
+                            <div className="text-center py-8 text-[#475569] text-xs font-medium italic">Nessun progetto trovato per questo cliente</div>
+                          )}
+                        </div>
+                      </div>
+                      <DialogFooter className="p-6 pt-0 flex items-center justify-between gap-4">
+                        <Button
+                          onClick={() => { setIsAddingProject(false); setIsCreatingProject(true); }}
+                          className="bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 text-[10px] font-black uppercase tracking-widest px-4 h-10 rounded-xl"
+                        >
+                          <Plus className="w-3.5 h-3.5 mr-2" /> Crea Nuovo Progetto
+                        </Button>
+                        <Button variant="ghost" onClick={() => setIsAddingProject(false)} className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Chiudi</Button>
+                      </DialogFooter>
+                    </>
+                  )}
                 </DialogContent>
               </Dialog>
               <ProgettoDialog 
@@ -840,7 +915,7 @@ export default function CommessaDetailPage() {
                 <div className="p-8 text-center space-y-4 border-2 border-dashed border-border rounded-xl">
                   <FileText className="w-8 h-8 text-[#1e293b] mx-auto" />
                   <p className="text-xs text-muted-foreground">Nessuna fattura collegata.</p>
-                  <Button size="sm" variant="outline" onClick={() => navigate("/fatture")} className="w-full bg-primary/10 text-purple-400 border-purple-500/20 hover:bg-primary/20">
+                  <Button size="sm" variant="outline" onClick={() => navigate(`/fatture?cliente_id=${commessa.cliente_id}`)} className="w-full bg-primary/10 text-purple-400 border-purple-500/20 hover:bg-primary/20">
                     Collega ora
                   </Button>
                 </div>
@@ -950,7 +1025,9 @@ export default function CommessaDetailPage() {
           </Card>
 
           {/* ═══ COSTI DIRETTI DETTAGLIO ══════════════════════ */}
-          <CostiDettaglioCard commessaId={id!} />
+          <div id="costi-sezione">
+            <CostiDettaglioCard commessaId={id!} />
+          </div>
 
           {canEdit && (
             <Card className="bg-card border-border text-white overflow-hidden">
@@ -1037,13 +1114,57 @@ export default function CommessaDetailPage() {
           </Card>
 
           <Card className="bg-card border-border text-white overflow-hidden">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="text-lg font-medium">Note Interne</CardTitle>
+              {canEdit && !isEditingNote && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { setNoteDraft(commessa.note || ""); setIsEditingNote(true); }}
+                  className="h-7 px-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-white"
+                >
+                  <Edit2 className="w-3 h-3 mr-1" /> Modifica
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-foreground whitespace-pre-wrap italic">
-                {commessa.note || "Nessuna nota presente."}
-              </p>
+              {isEditingNote ? (
+                <div className="space-y-3">
+                  <textarea
+                    value={noteDraft}
+                    onChange={(e) => setNoteDraft(e.target.value)}
+                    rows={5}
+                    className="w-full rounded-xl border border-border bg-muted/30 text-sm text-foreground p-3 resize-none focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    placeholder="Inserisci note interne..."
+                    autoFocus
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsEditingNote(false)}
+                      className="text-[10px] font-black uppercase tracking-widest text-muted-foreground h-8"
+                    >
+                      Annulla
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={isUpdating}
+                      onClick={() => updateCommessa({ id: id!, data: { note: noteDraft } }, {
+                        onSuccess: () => { setIsEditingNote(false); toast.success("Note aggiornate"); },
+                        onError: () => toast.error("Errore nel salvataggio note"),
+                      })}
+                      className="bg-primary hover:bg-primary/90 text-white text-[10px] font-black uppercase tracking-widest h-8 px-4"
+                    >
+                      {isUpdating ? "..." : "Salva"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-foreground whitespace-pre-wrap italic">
+                  {commessa.note || "Nessuna nota presente."}
+                </p>
+              )}
             </CardContent>
           </Card>
 

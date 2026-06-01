@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -131,6 +132,7 @@ export default function CommessePage() {
         setCommessaToDelete(null);
       } catch (error) {
         console.error("Errore durante l'eliminazione della commessa:", error);
+        toast.error("Errore durante l'eliminazione della commessa");
       }
     }
   };

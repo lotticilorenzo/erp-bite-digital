@@ -284,8 +284,8 @@ function FatturaModalForm({ onOpenChange, type, fattura }: Omit<FatturaModalProp
                 <div className="space-y-4">
                    <Label className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Stato Pagamento</Label>
                    <div className="flex gap-2">
-                      {["ATTESA", "PAGATA", "SCADUTA"].map(s => (
-                        <Button 
+                      {(isAttiva ? ["ATTESA", "INCASSATA", "SCADUTA"] : ["ATTESA", "PAGATA", "SCADUTA"]).map(s => (
+                        <Button
                           key={s}
                           type="button"
                           variant={formData.stato_pagamento === s ? "default" : "outline"}

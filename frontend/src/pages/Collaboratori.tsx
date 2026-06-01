@@ -169,12 +169,17 @@ const CollaboratoriPage: React.FC = () => {
 
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[
-            { label: 'Totale Team', value: risorse.length, icon: Users, color: 'text-blue-400' },
-            { label: 'Capacità Sett.', value: `${risorse.reduce((acc, r) => acc + Number(r.ore_settimanali), 0)}h`, icon: Activity, color: 'text-emerald-400' },
-            { label: 'Costo Medio', value: '€42/h', icon: Euro, color: 'text-purple-400' },
-            { label: 'Attivi Ora', value: risorse.filter(r => r.attivo).length, icon: TrendingUp, color: 'text-amber-400' },
-          ].map((stat, i) => (
+          {(() => {
+            const attivi = risorse.filter(r => r.attivo);
+            const costiOrari = attivi.flatMap(r => r.servizi).filter(s => s.attivo && s.costo_orario != null).map(s => s.costo_orario as number);
+            const costoMedio = costiOrari.length > 0 ? Math.round(costiOrari.reduce((a, b) => a + b, 0) / costiOrari.length) : null;
+            return [
+              { label: 'Totale Team', value: risorse.length, icon: Users, color: 'text-blue-400' },
+              { label: 'Capacità Sett.', value: `${attivi.reduce((acc, r) => acc + Number(r.ore_settimanali), 0)}h`, icon: Activity, color: 'text-emerald-400' },
+              { label: 'Costo Medio', value: costoMedio != null ? `€${costoMedio}/h` : '—', icon: Euro, color: 'text-purple-400' },
+              { label: 'Attivi Ora', value: attivi.length, icon: TrendingUp, color: 'text-amber-400' },
+            ];
+          })().map((stat, i) => (
             <Card key={i} className="bg-card/40 border-border backdrop-blur-sm group hover:border-primary/20 transition-all duration-500 rounded-xl overflow-hidden">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">

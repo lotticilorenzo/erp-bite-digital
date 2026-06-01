@@ -207,7 +207,7 @@ export default function Fatture() {
             <div className="text-3xl font-black text-white tabular-nums tracking-tighter">
               {new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(stats.totalA)}
             </div>
-            <p className="text-[10px] font-bold text-emerald-500 uppercase mt-1">+12% rispetto al mese scorso</p>
+            <p className="text-[10px] font-bold text-[#475569] uppercase mt-1">{attive?.length || 0} fatture totali</p>
           </CardContent>
         </Card>
 

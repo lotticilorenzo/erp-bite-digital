@@ -285,7 +285,8 @@ export function useAnalytics(referenceDate?: Date) {
       fatturePassive: fatturePassiveArr,
       costiFissi: costiFissiArr,
       last12Months,
-      pendingTs: pendingTsArr
+      pendingTs: pendingTsArr,
+      allTimesheets: timesheetsCurrentMonthArr
     };
   }, [commesse, clienti, tasks, fatture, timesheetsCurrentMonth, pendingTs, costiFissi, progetti, now]);
 

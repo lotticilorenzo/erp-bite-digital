@@ -74,6 +74,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useUsers } from "@/hooks/useUsers";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import type { ClienteAffidabilita, Commessa } from "@/types";
 
 function capitalizeLabel(value: string) {
@@ -200,6 +201,7 @@ export default function DashboardPage() {
         setCommessaToDelete(null);
       } catch (error) {
         console.error("Errore eliminazione commessa:", error);
+        toast.error("Errore durante l'eliminazione della commessa");
       }
     }
   };

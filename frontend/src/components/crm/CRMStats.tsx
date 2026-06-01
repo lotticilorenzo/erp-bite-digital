@@ -43,20 +43,11 @@ export function CRMStats({ stats }: { stats: CRMStatsType }) {
             <div className={`h-14 w-14 rounded-2xl ${card.bg} flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-transform border border-white/5 shadow-inner`}>
               <card.icon className={`h-7 w-7 ${card.color}`} />
             </div>
-            <div className="flex flex-col items-end">
-              <span className="text-[10px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full tracking-tighter">
-                +12.5%
-              </span>
-            </div>
           </div>
-          
+
           <div className="relative z-10">
             <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2">{card.label}</div>
             <div className="text-3xl font-black text-white tabular-nums tracking-tighter group-hover:text-primary transition-colors">{card.value}</div>
-          </div>
-          
-          <div className="mt-4 h-1 w-full bg-white/5 rounded-full overflow-hidden">
-            <div className={`h-full ${card.color.replace('text-', 'bg-')} opacity-40 group-hover:opacity-100 transition-all`} style={{ width: '65%' }} />
           </div>
         </div>
       ))}
