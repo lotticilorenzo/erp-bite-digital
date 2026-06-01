@@ -58,14 +58,41 @@ async def get_coefficiente_allocazione(db: AsyncSession, mese: date) -> Decimal:
     return Decimal(coeff)
 
 
-async def calcola_metriche_commessa(
+# ── MARGINE: FONTE UNICA (brief §4.2) ─────────────────────
+# Soglie semaforo sul MARGINE LORDO %: verde >40 / giallo 20–40 / arancio 0–20 / rosso <0.
+MARGINE_VERDE_PCT = Decimal("40")
+MARGINE_GIALLO_PCT = Decimal("20")
+MARGINE_ARANCIO_PCT = Decimal("0")
+
+
+def semaforo_margine_lordo(pct: Optional[float]) -> str:
+    """Semaforo canonico sul margine lordo %. Unica sorgente delle bande (Decisione 3)."""
+    if pct is None:
+        return "grigio"
+    if pct < float(MARGINE_ARANCIO_PCT):
+        return "rosso"
+    if pct < float(MARGINE_GIALLO_PCT):
+        return "arancio"
+    if pct < float(MARGINE_VERDE_PCT):
+        return "giallo"
+    return "verde"
+
+
+async def calcola_margine_commessa(
     db: AsyncSession,
     commessa: Commessa,
+    *,
     coeff_cache: Optional[dict[date, Decimal]] = None,
+    costo_manodopera_override: Optional[Decimal] = None,
 ) -> dict:
-    """
-    Calcolo marginalità:
-    (Fatturabile - (manodopera diretta + costi diretti + quota indiretti)) / Fatturabile
+    """FONTE UNICA del margine commessa (brief §4.2).
+
+    Numero-titolo = MARGINE LORDO (PRIMA degli overhead/indiretti):
+        margine_lordo = ricavo − costo_manodopera − costi_diretti_totali
+    Base manodopera = snapshot approvati (commessa.costo_manodopera), salvo override esplicito
+    (usato solo per esporre una stima "live" separata, non canonica).
+    Gli overhead restano esposti come campi SEPARATI (costi_indiretti / margine_operativo)
+    per il P&L di Fase 3, NON sottratti dal margine canonico.
     """
     mese_norm = commessa.mese_competenza.replace(day=1)
     coefficiente = coeff_cache.get(mese_norm) if coeff_cache is not None else None
@@ -74,22 +101,59 @@ async def calcola_metriche_commessa(
         if coeff_cache is not None:
             coeff_cache[mese_norm] = coefficiente
 
-    valore_fatturabile = commessa.valore_fatturabile_calc
-    costo_manodopera = commessa.costo_manodopera or Decimal("0")
-    costi_diretti = commessa.costi_diretti_totali  # manuali + imputati (R3)
-    costi_indiretti = costo_manodopera * coefficiente
-    margine_euro = valore_fatturabile - (costo_manodopera + costi_diretti + costi_indiretti)
+    ricavo = commessa.valore_fatturabile_calc  # include righe_progetto + aggiustamenti
+    if costo_manodopera_override is not None:
+        costo_manodopera = costo_manodopera_override
+    else:
+        costo_manodopera = commessa.costo_manodopera or Decimal("0")  # snapshot approvati (Decisione 2)
+    costi_diretti_totali = commessa.costi_diretti_totali  # manuali + imputati (R3)
 
-    margine_percentuale = None
-    if valore_fatturabile and valore_fatturabile > 0:
-        margine_percentuale = round(float((margine_euro / valore_fatturabile) * 100), 1)
+    # MARGINE LORDO canonico — NON include gli indiretti (Decisione 1, brief §4.2)
+    margine_lordo_euro = ricavo - costo_manodopera - costi_diretti_totali
+    # TODO(Prompt 4 — Quota Luca): qui andrà sottratta la quota_luca dal margine
+    #   es. margine_dopo_quota = margine_lordo_euro - quota_luca
+    quota_luca = Decimal("0")  # placeholder: implementazione nel task successivo
+
+    # Campi SEPARATI per il P&L di Fase 3 (non sono il numero-titolo)
+    costi_indiretti = costo_manodopera * coefficiente
+    margine_operativo_euro = margine_lordo_euro - costi_indiretti
+
+    margine_lordo_pct = None
+    if ricavo and ricavo > 0:
+        margine_lordo_pct = round(float((margine_lordo_euro / ricavo) * 100), 1)
 
     return {
-        "valore_fatturabile": valore_fatturabile,
+        "ricavo": ricavo,
+        "costo_manodopera": costo_manodopera,
+        "costi_diretti_totali": costi_diretti_totali,
+        "margine_lordo_euro": margine_lordo_euro,
+        "margine_lordo_pct": margine_lordo_pct,
+        "semaforo": semaforo_margine_lordo(margine_lordo_pct),
+        "quota_luca": quota_luca,
         "coefficiente_allocazione": coefficiente,
-        "costi_indiretti_allocati": costi_indiretti,
-        "margine_euro": margine_euro,
-        "margine_percentuale": margine_percentuale,
+        "costi_indiretti": costi_indiretti,
+        "margine_operativo_euro": margine_operativo_euro,
+    }
+
+
+async def calcola_metriche_commessa(
+    db: AsyncSession,
+    commessa: Commessa,
+    coeff_cache: Optional[dict[date, Decimal]] = None,
+) -> dict:
+    """Adapter legacy sopra calcola_margine_commessa (nessuna formula duplicata).
+
+    `margine_euro`/`margine_percentuale` ora sono il MARGINE LORDO canonico (brief §4.2).
+    """
+    m = await calcola_margine_commessa(db, commessa, coeff_cache=coeff_cache)
+    return {
+        "valore_fatturabile": m["ricavo"],
+        "coefficiente_allocazione": m["coefficiente_allocazione"],
+        "costi_indiretti_allocati": m["costi_indiretti"],
+        "margine_euro": m["margine_lordo_euro"],
+        "margine_percentuale": m["margine_lordo_pct"],
+        "margine_operativo_euro": m["margine_operativo_euro"],
+        "semaforo": m["semaforo"],
     }
 
 
@@ -936,69 +1000,60 @@ async def get_dashboard_kpi(db: AsyncSession, mese: date) -> dict:
     }
 
 async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None) -> List[dict]:
-    from sqlalchemy import text
-    
-    # Costruiamo la query in modo che i parametri siano sempre gestiti da SQLAlchemy
-    query_str = """
-        WITH commessa_valori AS (
-            SELECT
-                cp.commessa_id,
-                COALESCE(SUM(
-                    cp.importo_fisso +
-                    CASE
-                        WHEN cp.delivery_attesa > 0
-                        THEN (cp.importo_variabile::NUMERIC / cp.delivery_attesa) * cp.delivery_consuntiva
-                        ELSE 0
-                    END
-                ), 0) AS valore_fatturabile
-            FROM commessa_progetti cp
-            GROUP BY cp.commessa_id
-        )
-        SELECT
-            cl.id AS cliente_id,
-            cl.ragione_sociale,
-            COALESCE(SUM(cv.valore_fatturabile), 0) AS fatturato,
-            COALESCE(SUM(c.costo_manodopera), 0)    AS costo_manodopera,
-            COALESCE(SUM(c.costi_diretti + COALESCE(c.costi_diretti_imputati, 0)), 0) AS costi_diretti,
-            COALESCE(SUM(c.costo_manodopera * COALESCE(ca.stipendi_operativi / NULLIF(ca.overhead_produttivo, 0), :default_coeff)), 0) AS costi_indiretti_allocati,
-            COALESCE(SUM(
-                COALESCE(cv.valore_fatturabile, 0)
-                - c.costo_manodopera
-                - (c.costi_diretti + COALESCE(c.costi_diretti_imputati, 0))
-                - (c.costo_manodopera * COALESCE(ca.stipendi_operativi / NULLIF(ca.overhead_produttivo, 0), :default_coeff))
-            ), 0) AS margine_euro,
-            COUNT(c.id) AS num_commesse
-        FROM clienti cl
-        JOIN commesse c ON cl.id = c.cliente_id
-        LEFT JOIN commessa_valori cv ON c.id = cv.commessa_id
-        LEFT JOIN coefficienti_allocazione ca ON ca.mese_competenza = c.mese_competenza
-        WHERE (CAST(:mese AS DATE) IS NULL OR c.mese_competenza = CAST(:mese AS DATE))
-        GROUP BY cl.id, cl.ragione_sociale
-        ORDER BY margine_euro DESC
-    """
+    """Marginalità per cliente — aggrega i valori per-commessa dalla FONTE UNICA del margine.
 
-    params = {
-        "mese": mese.replace(day=1) if mese else None,
-        "default_coeff": float(DEFAULT_COEFFICIENTE_ALLOCAZIONE),
-    }
-    
-    r = await db.execute(text(query_str), params)
-    rows = r.all()
-    
-    return [
-        {
-            "cliente_id": row.cliente_id,
-            "ragione_sociale": row.ragione_sociale,
-            "fatturato": float(row.fatturato),
-            "costo_manodopera": float(row.costo_manodopera),
-            "costi_diretti": float(row.costi_diretti),
-            "costi_indiretti_allocati": float(row.costi_indiretti_allocati),
-            "margine_euro": float(row.margine_euro),
-            "num_commesse": row.num_commesse,
-            "margine_percentuale": (float(row.margine_euro) / float(row.fatturato) * 100) if row.fatturato > 0 else 0
-        }
-        for row in rows
-    ]
+    Nessuna formula duplicata: somma per cliente i campi di calcola_margine_commessa.
+    `margine_euro`/`margine_percentuale` sono il MARGINE LORDO canonico (brief §4.2);
+    gli indiretti/operativo restano esposti come campi separati.
+    """
+    commesse = await list_commesse(db, mese)
+    coeff_cache: dict[date, Decimal] = {}
+
+    acc: dict[uuid.UUID, dict] = {}
+    for c in commesse:
+        m = await calcola_margine_commessa(db, c, coeff_cache=coeff_cache)
+        agg = acc.get(c.cliente_id)
+        if agg is None:
+            agg = {
+                "cliente_id": c.cliente_id,
+                "ragione_sociale": c.cliente.ragione_sociale if c.cliente else "?",
+                "fatturato": Decimal("0"),
+                "costo_manodopera": Decimal("0"),
+                "costi_diretti": Decimal("0"),
+                "costi_indiretti_allocati": Decimal("0"),
+                "margine_euro": Decimal("0"),           # lordo (canonico)
+                "margine_operativo_euro": Decimal("0"),
+                "num_commesse": 0,
+            }
+            acc[c.cliente_id] = agg
+        agg["fatturato"] += m["ricavo"]
+        agg["costo_manodopera"] += m["costo_manodopera"]
+        agg["costi_diretti"] += m["costi_diretti_totali"]
+        agg["costi_indiretti_allocati"] += m["costi_indiretti"]
+        agg["margine_euro"] += m["margine_lordo_euro"]
+        agg["margine_operativo_euro"] += m["margine_operativo_euro"]
+        agg["num_commesse"] += 1
+
+    result = []
+    for agg in acc.values():
+        fatturato = float(agg["fatturato"])
+        margine_euro = float(agg["margine_euro"])
+        pct = round(margine_euro / fatturato * 100, 1) if fatturato > 0 else 0
+        result.append({
+            "cliente_id": agg["cliente_id"],
+            "ragione_sociale": agg["ragione_sociale"],
+            "fatturato": fatturato,
+            "costo_manodopera": float(agg["costo_manodopera"]),
+            "costi_diretti": float(agg["costi_diretti"]),
+            "costi_indiretti_allocati": float(agg["costi_indiretti_allocati"]),
+            "margine_euro": margine_euro,
+            "margine_operativo_euro": float(agg["margine_operativo_euro"]),
+            "margine_percentuale": pct,
+            "semaforo": semaforo_margine_lordo(pct if fatturato > 0 else None),
+            "num_commesse": agg["num_commesse"],
+        })
+    result.sort(key=lambda x: x["margine_euro"], reverse=True)
+    return result
 
 
 # ── TASK SERVICE ──────────────────────────────────────────

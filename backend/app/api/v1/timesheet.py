@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.commesse import MARGINE_CRITICAL_PCT, MARGINE_WARNING_PCT
 from app.core.security import get_current_user, require_admin
 from app.db.session import get_db
 from app.models.models import TimesheetStatus, User, UserRole
@@ -16,6 +15,7 @@ from app.schemas.schemas import TimesheetApprova, TimesheetCreate, TimesheetOut
 from app.services import audit
 from app.services.services import (
     approva_timesheet,
+    calcola_margine_commessa,
     create_timesheet,
     list_timesheet,
 )
@@ -48,36 +48,26 @@ async def _check_margin_and_notify(db: AsyncSession, commessa_id: Optional[uuid.
         if not c:
             return
 
-        costo_manodopera = float(sum(t.costo_lavoro or Decimal("0") for t in c.timesheet))
-        try:
-            valore_fatturabile = float(sum(r.valore_fatturabile_calc for r in c.righe_progetto))
-            for ag in c.aggiustamenti or []:
-                valore_fatturabile += float(ag.get("importo", 0))
-        except Exception:
-            valore_fatturabile = 0.0
-
-        if valore_fatturabile <= 0:
-            return
-
-        from app.services.services import get_coefficiente_allocazione
-        coefficiente = float(await get_coefficiente_allocazione(db, c.mese_competenza))
-        costi_diretti = float(c.costi_diretti_totali)  # manuali + imputati (R3)
-        costi_indiretti = costo_manodopera * coefficiente
-        margine_euro = valore_fatturabile - costo_manodopera - costi_diretti - costi_indiretti
-        margine_pct = round(margine_euro / valore_fatturabile * 100, 1)
+        # FONTE UNICA del margine (brief §4.2): canonico = LORDO su base snapshot approvati.
+        m = await calcola_margine_commessa(db, c)
+        if m["margine_lordo_pct"] is None:
+            return  # nessun ricavo, niente da valutare
+        margine_pct = m["margine_lordo_pct"]
         cliente_nome = c.cliente.ragione_sociale if c.cliente else "?"
         mese_str = c.mese_competenza.strftime("%B %Y") if c.mese_competenza else "?"
 
-        if margine_pct < MARGINE_CRITICAL_PCT:
+        # L'alert opera sul semaforo canonico (bande brief §4.2): rosso→CRITICAL, arancio→WARNING.
+        semaforo = m["semaforo"]
+        if semaforo == "rosso":
             alert_type = "CRITICAL"
             title = f"Margine critico - {cliente_nome}"
-            message = f"Commessa {mese_str}: margine sceso al {margine_pct}% (soglia critica: {MARGINE_CRITICAL_PCT}%)"
-        elif margine_pct < MARGINE_WARNING_PCT:
+            message = f"Commessa {mese_str}: margine lordo negativo ({margine_pct}%)"
+        elif semaforo == "arancio":
             alert_type = "WARNING"
             title = f"Attenzione margine - {cliente_nome}"
-            message = f"Commessa {mese_str}: margine al {margine_pct}% (soglia warning: {MARGINE_WARNING_PCT}%)"
+            message = f"Commessa {mese_str}: margine lordo basso al {margine_pct}%"
         else:
-            return  # Tutto OK, nessuna notifica
+            return  # giallo/verde: nessuna notifica
 
         link = f"/commesse/{commessa_id}"
         month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)

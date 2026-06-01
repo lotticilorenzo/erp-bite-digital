@@ -3,9 +3,6 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
 
-MARGINE_CRITICAL_PCT = 15
-MARGINE_WARNING_PCT = 30
-
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +12,7 @@ from app.db.session import get_db
 from app.models.models import Commessa as CommessaModel, CommessaStatus, FatturaAttiva, User
 from app.schemas.schemas import CommessaCreate, CommessaOut, CommessaUpdate
 from app.services.services import (
-    calcola_metriche_commessa,
+    calcola_margine_commessa,
     create_commessa,
     get_commessa,
     get_costi_dettaglio_commessa,
@@ -38,22 +35,20 @@ async def _enrich_commessa(db: AsyncSession, c, coeff_cache: Optional[dict[date,
     ore_reali = minuti_totali / 60.0
     d = CommessaOut.model_validate(c, from_attributes=True, strict=False).model_dump(warnings=False)
     d["ore_reali"] = float(ore_reali)
-    # Tutti i valori economici usano lo stesso costo_manodopera_calc (tutti i timesheet)
-    # così margine_euro è sempre coerente con il costo_manodopera visualizzato.
-    d["costo_manodopera"] = float(costo_manodopera_calc)
 
-    metriche = await calcola_metriche_commessa(db, c, coeff_cache)
-    valore_fatturabile = metriche["valore_fatturabile"]
-    coefficiente = metriche["coefficiente_allocazione"]
-    costi_diretti = c.costi_diretti_totali  # manuali + imputati (R3)
-    costi_indiretti = costo_manodopera_calc * coefficiente
-    margine = valore_fatturabile - costo_manodopera_calc - costi_diretti - costi_indiretti
-
-    d["valore_fatturabile"] = float(valore_fatturabile)
-    d["coefficiente_allocazione"] = float(coefficiente)
-    d["costi_indiretti_allocati"] = float(costi_indiretti)
-    d["margine_euro"] = float(margine)
-    d["margine_percentuale"] = round(float(margine / valore_fatturabile * 100), 1) if valore_fatturabile > 0 else None
+    # FONTE UNICA del margine (brief §4.2): canonico = LORDO su base snapshot approvati.
+    m = await calcola_margine_commessa(db, c, coeff_cache=coeff_cache)
+    d["costo_manodopera"] = float(m["costo_manodopera"])  # snapshot (Decisione 2)
+    d["valore_fatturabile"] = float(m["ricavo"])
+    d["coefficiente_allocazione"] = float(m["coefficiente_allocazione"])
+    d["costi_indiretti_allocati"] = float(m["costi_indiretti"])
+    d["margine_euro"] = float(m["margine_lordo_euro"])          # LORDO (numero-titolo)
+    d["margine_percentuale"] = m["margine_lordo_pct"]
+    d["margine_operativo_euro"] = float(m["margine_operativo_euro"])  # separato, per P&L Fase 3
+    d["semaforo"] = m["semaforo"]
+    # Stima "live" (tutti i timesheet, non solo approvati): campo SEPARATO ed etichettato, non canonico.
+    m_live = await calcola_margine_commessa(db, c, coeff_cache=coeff_cache, costo_manodopera_override=costo_manodopera_calc)
+    d["margine_lordo_stima_live"] = float(m_live["margine_lordo_euro"])
 
     d["aggiustamenti"] = c.aggiustamenti or []
     d["data_inizio"] = str(c.data_inizio) if c.data_inizio else None
@@ -115,44 +110,32 @@ async def get_commessa_profitability(
         raise HTTPException(status_code=404, detail="Commessa non trovata")
 
     minuti_totali = sum(t.durata_minuti or 0 for t in c.timesheet)
-    costo_manodopera = float(sum(t.costo_lavoro or Decimal("0") for t in c.timesheet))
     ore_consumate = minuti_totali / 60.0
     ore_budget = float(c.ore_contratto or 0)
-
-    try:
-        valore_fatturabile = float(sum(r.valore_fatturabile_calc for r in c.righe_progetto))
-        for ag in (c.aggiustamenti or []):
-            valore_fatturabile += float(ag.get("importo", 0))
-    except Exception:
-        valore_fatturabile = 0.0
-
-    costi_diretti = float(c.costi_diretti_totali)  # manuali + imputati (R3)
-    margine_euro = valore_fatturabile - costo_manodopera - costi_diretti
-    margine_percentuale = (
-        round(margine_euro / valore_fatturabile * 100, 1) if valore_fatturabile > 0 else None
-    )
-
     perc_ore = round(ore_consumate / ore_budget * 100, 1) if ore_budget > 0 else None
 
-    if margine_percentuale is None:
-        alert_level = "NO_DATA"
-    elif margine_percentuale < MARGINE_CRITICAL_PCT:
-        alert_level = "CRITICAL"
-    elif margine_percentuale < MARGINE_WARNING_PCT:
-        alert_level = "WARNING"
-    else:
-        alert_level = "OK"
+    # FONTE UNICA del margine (brief §4.2): canonico = LORDO su base snapshot approvati.
+    m = await calcola_margine_commessa(db, c)
+    margine_percentuale = m["margine_lordo_pct"]
+    # alert_level derivato dal semaforo canonico (unica sorgente delle bande)
+    alert_level = {
+        "grigio": "NO_DATA", "rosso": "CRITICAL", "arancio": "WARNING",
+        "giallo": "OK", "verde": "OK",
+    }[m["semaforo"]]
 
     return {
         "commessa_id": str(commessa_id),
         "ore_budget": ore_budget,
         "ore_consumate": round(ore_consumate, 2),
         "perc_ore_consumate": perc_ore,
-        "valore_fatturabile": valore_fatturabile,
-        "costo_manodopera": round(costo_manodopera, 2),
-        "costi_diretti": costi_diretti,
-        "margine_euro": round(margine_euro, 2),
+        "valore_fatturabile": float(m["ricavo"]),
+        "costo_manodopera": round(float(m["costo_manodopera"]), 2),  # snapshot (Decisione 2)
+        "costi_diretti": float(m["costi_diretti_totali"]),
+        "margine_euro": round(float(m["margine_lordo_euro"]), 2),    # LORDO (numero-titolo)
         "margine_percentuale": margine_percentuale,
+        "costi_indiretti": float(m["costi_indiretti"]),               # separato (P&L Fase 3)
+        "margine_operativo_euro": round(float(m["margine_operativo_euro"]), 2),
+        "semaforo": m["semaforo"],
         "alert_level": alert_level,
     }
 
