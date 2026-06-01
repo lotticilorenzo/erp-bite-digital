@@ -14,6 +14,7 @@ import {
   FileText,
   Wallet,
   PieChart,
+  Calculator,
   ShoppingCart,
   Target,
   BookOpen,
@@ -72,6 +73,7 @@ const navItems = [
     items: [
       { title: "Analytics", url: "/analytics", icon: PieChart },
       { title: "Report Mensili", url: "/report", icon: BarChart3 },
+      { title: "Pricing Floor", url: "/pricing-floor", icon: Calculator },
     ],
   },
   {

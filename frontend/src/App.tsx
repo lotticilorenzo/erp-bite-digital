@@ -16,6 +16,7 @@ const ProgettoDetailPage = React.lazy(() => import("./pages/ProgettoDetail"));
 const CommessePage = React.lazy(() => import("./pages/Commesse"));
 const CommessaDetailPage = React.lazy(() => import("./pages/CommessaDetail"));
 const PreventiviPage = React.lazy(() => import("./pages/PreventiviPage"));
+const PricingFloorPage = React.lazy(() => import("./pages/PricingFloor"));
 const TimesheetPage = React.lazy(() => import("./pages/Timesheet"));
 const FatturePage = React.lazy(() => import("./pages/Fatture"));
 const CassaPage = React.lazy(() => import("./pages/Cassa"));
@@ -150,6 +151,7 @@ function App() {
                   <Route path="/cassa/regole" element={renderFinanceOnly(<RegoleRiconciliazionePageLazy />)} />
                   <Route path="/analytics" element={renderFinanceOnly(<AnalyticsPage />)} />
                   <Route path="/report" element={renderFinanceOnly(<ReportsPage />)} />
+                  <Route path="/pricing-floor" element={renderFinanceOnly(<PricingFloorPage />)} />
                   <Route path="/fornitori" element={renderFinanceOnly(<Fornitori />)} />
                   <Route path="/fornitori/:id" element={renderFinanceOnly(<Fornitori />)} />
                   <Route path="/budget" element={renderFinanceOnly(<BudgetPage />)} />

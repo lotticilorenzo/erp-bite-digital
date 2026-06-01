@@ -85,6 +85,7 @@ from app.api.v1 import notifications
 from app.api.v1 import assenze
 from app.api.v1 import risorse_servizi
 from app.api.v1 import risorse
+from app.api.v1 import pricing_floor
 from app.api.v1 import studio
 from app.api.v1 import chat
 from app.api.v1 import uploads
@@ -127,6 +128,7 @@ router.include_router(ai.router)
 router.include_router(planning.router)
 router.include_router(pianificazioni.router)
 router.include_router(risorse.router)
+router.include_router(pricing_floor.router)
 router.include_router(risorse_servizi.router)
 router.include_router(studio.router)
 router.include_router(chat.router, prefix="/chat", tags=["Chat"])

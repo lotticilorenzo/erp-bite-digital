@@ -1718,6 +1718,19 @@ class RisorsaUpdate(BaseModel):
     costo_orario_calcolato: Optional[Decimal] = None
 
 
+# ── PRICING FLOOR (Prompt 5, stateless) ───────────────────
+class PricingFloorVoce(BaseModel):
+    risorsa_id: uuid.UUID
+    ore: Decimal = Field(..., ge=0)
+
+
+class PricingFloorRequest(BaseModel):
+    voci_manodopera: List[PricingFloorVoce] = []
+    costi_diretti_extra: Decimal = Field(Decimal("0"), ge=0)
+    quota_luca_stimata: Decimal = Field(Decimal("0"), ge=0)
+    margine_target: Decimal = Field(Decimal("0.30"))  # validato nell'endpoint: 0 <= target < 1
+
+
 # ── PROGETTO TEMPLATE ─────────────────────────────────────
 class ProgettoTemplateTaskOut(BaseModel):
     id: uuid.UUID
