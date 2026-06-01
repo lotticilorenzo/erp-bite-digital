@@ -39,3 +39,6 @@ data-studio*
 
 # Claude settings locali
 .claude/settings.local.json
+
+# Artefatti di analisi locali (non versionati)
+.analysis/
