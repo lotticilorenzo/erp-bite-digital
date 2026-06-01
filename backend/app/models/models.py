@@ -283,7 +283,8 @@ class Commessa(Base):
     stato: Mapped[CommessaStatus] = mapped_column(SAEnum(CommessaStatus, name="commessa_status"), default=CommessaStatus.APERTA)
     costo_manodopera: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     fattura_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey('fatture_attive.id'), nullable=True)
-    costi_diretti: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    costi_diretti: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)  # Input manuale (costi diretti non rappresentati come imputazioni)
+    costi_diretti_imputati: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, server_default="0")  # Derivato dalle fatture_passive_imputazioni (R3)
     pianificazione_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("pianificazioni.id"), nullable=True)
     preventivo: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     data_inizio: Mapped[Optional[date]] = mapped_column(Date)
@@ -319,8 +320,13 @@ class Commessa(Base):
         return totale
 
     @property
+    def costi_diretti_totali(self) -> Decimal:
+        """Costi diretti non-manodopera: manuali + derivati dalle imputazioni passive (R3)."""
+        return (self.costi_diretti or Decimal("0")) + (self.costi_diretti_imputati or Decimal("0"))
+
+    @property
     def margine_euro(self) -> Decimal:
-        return self.valore_fatturabile_calc - self.costo_manodopera - self.costi_diretti
+        return self.valore_fatturabile_calc - self.costo_manodopera - self.costi_diretti_totali
 
     @property
     def margine_percentuale(self) -> Optional[float]:

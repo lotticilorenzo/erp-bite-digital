@@ -730,10 +730,15 @@ async def delete_imputazioni_fattura(
 ):
     """Elimina tutte le imputazioni di una fattura passiva."""
     from app.models.models import FatturaPassivaImputazione
+    from app.services.services import _commesse_impattate_da_fattura, ricalcola_costi_diretti_imputati
+    # R3: cattura le commesse impattate PRIMA della delete, poi ricalcola i loro costi imputati
+    impatto = await _commesse_impattate_da_fattura(db, fattura_id)
     await db.execute(
         __import__('sqlalchemy', fromlist=['delete']).delete(FatturaPassivaImputazione)
         .where(FatturaPassivaImputazione.fattura_passiva_id == fattura_id)
     )
+    await db.flush()
+    await ricalcola_costi_diretti_imputati(db, impatto)
     await db.commit()
 
 

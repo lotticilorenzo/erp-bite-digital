@@ -76,7 +76,7 @@ async def calcola_metriche_commessa(
 
     valore_fatturabile = commessa.valore_fatturabile_calc
     costo_manodopera = commessa.costo_manodopera or Decimal("0")
-    costi_diretti = commessa.costi_diretti or Decimal("0")
+    costi_diretti = commessa.costi_diretti_totali  # manuali + imputati (R3)
     costi_indiretti = costo_manodopera * coefficiente
     margine_euro = valore_fatturabile - (costo_manodopera + costi_diretti + costi_indiretti)
 
@@ -959,12 +959,12 @@ async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None)
             cl.ragione_sociale,
             COALESCE(SUM(cv.valore_fatturabile), 0) AS fatturato,
             COALESCE(SUM(c.costo_manodopera), 0)    AS costo_manodopera,
-            COALESCE(SUM(c.costi_diretti), 0)       AS costi_diretti,
+            COALESCE(SUM(c.costi_diretti + COALESCE(c.costi_diretti_imputati, 0)), 0) AS costi_diretti,
             COALESCE(SUM(c.costo_manodopera * COALESCE(ca.stipendi_operativi / NULLIF(ca.overhead_produttivo, 0), :default_coeff)), 0) AS costi_indiretti_allocati,
             COALESCE(SUM(
                 COALESCE(cv.valore_fatturabile, 0)
                 - c.costo_manodopera
-                - c.costi_diretti
+                - (c.costi_diretti + COALESCE(c.costi_diretti_imputati, 0))
                 - (c.costo_manodopera * COALESCE(ca.stipendi_operativi / NULLIF(ca.overhead_produttivo, 0), :default_coeff))
             ), 0) AS margine_euro,
             COUNT(c.id) AS num_commesse
@@ -2321,6 +2321,66 @@ async def suggest_riconciliazione(db: AsyncSession, movimento_id: uuid.UUID):
 
 
 # ── IMPUTAZIONI FATTURE PASSIVE ───────────────────────────
+def _coerce_uuid(value) -> Optional[uuid.UUID]:
+    """Accetta str o uuid.UUID (o None). Robusto: il payload Pydantic puo' gia' fornire UUID."""
+    if not value:
+        return None
+    if isinstance(value, uuid.UUID):
+        return value
+    return uuid.UUID(str(value))
+
+
+async def _commesse_impattate_da_fattura(db: AsyncSession, fattura_passiva_id: uuid.UUID) -> set[uuid.UUID]:
+    """Commesse impattate dalle imputazioni di una fattura passiva.
+
+    Legame di competenza (R3): cliente effettivo = COALESCE(imputazione.cliente_id,
+    progetto.cliente_id); mese = mese di emissione della fattura passiva.
+    """
+    rows = await db.execute(
+        text(
+            """
+            SELECT DISTINCT c.id
+            FROM fatture_passive_imputazioni i
+            JOIN fatture_passive fp ON fp.id = i.fattura_passiva_id
+            LEFT JOIN progetti p ON p.id = i.progetto_id
+            JOIN commesse c
+              ON c.cliente_id = COALESCE(i.cliente_id, p.cliente_id)
+             AND c.mese_competenza = date_trunc('month', fp.data_emissione)::date
+            WHERE i.fattura_passiva_id = :fid
+            """
+        ),
+        {"fid": str(fattura_passiva_id)},
+    )
+    return {r[0] for r in rows.all()}
+
+
+async def ricalcola_costi_diretti_imputati(db: AsyncSession, commessa_ids: set[uuid.UUID]) -> None:
+    """Ricalcola e PERSISTE costi_diretti_imputati per le commesse date (R3).
+
+    Pattern snapshot: somma da zero TUTTE le imputazioni di fatture passive che
+    competono a ciascuna commessa (cliente effettivo + mese di emissione). Non
+    tocca costi_diretti (input manuale). Non esegue commit: lo gestisce il chiamante.
+    """
+    if not commessa_ids:
+        return
+    await db.execute(
+        text(
+            """
+            UPDATE commesse c SET costi_diretti_imputati = COALESCE((
+                SELECT SUM(i.importo)
+                FROM fatture_passive_imputazioni i
+                JOIN fatture_passive fp ON fp.id = i.fattura_passiva_id
+                LEFT JOIN progetti p ON p.id = i.progetto_id
+                WHERE COALESCE(i.cliente_id, p.cliente_id) = c.cliente_id
+                  AND date_trunc('month', fp.data_emissione)::date = c.mese_competenza
+            ), 0)
+            WHERE c.id = ANY(:ids)
+            """
+        ),
+        {"ids": [str(cid) for cid in commessa_ids]},
+    )
+
+
 async def get_imputazioni(db: AsyncSession, fattura_passiva_id: uuid.UUID):
     from app.models.models import FatturaPassivaImputazione, Cliente, Progetto
     result = await db.execute(
@@ -2350,6 +2410,9 @@ async def save_imputazioni(db: AsyncSession, fattura_passiva_id: uuid.UUID, impu
     if not fp:
         return None
 
+    # R3: commesse impattate dalle imputazioni correnti (prima della modifica)
+    impatto = await _commesse_impattate_da_fattura(db, fattura_passiva_id)
+
     # Elimina imputazioni esistenti e ricrea
     await db.execute(delete(FatturaPassivaImputazione).where(FatturaPassivaImputazione.fattura_passiva_id == fattura_passiva_id))
 
@@ -2359,14 +2422,19 @@ async def save_imputazioni(db: AsyncSession, fattura_passiva_id: uuid.UUID, impu
         importo_imp = round(totale * perc / 100, 2)
         obj = FatturaPassivaImputazione(
             fattura_passiva_id=fattura_passiva_id,
-            cliente_id=uuid.UUID(imp['cliente_id']) if imp.get('cliente_id') else None,
-            progetto_id=uuid.UUID(imp['progetto_id']) if imp.get('progetto_id') else None,
+            cliente_id=_coerce_uuid(imp.get('cliente_id')),
+            progetto_id=_coerce_uuid(imp.get('progetto_id')),
             tipo=imp.get('tipo', 'PROGETTO'),
             percentuale=perc,
             importo=importo_imp,
             note=imp.get('note'),
         )
         db.add(obj)
+
+    # R3: aggiunge le commesse impattate dalle NUOVE imputazioni e ricalcola l'unione
+    await db.flush()
+    impatto |= await _commesse_impattate_da_fattura(db, fattura_passiva_id)
+    await ricalcola_costi_diretti_imputati(db, impatto)
 
     await db.commit()
     return await get_imputazioni(db, fattura_passiva_id)
