@@ -67,7 +67,7 @@ import {
   resolveCommessaCliente,
 } from "@/lib/commessa-clienti";
 import type { Cliente, Commessa, FatturaAttiva, CommessaStatus } from "@/types";
-import { formatEuro } from "@/lib/utils";
+import { formatEuro, marginColorClass } from "@/lib/utils";
 
 function getCommessaProjectsLabel(commessa: Commessa) {
   const names = commessa.righe_progetto
@@ -832,9 +832,7 @@ export default function Reports() {
                       {formatEuro(Number(commessa.valore_fatturabile || 0))}
                     </TableCell>
                     <TableCell
-                      className={`py-4 text-right text-sm font-black ${
-                        Number(commessa.margine_percentuale || 0) >= 20 ? "text-emerald-400" : "text-rose-400"
-                      }`}
+                      className={`py-4 text-right text-sm font-black ${marginColorClass((commessa as any).semaforo ?? commessa.margine_percentuale)}`}
                     >
                       {Number(commessa.margine_percentuale || 0).toFixed(1)}%
                     </TableCell>

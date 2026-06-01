@@ -134,8 +134,11 @@ export interface Commessa {
   valore_fatturabile?: number;
   costi_indiretti_allocati?: number;
   coefficiente_allocazione?: number;
-  margine_euro?: number;
-  margine_percentuale?: number;
+  margine_euro?: number;            // MARGINE LORDO (brief §4.2), FONTE UNICA backend
+  margine_percentuale?: number;     // margine lordo %
+  margine_operativo_euro?: number;  // separato: lordo − overhead (P&L Fase 3)
+  margine_lordo_stima_live?: number; // stima su tutti i timesheet (non canonico)
+  semaforo?: "verde" | "giallo" | "arancio" | "rosso" | "grigio";
   fattura_id?: string;
   fattura_numero?: string;
   fattura_data?: string;

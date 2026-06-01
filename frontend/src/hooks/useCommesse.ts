@@ -92,8 +92,11 @@ export interface ProfitabilityData {
   valore_fatturabile: number;
   costo_manodopera: number;
   costi_diretti: number;
-  margine_euro: number;
+  margine_euro: number;            // MARGINE LORDO (brief §4.2)
   margine_percentuale: number | null;
+  costi_indiretti?: number;        // separato (P&L Fase 3)
+  margine_operativo_euro?: number; // lordo − overhead
+  semaforo?: "verde" | "giallo" | "arancio" | "rosso" | "grigio";
   alert_level: "OK" | "WARNING" | "CRITICAL" | "NO_DATA";
 }
 

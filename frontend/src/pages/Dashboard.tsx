@@ -73,7 +73,7 @@ import {
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useUsers } from "@/hooks/useUsers";
-import { cn } from "@/lib/utils";
+import { cn, marginColorClass } from "@/lib/utils";
 import { toast } from "sonner";
 import type { ClienteAffidabilita, Commessa } from "@/types";
 
@@ -543,11 +543,7 @@ export default function DashboardPage() {
 
                         <TableCell className="py-5 text-right">
                           <span
-                            className={`text-[12px] font-black tabular-nums ${
-                              (commessa.margine_percentuale || 0) < 30
-                                ? "text-rose-600 dark:text-rose-400"
-                                : "text-emerald-600 dark:text-emerald-400"
-                            }`}
+                            className={`text-[12px] font-black tabular-nums ${marginColorClass((commessa as any).semaforo ?? commessa.margine_percentuale)}`}
                           >
                             {commessa.margine_percentuale?.toFixed(0)}%
                           </span>

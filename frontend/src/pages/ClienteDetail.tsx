@@ -1,5 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { useParams, useNavigate, Link } from "react-router-dom";
+import { marginColorClass } from "@/lib/utils";
 import {
   ChevronLeft,
   ChevronRight,
@@ -483,7 +484,7 @@ export default function ClienteDetailPage() {
                               </div>
                             </td>
                             <td className="px-6 py-4 text-right">
-                              <span className={`text-sm font-bold ${c.margine_percentuale! > 30 ? 'text-emerald-400' : c.margine_percentuale! > 15 ? 'text-amber-400' : 'text-red-400'}`}>
+                              <span className={`text-sm font-bold ${marginColorClass((c as any).semaforo ?? c.margine_percentuale)}`}>
                                 {c.margine_percentuale}%
                               </span>
                             </td>

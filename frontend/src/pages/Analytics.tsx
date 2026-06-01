@@ -55,7 +55,7 @@ import {
 import { it } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { cn, formatEuro } from "@/lib/utils";
+import { cn, formatEuro, semaforoMargine, marginColorClass, type Semaforo } from "@/lib/utils";
 import { ClientAvatar } from "@/components/common/ClientAvatar";
 import { ForecastWidget } from "@/components/analytics/ForecastWidget";
 import {
@@ -78,11 +78,15 @@ import {
 } from "@/lib/commessa-clienti";
 import type { Commessa, Cliente } from "@/types";
 
-const getStatusBadge = (margin: number) => {
-  if (margin > 30) return { label: "Profittevole", color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20" };
-  if (margin >= 10) return { label: "Attenzione", color: "text-amber-500", bg: "bg-amber-500/10", border: "border-amber-500/20" };
-  return { label: "Perdita", color: "text-rose-500", bg: "bg-rose-500/10", border: "border-rose-500/20" };
+// Bande brief §4.2 via semaforo unico (lib/utils). NIENTE soglie hardcoded divergenti.
+const STATUS_BADGE: Record<Semaforo, { label: string; color: string; bg: string; border: string }> = {
+  verde: { label: "Profittevole", color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
+  giallo: { label: "Attenzione", color: "text-amber-500", bg: "bg-amber-500/10", border: "border-amber-500/20" },
+  arancio: { label: "Attenzione", color: "text-orange-500", bg: "bg-orange-500/10", border: "border-orange-500/20" },
+  rosso: { label: "Perdita", color: "text-rose-500", bg: "bg-rose-500/10", border: "border-rose-500/20" },
+  grigio: { label: "N/D", color: "text-muted-foreground", bg: "bg-muted/10", border: "border-border" },
 };
+const getStatusBadge = (margin: number) => STATUS_BADGE[semaforoMargine(margin)];
 
 
 type TrendPoint = {
@@ -152,8 +156,10 @@ function calculateProfitabilityMetrics(commesse: Commessa[], range: ReportingDat
     const laborCost = (c as any).costo_manodopera_reale || 0;
     const structureCost = rev * allocationFactor;
     const totalCost = laborCost + structureCost;
-    const marginEuro = rev - totalCost;
-    const marginPct = rev > 0 ? (marginEuro / rev) * 100 : 0;
+    // FONTE UNICA: margine LORDO dal backend (calcola_margine_commessa). Nessun ricalcolo client.
+    // laborCost/structureCost restano solo come info (l'overhead NON entra nel margine-titolo lordo).
+    const marginEuro = Number(c.margine_euro ?? 0);
+    const marginPct = Number(c.margine_percentuale ?? 0);
 
     const expected = Number(c.ore_contratto || 0);
     const real = (c as any).ore_reali_timesheet || 0;
@@ -601,12 +607,14 @@ export default function Analytics() {
     
     // 1. Margin Alerts
     profitabilityData.current.commesseProfitability.forEach((c: any) => {
-      if (c.marginPct > 0 && c.marginPct < 15) {
+      // Bande brief §4.2: arancio (0–20) e rosso (<0) sono sotto soglia.
+      const sem = semaforoMargine(c.marginPct);
+      if (sem === "arancio" || sem === "rosso") {
         nextAlerts.push({
           type: "MARGIN",
           title: `Margine basso: ${getClienteDisplayName(c.cliente)}`,
           value: `${c.marginPct.toFixed(1)}%`,
-          severity: "high",
+          severity: sem === "rosso" ? "high" : "medium",
         });
       }
     });
@@ -909,7 +917,7 @@ export default function Analytics() {
                       </Badge>
                     </TableCell>
                     <TableCell className="py-5 text-right font-black text-foreground tabular-nums">{formatEuro(c.valore_fatturabile || 0)}</TableCell>
-                    <TableCell className={`py-5 text-right font-black tabular-nums ${(c.margine_percentuale || 0) < 15 ? "text-rose-500" : "text-emerald-500"}`}>
+                    <TableCell className={`py-5 text-right font-black tabular-nums ${marginColorClass((c as any).semaforo ?? c.margine_percentuale)}`}>
                       {c.margine_percentuale}%
                     </TableCell>
                   </TableRow>
@@ -1020,7 +1028,7 @@ export default function Analytics() {
                         </Badge>
                       </TableCell>
                       <TableCell className="py-5 text-right font-black text-foreground tabular-nums">{formatEuro(c.valore_fatturabile || 0)}</TableCell>
-                      <TableCell className={`py-5 text-right font-black tabular-nums ${(c.margine_percentuale || 0) < 15 ? "text-rose-500" : "text-emerald-500"}`}>
+                      <TableCell className={`py-5 text-right font-black tabular-nums ${marginColorClass((c as any).semaforo ?? c.margine_percentuale)}`}>
                         {c.margine_percentuale}%
                       </TableCell>
                     </TableRow>

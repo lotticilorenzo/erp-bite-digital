@@ -36,3 +36,45 @@ export function formatPercent(value: number | null | undefined, decimals = 1): s
   if (value == null || isNaN(value)) return "—"
   return `${value.toFixed(decimals).replace(".", ",")}%`
 }
+
+// ── MARGINE: semaforo unico (brief §4.2) ───────────────────────────────
+// Bande sul MARGINE LORDO %: verde >40 / giallo 20–40 / arancio 0–20 / rosso <0.
+// Sorgente unica lato FE; preferire il campo `semaforo` del backend dove disponibile.
+export type Semaforo = "verde" | "giallo" | "arancio" | "rosso" | "grigio"
+
+export function semaforoMargine(pct: number | null | undefined): Semaforo {
+  if (pct == null || isNaN(pct)) return "grigio"
+  if (pct < 0) return "rosso"
+  if (pct < 20) return "arancio"
+  if (pct < 40) return "giallo"
+  return "verde"
+}
+
+const SEMAFORO_TEXT: Record<Semaforo, string> = {
+  verde: "text-emerald-500",
+  giallo: "text-amber-500",
+  arancio: "text-orange-500",
+  rosso: "text-rose-500",
+  grigio: "text-muted-foreground",
+}
+const SEMAFORO_BG: Record<Semaforo, string> = {
+  verde: "bg-emerald-500",
+  giallo: "bg-amber-500",
+  arancio: "bg-orange-500",
+  rosso: "bg-rose-500",
+  grigio: "bg-muted",
+}
+
+function toSemaforo(v: Semaforo | number | null | undefined): Semaforo {
+  return typeof v === "string" ? v : semaforoMargine(v)
+}
+
+/** Classe tailwind testo per il semaforo margine. Accetta un Semaforo backend o un margine %. */
+export function marginColorClass(v: Semaforo | number | null | undefined): string {
+  return SEMAFORO_TEXT[toSemaforo(v)]
+}
+
+/** Classe tailwind background per il semaforo margine. */
+export function marginBgClass(v: Semaforo | number | null | undefined): string {
+  return SEMAFORO_BG[toSemaforo(v)]
+}

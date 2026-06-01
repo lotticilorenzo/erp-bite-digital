@@ -7,6 +7,7 @@ import { useTimesheets } from "./useTimesheet";
 import { useCostiFissi } from "./useCosti";
 import { useProgetti } from "./useProgetti";
 import { hydrateCommesseWithClienti } from "@/lib/commessa-clienti";
+import { semaforoMargine } from "@/lib/utils";
 import {
   subMonths, 
   startOfMonth, 
@@ -180,7 +181,9 @@ export function useAnalytics(referenceDate?: Date) {
     const alerts = [
       ...commesseArr
         .filter((c: Commessa) => {
-            if (!c.mese_competenza || (c.margine_percentuale || 0) >= 15) return false;
+            // Sotto soglia = arancio/rosso (brief §4.2): margine lordo % < 20.
+            const sem = semaforoMargine(c.margine_percentuale);
+            if (!c.mese_competenza || (sem !== "arancio" && sem !== "rosso")) return false;
             return isWithinInterval(parseISO(c.mese_competenza), { start: startOfMonth(now), end: now });
         })
         .map((c: Commessa) => ({ 
@@ -242,7 +245,7 @@ export function useAnalytics(referenceDate?: Date) {
           })
           .reduce((acc, c) => acc + (c.valore_fatturabile || 0), 0),
         costoStruttura: costiFissiArr.filter(cf => cf.attivo).reduce((acc, cf) => acc + Number(cf.importo || 0), 0),
-        marginiSottoSoglia: selectedMonthCommesse.filter((c: Commessa) => (c.margine_percentuale || 0) < 30).length,
+        marginiSottoSoglia: selectedMonthCommesse.filter((c: Commessa) => ["arancio", "rosso"].includes(semaforoMargine(c.margine_percentuale))).length,
         timesheetPendingCount: pendingTsArr.length,
         progettiSenzaCommessaCount: progettiArr.filter(p => p.stato === "ATTIVO" && !p.has_commessa_mese).length,
         progettiSenzaTeamCount: progettiArr.filter(p => p.stato === "ATTIVO" && (!p.team || p.team.length === 0)).length

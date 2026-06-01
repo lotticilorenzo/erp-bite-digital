@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { semaforoMargine, type Semaforo } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -312,16 +313,19 @@ function CommessaStatusBadge({ status }: { status: CommessaStatus }) {
 function CommessaMarginBadge({ percentage }: { percentage: number | undefined | null }) {
   if (percentage === undefined || percentage === null) return <span className="text-[#475569] text-xs">N/A</span>;
 
-  let color = "bg-red-500/10 text-red-400 border-red-500/20";
-  let icon = <TrendingDown className="w-3 h-3 mr-1" />;
-
-  if (percentage > 30) {
-    color = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
-    icon = <TrendingUp className="w-3 h-3 mr-1" />;
-  } else if (percentage >= 15) {
-    color = "bg-amber-500/10 text-amber-400 border-amber-500/20";
-    icon = <TrendingUp className="w-3 h-3 mr-1 text-amber-400/70" />;
-  }
+  // Semaforo unico (brief §4.2) — niente soglie hardcoded.
+  const sem: Semaforo = semaforoMargine(percentage);
+  const COLOR: Record<Semaforo, string> = {
+    verde: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    giallo: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+    arancio: "bg-orange-500/10 text-orange-400 border-orange-500/20",
+    rosso: "bg-red-500/10 text-red-400 border-red-500/20",
+    grigio: "bg-muted/10 text-muted-foreground border-border",
+  };
+  const color = COLOR[sem];
+  const icon = (sem === "verde" || sem === "giallo")
+    ? <TrendingUp className="w-3 h-3 mr-1" />
+    : <TrendingDown className="w-3 h-3 mr-1" />;
 
   return (
     <Badge variant="outline" className={`${color} font-bold px-2 py-0.5 min-w-[60px] justify-center`}>

@@ -71,7 +71,7 @@ import { ContenutoDialog } from "@/components/contenuti/ContenutoDialog";
 import { AuditLogTable } from "@/components/audit/AuditLogTable";
 import { AITaskGeneratorDialog } from "@/components/ai/AITaskGeneratorDialog";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, semaforoMargine } from "@/lib/utils";
 
 export default function CommessaDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -573,9 +573,9 @@ export default function CommessaDetailPage() {
         <KPICard 
           title="Margine Lordo" 
           value={`€${commessa.margine_euro?.toLocaleString() || "0"}`} 
-          icon={commessa.margine_percentuale! > 30 ? <TrendingUp className="w-5 h-5 text-emerald-400" /> : <TrendingDown className="w-5 h-5 text-red-400" />}
+          icon={["verde", "giallo"].includes(commessa.semaforo ?? semaforoMargine(commessa.margine_percentuale)) ? <TrendingUp className="w-5 h-5 text-emerald-400" /> : <TrendingDown className="w-5 h-5 text-red-400" />}
           trend={`${commessa.margine_percentuale}% su fatturato`}
-          trendPositive={commessa.margine_percentuale! > 15}
+          trendPositive={["verde", "giallo"].includes(commessa.semaforo ?? semaforoMargine(commessa.margine_percentuale))}
           isPremium
         />
       </div>
