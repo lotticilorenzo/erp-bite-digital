@@ -67,13 +67,7 @@ import {
   resolveCommessaCliente,
 } from "@/lib/commessa-clienti";
 import type { Cliente, Commessa, FatturaAttiva, CommessaStatus } from "@/types";
-
-const formatEuro = (value = 0) =>
-  new Intl.NumberFormat("it-IT", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0,
-  }).format(value);
+import { formatEuro } from "@/lib/utils";
 
 function getCommessaProjectsLabel(commessa: Commessa) {
   const names = commessa.righe_progetto

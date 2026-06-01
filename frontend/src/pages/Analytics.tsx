@@ -55,7 +55,7 @@ import {
 import { it } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
+import { cn, formatEuro } from "@/lib/utils";
 import { ClientAvatar } from "@/components/common/ClientAvatar";
 import { ForecastWidget } from "@/components/analytics/ForecastWidget";
 import {
@@ -84,8 +84,6 @@ const getStatusBadge = (margin: number) => {
   return { label: "Perdita", color: "text-rose-500", bg: "bg-rose-500/10", border: "border-rose-500/20" };
 };
 
-const formatEuro = (val: number) => 
-  new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(val);
 
 type TrendPoint = {
   month: string;
