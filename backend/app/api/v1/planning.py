@@ -35,6 +35,7 @@ async def get_planning_tasks(
             "id": str(t.id),
             "titolo": t.titolo,
             "assegnatario_id": str(t.assegnatario_id) if t.assegnatario_id else None,
+            "data_inizio": t.data_inizio.isoformat() if t.data_inizio else None,
             "data_scadenza": t.data_scadenza.isoformat() if t.data_scadenza else None,
             "stima_minuti": t.stima_minuti,
             "progetto_id": str(t.progetto_id) if t.progetto_id else None,
