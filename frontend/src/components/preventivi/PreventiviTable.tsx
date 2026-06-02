@@ -45,7 +45,7 @@ export const PreventiviTable: React.FC<Props> = ({
   data, onEdit, onDelete, onConvert, onStatusChange 
 }) => {
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
+    <div className="rounded-xl border border-border bg-card overflow-x-auto shadow-sm">
       <Table>
         <TableHeader className="bg-muted/20">
           <TableRow>

@@ -171,7 +171,7 @@ export default function CRM() {
       )}
       
       {view === "list" && (
-        <div className="bg-card/40 rounded-3xl border border-white/5 overflow-hidden backdrop-blur-sm">
+        <div className="bg-card/40 rounded-3xl border border-white/5 overflow-x-auto backdrop-blur-sm">
           <table className="w-full text-left">
             <thead className="bg-white/5 text-[10px] font-black uppercase tracking-widest text-[#475569]">
               <tr>
