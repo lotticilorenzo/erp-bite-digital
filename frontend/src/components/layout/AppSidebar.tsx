@@ -17,6 +17,7 @@ import {
   Calculator,
   LineChart,
   Scale,
+  CalendarClock,
   ShoppingCart,
   Target,
   BookOpen,
@@ -78,6 +79,7 @@ const navItems = [
       { title: "Pricing Floor", url: "/pricing-floor", icon: Calculator },
       { title: "Proiezione Cassa", url: "/proiezione-cassa", icon: LineChart },
       { title: "P&L Gestionale", url: "/pl-gestionale", icon: Scale },
+      { title: "Scadenzario Fiscale", url: "/scadenzario-fiscale", icon: CalendarClock },
     ],
   },
   {

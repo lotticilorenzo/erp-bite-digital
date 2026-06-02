@@ -19,6 +19,7 @@ const PreventiviPage = React.lazy(() => import("./pages/PreventiviPage"));
 const PricingFloorPage = React.lazy(() => import("./pages/PricingFloor"));
 const ProiezioneCassaPage = React.lazy(() => import("./pages/ProiezioneCassa"));
 const PLGestionalePage = React.lazy(() => import("./pages/PLGestionale"));
+const ScadenzarioFiscalePage = React.lazy(() => import("./pages/ScadenzarioFiscale"));
 const TimesheetPage = React.lazy(() => import("./pages/Timesheet"));
 const FatturePage = React.lazy(() => import("./pages/Fatture"));
 const CassaPage = React.lazy(() => import("./pages/Cassa"));
@@ -156,6 +157,7 @@ function App() {
                   <Route path="/pricing-floor" element={renderFinanceOnly(<PricingFloorPage />)} />
                   <Route path="/proiezione-cassa" element={renderFinanceOnly(<ProiezioneCassaPage />)} />
                   <Route path="/pl-gestionale" element={renderFinanceOnly(<PLGestionalePage />)} />
+                  <Route path="/scadenzario-fiscale" element={renderFinanceOnly(<ScadenzarioFiscalePage />)} />
                   <Route path="/fornitori" element={renderFinanceOnly(<Fornitori />)} />
                   <Route path="/fornitori/:id" element={renderFinanceOnly(<Fornitori />)} />
                   <Route path="/budget" element={renderFinanceOnly(<BudgetPage />)} />
