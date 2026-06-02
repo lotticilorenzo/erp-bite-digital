@@ -188,6 +188,10 @@ const PlanningPage: React.FC = () => {
     }
   };
   
+  // Mappe lookup dichiarate PRIMA dei consumer in render (backlogTasks le usa) per evitare TDZ.
+  const risorsaMap = Object.fromEntries(risorse.map(r => [r.user_id, r]));
+  const progettiMap = Object.fromEntries((progetti as any[]).map((p: any) => [p.id, p]));
+
   // Backlog Filtering
   const backlogTasks = tasks.filter(t => {
     if (t.assegnatario_id) return false;
@@ -278,9 +282,6 @@ const PlanningPage: React.FC = () => {
       capacity: Math.max(0, Math.round(availableHours))
     };
   };
-
-  const risorsaMap = Object.fromEntries(risorse.map(r => [r.user_id, r]));
-  const progettiMap = Object.fromEntries((progetti as any[]).map((p: any) => [p.id, p]));
 
   // Project color helper
   const getProjectColor = (projectId?: string) => {
