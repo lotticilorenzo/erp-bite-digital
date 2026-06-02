@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { User } from "@/types";
+import { TASK_STATUSES, isTaskDone, TASK_DONE_STATUS } from "@/lib/taskStatus";
 
 import { 
   Select, 
@@ -223,7 +224,7 @@ export function StudioTaskModal() {
   };
 
   const handleToggleSubtask = async (sub: any) => {
-    const newStatus = (sub.stateId === "COMPLETATO" || sub.stateId === "done") ? "DA_FARE" : "COMPLETATO";
+    const newStatus = isTaskDone(sub.stateId) ? "DA_FARE" : TASK_DONE_STATUS;
     try {
       await updateTask.mutateAsync({ id: sub.id, data: { stato: newStatus } });
     } catch (err) {
@@ -350,13 +351,13 @@ export function StudioTaskModal() {
                           <button 
                             onClick={() => handleToggleSubtask(sub)}
                             className={`h-5 w-5 rounded-md border-2 border-border transition-colors flex items-center justify-center ${
-                              (sub.stateId === "COMPLETATO" || sub.stateId === "done") ? "bg-emerald-500 border-emerald-500" : "group-hover:border-primary/50"
+                              isTaskDone(sub.stateId) ? "bg-emerald-500 border-emerald-500" : "group-hover:border-primary/50"
                             }`}
                           >
-                            {(sub.stateId === "COMPLETATO" || sub.stateId === "done") && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
+                            {isTaskDone(sub.stateId) && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
                           </button>
                           <span className={`text-sm font-bold transition-colors flex-1 ${
-                            (sub.stateId === "COMPLETATO" || sub.stateId === "done") ? "text-muted-foreground line-through decoration-emerald-500/50" : "text-muted-foreground group-hover:text-white"
+                            isTaskDone(sub.stateId) ? "text-muted-foreground line-through decoration-emerald-500/50" : "text-muted-foreground group-hover:text-white"
                           }`}>
                             {sub.title}
                           </span>
@@ -452,10 +453,9 @@ export function StudioTaskModal() {
                      <SelectValue />
                    </SelectTrigger>
                    <SelectContent className="bg-card border-border text-white">
-                      <SelectItem value="DA_FARE">DA FARE</SelectItem>
-                      <SelectItem value="IN_CORSO">IN CORSO</SelectItem>
-                      <SelectItem value="REVISIONE">REVISIONE</SelectItem>
-                      <SelectItem value="COMPLETATO">COMPLETATO</SelectItem>
+                      {TASK_STATUSES.map(s => (
+                        <SelectItem key={s.value} value={s.value}>{s.label.toUpperCase()}</SelectItem>
+                      ))}
                    </SelectContent>
                  </Select>
               </div>

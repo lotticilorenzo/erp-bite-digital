@@ -24,6 +24,7 @@ import { useTasks, useTaskMutations } from "@/hooks/useTasks";
 import { useTimerSessions, useSaveTimerToTimesheet } from "@/hooks/useTimer";
 import { useUsers } from "@/hooks/useUsers";
 import { useAuth } from "@/hooks/useAuth";
+import { TASK_STATUSES, isTaskDone } from "@/lib/taskStatus";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { TaskCommentSection } from "@/components/studio/TaskCommentSection";
@@ -337,7 +338,7 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
                     Checklist
                   </div>
                   <span className="text-[10px] font-bold text-muted-foreground uppercase">
-                    {task.subtasks?.filter((s: any) => s.stateId === "COMPLETATO" || s.stateId === "done").length ?? 0}
+                    {task.subtasks?.filter((s: any) => isTaskDone(s.stateId)).length ?? 0}
                     {" / "}
                     {task.subtasks?.length ?? 0} Completati
                   </span>
@@ -350,16 +351,16 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
                       className="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/[0.03] border border-transparent hover:border-white/5 transition-all group"
                     >
                       <div className={`h-5 w-5 rounded-lg border-2 flex items-center justify-center transition-all ${
-                        sub.stateId === "COMPLETATO" || sub.stateId === "done"
+                        isTaskDone(sub.stateId)
                           ? "bg-emerald-500 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
                           : "border-border group-hover:border-primary/50"
                       }`}>
-                        {(sub.stateId === "COMPLETATO" || sub.stateId === "done") && (
+                        {(isTaskDone(sub.stateId)) && (
                           <CheckCircle2 className="h-3 w-3 text-white" />
                         )}
                       </div>
                       <span className={`text-sm font-bold flex-1 transition-all ${
-                        sub.stateId === "COMPLETATO" || sub.stateId === "done"
+                        isTaskDone(sub.stateId)
                           ? "text-muted-foreground line-through opacity-50"
                           : "text-white/80 group-hover:text-white"
                       }`}>
@@ -635,10 +636,9 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-900 border-white/10 text-white rounded-xl shadow-2xl p-1">
-                  <SelectItem value="DA_FARE">Da Fare</SelectItem>
-                  <SelectItem value="IN_CORSO">In Corso</SelectItem>
-                  <SelectItem value="REVISIONE">Revisione</SelectItem>
-                  <SelectItem value="COMPLETATO">Completato</SelectItem>
+                  {TASK_STATUSES.map(s => (
+                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

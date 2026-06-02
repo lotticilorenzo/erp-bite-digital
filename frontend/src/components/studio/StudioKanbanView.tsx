@@ -29,6 +29,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import type { TaskSO } from "@/types/studio";
 import { format, isBefore, isToday, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
+import { TASK_STATUSES, isTaskDone } from "@/lib/taskStatus";
 import { toast } from "sonner";
 
 // ─── Avatar helper ─────────────────────────────────────────────────────────────
@@ -52,12 +53,10 @@ function formatTime(ms: number): string {
 }
 
 // ─── Column definitions ────────────────────────────────────────────────────────
-const COLUMNS = [
-  { id: "DA_FARE",     label: "Da Fare",    color: "#64748b", accent: "border-slate-500/40",   bg: "bg-slate-500/5"   },
-  { id: "IN_CORSO",   label: "In Corso",   color: "#7c3aed", accent: "border-violet-500/40",  bg: "bg-violet-500/5"  },
-  { id: "REVISIONE",  label: "Revisione",  color: "#f59e0b", accent: "border-amber-500/40",   bg: "bg-amber-500/5"   },
-  { id: "COMPLETATO", label: "Completato", color: "#10b981", accent: "border-emerald-500/40", bg: "bg-emerald-500/5" },
-];
+// Derivate dalla fonte di verità: una colonna per ogni stato reale dell'enum TaskStatus.
+const COLUMNS = TASK_STATUSES.map(s => ({
+  id: s.value, label: s.label, color: s.color, accent: s.accent, bg: s.bg,
+}));
 
 // ─── Task Card ─────────────────────────────────────────────────────────────────
 interface KanbanCardProps {
@@ -92,7 +91,7 @@ function KanbanCard({ task, isDragging }: KanbanCardProps) {
     openTab({ type: "TASK", title: task.title, linkedId: task.id });
   };
 
-  const completedSubs = task.subtasks?.filter(s => s.stateId === "COMPLETATO").length ?? 0;
+  const completedSubs = task.subtasks?.filter(s => isTaskDone(s.stateId)).length ?? 0;
   const totalSubs = task.subtasks?.length ?? 0;
 
   return (
