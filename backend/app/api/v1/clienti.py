@@ -86,9 +86,12 @@ async def patch_cliente(
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
 ):
     c = await update_cliente(db, cliente_id, data, current_user.id)
-    await audit.emit_update(db, tabella="clienti", record_id=cliente_id, user_id=current_user.id, dopo=data.model_dump(exclude_none=True))
     if not c:
         raise HTTPException(status_code=404, detail="Cliente non trovato")
+    # update_cliente già scrive l'audit (write_audit con snapshot 'prima'); niente doppio audit qui.
+    # updated_at ha onupdate=func.now() (DB-side): dopo il flush è espirata → ricarico in ctx async
+    # per evitare il lazy-load sync (MissingGreenlet) durante la serializzazione di ClienteOut.
+    await db.refresh(c)
     return c
 
 
