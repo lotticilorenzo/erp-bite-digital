@@ -1510,6 +1510,102 @@ async def calcola_proiezione_cassa(
     }
 
 
+# ── P&L GESTIONALE MENSILE (brief §5.2, Fase 3 core — fiscale escluso) ────
+# Categorie di costi_fissi che rappresentano STIPENDI/personale GIA' incluso nel costo orario
+# fully-loaded (risorse.costo_orario_calcolato): vanno ESCLUSE dai costi fissi indivisibili per
+# evitare il doppio conteggio. Tutto il resto = overhead indivisibile NON attribuito ai clienti.
+# Nota: il +30% overhead del costo orario FL e' una scelta di Fase 1 e resta DENTRO i costi diretti;
+# i costi fissi indivisibili sono i costi di struttura, sottratti UNA sola volta.
+_PL_CATEGORIE_PERSONALE = {"STIPENDI", "PERSONALE", "SALARI", "RAL", "PAYROLL_DIPENDENTI"}
+
+
+async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
+    """Conto economico gestionale del mese (brief §5.2). Consuma calcola_margine_commessa (no ricalcolo).
+
+    TODO(Fase 3): scadenzario fiscale IRPEF/IRES (bloccato sul commercialista),
+    split retainer vs one-shot (dato non strutturato a livello commessa),
+    memo copertura ricavo Italfer vs costo risorsa "Paolo G.".
+    """
+    from app.models.models import CostoFisso, FatturaAttiva, FatturaPassiva
+    from dateutil.relativedelta import relativedelta
+
+    mese_norm = mese.replace(day=1)
+    warning: list[str] = []
+
+    # 1) Ricavi + costi diretti + margine lordo dalle commesse del mese (FONTE UNICA)
+    commesse = await list_commesse(db, mese_norm)
+    coeff_cache: dict = {}
+    quota_cache: dict = {}
+    ricavi_totale = Decimal("0")
+    ricavi_italfer = Decimal("0")
+    costi_diretti = Decimal("0")
+    margine_lordo = Decimal("0")
+    for c in commesse:
+        m = await calcola_margine_commessa(db, c, coeff_cache=coeff_cache, quota_cache=quota_cache)
+        ricavi_totale += m["ricavo"]
+        costi_diretti += m["costo_manodopera"] + m["costi_diretti_totali"] + m["quota_luca"]
+        margine_lordo += m["margine_lordo_euro"]
+        nome_cli = (c.cliente.ragione_sociale if c.cliente else "") or ""
+        if "italfer" in nome_cli.lower():
+            ricavi_italfer += m["ricavo"]
+    ricavi_retainer_oneshot = ricavi_totale - ricavi_italfer
+    if ricavi_italfer == 0:
+        warning.append("Cliente 'Italfer' non presente: riga ricavo Italfer = 0.")
+    warning.append("Split retainer/one-shot non strutturato a livello commessa: TODO.")
+
+    # 2) Costi fissi indivisibili = solo gruppo (b), normalizzati EUR/mese, attivi nel mese
+    fine_mese = (mese_norm + relativedelta(months=1)) - timedelta(days=1)
+    res_cf = await db.execute(select(CostoFisso).where(CostoFisso.attivo == True))
+    incluse, escluse = [], []
+    costi_fissi_indivisibili = Decimal("0")
+    for cf in res_cf.scalars().all():
+        # filtro temporale: attivo nel mese
+        if cf.data_inizio and cf.data_inizio > fine_mese:
+            continue
+        if cf.data_fine and cf.data_fine < mese_norm:
+            continue
+        cat = (cf.categoria or "").upper()
+        div = _PERIODO_DIVISORE.get((cf.periodicita or "mensile").lower(), Decimal("1"))
+        mensile = ((cf.importo or Decimal("0")) / div).quantize(Decimal("0.01"))
+        voce = {"descrizione": cf.descrizione, "categoria": cf.categoria,
+                "periodicita": cf.periodicita, "importo_mensile": float(mensile)}
+        if cat in _PL_CATEGORIE_PERSONALE:
+            voce["motivo_esclusione"] = "personale gia' nel costo orario fully-loaded (no doppio conteggio)"
+            escluse.append(voce)
+        else:
+            incluse.append(voce)
+            costi_fissi_indivisibili += mensile
+
+    risultato_operativo = margine_lordo - costi_fissi_indivisibili
+
+    # 3) IVA di competenza (MEMO, fuori dal risultato) — per mese di emissione
+    iva_a = await db.execute(text(
+        "SELECT COALESCE(SUM(importo_iva),0) FROM fatture_attive WHERE date_trunc('month', data_emissione)::date = :m"
+    ), {"m": mese_norm})
+    iva_p = await db.execute(text(
+        "SELECT COALESCE(SUM(importo_iva),0) FROM fatture_passive WHERE date_trunc('month', data_emissione)::date = :m"
+    ), {"m": mese_norm})
+    iva_attiva = Decimal(str(iva_a.scalar() or 0))
+    iva_passiva = Decimal(str(iva_p.scalar() or 0))
+
+    F = lambda x: float(Decimal(x).quantize(Decimal("0.01")))
+    return {
+        "mese": str(mese_norm),
+        "ricavi": {
+            "retainer_oneshot": F(ricavi_retainer_oneshot),
+            "italfer": F(ricavi_italfer),
+            "totale": F(ricavi_totale),
+        },
+        "costi_diretti": F(costi_diretti),
+        "margine_lordo_aggregato": F(margine_lordo),
+        "costi_fissi_indivisibili": F(costi_fissi_indivisibili),
+        "costi_fissi_dettaglio": {"incluse": incluse, "escluse": escluse},
+        "risultato_operativo_gestionale": F(risultato_operativo),
+        "iva_memo": {"attiva": F(iva_attiva), "passiva": F(iva_passiva), "saldo": F(iva_attiva - iva_passiva)},
+        "warning": warning,
+    }
+
+
 # ── TASK SERVICE ──────────────────────────────────────────
 async def list_tasks(
     db: AsyncSession,

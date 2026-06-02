@@ -62,7 +62,7 @@ from app.services.services import (
     list_tasks, get_task, create_task, update_task, delete_task,
     list_timesheet, create_timesheet, approva_timesheet,
     get_dashboard_kpi, get_marginalita_clienti, calcola_dso,
-    calcola_proiezione_cassa, get_ultimo_saldo, create_saldo,
+    calcola_proiezione_cassa, get_ultimo_saldo, create_saldo, calcola_pl_gestionale,
     sync_fic_data, get_last_fic_sync_status, list_fatture_attive, incassa_fattura,
     list_fornitori_full, update_fornitore, list_fatture_passive, update_fattura_passiva, list_fornitori,
     list_movimenti_cassa, list_costi_fissi, create_costo_fisso, update_costo_fisso, delete_costo_fisso,
@@ -313,6 +313,17 @@ async def report_dso(
     """DSO engine (Fase 2): storico incassi per cliente, scenari incasso sulle fatture aperte,
     rischio concentrazione ricavo. Solo lettura."""
     return await calcola_dso(db, mesi)
+
+
+@router.get("/report/pl-gestionale", tags=["Report"])
+async def report_pl_gestionale(
+    mese: Optional[date] = Query(None, description="Mese di competenza YYYY-MM-01 (default: mese corrente)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """P&L gestionale mensile (Fase 3 core, fiscale escluso): ricavi, costi diretti, margine lordo
+    aggregato, costi fissi indivisibili, risultato operativo + IVA memo. Solo lettura."""
+    return await calcola_pl_gestionale(db, mese or date.today())
 
 
 # ── SALDO CASSA + PROIEZIONE CASSA (Fase 2, Layer 3) ──────
