@@ -27,6 +27,7 @@ from app.core.security import (
     require_roles,
     require_admin,
     require_erp_access,
+    has_erp_access,
 )
 from app.models.models import (
     User, UserRole, ProjectStatus, ProjectType, 
@@ -1213,6 +1214,10 @@ async def get_task_time_estimate(
     current_user: User = Depends(get_current_user)
 ):
     """Stima il tempo richiesto per un task basandosi sullo storico dell'utente."""
+    # A-03 (IDOR): lo storico/produttivita di un altro utente e' visibile solo a chi ha accesso
+    # pieno (manager/admin, has_erp_access); altrimenti si puo' interrogare solo il proprio.
+    if user_id != current_user.id and not has_erp_access(current_user.ruolo):
+        raise HTTPException(status_code=403, detail="Non autorizzato")
     from sqlalchemy import select, and_, func
     from app.models.models import TimerSession, Task
     from datetime import datetime, timedelta, timezone
