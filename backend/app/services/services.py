@@ -1301,6 +1301,215 @@ async def calcola_dso(db: AsyncSession, window_mesi: int = 12) -> dict:
     }
 
 
+# ── SALDO CASSA + PROIEZIONE CASSA ROLLING 90gg (Fase 2, Layer 3, §4.1) ────
+async def get_ultimo_saldo(db: AsyncSession):
+    from app.models.models import SaldoCassa
+    res = await db.execute(
+        select(SaldoCassa).order_by(SaldoCassa.data.desc(), SaldoCassa.created_at.desc()).limit(1)
+    )
+    return res.scalar_one_or_none()
+
+
+async def create_saldo(db: AsyncSession, data, saldo, nota=None):
+    from app.models.models import SaldoCassa
+    obj = SaldoCassa(data=data or date.today(), saldo=Decimal(str(saldo)), nota=nota)
+    db.add(obj)
+    await db.commit()
+    await db.refresh(obj)
+    return obj
+
+
+_PERIODO_MESI = {"mensile": 1, "semestrale": 6, "annuale": 12}
+_PERIODO_DIVISORE = {"mensile": Decimal("1"), "semestrale": Decimal("6"), "annuale": Decimal("12")}
+
+
+async def _espandi_costi_fissi(db: AsyncSession, start: date, end: date, uscite_var: Decimal):
+    """Espande i costi fissi attivi in occorrenze (data, importo) nella finestra [start, end].
+
+    Ancora di ricorrenza = giorno di data_inizio; relativedelta gestisce il clamp fine-mese.
+    Rispetta data_inizio/data_fine. `uscite_var` (>0) = uscita mensile ancorata al giorno di start.
+    """
+    from dateutil.relativedelta import relativedelta
+    from app.models.models import CostoFisso
+
+    res = await db.execute(select(CostoFisso).where(CostoFisso.attivo == True))
+    costi = res.scalars().all()
+
+    occorrenze: list[tuple] = []
+    for c in costi:
+        step = _PERIODO_MESI.get((c.periodicita or "mensile").lower(), 1)
+        anchor = c.data_inizio or start
+        importo = c.importo or Decimal("0")
+        # porta la prima occorrenza a <= start, poi avanza fino a end
+        k = 0
+        occ = anchor
+        # fast-forward se l'ancora e' molto prima di start
+        while occ < start:
+            k += 1
+            occ = anchor + relativedelta(months=step * k)
+        while occ <= end:
+            if occ >= start and occ >= anchor and (c.data_fine is None or occ <= c.data_fine):
+                occorrenze.append((occ, importo, c.descrizione))
+            k += 1
+            occ = anchor + relativedelta(months=step * k)
+
+    # Uscite variabili mensili: ancorate al giorno di start
+    if uscite_var and uscite_var > 0:
+        k = 0
+        occ = start
+        while occ <= end:
+            occorrenze.append((occ, uscite_var, "Uscite variabili (stima)"))
+            k += 1
+            occ = start + relativedelta(months=k)
+
+    return occorrenze
+
+
+def _soglia_operativa(costi) -> Decimal:
+    """Σ costi fissi attivi normalizzati a €/mese (mensile=1, semestrale/6, annuale/12)."""
+    tot = Decimal("0")
+    for c in costi:
+        div = _PERIODO_DIVISORE.get((c.periodicita or "mensile").lower(), Decimal("1"))
+        tot += (c.importo or Decimal("0")) / div
+    return tot.quantize(Decimal("0.01"))
+
+
+def _zona_cassa(saldo: Decimal, soglia: Decimal) -> str:
+    if saldo < soglia:
+        return "rossa"
+    if saldo <= soglia * Decimal("1.5"):
+        return "gialla"
+    return "verde"
+
+
+async def calcola_proiezione_cassa(
+    db: AsyncSession,
+    giorni: int = 90,
+    uscite_variabili_mensili: Decimal = Decimal("0"),
+) -> dict:
+    """Proiezione cassa rolling su `giorni`, 3 scenari (base/ottimista/pessimista).
+
+    Entrate = fatture aperte collocate alla data attesa dal DSO (consumato, non ricalcolato).
+    Uscite = costi fissi espansi + uscite variabili stimate. Le uscite sono identiche nei 3
+    scenari: cambia solo la DATA delle entrate.
+    TODO(Fase 3): scadenze fiscali, modulo costi variabili strutturato, saldo da estratto conto/riconciliazione.
+    """
+    from app.models.models import CostoFisso
+
+    warning: list[str] = []
+    giorni = max(int(giorni), 1)
+    uscite_var = Decimal(str(uscite_variabili_mensili or 0))
+
+    saldo_rec = await get_ultimo_saldo(db)
+    if saldo_rec is None:
+        start = date.today()
+        saldo_iniziale = Decimal("0")
+        warning.append("Saldo non impostato: proiezione a partire da 0. Imposta un saldo con POST /saldo-cassa.")
+    else:
+        start = saldo_rec.data
+        saldo_iniziale = saldo_rec.saldo or Decimal("0")
+    end = start + timedelta(days=giorni - 1)
+
+    # Entrate dal DSO (consumato)
+    dso = await calcola_dso(db)
+    scenari = ("base", "ottimista", "pessimista")
+    entrate = {s: [Decimal("0")] * giorni for s in scenari}
+    for f in dso["fatture_aperte"]:
+        residuo = Decimal(str(f.get("importo_residuo") or 0))
+        if residuo <= 0:
+            continue
+        for s, key in (("base", "data_attesa_base"), ("ottimista", "data_attesa_ottimista"), ("pessimista", "data_attesa_pessimista")):
+            ds = f.get(key)
+            if not ds:
+                continue
+            d = date.fromisoformat(ds)
+            idx = (d - start).days
+            if idx < 0:
+                idx = 0  # overdue: collocata al giorno 0
+            if idx <= giorni - 1:
+                entrate[s][idx] += residuo
+
+    # Uscite (identiche nei 3 scenari)
+    uscite = [Decimal("0")] * giorni
+    for (d, imp, _desc) in await _espandi_costi_fissi(db, start, end, uscite_var):
+        idx = (d - start).days
+        if 0 <= idx <= giorni - 1:
+            uscite[idx] += imp
+
+    # Soglia operativa (solo costi fissi normalizzati)
+    costi_attivi = (await db.execute(select(CostoFisso).where(CostoFisso.attivo == True))).scalars().all()
+    soglia = _soglia_operativa(costi_attivi)
+
+    # Saldo progressivo per scenario
+    saldo = {s: [] for s in scenari}
+    for s in scenari:
+        acc = saldo_iniziale
+        for g in range(giorni):
+            acc += entrate[s][g] - uscite[g]
+            saldo[s].append(acc)
+
+    Q = lambda x: float(Decimal(x).quantize(Decimal("0.01")))
+
+    # Vista A — giornaliera
+    vista_giornaliera = []
+    prima_giornata_critica = None
+    for g in range(giorni):
+        sb = saldo["base"][g]
+        if prima_giornata_critica is None and sb < soglia:
+            prima_giornata_critica = str(start + timedelta(days=g))
+        vista_giornaliera.append({
+            "data": str(start + timedelta(days=g)),
+            "saldo_base": Q(sb),
+            "saldo_ottimista": Q(saldo["ottimista"][g]),
+            "saldo_pessimista": Q(saldo["pessimista"][g]),
+            "zona": _zona_cassa(sb, soglia),
+        })
+
+    # Vista B — settimanale (blocchi di 7gg, scenario base)
+    vista_settimanale = []
+    n_sett = (giorni + 6) // 7
+    for w in range(n_sett):
+        a, b = w * 7, min(w * 7 + 6, giorni - 1)
+        ent = sum(entrate["base"][a:b + 1], Decimal("0"))
+        usc = sum(uscite[a:b + 1], Decimal("0"))
+        vista_settimanale.append({
+            "settimana": w + 1,
+            "settimana_inizio": str(start + timedelta(days=a)),
+            "entrate": Q(ent),
+            "uscite": Q(usc),
+            "saldo_netto": Q(ent - usc),
+            "saldo_cumulato": Q(saldo["base"][b]),
+        })
+
+    # Vista C — mensile (blocchi di 30gg, scenario base)
+    vista_mensile = []
+    n_mesi = (giorni + 29) // 30
+    for m in range(n_mesi):
+        a, b = m * 30, min(m * 30 + 29, giorni - 1)
+        ini = saldo["base"][a - 1] if a > 0 else saldo_iniziale
+        ent = sum(entrate["base"][a:b + 1], Decimal("0"))
+        usc = sum(uscite[a:b + 1], Decimal("0"))
+        vista_mensile.append({
+            "mese": m + 1,
+            "saldo_iniziale": Q(ini),
+            "entrate": Q(ent),
+            "uscite": Q(usc),
+            "saldo_finale": Q(saldo["base"][b]),
+        })
+
+    return {
+        "giorni": giorni,
+        "data_inizio": str(start),
+        "saldo_iniziale": Q(saldo_iniziale),
+        "soglia_operativa": Q(soglia),
+        "prima_giornata_critica": prima_giornata_critica,
+        "vista_giornaliera": vista_giornaliera,
+        "vista_settimanale": vista_settimanale,
+        "vista_mensile": vista_mensile,
+        "warning": warning,
+    }
+
+
 # ── TASK SERVICE ──────────────────────────────────────────
 async def list_tasks(
     db: AsyncSession,

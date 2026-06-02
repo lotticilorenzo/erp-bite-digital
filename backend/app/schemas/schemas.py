@@ -1731,6 +1731,13 @@ class PricingFloorRequest(BaseModel):
     margine_target: Decimal = Field(Decimal("0.30"))  # validato nell'endpoint: 0 <= target < 1
 
 
+# ── SALDO CASSA (Fase 2, Layer 3) ─────────────────────────
+class SaldoCassaCreate(BaseModel):
+    data: Optional[date] = None  # default = oggi nell'endpoint
+    saldo: Decimal
+    nota: Optional[str] = Field(None, max_length=500)
+
+
 # ── PROGETTO TEMPLATE ─────────────────────────────────────
 class ProgettoTemplateTaskOut(BaseModel):
     id: uuid.UUID

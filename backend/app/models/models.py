@@ -774,6 +774,17 @@ class CostoFisso(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+# ── SALDO CASSA (manuale, per proiezione cassa — Fase 2 Layer 3) ──
+class SaldoCassa(Base):
+    __tablename__ = "saldi_cassa"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    data: Mapped[date] = mapped_column(Date, nullable=False)
+    saldo: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    nota: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 # ── REGOLE RICONCILIAZIONE ────────────────────────────────
 class RegolaRiconciliazione(Base):
     __tablename__ = "regole_riconciliazione"
