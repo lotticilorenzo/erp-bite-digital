@@ -12,7 +12,8 @@ import {
   Briefcase,
   ExternalLink,
   Edit,
-  Trash2
+  Trash2,
+  UserCheck
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
@@ -23,6 +24,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { 
   Dialog, 
   DialogContent, 
@@ -79,12 +82,15 @@ const CollaboratoriPage: React.FC = () => {
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [isCollaboratorFormOpen, setIsCollaboratorFormOpen] = useState(false);
   const [selectedRisorsa, setSelectedRisorsa] = useState<Risorsa | null>(null);
+  const [mostraInattive, setMostraInattive] = useState(false);
 
   // Queries
   const { data: risorse = [], isLoading } = useQuery<Risorsa[]>({
-    queryKey: ['risorse-full'],
+    queryKey: ['risorse-full', mostraInattive],
     queryFn: async () => {
-      const res = await api.get('/risorse');
+      const res = await api.get('/risorse', {
+        params: mostraInattive ? { includi_inattivi: true } : undefined,
+      });
       return res.data;
     }
   });
@@ -116,7 +122,21 @@ const CollaboratoriPage: React.FC = () => {
     }
   });
 
-  const filteredRisorse = risorse.filter(r => 
+  // Mutation to reactivate (PATCH attivo=true)
+  const reactivateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return api.patch(`/risorse/${id}`, { attivo: true });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['risorse-full'] });
+      toast.success("Collaboratore riattivato");
+    },
+    onError: () => {
+      toast.error("Errore durante la riattivazione");
+    }
+  });
+
+  const filteredRisorse = risorse.filter(r =>
     `${r.nome} ${r.cognome}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.ruolo?.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -154,7 +174,13 @@ const CollaboratoriPage: React.FC = () => {
                 className="pl-10 w-[200px] md:w-[300px] bg-card/50 border-border focus-visible:ring-primary/30 h-10 rounded-xl"
               />
             </div>
-            <Button 
+            <div className="flex items-center gap-2 px-2">
+              <Switch id="toggle-inattive" checked={mostraInattive} onCheckedChange={setMostraInattive} />
+              <Label htmlFor="toggle-inattive" className="text-[10px] font-black uppercase tracking-widest text-slate-500 cursor-pointer whitespace-nowrap">
+                Mostra inattive
+              </Label>
+            </div>
+            <Button
               className="bg-primary hover:bg-primary/90 text-[10px] font-black uppercase italic tracking-widest text-primary-foreground shadow-xl shadow-[0_0_20px_hsl(var(--primary)/0.2)] h-10 px-6 rounded-xl transition-all active:scale-[0.98]"
               onClick={() => {
                 setSelectedRisorsa(null);
@@ -215,6 +241,7 @@ const CollaboratoriPage: React.FC = () => {
                   deactivateMutation.mutate(id);
                 }
               }}
+              onReactivate={(id) => reactivateMutation.mutate(id)}
             />
           ))}
         </div>
@@ -318,7 +345,8 @@ const CollaboratorCard: React.FC<{
   onEdit: (r: Risorsa) => void;
   onAddService: (r: Risorsa) => void;
   onDeactivate: (id: string) => void;
-}> = ({ risorsa, onEdit, onAddService, onDeactivate }) => {
+  onReactivate: (id: string) => void;
+}> = ({ risorsa, onEdit, onAddService, onDeactivate, onReactivate }) => {
   const navigate = useNavigate();
   return (
     <Card id={`collab-card-${risorsa.id}`} className={`group bg-card/50 border-border hover:border-primary/50 transition-all duration-500 backdrop-blur-xl shadow-lg hover:shadow-primary/5 overflow-hidden ${!risorsa.attivo ? 'opacity-50 grayscale' : ''}`}>
@@ -341,9 +369,16 @@ const CollaboratorCard: React.FC<{
               <CardTitle className="text-white font-black text-xl group-hover:text-primary transition-colors">
                 {risorsa.nome} {risorsa.cognome}
               </CardTitle>
-              <Badge className="bg-white/5 border-white/10 text-[#64748b] font-black uppercase text-[9px] h-5 mt-1">
-                {risorsa.ruolo || 'Team Member'}
-              </Badge>
+              <div className="flex items-center gap-1.5 mt-1">
+                <Badge className="bg-white/5 border-white/10 text-[#64748b] font-black uppercase text-[9px] h-5">
+                  {risorsa.ruolo || 'Team Member'}
+                </Badge>
+                {!risorsa.attivo && (
+                  <Badge className="bg-rose-500/10 border-rose-500/20 text-rose-400 font-black uppercase text-[9px] h-5">
+                    Inattiva
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
           <DropdownMenu>
@@ -356,9 +391,15 @@ const CollaboratorCard: React.FC<{
               <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => onEdit(risorsa)}>
                 <Edit className="h-3.5 w-3.5" /> Modifica
               </DropdownMenuItem>
-              <DropdownMenuItem className="gap-2 text-destructive cursor-pointer" onClick={() => onDeactivate(risorsa.id)}>
-                <Trash2 className="h-3.5 w-3.5" /> Disattiva
-              </DropdownMenuItem>
+              {risorsa.attivo ? (
+                <DropdownMenuItem className="gap-2 text-destructive cursor-pointer" onClick={() => onDeactivate(risorsa.id)}>
+                  <Trash2 className="h-3.5 w-3.5" /> Disattiva
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem className="gap-2 text-emerald-400 cursor-pointer" onClick={() => onReactivate(risorsa.id)}>
+                  <UserCheck className="h-3.5 w-3.5" /> Riattiva
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

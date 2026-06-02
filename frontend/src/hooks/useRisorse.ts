@@ -21,11 +21,13 @@ export interface Risorsa {
   note?: string;
 }
 
-export function useRisorse() {
+export function useRisorse(includiInattivi = false) {
   return useQuery<Risorsa[]>({
-    queryKey: ["risorse"],
+    queryKey: ["risorse", includiInattivi],
     queryFn: async () => {
-      const { data } = await api.get("/risorse");
+      const { data } = await api.get("/risorse", {
+        params: includiInattivi ? { includi_inattivi: true } : undefined,
+      });
       return data;
     },
   });
