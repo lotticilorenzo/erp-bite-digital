@@ -867,7 +867,7 @@ async def get_consuntivo_piano(
     return {"righe": [dict(r) for r in righe.mappings().fetchall()], "totali": dict(totali.mappings().fetchone() or {})}
 
 @router.delete("/piani/{piano_id}", status_code=204, tags=["Pianificazione"])
-async def delete_piano(piano_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
+async def delete_piano(piano_id: uuid.UUID, db: AsyncSession = Depends(get_db), _auth: User = Depends(require_finance_access)):
     from sqlalchemy import text
     await db.execute(text("DELETE FROM piano_commessa WHERE id=:pid"), {"pid": str(piano_id)})
     await db.commit()
