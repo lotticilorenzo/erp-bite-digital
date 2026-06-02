@@ -1754,26 +1754,31 @@ async def list_tasks(
     limit: int = 200,
     skip: int = 0,
 ) -> List[Task]:
-    # Restricted roles can see their tasks. Admin sees everything.
-    p_ids, t_ids, _ = await get_user_access_scope(db, current_user)
-    
+    # Eager-load di tutte le relazioni esposte da TaskOut (attachments + timer_sessions root incluse):
+    # con la lista non più vuota (vedi fix scope sotto) la serializzazione sync ne farebbe lazy-load
+    # fuori dal greenlet -> MissingGreenlet/ResponseValidationError. Allineato a _get_task_record.
     q = select(Task).options(
-        selectinload(Task.subtasks).selectinload(Task.timer_sessions),
         selectinload(Task.assegnatario),
-        selectinload(Task.revisore)
+        selectinload(Task.revisore),
+        selectinload(Task.attachments),
+        selectinload(Task.timer_sessions),
+        selectinload(Task.subtasks).selectinload(Task.assegnatario),
+        selectinload(Task.subtasks).selectinload(Task.revisore),
+        selectinload(Task.subtasks).selectinload(Task.attachments),
+        selectinload(Task.subtasks).selectinload(Task.timer_sessions),
+        selectinload(Task.subtasks).selectinload(Task.subtasks),
     )
-    
-    # Apply Security Filters
-    if p_ids is not None:
-        # If user has a limited project scope, they can see tasks in those projects 
-        # OR tasks explicitly assigned to them (t_ids)
+
+    # Contratto get_user_access_scope: i ruoli ERP (ADMIN/DEVELOPER) hanno accesso ILLIMITATO
+    # (la funzione ritorna set vuoti per loro) -> NESSUN filtro di scope. Calcolo lo scope solo
+    # per i ruoli studio-only, che vedono i propri progetti (team) e i task assegnati/in revisione;
+    # con set vuoti (nessuna assegnazione) il filtro restituisce 0 task -> corretto.
+    if not has_erp_access(current_user.ruolo):
+        p_ids, t_ids, _ = await get_user_access_scope(db, current_user)
         if t_ids:
             q = q.where(or_(Task.progetto_id.in_(p_ids), Task.id.in_(t_ids)))
         else:
             q = q.where(Task.progetto_id.in_(p_ids))
-    elif t_ids is not None:
-        # If no project scope but has task scope
-        q = q.where(Task.id.in_(t_ids))
     if progetto_id:
         q = q.where(Task.progetto_id == progetto_id)
     if commessa_id:
