@@ -643,6 +643,9 @@ async def update_studio_node(
         setattr(node, field, value)
 
     await db.flush()
+    # updated_at ha onupdate=func.now(): dopo il flush e' espirata. Ricarico SUBITO, perche'
+    # _node_to_dict(node) la legge gia' nell'audit (dopo=...) -> altrimenti MissingGreenlet.
+    await db.refresh(node)
     await audit.emit_update(
         db,
         tabella="studio_nodes",
@@ -652,7 +655,6 @@ async def update_studio_node(
         dopo=_node_to_dict(node)
     )
     await db.commit()
-    await db.refresh(node)
     return _node_to_dict(node)
 
 @router.delete("/nodes/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
