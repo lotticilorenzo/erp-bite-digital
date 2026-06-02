@@ -73,10 +73,22 @@ type DragState = {
 const getFallbackStyle = () => ({ bar: "bg-slate-500", text: "text-slate-400", label: "Sconosciuto" });
 const getStyle = (state: string) => STATUS_STYLES[state] || getFallbackStyle();
 
+// Difensivo contro date corrotte nel seed (es. "0464-06-06"): isValid accetterebbe l'anno 464
+// ed eachDayOfInterval/differenceInDays espanderebbero il range a intervalli enormi (crash).
+// Date fuori da [2000, 2100] sono trattate come MANCANTI (null) -> barra omessa, range non espanso.
+const GANTT_MIN_YEAR = 2000;
+const GANTT_MAX_YEAR = 2100;
+function safeParseISO(value?: string | null): Date | null {
+  if (!value) return null;
+  const d = parseISO(value);
+  if (!isValid(d)) return null;
+  const y = d.getFullYear();
+  return y >= GANTT_MIN_YEAR && y <= GANTT_MAX_YEAR ? d : null;
+}
+
 function isOverdue(task: TaskSO) {
-  if (!task.due_date) return false;
-  const dueDate = parseISO(task.due_date);
-  if (!isValid(dueDate)) return false;
+  const dueDate = safeParseISO(task.due_date);
+  if (!dueDate) return false;
   return isPast(dueDate) && !isToday(dueDate) && task.state_id !== "COMPLETATO" && task.state_id !== "done";
 }
 
@@ -128,14 +140,10 @@ export function GanttChart({
           : endOfMonth(baseDate);
 
     tasks.forEach((task) => {
-      if (task.data_inizio) {
-        const parsed = parseISO(task.data_inizio);
-        if (isValid(parsed) && parsed < start) start = parsed;
-      }
-      if (task.due_date) {
-        const parsed = parseISO(task.due_date);
-        if (isValid(parsed) && parsed > end) end = parsed;
-      }
+      const di = safeParseISO(task.data_inizio);
+      if (di && di < start) start = di;
+      const dd = safeParseISO(task.due_date);
+      if (dd && dd > end) end = dd;
     });
 
     return {
@@ -245,9 +253,9 @@ export function GanttChart({
   }, [assenze]);
 
   function getGeometry(task: TaskSO) {
-    const start = task.data_inizio ? parseISO(task.data_inizio) : null;
-    const end = task.due_date ? parseISO(task.due_date) : null;
-    if (!start || !end || !isValid(start) || !isValid(end)) return null;
+    const start = safeParseISO(task.data_inizio);
+    const end = safeParseISO(task.due_date);
+    if (!start || !end) return null;
 
     let x = differenceInDays(start, startDate) * dayWidth;
     const width = Math.max((differenceInDays(end, start) + 1) * dayWidth, dayWidth);
@@ -260,11 +268,11 @@ export function GanttChart({
   }
 
   function handleBarMouseDown(event: React.MouseEvent, task: TaskSO) {
-    if (!onTaskDateChange || !task.data_inizio || !task.due_date) return;
+    if (!onTaskDateChange) return;
 
-    const start = parseISO(task.data_inizio);
-    const end = parseISO(task.due_date);
-    if (!isValid(start) || !isValid(end)) return;
+    const start = safeParseISO(task.data_inizio);
+    const end = safeParseISO(task.due_date);
+    if (!start || !end) return;
 
     event.preventDefault();
     event.stopPropagation();
@@ -414,9 +422,9 @@ export function GanttChart({
                       className="relative flex items-center border-b border-border/10"
                     >
                       {absences.map((assenza) => {
-                        const start = parseISO(assenza.data_inizio);
-                        const end = parseISO(assenza.data_fine);
-                        if (!isValid(start) || !isValid(end)) return null;
+                        const start = safeParseISO(assenza.data_inizio);
+                        const end = safeParseISO(assenza.data_fine);
+                        if (!start || !end) return null;
 
                         const x = differenceInDays(start, startDate) * dayWidth;
                         const width = Math.max((differenceInDays(end, start) + 1) * dayWidth, dayWidth);
