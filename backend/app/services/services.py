@@ -1390,9 +1390,11 @@ async def calcola_proiezione_cassa(
     """Proiezione cassa rolling su `giorni`, 3 scenari (base/ottimista/pessimista).
 
     Entrate = fatture aperte collocate alla data attesa dal DSO (consumato, non ricalcolato).
-    Uscite = costi fissi espansi + uscite variabili stimate. Le uscite sono identiche nei 3
-    scenari: cambia solo la DATA delle entrate.
-    TODO(Fase 3): scadenze fiscali, modulo costi variabili strutturato, saldo da estratto conto/riconciliazione.
+    Uscite = costi fissi espansi + uscite variabili stimate + scadenze fiscali QUANTIFICATE
+    (IVA dallo scadenzario; le voci con importo null NON entrano nel saldo). Le uscite sono
+    identiche nei 3 scenari: cambia solo la DATA delle entrate.
+    TODO(Fase 3): modulo costi variabili strutturato, saldo da estratto conto/riconciliazione;
+    importi F24/ritenute/IRPEF (oggi non quantificati) quando disponibili da cedolino/commercialista.
     """
     from app.models.models import CostoFisso
 
@@ -1435,6 +1437,29 @@ async def calcola_proiezione_cassa(
         idx = (d - start).days
         if 0 <= idx <= giorni - 1:
             uscite[idx] += imp
+
+    # Uscite fiscali QUANTIFICATE (consuma lo scadenzario, non ricalcola l'IVA).
+    # Solo importo_stimato non null e > 0 (IVA con saldo>0) entra nel saldo, alla data fissa
+    # (indipendente dallo scenario). Le voci con importo null restano fuori, esposte a parte.
+    scad = await calcola_scadenzario_fiscale(db, start, end)
+    scadenze_fiscali_incluse: list[dict] = []
+    scadenze_fiscali_non_quantificate: list[dict] = []
+    for s in scad.get("scadenze", []):
+        imp = s.get("importo_stimato")
+        if imp is None:
+            scadenze_fiscali_non_quantificate.append({
+                "data": s["data"], "voce": s["voce"], "certezza": s["certezza"], "note": s.get("note"),
+            })
+            continue
+        imp_d = Decimal(str(imp))
+        if imp_d <= 0:
+            continue  # IVA a credito/zero: non e' un'uscita
+        idx = (date.fromisoformat(s["data"]) - start).days
+        if 0 <= idx <= giorni - 1:
+            uscite[idx] += imp_d
+            scadenze_fiscali_incluse.append({"data": s["data"], "voce": s["voce"], "importo": float(imp_d)})
+    if scadenze_fiscali_non_quantificate:
+        warning.append("Alcune scadenze fiscali non sono quantificate (cedolino/commercialista) e non sono incluse nella curva.")
 
     # Soglia operativa (solo costi fissi normalizzati)
     costi_attivi = (await db.execute(select(CostoFisso).where(CostoFisso.attivo == True))).scalars().all()
@@ -1506,6 +1531,8 @@ async def calcola_proiezione_cassa(
         "vista_giornaliera": vista_giornaliera,
         "vista_settimanale": vista_settimanale,
         "vista_mensile": vista_mensile,
+        "scadenze_fiscali_incluse": scadenze_fiscali_incluse,
+        "scadenze_fiscali_non_quantificate": scadenze_fiscali_non_quantificate,
         "warning": warning,
     }
 

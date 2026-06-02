@@ -25,6 +25,9 @@ export interface RigaMensile {
   uscite: number;
   saldo_finale: number;
 }
+export interface ScadenzaInclusa { data: string; voce: string; importo: number }
+export interface ScadenzaNonQuantificata { data: string; voce: string; certezza: string; note?: string | null }
+
 export interface ProiezioneCassa {
   giorni: number;
   data_inizio: string;
@@ -34,6 +37,8 @@ export interface ProiezioneCassa {
   vista_giornaliera: PuntoGiornaliero[];
   vista_settimanale: RigaSettimanale[];
   vista_mensile: RigaMensile[];
+  scadenze_fiscali_incluse?: ScadenzaInclusa[];
+  scadenze_fiscali_non_quantificate?: ScadenzaNonQuantificata[];
   warning: string[];
 }
 export interface SaldoCassa {

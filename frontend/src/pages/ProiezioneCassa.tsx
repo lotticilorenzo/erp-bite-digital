@@ -237,6 +237,38 @@ export default function ProiezioneCassa() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Scadenze fiscali */}
+      {proj && ((proj.scadenze_fiscali_incluse?.length ?? 0) > 0 || (proj.scadenze_fiscali_non_quantificate?.length ?? 0) > 0) && (
+        <Card className="border-dashed bg-muted/20">
+          <CardHeader><CardTitle className="text-base">Scadenze fiscali</CardTitle></CardHeader>
+          <CardContent className="space-y-4 text-sm">
+            {(proj.scadenze_fiscali_incluse?.length ?? 0) > 0 && (
+              <div className="space-y-1">
+                <p className="text-[10px] uppercase tracking-widest font-black text-muted-foreground">Incluse nella curva (uscite quantificate)</p>
+                {proj.scadenze_fiscali_incluse!.map((s, i) => (
+                  <div key={i} className="flex justify-between">
+                    <span className="text-muted-foreground">{fmtDay(s.data)} · {s.voce}</span>
+                    <span className="tabular-nums font-bold text-rose-400">−{formatEuro(s.importo)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {(proj.scadenze_fiscali_non_quantificate?.length ?? 0) > 0 && (
+              <div className="space-y-1 pt-2 border-t border-border/50">
+                <p className="text-[10px] uppercase tracking-widest font-black text-amber-400">Non incluse — importo da definire</p>
+                <p className="text-[11px] text-muted-foreground">Importi non quantificati (cedolino/commercialista): NON incidono sulla curva finché non definiti.</p>
+                {proj.scadenze_fiscali_non_quantificate!.map((s, i) => (
+                  <div key={i} className="flex justify-between">
+                    <span className="text-muted-foreground">{fmtDay(s.data)} · {s.voce}</span>
+                    <span className="text-xs text-muted-foreground italic">da definire</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
