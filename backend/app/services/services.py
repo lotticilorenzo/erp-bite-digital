@@ -1862,12 +1862,20 @@ async def get_project_stats(db: AsyncSession, progetto_id: uuid.UUID, current_us
     }
 
 async def _get_task_record(db: AsyncSession, task_id: uuid.UUID) -> Optional[Task]:
+    # Eager-load di TUTTE le relazioni esposte da TaskOut (attachments incluse: la loro
+    # omissione causava MissingGreenlet al serialize). subtasks è ricorsivo: carico anche
+    # le relazioni dei subtask (gerarchia Studio a 2 livelli task→subtask).
     result = await db.execute(
         select(Task).options(
-            selectinload(Task.subtasks).selectinload(Task.timer_sessions),
             selectinload(Task.assegnatario),
             selectinload(Task.revisore),
-            selectinload(Task.timer_sessions)
+            selectinload(Task.attachments),
+            selectinload(Task.timer_sessions),
+            selectinload(Task.subtasks).selectinload(Task.assegnatario),
+            selectinload(Task.subtasks).selectinload(Task.revisore),
+            selectinload(Task.subtasks).selectinload(Task.attachments),
+            selectinload(Task.subtasks).selectinload(Task.timer_sessions),
+            selectinload(Task.subtasks).selectinload(Task.subtasks),
         ).where(Task.id == task_id, Task.is_deleted == False)
     )
     return result.unique().scalar_one_or_none()
