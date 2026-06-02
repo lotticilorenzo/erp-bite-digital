@@ -229,9 +229,12 @@ async def write_audit(
     tabella: str, record_id: uuid.UUID,
     azione: str, prima: dict = None, dopo: dict = None
 ):
+    # I campi dati_prima/dati_dopo sono colonne JSON: vanno resi serializzabili (UUID/Decimal/date
+    # -> str) altrimenti l'INSERT fallisce con TypeError. Riuso l'helper gia' usato da audit.emit.
+    from app.services.audit import _json_safe
     log = AuditLog(
         user_id=user_id, tabella=tabella, record_id=record_id,
-        azione=azione, dati_prima=prima, dati_dopo=dopo
+        azione=azione, dati_prima=_json_safe(prima), dati_dopo=_json_safe(dopo)
     )
     db.add(log)
 
