@@ -15,6 +15,7 @@ import {
   Wallet,
   PieChart,
   Calculator,
+  LineChart,
   ShoppingCart,
   Target,
   BookOpen,
@@ -74,6 +75,7 @@ const navItems = [
       { title: "Analytics", url: "/analytics", icon: PieChart },
       { title: "Report Mensili", url: "/report", icon: BarChart3 },
       { title: "Pricing Floor", url: "/pricing-floor", icon: Calculator },
+      { title: "Proiezione Cassa", url: "/proiezione-cassa", icon: LineChart },
     ],
   },
   {
