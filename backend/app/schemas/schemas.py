@@ -267,6 +267,7 @@ class ClienteCreate(BaseModel):
     affidabilita: Optional[ClienteAffidabilita] = "MEDIA"
     drive_files: Optional[list] = None
     logo_url: Optional[str] = Field(None, max_length=500)
+    google_drive_url: Optional[str] = Field(None, max_length=500)
     start_day_type: ClientStartDayType = ClientStartDayType.STANDARD_1
 
 class ClienteUpdate(BaseModel):
@@ -297,6 +298,7 @@ class ClienteUpdate(BaseModel):
     affidabilita: Optional[ClienteAffidabilita] = None
     drive_files: Optional[list] = None
     logo_url: Optional[str] = None
+    google_drive_url: Optional[str] = None
     start_day_type: Optional[ClientStartDayType] = None
 
 class ClienteOut(OrmBase):
@@ -329,6 +331,7 @@ class ClienteOut(OrmBase):
     fic_cliente_id: Optional[str] = None
     drive_files: Optional[list] = None
     logo_url: Optional[str] = None
+    google_drive_url: Optional[str] = None
     start_day_type: ClientStartDayType = ClientStartDayType.STANDARD_1
     created_at: Optional[datetime]
     deleted_at: Optional[datetime] = None
