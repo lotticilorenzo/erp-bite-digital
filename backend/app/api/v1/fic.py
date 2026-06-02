@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import require_finance_access
@@ -56,6 +57,15 @@ async def get_fatture_attive(
     return await list_fatture_attive(db)
 
 
+async def _reload_fattura_attiva(db: AsyncSession, fattura_id: uuid.UUID) -> FatturaAttiva:
+    """Re-fetch fattura attiva con `cliente` eager-caricato (FatturaAttivaOut lo espone): evita il
+    lazy-load fuori greenlet alla serializzazione e ricarica `updated_at` (fresco dalla SELECT)."""
+    res = await db.execute(
+        select(FatturaAttiva).options(selectinload(FatturaAttiva.cliente)).where(FatturaAttiva.id == fattura_id)
+    )
+    return res.scalar_one()
+
+
 @router.patch("/fatture-attive/{fattura_id}/incassa", response_model=FatturaAttivaOut)
 async def patch_incassa_fattura(
     fattura_id: uuid.UUID,
@@ -66,7 +76,10 @@ async def patch_incassa_fattura(
     fattura = await incassa_fattura(db, fattura_id, body.data_incasso)
     if not fattura:
         raise HTTPException(status_code=404, detail="Fattura non trovata")
-    return fattura
+    await db.commit()
+    # re-fetch con cliente eager: FatturaAttivaOut espone `cliente` (relazione) che, non caricata,
+    # andrebbe in lazy-load/MissingGreenlet alla serializzazione. Ricarica anche updated_at.
+    return await _reload_fattura_attiva(db, fattura_id)
 
 
 @router.patch("/fatture-attive/{fattura_id}", response_model=FatturaAttivaOut)
@@ -86,8 +99,8 @@ async def patch_fattura_attiva(
         setattr(fattura, key, value)
 
     await db.commit()
-    await db.refresh(fattura)
-    return fattura
+    # re-fetch con cliente eager (il refresh espirerebbe la relazione -> lazy-load 500)
+    return await _reload_fattura_attiva(db, fattura_id)
 
 
 @router.delete("/fatture-attive/{fattura_id}", status_code=204)
