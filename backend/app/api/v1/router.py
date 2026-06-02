@@ -2670,10 +2670,8 @@ async def get_wiki_article_endpoint(
     # Increment views
     article.visualizzazioni += 1
     await db.commit()
-    await db.refresh(article)
-    
-    article.autore_nome = f"{article.autore.nome} {article.autore.cognome}" if article.autore else "Anonimo"
-    return article
+    # re-fetch con autore+categoria eager (il refresh espirerebbe le relazioni -> lazy-load 500)
+    return await _reload_wiki_article(db, articolo_id)
 
 async def _reload_wiki_article(db: AsyncSession, article_id: uuid.UUID):
     """Re-fetch articolo wiki con autore+categoria eager-caricati: WikiArticoloOut espone la relazione
