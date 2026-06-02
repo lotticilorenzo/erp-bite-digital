@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
@@ -14,17 +14,18 @@ router = APIRouter(prefix="/risorse", tags=["Collaboratori"])
 
 @router.get("", response_model=List[RisorsaOut])
 async def get_risorse(
+    includi_inattivi: bool = Query(False, description="Se true include anche le risorse disattivate (soft-deleted)"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
     Ritorna la lista dei membri del team (risorse) con la loro capacità e servizi.
+    Di default esclude le risorse disattivate (soft-delete, attivo=False).
     """
-    result = await db.execute(
-        select(Risorsa)
-        .options(selectinload(Risorsa.servizi))
-        .order_by(Risorsa.nome)
-    )
+    q = select(Risorsa).options(selectinload(Risorsa.servizi)).order_by(Risorsa.nome)
+    if not includi_inattivi:
+        q = q.where(Risorsa.attivo == True)
+    result = await db.execute(q)
     return result.scalars().all()
 
 @router.get("/{risorsa_id}", response_model=RisorsaOut)
@@ -97,9 +98,8 @@ async def delete_risorsa(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN))
 ):
-    # Soft delete or hard delete? Let's do hard delete for now if requested, 
-    # but soft-delete (attivo=False) is usually safer.
-    # The user asked for "deactivation" in the plan.
+    # SOFT-DELETE canonico (attivo=False): preserva lo storico finanziario e i riferimenti
+    # FK (risorse_servizi, piano_commessa_righe). Per riattivare: PATCH /risorse/{id} {attivo:true}.
     res = await db.execute(select(Risorsa).where(Risorsa.id == risorsa_id))
     risorsa = res.scalar_one_or_none()
     if not risorsa:

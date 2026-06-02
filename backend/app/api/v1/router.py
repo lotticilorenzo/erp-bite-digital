@@ -711,16 +711,8 @@ async def patch_risorsa(
     return r
 
 
-@router.delete("/risorse/{risorsa_id}", status_code=204, tags=["HR"])
-async def del_risorsa(
-    risorsa_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    _auth: User = Depends(require_admin),
-):
-    from app.services.services import delete_risorsa
-    ok = await delete_risorsa(db, risorsa_id)
-    if not ok:
-        raise HTTPException(status_code=404, detail="Risorsa non trovata")
+# DELETE /risorse/{id} è gestito da risorse.py (soft-delete canonico, attivo=False).
+# L'endpoint hard-delete duplicato è stato rimosso (route shadowing + rischio FK).
 
 
 # ── PIANIFICAZIONE COMMESSA ──────────────────────────────

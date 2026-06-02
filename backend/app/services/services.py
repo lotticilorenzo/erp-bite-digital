@@ -3244,16 +3244,6 @@ async def update_risorsa(db: AsyncSession, risorsa_id: uuid.UUID, payload: dict)
     return r
 
 
-async def delete_risorsa(db: AsyncSession, risorsa_id: uuid.UUID):
-    from app.models.models import Risorsa
-    result = await db.execute(select(Risorsa).where(Risorsa.id == risorsa_id))
-    r = result.scalar_one_or_none()
-    if not r:
-        return False
-    await db.delete(r)
-    await db.commit()
-    return True
-
 async def get_progetto_with_servizi(db: AsyncSession, progetto_id):
     result = await db.execute(
         select(Progetto).options(
