@@ -47,7 +47,17 @@ def _ensure_document_access(node: DocumentNode, current_user: User) -> None:
 
 
 async def _get_document_node_or_404(db: AsyncSession, node_id: uuid.UUID) -> DocumentNode:
-    res = await db.execute(select(DocumentNode).where(DocumentNode.id == node_id))
+    # children eager-caricati: _serialize_node vi accede ricorsivamente; senza eager-load
+    # la serializzazione (sync) farebbe lazy-load fuori dal greenlet -> MissingGreenlet.
+    res = await db.execute(
+        select(DocumentNode)
+        .where(DocumentNode.id == node_id)
+        .options(
+            selectinload(DocumentNode.children)
+            .selectinload(DocumentNode.children)
+            .selectinload(DocumentNode.children)
+        )
+    )
     node = res.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=404, detail="Documento non trovato")
@@ -166,7 +176,8 @@ async def create_node(
     )
     db.add(node)
     await db.commit()
-    await db.refresh(node)
+    # re-fetch con children eager-caricati (refresh non carica la relazione -> MissingGreenlet)
+    node = await _get_document_node_or_404(db, node.id)
     return _serialize_node(node, include_content=True)
 
 
@@ -204,7 +215,8 @@ async def update_node(
 
     node.updated_at = datetime.utcnow()
     await db.commit()
-    await db.refresh(node)
+    # re-fetch con children eager-caricati (refresh non carica la relazione -> MissingGreenlet)
+    node = await _get_document_node_or_404(db, node.id)
     return _serialize_node(node, include_content=True)
 
 

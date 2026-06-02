@@ -1132,7 +1132,6 @@ class DocumentNode(Base):
         UUID(as_uuid=True), ForeignKey("document_nodes.id", ondelete="CASCADE"), nullable=True, index=True
     )
     ordine: Mapped[int] = mapped_column(Integer, default=0)
-    is_private: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
