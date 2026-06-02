@@ -1411,7 +1411,7 @@ export default function Analytics() {
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(val) => `${val}%`}
-                    domain={[0, 60]}
+                    domain={[0, "auto"]}
                   />
                   <Tooltip
                     contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: "12px", color: "hsl(var(--foreground))" }}
@@ -1775,7 +1775,7 @@ export default function Analytics() {
 
                   <div className="space-y-1.5 pt-4">
                     <div className="flex items-center justify-between text-[9px] font-black uppercase text-muted-foreground">
-                      <span>Copertura Pipeline (Lavori Ceri)</span>
+                      <span>Copertura Pipeline (Lavori Certi)</span>
                       <span>{(f.coverage * 100).toFixed(0)}%</span>
                     </div>
                     <div className="h-1.5 w-full bg-muted/30 rounded-full overflow-hidden">
