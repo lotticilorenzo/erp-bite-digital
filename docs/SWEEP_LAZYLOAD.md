@@ -43,7 +43,7 @@ relazioni dello schema** (come `documents._get_document_node_or_404`, `progetti.
 | L6 | Pianificazioni | `pianificazioni.py:59/77/98` → `_hydrate` | a+b | `PianificazioneOut.{cliente,lavorazioni(+user),commessa}` | **lazy-load già SAFE** — `get_pianificazione` (pianificazione_service.py:63) fa `selectinload(cliente,commessa,lavorazioni.user)` e create/update/approve fanno `return await get_pianificazione()`. **MA POST/PATCH erano 400** per un bug SEPARATO (non lazy-load): `write_audit` non rendeva JSON-safe `UUID/Decimal` → INSERT audit_log fallito. **FIX-LL-3 ha corretto `write_audit`**. Validato 201/200 (lavorazioni.user serializzato) | (lazy-load) nessuno; audit: `_json_safe` in `write_audit` | Basso |
 | L7 | CRM | `router.py:2841-2860` `create_crm_lead` (POST) | b | `CRMLeadOut.stadio/attivita` (fa `refresh(lead)` + selectinload parziale di `attivita`) | **non testato** (no cleanup) — sospetto, stesso schema di L2 | come L2: re-fetch con `selectinload(stadio, attivita)`, evitare `refresh` che le espira | Basso |
 | L8 | CRM | `router.py:2953` `POST /crm/lead/{id}/attivita` (`CRMActivityOut`) | b | eventuale `CRMActivityOut.user`/autore non caricato | **non testato** | re-fetch con `selectinload` della relazione esposta | Basso |
-| L9 | FiC | `fic.py:59-69` `PATCH /fatture-attive/{id}/incassa` | a | `FatturaAttivaOut` (solo `updated_at`, **nessuna** relazione) — nessun `refresh` | **non testato** (state-change invasivo) — **basso**: il fratello `PATCH /fatture-attive/{id}` (con refresh) e `PATCH /fatture-passive` tornano 200 | per coerenza `await db.refresh(fattura)` prima del return | Basso |
+| L9 | FiC | `fic.py:59` `/incassa` + `:72` `patch_fattura_attiva` | **a+b** (riclassificato) | `FatturaAttivaOut.cliente: _EntityNested` mappa la relationship `FatturaAttiva.cliente` (lo sweep l'aveva mancata) — non eager-caricata da `incassa_fattura`/`refresh` | **SÌ (500)** confermato → **RISOLTO** (FIX-LL-4) | helper `_reload_fattura_attiva` con `selectinload(FatturaAttiva.cliente)` dopo commit, in entrambi gli handler | Basso |
 
 ### Già fixato (escluso, citato per completezza)
 `patch_cliente` (refresh+audit singolo), `_get_task_record`/`list_tasks` (selectinload attachments+rel),
@@ -90,6 +90,8 @@ PATCH 200.
 3. **Lotto FIX-LL-3 — Preventivi + Pianificazioni — ✅ FATTO:** L5/L6 lazy-load erano **già safe**
    (validati con record di test). Unico fix reale: `write_audit` JSON-safe (sbloccava `POST/PATCH
    /pianificazioni` da 400). Vedi sopra.
-4. **Lotto FIX-LL-4 — FiC incassa (`fic.py`, basso):** L9. Aggiungere `refresh(fattura)` per coerenza. — DA FARE.
+4. **Lotto FIX-LL-4 — FiC fatture-attive — ✅ FATTO:** L9 era **(a)+(b)** (relazione `cliente` mancata
+   dallo sweep). `incassa` e `patch_fattura_attiva` re-fetchano con `selectinload(cliente)`. Confermato
+   500→200 con record reale (cliente serializzato).
 
-> Stato: FIX-LL-1, FIX-LL-2, FIX-LL-3 completati. Resta FIX-LL-4 (L9).
+> Stato: **tutti i lotti LL (1,2,3,4) COMPLETATI**. Lo sweep lazy-load è chiuso.
