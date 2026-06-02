@@ -2381,6 +2381,7 @@ async def upsert_budget_endpoint(
     current_user: User = Depends(require_finance_access)
 ):
     from app.models.models import BudgetMensile
+    from sqlalchemy.orm import selectinload
     mese_start = data.mese_competenza.replace(day=1)
     
     # Upsert logic
@@ -2403,10 +2404,13 @@ async def upsert_budget_endpoint(
             note=data.note
         )
         db.add(b)
-    
+
     await db.commit()
-    await db.refresh(b)
-    return b
+    # re-fetch con categoria eager: BudgetMensileOut espone la relazione `categoria` (lazy dopo refresh).
+    res2 = await db.execute(
+        select(BudgetMensile).where(BudgetMensile.id == b.id).options(selectinload(BudgetMensile.categoria))
+    )
+    return res2.scalar_one()
 
 @router.post("/budget/copia", tags=["Budget"])
 async def copy_prev_month_budget(
@@ -2671,6 +2675,21 @@ async def get_wiki_article_endpoint(
     article.autore_nome = f"{article.autore.nome} {article.autore.cognome}" if article.autore else "Anonimo"
     return article
 
+async def _reload_wiki_article(db: AsyncSession, article_id: uuid.UUID):
+    """Re-fetch articolo wiki con autore+categoria eager-caricati: WikiArticoloOut espone la relazione
+    `categoria`, che dopo un semplice db.refresh() resterebbe lazy -> MissingGreenlet alla serializzazione."""
+    from app.models.models import WikiArticolo
+    from sqlalchemy.orm import joinedload
+    res = await db.execute(
+        select(WikiArticolo)
+        .options(joinedload(WikiArticolo.autore), joinedload(WikiArticolo.categoria))
+        .where(WikiArticolo.id == article_id)
+    )
+    article = res.scalar_one()
+    article.autore_nome = f"{article.autore.nome} {article.autore.cognome}" if article.autore else "Anonimo"
+    return article
+
+
 @router.post("/wiki/articoli", response_model=WikiArticoloOut, status_code=201, tags=["Wiki"])
 async def create_wiki_article_endpoint(
     data: WikiArticoloCreate,
@@ -2681,8 +2700,7 @@ async def create_wiki_article_endpoint(
     art = WikiArticolo(**data.model_dump(), autore_id=current_user.id)
     db.add(art)
     await db.commit()
-    await db.refresh(art)
-    return art
+    return await _reload_wiki_article(db, art.id)
 
 @router.patch("/wiki/articoli/{articolo_id}", response_model=WikiArticoloOut, tags=["Wiki"])
 async def update_wiki_article_endpoint(
@@ -2701,10 +2719,9 @@ async def update_wiki_article_endpoint(
     update_data = data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(article, key, value)
-    
+
     await db.commit()
-    await db.refresh(article)
-    return article
+    return await _reload_wiki_article(db, articolo_id)
 
 @router.delete("/wiki/articoli/{articolo_id}", tags=["Wiki"])
 async def delete_wiki_article_endpoint(
@@ -2838,9 +2855,31 @@ async def get_crm_leads(
             
     return leads
 
+async def _reload_crm_lead(db: AsyncSession, lead_id: uuid.UUID):
+    """Re-fetch lead con stadio+assegnato_a+attivita eager-caricati: CRMLeadOut espone le relazioni
+    `stadio` e `attivita`, che dopo un semplice db.refresh() resterebbero lazy -> MissingGreenlet.
+    Popola i campi virtuali assegnato_a_nome e autore_nome delle attività (come get_single_crm_lead)."""
+    from sqlalchemy.orm import joinedload, selectinload
+    res = await db.execute(
+        select(CRMLead).where(CRMLead.id == lead_id).options(
+            joinedload(CRMLead.stadio),
+            joinedload(CRMLead.assegnato_a),
+            selectinload(CRMLead.attivita),
+        )
+    )
+    lead = res.scalar_one()
+    if lead.assegnato_a:
+        lead.assegnato_a_nome = f"{lead.assegnato_a.nome} {lead.assegnato_a.cognome}"
+    for act in lead.attivita:
+        author = await db.get(User, act.autore_id)
+        if author:
+            act.autore_nome = f"{author.nome} {author.cognome}"
+    return lead
+
+
 @router.post("/crm/lead", response_model=CRMLeadOut, status_code=201, tags=["CRM"])
 async def add_crm_lead(
-    data: CRMLeadCreate, 
+    data: CRMLeadCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -2850,8 +2889,7 @@ async def add_crm_lead(
         lead.assegnato_a_id = current_user.id
     db.add(lead)
     await db.commit()
-    await db.refresh(lead)
-    return lead
+    return await _reload_crm_lead(db, lead.id)
 
 @router.get("/crm/lead/{lead_id}", response_model=CRMLeadOut, tags=["CRM"])
 async def get_single_crm_lead(
@@ -2905,10 +2943,9 @@ async def patch_crm_lead(
     update_data = data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(lead, key, value)
-        
+
     await db.commit()
-    await db.refresh(lead)
-    return lead
+    return await _reload_crm_lead(db, lead_id)
 
 @router.delete("/crm/lead/{lead_id}", status_code=204, tags=["CRM"])
 async def remove_crm_lead(
