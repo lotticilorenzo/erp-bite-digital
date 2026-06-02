@@ -1126,6 +1126,181 @@ async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None)
     return result
 
 
+# ── DSO ENGINE + RISCHIO CONCENTRAZIONE (Fase 2, brief §3.1/§5.3) ──────────
+DSO_FALLBACK_GIORNI = 30          # se < 2 fatture incassate
+DSO_PESSIMISTA_BUFFER = 15        # giorni extra sullo scenario pessimista
+DSO_FALLBACK_PESSIMISTA = 45      # fallback pessimista (30 + 15)
+CONCENTRAZIONE_TOP1_PCT = 25
+CONCENTRAZIONE_TOP3_PCT = 60
+
+
+async def _dso_storico_per_cliente(db: AsyncSession) -> tuple[dict, int]:
+    """Storico DSO per cliente da fatture incassate completamente (1 query, no N+1).
+
+    Incassata completa = importo_residuo=0 AND data_ultimo_incasso NOT NULL.
+    giorni = data_ultimo_incasso − data_emissione; i giorni NEGATIVI (dato sporco) sono esclusi.
+    TODO(R2): a regime la data incasso deve venire SOLO dalla riconciliazione bancaria
+    (quando FiC sarà attivo) — qui si usa data_ultimo_incasso come unica fonte disponibile.
+    """
+    rows = await db.execute(text(
+        """
+        SELECT cliente_id,
+               COUNT(*) AS n,
+               AVG(data_ultimo_incasso - data_emissione) AS dso_medio,
+               MIN(data_ultimo_incasso - data_emissione) AS dso_min,
+               MAX(data_ultimo_incasso - data_emissione) AS dso_max
+        FROM fatture_attive
+        WHERE importo_residuo = 0
+          AND data_ultimo_incasso IS NOT NULL
+          AND data_emissione IS NOT NULL
+          AND cliente_id IS NOT NULL
+          AND data_ultimo_incasso >= data_emissione
+        GROUP BY cliente_id
+        """
+    ))
+    storico: dict = {}
+    for r in rows.all():
+        storico[r.cliente_id] = {
+            "n": int(r.n),
+            "dso_medio": float(r.dso_medio),
+            "dso_min": int(r.dso_min),
+            "dso_max": int(r.dso_max),
+        }
+    # Conteggio scartati (giorni negativi) per il warning.
+    neg = await db.execute(text(
+        "SELECT COUNT(*) FROM fatture_attive "
+        "WHERE importo_residuo = 0 AND data_ultimo_incasso IS NOT NULL "
+        "AND data_emissione IS NOT NULL AND data_ultimo_incasso < data_emissione"
+    ))
+    scartati = int(neg.scalar() or 0)
+    return storico, scartati
+
+
+def _dso_cliente(storico: dict, cliente_id) -> dict:
+    """DSO effettivo del cliente: storico se ≥2 fatture, altrimenti fallback 30."""
+    s = storico.get(cliente_id)
+    if not s or s["n"] < 2:
+        return {
+            "dso_medio": float(DSO_FALLBACK_GIORNI),
+            "dso_min": None,
+            "dso_max": None,
+            "n_fatture_storiche": s["n"] if s else 0,
+            "is_fallback": True,
+        }
+    return {
+        "dso_medio": round(s["dso_medio"], 1),
+        "dso_min": s["dso_min"],
+        "dso_max": s["dso_max"],
+        "n_fatture_storiche": s["n"],
+        "is_fallback": False,
+    }
+
+
+async def calcola_dso(db: AsyncSession, window_mesi: int = 12) -> dict:
+    """DSO engine: storico per cliente, scenari incasso sulle fatture aperte, concentrazione ricavo."""
+    from app.models.models import Cliente, Commessa, FatturaAttiva
+    from dateutil.relativedelta import relativedelta
+
+    warning: list[str] = []
+    storico, scartati = await _dso_storico_per_cliente(db)
+    if scartati:
+        warning.append(f"{scartati} fatture con data_ultimo_incasso < data_emissione escluse dallo storico (dato sporco).")
+
+    # Nomi clienti (una query)
+    cli_rows = await db.execute(select(Cliente.id, Cliente.ragione_sociale))
+    nomi = {cid: rs for cid, rs in cli_rows.all()}
+
+    # 1) DSO per cliente (tutti i clienti con storico o con fatture aperte)
+    aperte_res = await db.execute(
+        select(FatturaAttiva).where(FatturaAttiva.importo_residuo > 0)
+    )
+    fatture_aperte_rows = aperte_res.scalars().all()
+    cliente_ids = set(storico.keys()) | {f.cliente_id for f in fatture_aperte_rows if f.cliente_id}
+
+    clienti = []
+    for cid in cliente_ids:
+        d = _dso_cliente(storico, cid)
+        clienti.append({
+            "cliente_id": str(cid),
+            "cliente": nomi.get(cid, "?"),
+            "dso_medio": d["dso_medio"],
+            "dso_min": d["dso_min"],
+            "dso_max": d["dso_max"],
+            "n_fatture_storiche": d["n_fatture_storiche"],
+            "is_fallback": d["is_fallback"],
+        })
+    clienti.sort(key=lambda x: x["dso_medio"], reverse=True)
+
+    # 2) Scenari per ogni fattura aperta
+    fatture_aperte = []
+    for f in fatture_aperte_rows:
+        d = _dso_cliente(storico, f.cliente_id)
+        emiss = f.data_emissione
+        if emiss is None:
+            warning.append(f"Fattura {f.numero or f.id}: data_emissione mancante, scenari non calcolabili.")
+            base = ott = pess = None
+        elif d["is_fallback"]:
+            base = emiss + timedelta(days=DSO_FALLBACK_GIORNI)
+            ott = emiss + timedelta(days=DSO_FALLBACK_GIORNI)
+            pess = emiss + timedelta(days=DSO_FALLBACK_PESSIMISTA)
+        else:
+            base = emiss + timedelta(days=round(d["dso_medio"]))
+            ott = emiss + timedelta(days=d["dso_min"])
+            pess = emiss + timedelta(days=d["dso_max"] + DSO_PESSIMISTA_BUFFER)
+        fatture_aperte.append({
+            "id": str(f.id),
+            "numero": f.numero,
+            "cliente_id": str(f.cliente_id) if f.cliente_id else None,
+            "cliente": nomi.get(f.cliente_id, "?"),
+            "importo_residuo": float(f.importo_residuo or 0),
+            "data_emissione": str(emiss) if emiss else None,
+            "data_attesa_base": str(base) if base else None,
+            "data_attesa_ottimista": str(ott) if ott else None,
+            "data_attesa_pessimista": str(pess) if pess else None,
+            "is_fallback": d["is_fallback"],
+        })
+
+    # 3) Concentrazione ricavo (stessa base Fase 1: valore_fatturabile_calc, include aggiustamenti)
+    oggi = date.today()
+    window_start = (oggi.replace(day=1) - relativedelta(months=max(window_mesi, 1) - 1))
+    comm_res = await db.execute(
+        select(Commessa).options(
+            selectinload(Commessa.righe_progetto), selectinload(Commessa.cliente)
+        ).where(Commessa.is_deleted == False, Commessa.mese_competenza >= window_start)
+    )
+    fatt_per_cliente: dict = {}
+    for c in comm_res.scalars().unique().all():
+        fatt_per_cliente[c.cliente_id] = fatt_per_cliente.get(c.cliente_id, Decimal("0")) + c.valore_fatturabile_calc
+
+    totale = sum(fatt_per_cliente.values()) or Decimal("0")
+    pesi = []
+    for cid, fatt in fatt_per_cliente.items():
+        peso_pct = round(float(fatt) / float(totale) * 100, 1) if totale > 0 else 0.0
+        pesi.append({"cliente_id": str(cid), "cliente": nomi.get(cid, "?"),
+                     "fatturato": float(fatt), "peso_pct": peso_pct})
+    pesi.sort(key=lambda x: x["peso_pct"], reverse=True)
+
+    top1_pct = pesi[0]["peso_pct"] if pesi else 0.0
+    top3_pct = round(sum(p["peso_pct"] for p in pesi[:3]), 1)
+    concentrazione = {
+        "window_mesi": window_mesi,
+        "window_start": str(window_start),
+        "ricavo_totale": float(totale),
+        "n_clienti": len(pesi),
+        "top3": [{"cliente": p["cliente"], "peso_pct": p["peso_pct"]} for p in pesi[:3]],
+        "clienti": pesi,
+        "alert_top_oltre_25": top1_pct > CONCENTRAZIONE_TOP1_PCT,
+        "alert_top3_oltre_60": top3_pct > CONCENTRAZIONE_TOP3_PCT,
+    }
+
+    return {
+        "clienti": clienti,
+        "fatture_aperte": fatture_aperte,
+        "concentrazione": concentrazione,
+        "warning": warning,
+    }
+
+
 # ── TASK SERVICE ──────────────────────────────────────────
 async def list_tasks(
     db: AsyncSession,

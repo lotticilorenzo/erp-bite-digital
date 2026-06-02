@@ -61,7 +61,7 @@ import httpx
 from app.services.services import (
     list_tasks, get_task, create_task, update_task, delete_task,
     list_timesheet, create_timesheet, approva_timesheet,
-    get_dashboard_kpi, get_marginalita_clienti,
+    get_dashboard_kpi, get_marginalita_clienti, calcola_dso,
     sync_fic_data, get_last_fic_sync_status, list_fatture_attive, incassa_fattura,
     list_fornitori_full, update_fornitore, list_fatture_passive, update_fattura_passiva, list_fornitori,
     list_movimenti_cassa, list_costi_fissi, create_costo_fisso, update_costo_fisso, delete_costo_fisso,
@@ -301,6 +301,17 @@ async def report_marginalita(
 ):
     response.headers["Cache-Control"] = "private, max-age=120"
     return await get_marginalita_clienti(db, mese)
+
+
+@router.get("/report/dso", tags=["Report"])
+async def report_dso(
+    mesi: int = Query(12, ge=1, le=60, description="Finestra concentrazione in mesi (default 12)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """DSO engine (Fase 2): storico incassi per cliente, scenari incasso sulle fatture aperte,
+    rischio concentrazione ricavo. Solo lettura."""
+    return await calcola_dso(db, mesi)
 
 
 # ═══════════════════════════════════════════════════════
