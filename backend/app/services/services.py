@@ -2676,7 +2676,10 @@ async def list_fatture_passive(db: AsyncSession) -> List[FatturaPassiva]:
     return result.scalars().all()
 
 async def create_fornitore(db: AsyncSession, data: any) -> Fornitore: # data: FornitoreCreate
-    f = Fornitore(**data.model_dump())
+    # fic_id e' NOT NULL + unique a DB (valorizzato dalla sync FiC). Per i fornitori creati
+    # manualmente genero un sentinella MANUAL-<hex>: non collide mai con gli id numerici FiC,
+    # quindi _upsert_fic_fornitori (match per fic_id) non lo sovrascrive ne' duplica.
+    f = Fornitore(**data.model_dump(), fic_id=f"MANUAL-{uuid.uuid4().hex}")
     db.add(f)
     await db.flush()
     # Ricarica per avere la relazione categoria
