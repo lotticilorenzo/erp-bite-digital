@@ -63,6 +63,7 @@ from app.services.services import (
     list_timesheet, create_timesheet, approva_timesheet,
     get_dashboard_kpi, get_marginalita_clienti, calcola_dso,
     calcola_proiezione_cassa, get_ultimo_saldo, create_saldo, calcola_pl_gestionale,
+    calcola_scadenzario_fiscale,
     sync_fic_data, get_last_fic_sync_status, list_fatture_attive, incassa_fattura,
     list_fornitori_full, update_fornitore, list_fatture_passive, update_fattura_passiva, list_fornitori,
     list_movimenti_cassa, list_costi_fissi, create_costo_fisso, update_costo_fisso, delete_costo_fisso,
@@ -324,6 +325,19 @@ async def report_pl_gestionale(
     """P&L gestionale mensile (Fase 3 core, fiscale escluso): ricavi, costi diretti, margine lordo
     aggregato, costi fissi indivisibili, risultato operativo + IVA memo. Solo lettura."""
     return await calcola_pl_gestionale(db, mese or date.today())
+
+
+@router.get("/report/scadenzario-fiscale", tags=["Report"])
+async def report_scadenzario_fiscale(
+    mesi: int = Query(6, ge=0, le=24, description="Orizzonte in mesi (default 6)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """Scadenzario fiscale (Fase 3): IVA trimestrale calcolata dalle fatture + calendario scadenze
+    ricorrenti. Importi non disponibili in DB (F24/ritenute/IRPEF) = null + flag. Solo lettura."""
+    from dateutil.relativedelta import relativedelta
+    oggi = date.today()
+    return await calcola_scadenzario_fiscale(db, oggi, oggi + relativedelta(months=mesi))
 
 
 # ── SALDO CASSA + PROIEZIONE CASSA (Fase 2, Layer 3) ──────

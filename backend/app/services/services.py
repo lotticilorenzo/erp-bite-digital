@@ -1606,6 +1606,113 @@ async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
     }
 
 
+# ── SCADENZARIO FISCALE (brief §3.2 + dashboard IVA §5.1, Fase 3) ──────────
+# Importi disponibili SOLO per l'IVA (calcolata dalle fatture). Le altre voci hanno data certa
+# ma importo non disponibile in DB → importo_stimato=None + certezza/flag (mai numeri inventati).
+# TODO(Fase 3): importi F24 contributi/ritenute da cedolino; acconti IRPEF/IRES da commercialista
+# (metodo storico); aggancio alla proiezione cassa (uscite fiscali certe-per-data).
+def _trimestre_label(d: date) -> str:
+    return f"{d.year}-Q{(d.month - 1) // 3 + 1}"
+
+
+def _fine_trimestre(inizio: date) -> date:
+    from dateutil.relativedelta import relativedelta
+    return inizio + relativedelta(months=3) - timedelta(days=1)
+
+
+async def calcola_scadenzario_fiscale(db: AsyncSession, da_data: date, a_data: date) -> dict:
+    """Scadenzario fiscale: IVA trimestrale calcolata dalle fatture + calendario scadenze ricorrenti.
+    Stateless, solo lettura. Nessun importo inventato: dove la fonte non esiste → importo_stimato=None.
+    """
+    from dateutil.relativedelta import relativedelta
+
+    warning: list[str] = []
+    if a_data < da_data:
+        return {"iva_trimestrale": [], "scadenze": [], "warning": ["Orizzonte non valido (a_data < da_data)."]}
+
+    # IVA per trimestre: 2 query aggregate (stessa fonte dell'IVA memo del P&L)
+    async def _iva_per_trimestre(tabella: str) -> dict:
+        rows = await db.execute(text(
+            f"SELECT date_trunc('quarter', data_emissione)::date AS q, COALESCE(SUM(importo_iva),0) AS iva "
+            f"FROM {tabella} WHERE data_emissione IS NOT NULL GROUP BY 1"
+        ))
+        return {r.q: Decimal(str(r.iva or 0)) for r in rows.all()}
+
+    iva_att = await _iva_per_trimestre("fatture_attive")
+    iva_pas = await _iva_per_trimestre("fatture_passive")
+
+    F = lambda x: float(Decimal(x).quantize(Decimal("0.01")))
+
+    # Trimestri con data_versamento (= fine trimestre, da confermare col commercialista) nell'orizzonte
+    iva_trimestrale = []
+    iva_scadenze = []  # voci IVA da inserire nel calendario
+    q_inizio = date(da_data.year, ((da_data.month - 1) // 3) * 3 + 1, 1) - relativedelta(months=3)
+    for k in range(8):  # copre ampiamente qualunque orizzonte ragionevole
+        qi = q_inizio + relativedelta(months=3 * k)
+        versamento = _fine_trimestre(qi)
+        if versamento < da_data or versamento > a_data:
+            continue
+        debito = iva_att.get(qi, Decimal("0"))
+        credito = iva_pas.get(qi, Decimal("0"))
+        saldo = debito - credito
+        iva_trimestrale.append({
+            "trimestre": _trimestre_label(qi),
+            "iva_debito": F(debito), "iva_credito": F(credito), "saldo": F(saldo),
+            "data_versamento": str(versamento),
+            "certezza": "MEDIA",
+            "note": "Data/regime IVA da confermare col commercialista.",
+        })
+        iva_scadenze.append({
+            "data": str(versamento), "voce": f"IVA trimestrale {_trimestre_label(qi)}",
+            "importo_stimato": F(saldo), "certezza": "MEDIA", "fonte": "fatture (calcolato)",
+            "note": "Data/regime da confermare col commercialista.",
+        })
+
+    # Calendario ricorrente
+    scadenze = list(iva_scadenze)
+
+    def _clamp_day(anno: int, mese: int, giorno: int) -> date:
+        # gestisce mesi che potrebbero non avere il giorno (non serve per 16/30 giugno-nov, ma sicuro)
+        import calendar
+        last = calendar.monthrange(anno, mese)[1]
+        return date(anno, mese, min(giorno, last))
+
+    # F24 contributi (16/mese) + ritenute (16 del mese successivo al riferimento)
+    cur = date(da_data.year, da_data.month, 1)
+    while cur <= a_data:
+        f24 = _clamp_day(cur.year, cur.month, 16)
+        if da_data <= f24 <= a_data:
+            scadenze.append({"data": str(f24), "voce": "F24 contributi INPS",
+                             "importo_stimato": None, "certezza": "ALTA", "fonte": "ricorrente mensile",
+                             "note": "Importo da cedolino/da configurare."})
+            scadenze.append({"data": str(f24), "voce": f"Ritenute d'acconto (competenza {_trimestre_label(cur)[:4]}-{(cur - relativedelta(months=1)).month:02d})",
+                             "importo_stimato": None, "certezza": "ALTA", "fonte": "ricorrente mensile (16 mese successivo)",
+                             "note": "Importo da cedolino/da configurare."})
+        cur = cur + relativedelta(months=1)
+
+    # Acconti IRPEF/IRES: 30/06 e 30/11 di ogni anno nell'orizzonte
+    for anno in range(da_data.year, a_data.year + 1):
+        for (m, etichetta) in [(6, "Acconto IRPEF/IRES (giugno)"), (11, "Acconto IRPEF/IRES (novembre)")]:
+            d = _clamp_day(anno, m, 30)
+            if da_data <= d <= a_data:
+                scadenze.append({"data": str(d), "voce": etichetta, "importo_stimato": None,
+                                 "certezza": "DA_ALLINEARE", "fonte": "ricorrente annuale",
+                                 "note": "Da commercialista (metodo storico)."})
+
+    scadenze.sort(key=lambda x: x["data"])
+
+    if any(s["importo_stimato"] is None for s in scadenze):
+        warning.append("Alcune scadenze (F24/ritenute/IRPEF) hanno importo da configurare: non stimato per evitare numeri non verificati.")
+    warning.append("Date/regimi fiscali indicativi: confermare col commercialista.")
+
+    return {
+        "orizzonte": {"da": str(da_data), "a": str(a_data)},
+        "iva_trimestrale": iva_trimestrale,
+        "scadenze": scadenze,
+        "warning": warning,
+    }
+
+
 # ── TASK SERVICE ──────────────────────────────────────────
 async def list_tasks(
     db: AsyncSession,
