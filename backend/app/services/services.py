@@ -349,7 +349,9 @@ async def update_cliente(db: AsyncSession, cliente_id: uuid.UUID, data: ClienteU
         if not c:
             return None
         prima = {"ragione_sociale": c.ragione_sociale, "attivo": c.attivo}
-        for field, val in data.model_dump(exclude_none=True).items():
+        # exclude_unset (non exclude_none): il FE (ClienteDialog) invia uno snapshot completo del
+        # form con i null voluti, quindi un campo passato a null deve poter essere azzerato (B-04).
+        for field, val in data.model_dump(exclude_unset=True).items():
             setattr(c, field, val)
         await write_audit(db, by_user_id, "clienti", cliente_id, "UPDATE", prima)
         await db.flush()

@@ -118,10 +118,15 @@ async def patch_fornitore(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_finance_access),
 ):
-    forn = await update_fornitore(db, fornitore_id, body.model_dump(exclude_none=True))
+    # exclude_unset (non exclude_none): il FE invia uno snapshot completo del record con i null
+    # voluti, quindi un campo passato a null deve poter essere azzerato (B-04).
+    forn = await update_fornitore(db, fornitore_id, body.model_dump(exclude_unset=True))
     if not forn:
         raise HTTPException(status_code=404, detail="Fornitore non trovato")
     await db.commit()
+    # updated_at ha onupdate DB-side: dopo il flush e' espirata -> ricarico in ctx async per
+    # evitare il lazy-load sync (MissingGreenlet) durante la serializzazione di FornitoreOut.
+    await db.refresh(forn, attribute_names=["updated_at"])
     return forn
 
 
