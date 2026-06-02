@@ -6,13 +6,13 @@ from typing import List
 import uuid
 
 from app.db.session import get_db
-from app.core.security import get_current_user, require_roles
+from app.core.security import get_current_user, require_roles, has_finance_access
 from app.models.models import User, UserRole, Risorsa
-from app.schemas.schemas import RisorsaCreate, RisorsaUpdate, RisorsaOut
+from app.schemas.schemas import RisorsaCreate, RisorsaUpdate, RisorsaOut, RisorsaPublicOut
 
 router = APIRouter(prefix="/risorse", tags=["Collaboratori"])
 
-@router.get("", response_model=List[RisorsaOut])
+@router.get("", response_model=None)
 async def get_risorse(
     includi_inattivi: bool = Query(False, description="Se true include anche le risorse disattivate (soft-deleted)"),
     db: AsyncSession = Depends(get_db),
@@ -21,14 +21,19 @@ async def get_risorse(
     """
     Ritorna la lista dei membri del team (risorse) con la loro capacità e servizi.
     Di default esclude le risorse disattivate (soft-delete, attivo=False).
+    A-01: solo i ruoli finance/admin vedono i dati sensibili (IBAN/CF/P.IVA/costi);
+    gli altri ricevono una vista ridotta (RisorsaPublicOut).
     """
     q = select(Risorsa).options(selectinload(Risorsa.servizi)).order_by(Risorsa.nome)
     if not includi_inattivi:
         q = q.where(Risorsa.attivo == True)
     result = await db.execute(q)
-    return result.scalars().all()
+    rows = result.scalars().all()
+    if has_finance_access(current_user.ruolo):
+        return [RisorsaOut.model_validate(r) for r in rows]
+    return [RisorsaPublicOut.model_validate(r) for r in rows]
 
-@router.get("/{risorsa_id}", response_model=RisorsaOut)
+@router.get("/{risorsa_id}", response_model=None)
 async def get_risorsa(
     risorsa_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -42,7 +47,10 @@ async def get_risorsa(
     risorsa = result.scalar_one_or_none()
     if not risorsa:
         raise HTTPException(status_code=404, detail="Risorsa non trovata")
-    return risorsa
+    # A-01: dati sensibili solo a finance/admin; gli altri vista ridotta.
+    if has_finance_access(current_user.ruolo):
+        return RisorsaOut.model_validate(risorsa)
+    return RisorsaPublicOut.model_validate(risorsa)
 
 @router.post("", response_model=RisorsaOut, status_code=status.HTTP_201_CREATED)
 async def create_risorsa(

@@ -212,6 +212,19 @@ class RisorsaOut(OrmBase, RisorsaBase):
     updated_at: datetime
 
 
+class RisorsaPublicOut(OrmBase):
+    """Vista ridotta e SICURA di una risorsa per i ruoli non-finance (es. Studio OS):
+    esclude IBAN/banca/BIC, codice fiscale, P.IVA, indirizzo, costi e note."""
+    id: uuid.UUID
+    user_id: Optional[uuid.UUID] = None
+    nome: str
+    cognome: str
+    ruolo: Optional[str] = None
+    tipo_contratto: str = "DIPENDENTE"
+    ore_settimanali: Decimal = Decimal("40")
+    attivo: bool = True
+
+
 # ── AUTH ──────────────────────────────────────────────────
 class LoginRequest(BaseModel):
     email: str # Can be email or username
