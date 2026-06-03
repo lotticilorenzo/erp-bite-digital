@@ -446,14 +446,23 @@ async def get_client_health_score(db: AsyncSession, cliente_id: uuid.UUID) -> di
     ).options(selectinload(Commessa.righe_progetto))
     r_res = await db.execute(r_stmt)
     commesse_anno = r_res.scalars().all()
-    
+
+    # H-05: ore reali per commessa in UNA query aggregata invece di una SELECT per commessa (N+1)
+    commessa_ids = [c.id for c in commesse_anno]
+    ore_per_commessa: dict = {}
+    if commessa_ids:
+        agg_res = await db.execute(
+            select(Timesheet.commessa_id, func.sum(Timesheet.durata_minuti))
+            .where(Timesheet.commessa_id.in_(commessa_ids))
+            .group_by(Timesheet.commessa_id)
+        )
+        ore_per_commessa = {cid: (tot or 0) for cid, tot in agg_res.all()}
+
     creep_sum = 0
     creep_count = 0
     for c in commesse_anno:
         if c.ore_contratto and c.ore_contratto > 0:
-            # Calcola ore reali per questa commessa
-            ts_res = await db.execute(select(func.sum(Timesheet.durata_minuti)).where(Timesheet.commessa_id == c.id))
-            ore_reali = (ts_res.scalar_one() or 0) / 60
+            ore_reali = ore_per_commessa.get(c.id, 0) / 60
             ratio = ore_reali / float(c.ore_contratto)
             creep_sum += ratio
             creep_count += 1
