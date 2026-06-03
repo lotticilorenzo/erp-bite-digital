@@ -2249,14 +2249,19 @@ async def _upsert_fic_clienti(
     errors: list[str],
 ) -> int:
     imported = 0
+    # H-06: prefetch dei clienti esistenti per fic_id (1 query) invece di una SELECT per record
+    _fic_ids = [str(r["id"]) for r in items if r.get("id") is not None]
+    existing: dict[str, Cliente] = {}
+    if _fic_ids:
+        _pref = await db.execute(select(Cliente).where(Cliente.fic_cliente_id.in_(_fic_ids)))
+        existing = {c.fic_cliente_id: c for c in _pref.scalars().all()}
     for raw in items:
         try:
             fic_id_raw = raw.get("id")
             if fic_id_raw is None:
                 continue
             fic_id = str(fic_id_raw)
-            result = await db.execute(select(Cliente).where(Cliente.fic_cliente_id == fic_id))
-            cliente = result.scalar_one_or_none()
+            cliente = existing.get(fic_id)
             if not cliente:
                 cliente = Cliente(
                     ragione_sociale=raw.get("name") or raw.get("business_name") or f"Cliente FIC {fic_id}",
@@ -2264,6 +2269,7 @@ async def _upsert_fic_clienti(
                     attivo=True,
                 )
                 db.add(cliente)
+                existing[fic_id] = cliente
 
             cliente.ragione_sociale = raw.get("name") or raw.get("business_name") or cliente.ragione_sociale
             cliente.piva = raw.get("vat_number") or cliente.piva
@@ -2300,14 +2306,20 @@ async def _upsert_fic_fornitori(
     all_cats = res_cat.scalars().all()
     cat_map = {c.nome.lower(): c.id for c in all_cats}
 
+    # H-06: prefetch dei fornitori esistenti per fic_id (1 query). I MANUAL-* hanno fic_id non
+    # numerico -> non sono tra i fic_id FiC -> non vengono caricati ne' toccati (come prima, B-02).
+    _fic_ids = [str(r["id"]) for r in items if r.get("id") is not None]
+    existing: dict[str, Fornitore] = {}
+    if _fic_ids:
+        _pref = await db.execute(select(Fornitore).where(Fornitore.fic_id.in_(_fic_ids)))
+        existing = {f.fic_id: f for f in _pref.scalars().all()}
     for raw in items:
         try:
             fic_id_raw = raw.get("id")
             if fic_id_raw is None:
                 continue
             fic_id = str(fic_id_raw)
-            result = await db.execute(select(Fornitore).where(Fornitore.fic_id == fic_id))
-            fornitore = result.scalar_one_or_none()
+            fornitore = existing.get(fic_id)
             if not fornitore:
                 fornitore = Fornitore(
                     fic_id=fic_id,
@@ -2315,6 +2327,7 @@ async def _upsert_fic_fornitori(
                     attivo=True,
                 )
                 db.add(fornitore)
+                existing[fic_id] = fornitore
 
             fornitore.ragione_sociale = raw.get("name") or raw.get("business_name") or fornitore.ragione_sociale
             fornitore.piva = raw.get("vat_number") or fornitore.piva
@@ -2377,17 +2390,23 @@ async def _upsert_fic_fatture_attive(
 ) -> int:
     imported = 0
     clienti_cache: dict[str, Optional[Cliente]] = {}
+    # H-06: prefetch delle fatture attive esistenti per fic_id (1 query) invece di una SELECT per record
+    _fic_ids = [str(r["id"]) for r in items if r.get("id") is not None]
+    existing: dict[str, FatturaAttiva] = {}
+    if _fic_ids:
+        _pref = await db.execute(select(FatturaAttiva).where(FatturaAttiva.fic_id.in_(_fic_ids)))
+        existing = {f.fic_id: f for f in _pref.scalars().all()}
     for raw in items:
         try:
             fic_id_raw = raw.get("id")
             if fic_id_raw is None:
                 continue
             fic_id = str(fic_id_raw)
-            result = await db.execute(select(FatturaAttiva).where(FatturaAttiva.fic_id == fic_id))
-            fattura = result.scalar_one_or_none()
+            fattura = existing.get(fic_id)
             if not fattura:
                 fattura = FatturaAttiva(fic_id=fic_id)
                 db.add(fattura)
+                existing[fic_id] = fattura
 
             fic_cliente_id, _ = _extract_party(raw)
             cliente = await _find_cliente_by_fic_id(db, clienti_cache, fic_cliente_id)
@@ -2449,18 +2468,24 @@ async def _upsert_fic_fatture_passive(
 ) -> int:
     imported = 0
     fornitori_cache: dict[str, Optional[Fornitore]] = {}
+    # H-06: prefetch delle fatture passive esistenti per fic_id (1 query) invece di una SELECT per record
+    _fic_ids = [str(r["id"]) for r in items if r.get("id") is not None]
+    existing: dict[str, FatturaPassiva] = {}
+    if _fic_ids:
+        _pref = await db.execute(select(FatturaPassiva).where(FatturaPassiva.fic_id.in_(_fic_ids)))
+        existing = {f.fic_id: f for f in _pref.scalars().all()}
     for raw in items:
         try:
             fic_id_raw = raw.get("id")
             if fic_id_raw is None:
                 continue
             fic_id = str(fic_id_raw)
-            result = await db.execute(select(FatturaPassiva).where(FatturaPassiva.fic_id == fic_id))
-            fattura = result.scalar_one_or_none()
+            fattura = existing.get(fic_id)
             is_new = fattura is None
             if not fattura:
                 fattura = FatturaPassiva(fic_id=fic_id)
                 db.add(fattura)
+                existing[fic_id] = fattura
 
             fic_fornitore_id, _ = _extract_party(raw)
             fornitore = await _find_fornitore_by_fic_id(db, fornitori_cache, fic_fornitore_id)
