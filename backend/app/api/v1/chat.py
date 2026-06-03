@@ -39,7 +39,11 @@ def _allowed_websocket_origins() -> set[str]:
         _normalize_origin(settings.FRONTEND_BASE_URL),
         *(_normalize_origin(origin) for origin in settings.cors_origins_list),
     }
-    return {origin for origin in origins if origin}
+    base = {origin for origin in origins if origin}
+    # F-02: nginx redirige http://localhost -> https://localhost, quindi il browser invia Origin https.
+    # Consento la variante https SOLO degli origin http GIA' whitelistati (stessi host, non apre a nuovi).
+    https_variants = {o.replace("http://", "https://", 1) for o in base if o.startswith("http://")}
+    return base | https_variants
 
 # ═══════════════════════════════════════════════════════
 # WEBSOCKET MANAGER
