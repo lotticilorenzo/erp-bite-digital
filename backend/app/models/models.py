@@ -877,6 +877,12 @@ class Risorsa(Base):
 
     servizi: Mapped[List["RisorsaServizio"]] = relationship(back_populates="risorsa", cascade="all, delete-orphan")
 
+    @property
+    def costo_orario_effettivo(self) -> Decimal:
+        """Costo orario effettivo: override se presente, altrimenti calcolato, altrimenti 0.
+        Esposto da RisorsaOut e consumato dal FE (PricingFloor, CollaboratorCostCalculator)."""
+        return self.costo_orario_override or self.costo_orario_calcolato or Decimal("0")
+
 
 class RisorsaServizio(Base):
     __tablename__ = "risorse_servizi"

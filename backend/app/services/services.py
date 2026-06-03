@@ -3322,81 +3322,9 @@ def calcola_costo_orario(r) -> float:
     return round(costo_anno / ore_vendibili * 1.30, 2)
 
 
-async def list_risorse(db: AsyncSession):
-    from app.models.models import Risorsa
-    result = await db.execute(select(Risorsa).order_by(Risorsa.cognome, Risorsa.nome))
-    risorse = result.scalars().all()
-    out = []
-    for r in risorse:
-        d = {c.name: getattr(r, c.name) for c in r.__table__.columns}
-        d['costo_orario_effettivo'] = float(d.get('costo_orario_override') or d.get('costo_orario_calcolato') or 0)
-        out.append(d)
-    return out
-
-
-async def create_risorsa(db: AsyncSession, payload: dict):
-    from app.models.models import Risorsa
-    from decimal import Decimal
-    costo = calcola_costo_orario(payload)
-    from datetime import date as date_type
-    def parse_date(v):
-        if not v: return None
-        if isinstance(v, date_type): return v
-        try: return date_type.fromisoformat(str(v))
-        except (ValueError, TypeError): return None
-
-    r = Risorsa(
-        nome=payload['nome'],
-        cognome=payload['cognome'],
-        ruolo=payload.get('ruolo'),
-        tipo_contratto=payload.get('tipo_contratto', 'DIPENDENTE'),
-        data_inizio=parse_date(payload.get('data_inizio')),
-        data_fine=parse_date(payload.get('data_fine')),
-        ore_settimanali=Decimal(str(payload.get('ore_settimanali', 40))),
-        ral=Decimal(str(payload['ral'])) if payload.get('ral') else None,
-        compenso_fisso_mensile=Decimal(str(payload['compenso_fisso_mensile'])) if payload.get('compenso_fisso_mensile') else None,
-        compenso_obiettivo=Decimal(str(payload['compenso_obiettivo'])) if payload.get('compenso_obiettivo') else None,
-        contributi_percentuale=Decimal(str(payload.get('contributi_percentuale', 30))),
-        tfr_percentuale=Decimal(str(payload.get('tfr_percentuale', 6.91))),
-        costo_orario_override=Decimal(str(payload['costo_orario_override'])) if payload.get('costo_orario_override') else None,
-        costo_orario_calcolato=Decimal(str(costo)),
-        quota_proforma_mensile=Decimal(str(payload['quota_proforma_mensile'])) if payload.get('quota_proforma_mensile') else None,
-        attivo=payload.get('attivo', True),
-        note=payload.get('note'),
-        user_id=uuid.UUID(payload['user_id']) if payload.get('user_id') else None,
-    )
-    db.add(r)
-    await db.commit()
-    await db.refresh(r)
-    return r
-
-
-async def update_risorsa(db: AsyncSession, risorsa_id: uuid.UUID, payload: dict):
-    from app.models.models import Risorsa
-    from decimal import Decimal
-    result = await db.execute(select(Risorsa).where(Risorsa.id == risorsa_id))
-    r = result.scalar_one_or_none()
-    if not r:
-        return None
-    from datetime import date as date_type
-    def parse_date(v):
-        if not v: return None
-        if isinstance(v, date_type): return v
-        try: return date_type.fromisoformat(str(v))
-        except (ValueError, TypeError): return None
-
-    date_fields = {'data_inizio', 'data_fine'}
-    skip_fields = {'id', 'created_at', 'updated_at', 'costo_orario_calcolato'}
-    for k, v in payload.items():
-        if k in skip_fields: continue
-        if hasattr(r, k):
-            setattr(r, k, parse_date(v) if k in date_fields else v)
-    # Ricalcola costo orario
-    d = {c.name: getattr(r, c.name) for c in r.__table__.columns}
-    r.costo_orario_calcolato = Decimal(str(calcola_costo_orario(d)))
-    await db.commit()
-    await db.refresh(r)
-    return r
+# NOTE (D-02): list_risorse/create_risorsa/update_risorsa rimossi: erano usati solo dalle rotte
+# inline /risorse shadowed (D-01). Le risorse sono servite da risorse.py. calcola_costo_orario (sopra)
+# resta disponibile per il costing (E-02, da cablare nella create/update live in un task separato).
 
 
 async def get_progetto_with_servizi(db: AsyncSession, progetto_id):

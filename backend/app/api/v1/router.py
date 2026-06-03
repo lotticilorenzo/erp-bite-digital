@@ -55,7 +55,7 @@ from app.schemas.schemas import (
     MovimentoCassaUpdate, RiconciliaRequest,
     ImputazioniRequest,
     PianoCreate, PianoUpdate, CollegaCommessaRequest,
-    RisorsaCreate, RisorsaUpdate, SaldoCassaCreate,
+    SaldoCassaCreate,
 )
 from app.schemas.auth import ForgotPasswordRequest, ResetPasswordRequest
 import httpx
@@ -693,40 +693,9 @@ async def delete_imputazioni_movimento(
 
 
 # ── RISORSE (HR) ──────────────────────────────────────────
-@router.get("/risorse", tags=["HR"])
-async def get_risorse(
-    db: AsyncSession = Depends(get_db),
-    _auth: User = Depends(require_admin),
-):
-    from app.services.services import list_risorse
-    return await list_risorse(db)
-
-
-@router.post("/risorse", tags=["HR"])
-async def post_risorsa(
-    payload: RisorsaCreate,
-    db: AsyncSession = Depends(get_db),
-    _auth: User = Depends(require_admin),
-):
-    from app.services.services import create_risorsa
-    return await create_risorsa(db, payload.model_dump())
-
-
-@router.patch("/risorse/{risorsa_id}", tags=["HR"])
-async def patch_risorsa(
-    risorsa_id: uuid.UUID,
-    payload: RisorsaUpdate,
-    db: AsyncSession = Depends(get_db),
-    _auth: User = Depends(require_admin),
-):
-    from app.services.services import update_risorsa
-    r = await update_risorsa(db, risorsa_id, payload.model_dump(exclude_unset=True))
-    if not r:
-        raise HTTPException(status_code=404, detail="Risorsa non trovata")
-    return r
-
-
-# DELETE /risorse/{id} è gestito da risorse.py (soft-delete canonico, attivo=False).
+# Le rotte GET/POST/PATCH/DELETE /risorse sono servite da risorse.py (incluso sopra come
+# risorse.router). Le versioni inline qui erano shadowed/morte (D-01) e sono state rimosse
+# insieme ai service inutilizzati list_risorse/create_risorsa/update_risorsa (D-02).
 # L'endpoint hard-delete duplicato è stato rimosso (route shadowing + rischio FK).
 
 

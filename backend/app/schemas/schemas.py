@@ -208,6 +208,7 @@ class RisorsaUpdate(BaseModel):
 class RisorsaOut(OrmBase, RisorsaBase):
     id: uuid.UUID
     servizi: List[RisorsaServizioOut] = []
+    costo_orario_effettivo: Optional[float] = None  # override or calcolato or 0 (proprieta' del model)
     created_at: datetime
     updated_at: datetime
 
