@@ -37,13 +37,36 @@ interface FattureTableProps {
 }
 
 export function FattureTable({ data, type, onAction }: FattureTableProps) {
-  const getStatusBadge = (status: string) => {
-    const s = status.toLowerCase();
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(val);
+  };
+
+  const getStatusBadge = (item: any) => {
+    const s = (item.stato_pagamento || "").toLowerCase();
+    if (s === "saldato_fic_da_riconciliare") {
+      return (
+        <Badge className="bg-primary/15 text-primary border-primary/30 gap-1.5 font-bold px-2.5 py-0.5 uppercase text-[10px] tracking-widest">
+          <AlertCircle className="h-3 w-3" />
+          Saldato FiC · Da riconciliare
+        </Badge>
+      );
+    }
+    if (s === "parziale") {
+      return (
+        <div className="flex flex-col items-center gap-0.5">
+          <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20 gap-1.5 font-bold px-2.5 py-0.5 uppercase text-[10px] tracking-widest">
+            <Clock className="h-3 w-3" />
+            Parziale
+          </Badge>
+          <span className="text-[9px] font-bold text-amber-500/80 tabular-nums">residuo {formatCurrency(Number(item.importo_residuo) || 0)}</span>
+        </div>
+      );
+    }
     if (s === "paid" || s === "incassata" || s === "pagata") {
       return (
         <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 gap-1.5 font-bold px-2.5 py-0.5 uppercase text-[10px] tracking-widest">
           <CheckCircle2 className="h-3 w-3" />
-          Pagata
+          {item.stato_pagamento?.toLowerCase() === "incassata" ? "Incassata" : "Pagata"}
         </Badge>
       );
     }
@@ -61,10 +84,6 @@ export function FattureTable({ data, type, onAction }: FattureTableProps) {
         In Attesa
       </Badge>
     );
-  };
-
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(val);
   };
 
   if (data.length === 0) {
@@ -131,7 +150,7 @@ export function FattureTable({ data, type, onAction }: FattureTableProps) {
                 </span>
               </TableCell>
               <TableCell className="text-center">
-                {getStatusBadge(item.stato_pagamento)}
+                {getStatusBadge(item)}
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex items-center justify-end gap-2">

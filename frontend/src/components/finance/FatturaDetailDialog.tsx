@@ -29,6 +29,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useIncassaFattura, useUpdateFattura } from "@/hooks/useFatture";
+import { useRiconciliazioniFattura } from "@/hooks/useRiconciliazioni";
+import { formatEuro } from "@/lib/utils";
+import { Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { it } from "date-fns/locale";
 
@@ -48,6 +51,7 @@ export function FatturaDetailDialog({
   const navigate = useNavigate();
   const incassaMutation = useIncassaFattura();
   const updateMutation = useUpdateFattura();
+  const { data: riconciliazioni = [] } = useRiconciliazioniFattura(fattura?.id ?? null, type, open && !!fattura);
 
   if (!fattura) return null;
 
@@ -101,12 +105,28 @@ export function FatturaDetailDialog({
   };
 
   const getStatusBadge = (status: string) => {
-    const s = status.toLowerCase();
+    const s = (status || "").toLowerCase();
+    if (s === "saldato_fic_da_riconciliare") {
+      return (
+        <Badge className="bg-primary/15 text-primary border-primary/30 gap-1.5 font-bold px-3 py-1 uppercase text-[10px] tracking-widest">
+          <AlertCircle className="h-3.5 w-3.5" />
+          Saldato FiC · Da riconciliare
+        </Badge>
+      );
+    }
+    if (s === "parziale") {
+      return (
+        <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20 gap-1.5 font-bold px-3 py-1 uppercase text-[10px] tracking-widest">
+          <Clock className="h-3.5 w-3.5" />
+          Parziale · residuo {formatCurrency(Number(fattura.importo_residuo) || 0)}
+        </Badge>
+      );
+    }
     if (s === "paid" || s === "incassata" || s === "pagata") {
       return (
         <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 gap-1.5 font-bold px-3 py-1 uppercase text-[10px] tracking-widest">
           <CheckCircle2 className="h-3.5 w-3.5" />
-          Pagata
+          {s === "incassata" ? "Incassata" : "Pagata"}
         </Badge>
       );
     }
@@ -355,6 +375,26 @@ export function FatturaDetailDialog({
               </div>
             </div>
           </div>
+
+          {/* Riconciliazioni collegate */}
+          {riconciliazioni.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] flex items-center gap-2">
+                <Link2 className="h-3.5 w-3.5" /> Riconciliazioni collegate
+              </h3>
+              <div className="rounded-2xl border border-border/50 bg-white/5 divide-y divide-white/5">
+                {riconciliazioni.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between px-5 py-3">
+                    <span className="text-xs font-bold text-white">
+                      {r.data ? format(new Date(r.data), "dd MMM yyyy", { locale: it }) : "—"}
+                    </span>
+                    {r.note && <span className="text-[10px] text-muted-foreground italic flex-1 px-4 truncate">{r.note}</span>}
+                    <span className="font-mono text-xs font-black text-emerald-500">{formatEuro(Number(r.importo))}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {fattura.importo_residuo > 0 && (
             <div className="pt-4 flex gap-4">

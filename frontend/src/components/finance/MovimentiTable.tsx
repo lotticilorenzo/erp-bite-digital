@@ -79,27 +79,42 @@ export function MovimentiTable({ data, onRiconcilia, onImputa }: MovimentiTableP
                   </span>
                 </TableCell>
                 <TableCell className="text-center">
-                  {item.riconciliato ? (
-                    <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 font-bold px-2 py-0.5 uppercase text-[9px] tracking-widest">
-                       Riconciliato
-                    </Badge>
-                  ) : (
-                    <Badge className="bg-slate-500/10 text-slate-500 border-slate-500/20 font-bold px-2 py-0.5 uppercase text-[9px] tracking-widest">
-                       In Attesa
-                    </Badge>
-                  )}
+                  {(() => {
+                    const riconciliatoImporto = Number(item.importo_riconciliato || 0);
+                    const residuo = Number(item.residuo_movimento ?? Math.abs(Number(item.importo)));
+                    if (item.riconciliato) {
+                      return (
+                        <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 font-bold px-2 py-0.5 uppercase text-[9px] tracking-widest">
+                          Riconciliato
+                        </Badge>
+                      );
+                    }
+                    if (riconciliatoImporto > 0.005 && residuo > 0.005) {
+                      return (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20 font-bold px-2 py-0.5 uppercase text-[9px] tracking-widest">
+                            Parziale
+                          </Badge>
+                          <span className="text-[9px] font-bold text-amber-500/80 tabular-nums">residuo {formatCurrency(residuo)}</span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <Badge className="bg-slate-500/10 text-slate-500 border-slate-500/20 font-bold px-2 py-0.5 uppercase text-[9px] tracking-widest">
+                        Da riconciliare
+                      </Badge>
+                    );
+                  })()}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
-                    {!item.riconciliato && (
-                      <button
-                        onClick={() => onRiconcilia?.(item)}
-                        className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center text-[#475569] hover:text-white hover:bg-primary transition-all duration-300 shadow-lg"
-                        title="Riconcilia con fattura"
-                      >
-                        <Link2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
+                    <button
+                      onClick={() => onRiconcilia?.(item)}
+                      className={`h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center transition-all duration-300 shadow-lg ${item.riconciliato ? "text-emerald-500/70 hover:text-white hover:bg-primary" : "text-[#475569] hover:text-white hover:bg-primary"}`}
+                      title={item.riconciliato ? "Gestisci riconciliazioni" : "Riconcilia con fattura"}
+                    >
+                      <Link2 className="h-3.5 w-3.5" />
+                    </button>
                     <button
                       onClick={() => onImputa?.(item)}
                       className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center text-[#475569] hover:text-white hover:bg-violet-600 transition-all duration-300 shadow-lg"

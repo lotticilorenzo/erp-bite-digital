@@ -17,6 +17,7 @@ import { useMovimentiCassa } from "@/hooks/useCassa";
 import { CassaDashboard } from "@/components/finance/CassaDashboard";
 import { MovimentiTable } from "@/components/finance/MovimentiTable";
 import { ImputazioneCostiDrawer } from "@/components/finance/ImputazioneCostiDrawer";
+import { RiconciliazioneDrawer } from "@/components/finance/RiconciliazioneDrawer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -24,6 +25,7 @@ import { toast } from "sonner";
 export default function Cassa() {
   const { data: movimenti, isLoading } = useMovimentiCassa();
   const [imputaMovimento, setImputaMovimento] = useState<any>(null);
+  const [riconciliaMovimento, setRiconciliaMovimento] = useState<any>(null);
   const [giorniFilter, setGiorniFilter] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
@@ -131,7 +133,7 @@ export default function Cassa() {
         <MovimentiTable
           data={displayedMovimenti}
           onImputa={setImputaMovimento}
-          onRiconcilia={(m) => toast.info(`Riconciliazione con fattura per movimento "${m.descrizione}" — seleziona la fattura dalla lista.`)}
+          onRiconcilia={setRiconciliaMovimento}
         />
       </div>
 
@@ -145,6 +147,12 @@ export default function Cassa() {
           sourceLabel={imputaMovimento.descrizione}
         />
       )}
+
+      <RiconciliazioneDrawer
+        open={!!riconciliaMovimento}
+        onClose={() => setRiconciliaMovimento(null)}
+        movimento={riconciliaMovimento}
+      />
     </div>
   );
 }
