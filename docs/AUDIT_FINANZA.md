@@ -133,9 +133,25 @@ Tutte le pagine consumano **API reali** via hook TanStack Query in
 
 ### 1.6 Costo orario / ore
 
+> **AGGIORNAMENTO 2026-06 — Architettura overhead (anti doppio conteggio).**
+> `calcola_costo_orario` ora calcola il **costo DIRETTO** per ora produttiva
+> (lordo+contributi+TFR ÷ ore vendibili, con saturazione 70% + scorporo ferie/festivi/malattia).
+> Il vecchio **markup ×1.30 di struttura è stato RIMOSSO**: era un overhead che, se cablato
+> nel costing, sarebbe stato sottratto dal margine/P&L **in aggiunta** ai costi fissi di
+> struttura (3845/mese) già sottratti dal P&L → doppio conteggio. Disinnescato **prima**
+> dell'attivazione dei dati reali (al momento il ×1.30 era dead code: `calcola_costo_orario`
+> senza caller, `costo_orario_calcolato` NULL su tutte le risorse, snapshot timesheet = `users.costo_orario`
+> piatto → doppio conteggio quantificato = €0).
+> L'overhead di struttura vive ora **solo nel pricing floor** via `calcola_tasso_overhead`
+> (brief §3.3): `tasso = costi_fissi_indivisibili_mensili ÷ ore_produttive_mensili_team`,
+> applicato ai soli ruoli **DIPENDENTE** (freelancer esclusi, tariffe già fully-loaded).
+> Il P&L (`calcola_pl_gestionale`) e `calcola_tasso_overhead` condividono la stessa
+> classificazione costi fissi (`costi_fissi_indivisibili_mese`) → i fissi sono contati una volta sola.
+
 | Aspetto | Stato | Evidenza | Note |
 |---|---|---|---|
-| Logica costo orario fully-loaded | ✅ esiste (su `risorse`) | services.py:2400 `calcola_costo_orario` | Include contributi + TFR + overhead 1.30 + saturazione 70% + scorporo ferie/festivi/malattia. Distingue DIPENDENTE/FONDATORE/FREELANCER. Salvato in `risorse.costo_orario_calcolato` |
+| Logica costo orario DIRETTO | ✅ esiste (su `risorse`) | `calcola_costo_orario` (services.py) | Costo diretto: contributi + TFR + saturazione 70% + scorporo ferie/festivi/malattia. **Nessun overhead** (rimosso ×1.30). Distingue DIPENDENTE/FONDATORE/FREELANCER. Salvato in `risorse.costo_orario_calcolato` |
+| Tasso overhead struttura (§3.3) | ✅ nuovo | `calcola_tasso_overhead` (services.py) | `costi_fissi_indivisibili ÷ ore_produttive_team`; usato dal pricing floor per i dipendenti, esposto separato nel breakdown. NON entra in margine/P&L |
 | **Costo usato per il margine commessa** | ❌ disallineato | services.py:817-828 | `approva_timesheet` calcola `costo_lavoro` da **`users.costo_orario`** (campo piatto), NON dal fully-loaded di `risorse`. I due sistemi sono scollegati |
 | Timesheet registra persona/cliente/progetto/ore/attività | ✅ | models.py:511-533 | `user_id` (persona), `commessa_id`→cliente, `task_id`→progetto, `durata_minuti` (ore), `servizio`/`task_display_name` (attività), `data_attivita` |
 | timer_sessions | ✅ | models.py:493 | `task_id`, `user_id`, `started_at`/`stopped_at`, `durata_minuti`, `salvato_timesheet` |
