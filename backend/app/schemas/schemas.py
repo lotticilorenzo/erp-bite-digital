@@ -1610,6 +1610,19 @@ class RiconciliaRequest(BaseModel):
     riconciliato: bool = True
 
 
+# ── RICONCILIAZIONI (M2M + parziali, brief §2.2) ──────────
+class RiconciliazioneRiga(BaseModel):
+    fattura_attiva_id: Optional[uuid.UUID] = None
+    fattura_passiva_id: Optional[uuid.UUID] = None
+    importo: Decimal = Field(..., gt=0)
+    data: Optional[date] = None  # default lato service = movimento.data_valuta (R2)
+    note: Optional[str] = Field(None, max_length=1000)
+
+
+class RiconciliazioniCreate(BaseModel):
+    righe: List[RiconciliazioneRiga] = Field(..., min_length=1)
+
+
 # ── IMPUTAZIONI ───────────────────────────────────────────
 class ImputazioneItem(BaseModel):
     cliente_id: Optional[uuid.UUID] = None

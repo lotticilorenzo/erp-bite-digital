@@ -1153,8 +1153,8 @@ async def _dso_storico_per_cliente(db: AsyncSession) -> tuple[dict, int]:
 
     Incassata completa = importo_residuo=0 AND data_ultimo_incasso NOT NULL.
     giorni = data_ultimo_incasso − data_emissione; i giorni NEGATIVI (dato sporco) sono esclusi.
-    TODO(R2): a regime la data incasso deve venire SOLO dalla riconciliazione bancaria
-    (quando FiC sarà attivo) — qui si usa data_ultimo_incasso come unica fonte disponibile.
+    R2 (implementata): data_ultimo_incasso e' scritta SOLO dalla riconciliazione bancaria
+    (_recompute_fattura), mai dalla sync FiC. E' quindi una data di incasso reale.
     """
     rows = await db.execute(text(
         """
@@ -2502,10 +2502,11 @@ async def _upsert_fic_fatture_attive(
                 due_date=due_date,
                 paid_label="INCASSATA",
             )
-            if fattura.stato_pagamento != 'paid':
-                fattura.stato_pagamento = fic_stato
-            if not fattura.data_ultimo_incasso:
-                fattura.data_ultimo_incasso = ultimo_incasso
+            # R2: la data incasso viene SOLO dalla riconciliazione bancaria, MAI dalla sync FiC.
+            # Se FiC dice saldato ma non c'e' (ancora) una riconciliazione che lo conferma, lo stato
+            # gestionale e' SALDATO_FIC_DA_RICONCILIARE; INCASSATA + data le scrive solo il recompute.
+            if fattura.stato_pagamento not in ('paid', 'INCASSATA'):
+                fattura.stato_pagamento = 'SALDATO_FIC_DA_RICONCILIARE' if fic_stato == 'INCASSATA' else fic_stato
             fattura.valuta = raw.get("currency", {}).get("code") if isinstance(raw.get("currency"), dict) else None
             fattura.payments_raw = {"payments": payments}
             fattura.fic_raw_data = raw
@@ -2586,15 +2587,15 @@ async def _upsert_fic_fatture_passive(
                     doc_date = _extract_doc_date(raw)
                     anno = doc_date.year if doc_date else date.today().year
                     fattura.numero = await _next_numero_passiva(db, anno)
+            # R2: la data pagamento viene SOLO dalla riconciliazione bancaria, MAI dalla sync FiC.
             if fattura.stato_pagamento not in ('paid', 'PAGATA'):
-                fattura.stato_pagamento = _payment_status(
+                fic_stato_p = _payment_status(
                     total=importo_totale,
                     paid=importo_pagato,
                     due_date=due_date,
                     paid_label="PAGATA",
                 )
-            if not fattura.data_ultimo_pagamento:
-                fattura.data_ultimo_pagamento = ultimo_pagamento
+                fattura.stato_pagamento = 'SALDATO_FIC_DA_RICONCILIARE' if fic_stato_p == 'PAGATA' else fic_stato_p
             imported += 1
         except Exception as exc:
             errors.append(f"fattura_passiva:{raw.get('id')} -> {exc}")
@@ -2920,6 +2921,235 @@ async def list_movimenti_cassa(db: AsyncSession, skip: int = 0, limit: int = 200
     return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
 
 
+# ── RICONCILIAZIONE BANCARIA (M2M + parziali, fonte unica — brief §2.2) ──────────
+# La tabella `riconciliazioni` e' la FONTE UNICA: importo_pagato/residuo/stato/data delle
+# fatture e il flag riconciliato dei movimenti sono SEMPRE derivati da qui (mai scritti a mano,
+# salvo l'eccezione documentata /incassa per incassi senza movimento bancario).
+
+async def _ric_query_fattura(fattura_id, is_attiva):
+    from app.models.models import Riconciliazione
+    col = Riconciliazione.fattura_attiva_id if is_attiva else Riconciliazione.fattura_passiva_id
+    return col == fattura_id
+
+
+async def _sum_riconciliazioni_fattura(db: AsyncSession, fattura_id, is_attiva) -> Decimal:
+    from app.models.models import Riconciliazione
+    cond = await _ric_query_fattura(fattura_id, is_attiva)
+    res = await db.execute(select(func.coalesce(func.sum(Riconciliazione.importo), 0)).where(cond))
+    return Decimal(str(res.scalar() or 0))
+
+
+async def _sum_riconciliazioni_movimento(db: AsyncSession, movimento_id) -> Decimal:
+    from app.models.models import Riconciliazione
+    res = await db.execute(
+        select(func.coalesce(func.sum(Riconciliazione.importo), 0)).where(Riconciliazione.movimento_id == movimento_id)
+    )
+    return Decimal(str(res.scalar() or 0))
+
+
+async def _recompute_fattura(db: AsyncSession, fattura, is_attiva: bool):
+    """Ricalcola importo_pagato/residuo/stato/data della fattura dalle sue riconciliazioni.
+    data (R2) = data della riconciliazione che porta il cumulato >= totale; None se residuo>0."""
+    from app.models.models import Riconciliazione
+    cond = await _ric_query_fattura(fattura.id, is_attiva)
+    res = await db.execute(
+        select(Riconciliazione.importo, Riconciliazione.data, Riconciliazione.created_at)
+        .where(cond)
+        .order_by(Riconciliazione.data.asc(), Riconciliazione.created_at.asc())
+    )
+    rows = res.all()
+    pagato = sum((r.importo for r in rows), Decimal("0"))
+    totale = fattura.importo_totale or Decimal("0")
+    residuo = totale - pagato
+    if residuo < 0:
+        residuo = Decimal("0")
+    fattura.importo_pagato = pagato
+    fattura.importo_residuo = residuo
+
+    data_saldo = None
+    if pagato >= totale and totale > 0 and rows:
+        cum = Decimal("0")
+        for r in rows:
+            cum += r.importo
+            if cum >= totale:
+                data_saldo = r.data
+                break
+        if data_saldo is None:
+            data_saldo = rows[-1].data
+
+    if pagato <= 0:
+        stato = "ATTESA"
+    elif residuo <= 0:
+        stato = "INCASSATA" if is_attiva else "PAGATA"
+    else:
+        stato = "PARZIALE"
+    fattura.stato_pagamento = stato
+
+    if is_attiva:
+        fattura.data_ultimo_incasso = data_saldo
+        if residuo <= 0 and totale > 0:
+            from app.models.models import Commessa, CommessaStatus
+            res_c = await db.execute(select(Commessa).where(Commessa.fattura_id == fattura.id))
+            for cm in res_c.scalars().all():
+                if cm.stato != CommessaStatus.INCASSATA:
+                    cm.stato = CommessaStatus.INCASSATA
+    else:
+        fattura.data_ultimo_pagamento = data_saldo
+
+
+async def _recompute_movimento(db: AsyncSession, mov) -> dict:
+    """riconciliato = (Σ importi riconciliazioni == |importo movimento|). Espone il residuo."""
+    somma = await _sum_riconciliazioni_movimento(db, mov.id)
+    mov_abs = abs(mov.importo or Decimal("0"))
+    mov.riconciliato = bool(somma > 0 and somma == mov_abs)
+    return {"importo_movimento": mov_abs, "riconciliato_importo": somma, "residuo_movimento": mov_abs - somma}
+
+
+async def _load_fattura(db: AsyncSession, *, fattura_attiva_id=None, fattura_passiva_id=None):
+    """Ritorna (fattura, is_attiva) o (None, None)."""
+    from app.models.models import FatturaAttiva, FatturaPassiva
+    if fattura_attiva_id:
+        r = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == fattura_attiva_id))
+        return r.scalar_one_or_none(), True
+    if fattura_passiva_id:
+        r = await db.execute(select(FatturaPassiva).where(FatturaPassiva.id == fattura_passiva_id))
+        return r.scalar_one_or_none(), False
+    return None, None
+
+
+async def riconcilia_movimento(db: AsyncSession, movimento_id, righe: list[dict], user_id=None) -> dict:
+    """Crea N righe di riconciliazione per un movimento (pagamento multiplo) con validazione vincoli.
+    righe: [{fattura_attiva_id|fattura_passiva_id, importo, note?, data?}]."""
+    from app.models.models import MovimentoCassa, Riconciliazione
+    res = await db.execute(select(MovimentoCassa).where(MovimentoCassa.id == movimento_id))
+    mov = res.scalar_one_or_none()
+    if not mov:
+        raise HTTPException(status_code=404, detail="Movimento non trovato")
+    if not righe:
+        raise HTTPException(status_code=400, detail="Nessuna riga di riconciliazione fornita")
+
+    mov_abs = abs(mov.importo or Decimal("0"))
+    running_mov = await _sum_riconciliazioni_movimento(db, movimento_id)
+    fattura_running: dict = {}
+    fatture_toccate = []
+    create_payload = []
+
+    for riga in righe:
+        fa_id = riga.get("fattura_attiva_id")
+        fp_id = riga.get("fattura_passiva_id")
+        if bool(fa_id) == bool(fp_id):
+            raise HTTPException(status_code=400, detail="Ogni riga deve referenziare ESATTAMENTE una fattura (attiva XOR passiva)")
+        try:
+            importo = Decimal(str(riga["importo"]))
+        except (KeyError, Exception):
+            raise HTTPException(status_code=400, detail="Importo riga mancante o non valido")
+        if importo <= 0:
+            raise HTTPException(status_code=400, detail="L'importo di riconciliazione deve essere > 0")
+
+        fattura, is_attiva = await _load_fattura(db, fattura_attiva_id=fa_id, fattura_passiva_id=fp_id)
+        if not fattura:
+            raise HTTPException(status_code=404, detail="Fattura non trovata")
+
+        fkey = (("A", fa_id) if is_attiva else ("P", fp_id))
+        if fkey not in fattura_running:
+            fattura_running[fkey] = await _sum_riconciliazioni_fattura(db, fattura.id, is_attiva)
+        totale = fattura.importo_totale or Decimal("0")
+        if fattura_running[fkey] + importo > totale:
+            residuo_f = totale - fattura_running[fkey]
+            raise HTTPException(status_code=400, detail=f"Importo {importo} supera il residuo della fattura ({residuo_f}).")
+        fattura_running[fkey] += importo
+
+        running_mov += importo
+        if running_mov > mov_abs:
+            raise HTTPException(status_code=400, detail=f"La somma riconciliata supera l'importo del movimento ({mov_abs}).")
+
+        create_payload.append((mov, fa_id, fp_id, importo, riga.get("data") or mov.data_valuta, riga.get("note"), fattura, is_attiva))
+
+    for (mov_, fa_id, fp_id, importo, data_ric, note, fattura, is_attiva) in create_payload:
+        db.add(Riconciliazione(
+            movimento_id=mov_.id, fattura_attiva_id=fa_id, fattura_passiva_id=fp_id,
+            importo=importo, data=data_ric, note=note,
+        ))
+        fatture_toccate.append((fattura, is_attiva))
+    await db.flush()
+
+    for fattura, is_attiva in fatture_toccate:
+        await _recompute_fattura(db, fattura, is_attiva)
+    mov_state = await _recompute_movimento(db, mov)
+
+    if user_id:
+        await write_audit(db, user_id, "movimenti_cassa", mov.id, "RICONCILIA",
+                          dopo={"righe": len(create_payload), "riconciliato": mov.riconciliato})
+    await db.commit()
+    return {
+        "movimento_id": str(mov.id),
+        "riconciliato": mov.riconciliato,
+        "residuo_movimento": float(mov_state["residuo_movimento"]),
+        "righe_create": len(create_payload),
+    }
+
+
+async def elimina_riconciliazione(db: AsyncSession, ric_id) -> bool:
+    from app.models.models import Riconciliazione, MovimentoCassa
+    res = await db.execute(select(Riconciliazione).where(Riconciliazione.id == ric_id))
+    r = res.scalar_one_or_none()
+    if not r:
+        return False
+    movimento_id = r.movimento_id
+    fa_id, fp_id = r.fattura_attiva_id, r.fattura_passiva_id
+    await db.delete(r)
+    await db.flush()
+    fattura, is_attiva = await _load_fattura(db, fattura_attiva_id=fa_id, fattura_passiva_id=fp_id)
+    if fattura:
+        await _recompute_fattura(db, fattura, is_attiva)
+    res_m = await db.execute(select(MovimentoCassa).where(MovimentoCassa.id == movimento_id))
+    mov = res_m.scalar_one_or_none()
+    if mov:
+        await _recompute_movimento(db, mov)
+    await db.commit()
+    return True
+
+
+async def rimuovi_riconciliazioni_movimento(db: AsyncSession, movimento_id) -> int:
+    """Elimina TUTTE le riconciliazioni di un movimento e ricalcola i derivati (retrocompat
+    del vecchio PATCH con riconciliato=false)."""
+    from app.models.models import Riconciliazione, MovimentoCassa
+    res = await db.execute(select(Riconciliazione).where(Riconciliazione.movimento_id == movimento_id))
+    righe = res.scalars().all()
+    fatture_keys = {("A", r.fattura_attiva_id) if r.fattura_attiva_id else ("P", r.fattura_passiva_id) for r in righe}
+    for r in righe:
+        await db.delete(r)
+    await db.flush()
+    for tipo, fid in fatture_keys:
+        fattura, is_attiva = await _load_fattura(
+            db, fattura_attiva_id=fid if tipo == "A" else None,
+            fattura_passiva_id=fid if tipo == "P" else None,
+        )
+        if fattura:
+            await _recompute_fattura(db, fattura, is_attiva)
+    res_m = await db.execute(select(MovimentoCassa).where(MovimentoCassa.id == movimento_id))
+    mov = res_m.scalar_one_or_none()
+    if mov:
+        await _recompute_movimento(db, mov)
+    await db.commit()
+    return len(righe)
+
+
+async def list_riconciliazioni_movimento(db: AsyncSession, movimento_id):
+    from app.models.models import Riconciliazione
+    res = await db.execute(
+        select(Riconciliazione).where(Riconciliazione.movimento_id == movimento_id).order_by(Riconciliazione.data.asc())
+    )
+    return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in res.scalars().all()]
+
+
+async def list_riconciliazioni_fattura(db: AsyncSession, fattura_id, is_attiva: bool):
+    from app.models.models import Riconciliazione
+    cond = await _ric_query_fattura(fattura_id, is_attiva)
+    res = await db.execute(select(Riconciliazione).where(cond).order_by(Riconciliazione.data.asc()))
+    return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in res.scalars().all()]
+
+
 async def list_costi_fissi(db: AsyncSession):
     from app.models.models import CostoFisso
     result = await db.execute(
@@ -3007,9 +3237,9 @@ async def delete_regola(db: AsyncSession, regola_id):
     return True
 
 
-async def applica_regole_automatiche(db: AsyncSession):
+async def applica_regole_automatiche(db: AsyncSession, user_id=None):
     import re as re_module
-    from app.models.models import RegolaRiconciliazione, MovimentoCassa
+    from app.models.models import RegolaRiconciliazione, MovimentoCassa, Riconciliazione, FatturaPassiva
 
     res_regole = await db.execute(
         select(RegolaRiconciliazione)
@@ -3024,6 +3254,9 @@ async def applica_regole_automatiche(db: AsyncSession):
     movimenti = res_mov.scalars().all()
 
     matched = 0
+    riconciliati = 0
+    # Tracciamento per audit APPLICA (chiude R7: log regole non piu' vuoto)
+    regola_match: dict = {}   # regola.id -> {"nome", "match", "riconciliati"}
     for mov in movimenti:
         desc = (mov.descrizione or '').lower()
         for regola in regole:
@@ -3041,16 +3274,37 @@ async def applica_regole_automatiche(db: AsyncSession):
             if hit:
                 if regola.categoria:
                     mov.categoria = regola.categoria
-                if regola.auto_riconcilia:
-                    mov.riconciliato = True
-                    if regola.fattura_passiva_id:
-                        mov.fattura_passiva_id = regola.fattura_passiva_id
+                stat = regola_match.setdefault(regola.id, {"nome": regola.nome, "match": 0, "riconciliati": 0})
+                # Auto-riconciliazione: crea la RIGA riconciliazioni (fonte unica), non il solo FK.
+                if regola.auto_riconcilia and regola.fattura_passiva_id:
+                    fp_res = await db.execute(select(FatturaPassiva).where(FatturaPassiva.id == regola.fattura_passiva_id))
+                    fp = fp_res.scalar_one_or_none()
+                    if fp:
+                        esistenti = await _sum_riconciliazioni_fattura(db, fp.id, False)
+                        residuo = (fp.importo_totale or Decimal("0")) - esistenti
+                        importo = min(abs(mov.importo or Decimal("0")), residuo)
+                        if importo > 0:
+                            db.add(Riconciliazione(
+                                movimento_id=mov.id, fattura_passiva_id=fp.id, importo=importo,
+                                data=mov.data_valuta, note=f"Auto-regola: {regola.nome}",
+                            ))
+                            await db.flush()
+                            await _recompute_fattura(db, fp, False)
+                            await _recompute_movimento(db, mov)
+                            riconciliati += 1
+                            stat["riconciliati"] += 1
                 regola.contatore_match = (regola.contatore_match or 0) + 1
+                stat["match"] += 1
                 matched += 1
                 break
 
+    # Audit APPLICA per ogni regola che ha avuto almeno un match (R7)
+    for rid, stat in regola_match.items():
+        await write_audit(db, user_id, "regole_riconciliazione", rid, "APPLICA",
+                          dopo={"nome": stat["nome"], "match": stat["match"], "riconciliati": stat["riconciliati"]})
+
     await db.commit()
-    return {'movimenti_processati': len(movimenti), 'match_trovati': matched}
+    return {'movimenti_processati': len(movimenti), 'match_trovati': matched, 'riconciliati': riconciliati}
 
 
 async def dry_run_regole_automatiche(db: AsyncSession):
@@ -3144,7 +3398,11 @@ async def suggest_riconciliazione(db: AsyncSession, movimento_id: uuid.UUID):
         return {'regola': None, 'fatture_importo': []}
 
     desc = (mov.descrizione or '').lower()
-    importo = abs(float(mov.importo or 0))
+    # Match/proposta sul RESIDUO del movimento (M2M/parziali): un bonifico gia' parzialmente
+    # riconciliato propone solo la parte non ancora coperta.
+    gia_riconciliato = await _sum_riconciliazioni_movimento(db, mov.id)
+    mov_residuo = float(abs(mov.importo or Decimal("0")) - gia_riconciliato)
+    importo = max(mov_residuo, 0.0)
 
     res_regole = await db.execute(
         select(RegolaRiconciliazione)
@@ -3164,25 +3422,29 @@ async def suggest_riconciliazione(db: AsyncSession, movimento_id: uuid.UUID):
             regola_match = {c.name: getattr(r, c.name) for c in r.__table__.columns}
             break
 
+    # Fatture passive con residuo aperto, matchate sul RESIDUO ~ residuo movimento (±5%).
     res_fp = await db.execute(
         select(FatturaPassiva, Fornitore)
         .outerjoin(Fornitore, FatturaPassiva.fornitore_id == Fornitore.id)
-        .where(FatturaPassiva.stato_pagamento.notin_(['paid', 'PAGATA']))
-        .where(func.abs(FatturaPassiva.importo_totale).between(importo * 0.95, importo * 1.05))
+        .where(FatturaPassiva.importo_residuo > 0)
+        .where(func.abs(FatturaPassiva.importo_residuo).between(importo * 0.95, importo * 1.05))
         .limit(5)
     )
     fatture_match = []
     for fp, forn in res_fp.all():
+        residuo_fp = float(fp.importo_residuo or 0)
         fatture_match.append({
             'id': str(fp.id),
             'numero': fp.numero,
             'importo': float(fp.importo_totale or 0),
+            'importo_residuo': residuo_fp,
+            'importo_suggerito': round(min(mov_residuo, residuo_fp), 2),
             'fornitore': forn.ragione_sociale if forn else '—',
             'data_emissione': str(fp.data_emissione) if fp.data_emissione else None,
-            'match_esatto': abs(float(fp.importo_totale or 0) - importo) < 0.01,
+            'match_esatto': abs(residuo_fp - importo) < 0.01,
         })
 
-    return {'regola': regola_match, 'fatture_importo': fatture_match}
+    return {'regola': regola_match, 'movimento_residuo': round(mov_residuo, 2), 'fatture_importo': fatture_match}
 
 
 # ── IMPUTAZIONI FATTURE PASSIVE ───────────────────────────

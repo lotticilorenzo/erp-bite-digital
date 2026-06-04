@@ -52,7 +52,7 @@ from app.schemas.schemas import (
     ProgettoTemplateOut,
     CostoFissoCreate, CostoFissoUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
-    MovimentoCassaUpdate, RiconciliaRequest,
+    MovimentoCassaUpdate, RiconciliaRequest, RiconciliazioniCreate,
     ImputazioniRequest,
     PianoCreate, PianoUpdate, CollegaCommessaRequest,
     SaldoCassaCreate,
@@ -68,6 +68,9 @@ from app.services.services import (
     sync_fic_data, get_last_fic_sync_status, list_fatture_attive, incassa_fattura,
     list_fornitori_full, update_fornitore, list_fatture_passive, update_fattura_passiva, list_fornitori,
     list_movimenti_cassa, list_costi_fissi, create_costo_fisso, update_costo_fisso, delete_costo_fisso,
+    riconcilia_movimento as svc_riconcilia_movimento, elimina_riconciliazione,
+    rimuovi_riconciliazioni_movimento, list_riconciliazioni_movimento, list_riconciliazioni_fattura,
+    _sum_riconciliazioni_fattura, _load_fattura,
     elimina_timesheet_bulk, aggiorna_mese_competenza_bulk,
     list_preventivi, get_preventivo, create_preventivo, update_preventivo, delete_preventivo, converti_preventivo_in_commessa
 )
@@ -422,57 +425,104 @@ async def patch_movimento_cassa(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_finance_access),
 ):
-    from app.models.models import MovimentoCassa, FatturaAttiva, FatturaPassiva, Commessa, CommessaStatus
+    """Retro-compat del matching 1:1: internamente delega alla tabella `riconciliazioni`
+    (fonte unica). riconciliato=True+fattura -> crea UNA riconciliazione piena (min |mov|, residuo);
+    riconciliato=False -> elimina le riconciliazioni del movimento. Stati/date sono ricalcolati."""
+    from app.models.models import MovimentoCassa
 
     result = await db.execute(select(MovimentoCassa).where(MovimentoCassa.id == movimento_id))
     mov = result.scalar_one_or_none()
     if not mov:
         raise HTTPException(status_code=404, detail="Movimento non trovato")
 
-    # Aggiorna campi scalari del movimento
+    # Campi scalari non legati alla riconciliazione (la riconciliazione la gestisce il service)
     data = payload.model_dump(exclude_unset=True)
-    for k, v in data.items():
-        if hasattr(mov, k):
-            setattr(mov, k, v)
+    for k in ("categoria", "descrizione", "note", "fattura_attiva_id", "fattura_passiva_id"):
+        if k in data:
+            setattr(mov, k, data[k])
 
-    # Riconciliazione con fattura attiva
-    if payload.fattura_attiva_id and payload.riconciliato:
-        fa_res = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == payload.fattura_attiva_id))
-        fa = fa_res.scalar_one_or_none()
-        if fa and fa.stato_pagamento not in ('INCASSATA', 'paid'):
-            fa.stato_pagamento = 'INCASSATA'
-            fa.data_ultimo_incasso = mov.data_valuta
-            cm_res = await db.execute(select(Commessa).where(Commessa.fattura_id == fa.id))
-            cm = cm_res.scalar_one_or_none()
-            if cm and cm.stato not in (CommessaStatus.INCASSATA,):
-                cm.stato = CommessaStatus.INCASSATA
+    # Riconciliazione 1:1 -> crea una riga piena via service (valida i vincoli)
+    if payload.riconciliato is True and (payload.fattura_attiva_id or payload.fattura_passiva_id):
+        is_attiva = bool(payload.fattura_attiva_id)
+        fid = payload.fattura_attiva_id or payload.fattura_passiva_id
+        fattura, _ = await _load_fattura(
+            db, fattura_attiva_id=fid if is_attiva else None,
+            fattura_passiva_id=None if is_attiva else fid,
+        )
+        if not fattura:
+            raise HTTPException(status_code=404, detail="Fattura non trovata")
+        esistenti = await _sum_riconciliazioni_fattura(db, fid, is_attiva)
+        residuo_fatt = (fattura.importo_totale or Decimal("0")) - esistenti
+        importo = min(abs(mov.importo or Decimal("0")), residuo_fatt)
+        if importo <= 0:
+            await db.commit()
+            await db.refresh(mov)
+            return {c.name: getattr(mov, c.name) for c in mov.__table__.columns}
+        key = "fattura_attiva_id" if is_attiva else "fattura_passiva_id"
+        await svc_riconcilia_movimento(db, movimento_id, [{key: fid, "importo": importo}], current_user.id)
+        await db.refresh(mov)
+        return {c.name: getattr(mov, c.name) for c in mov.__table__.columns}
 
-    # Riconciliazione con fattura passiva
-    if payload.fattura_passiva_id and payload.riconciliato:
-        fp_res = await db.execute(select(FatturaPassiva).where(FatturaPassiva.id == payload.fattura_passiva_id))
-        fp = fp_res.scalar_one_or_none()
-        if fp and fp.stato_pagamento not in ('paid', 'PAGATA'):
-            fp.stato_pagamento = 'PAGATA'
-            fp.data_ultimo_pagamento = mov.data_valuta
-
-    # Annullamento riconciliazione
+    # Annullamento riconciliazione -> elimina le righe del movimento + recompute
     if payload.riconciliato is False:
-        if mov.fattura_attiva_id:
-            fa_res = await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == mov.fattura_attiva_id))
-            fa = fa_res.scalar_one_or_none()
-            if fa and fa.stato_pagamento == 'INCASSATA':
-                fa.stato_pagamento = 'ATTESA'
-                fa.data_ultimo_incasso = None
-        if mov.fattura_passiva_id:
-            fp_res = await db.execute(select(FatturaPassiva).where(FatturaPassiva.id == mov.fattura_passiva_id))
-            fp = fp_res.scalar_one_or_none()
-            if fp and fp.stato_pagamento in ('paid', 'PAGATA'):  # 'paid' per retro-compatibilità dati esistenti
-                fp.stato_pagamento = 'ATTESA'
-                fp.data_ultimo_pagamento = None
+        await rimuovi_riconciliazioni_movimento(db, movimento_id)
+        await db.refresh(mov)
+        return {c.name: getattr(mov, c.name) for c in mov.__table__.columns}
 
     await db.commit()
     await db.refresh(mov)
     return {c.name: getattr(mov, c.name) for c in mov.__table__.columns}
+
+
+# ── RICONCILIAZIONI (M2M + parziali — brief §2.2) ─────────
+@router.post("/movimenti-cassa/{movimento_id}/riconciliazioni", tags=["Cassa"])
+async def post_riconciliazioni(
+    movimento_id: uuid.UUID,
+    payload: RiconciliazioniCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    righe = [r.model_dump(exclude_unset=True) for r in payload.righe]
+    return await svc_riconcilia_movimento(db, movimento_id, righe, current_user.id)
+
+
+@router.delete("/riconciliazioni/{ric_id}", tags=["Cassa"])
+async def delete_riconciliazione(
+    ric_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    ok = await elimina_riconciliazione(db, ric_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Riconciliazione non trovata")
+    return {"deleted": True}
+
+
+@router.get("/movimenti-cassa/{movimento_id}/riconciliazioni", tags=["Cassa"])
+async def get_riconciliazioni_movimento(
+    movimento_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return {"riconciliazioni": await list_riconciliazioni_movimento(db, movimento_id)}
+
+
+@router.get("/fatture-attive/{fattura_id}/riconciliazioni", tags=["Cassa"])
+async def get_riconciliazioni_fattura_attiva(
+    fattura_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return {"riconciliazioni": await list_riconciliazioni_fattura(db, fattura_id, True)}
+
+
+@router.get("/fatture-passive/{fattura_id}/riconciliazioni", tags=["Cassa"])
+async def get_riconciliazioni_fattura_passiva(
+    fattura_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return {"riconciliazioni": await list_riconciliazioni_fattura(db, fattura_id, False)}
 
 
 @router.get("/costi-fissi", tags=["CostiFissi"])
@@ -571,7 +621,7 @@ async def applica_regole(
     current_user: User = Depends(require_finance_access)
 ):
     from app.services.services import applica_regole_automatiche
-    return await applica_regole_automatiche(db)
+    return await applica_regole_automatiche(db, current_user.id)
 
 
 @router.post("/regole-riconciliazione/dry-run", tags=["Regole"])
