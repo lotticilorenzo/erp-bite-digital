@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Optional, List
 from sqlalchemy import (
     String, Boolean, Date, DateTime, Numeric, Integer, Float,
-    Text, ForeignKey, UniqueConstraint, Enum as SAEnum,
+    Text, ForeignKey, UniqueConstraint, CheckConstraint, Enum as SAEnum,
     JSON, func
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -660,7 +660,7 @@ class FatturaAttiva(Base):
     importo_iva: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     importo_pagato: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     importo_residuo: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
-    stato_pagamento: Mapped[str] = mapped_column(String(20), default="ATTESA")
+    stato_pagamento: Mapped[str] = mapped_column(String(40), default="ATTESA")
     data_ultimo_incasso: Mapped[Optional[date]] = mapped_column(Date)
     valuta: Mapped[Optional[str]] = mapped_column(String(10))
     payments_raw: Mapped[Optional[dict]] = mapped_column(JSON)
@@ -688,7 +688,7 @@ class FatturaPassiva(Base):
     importo_iva: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     importo_pagato: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     importo_residuo: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
-    stato_pagamento: Mapped[str] = mapped_column(String(20), default="ATTESA")
+    stato_pagamento: Mapped[str] = mapped_column(String(40), default="ATTESA")
     data_ultimo_pagamento: Mapped[Optional[date]] = mapped_column(Date)
     valuta: Mapped[Optional[str]] = mapped_column(String(10))
     categoria: Mapped[Optional[str]] = mapped_column(String(100))
@@ -755,6 +755,30 @@ class MovimentoCassa(Base):
     note: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# ── RICONCILIAZIONI (ponte movimento <-> fattura, M2M + parziali — brief §2.2) ──
+class Riconciliazione(Base):
+    """Riga di riconciliazione bancaria: lega un movimento a UNA fattura (attiva o passiva)
+    per un certo importo. Fonte unica: importo_pagato/residuo/stato/data delle fatture e
+    il flag riconciliato dei movimenti sono DERIVATI dalla somma di queste righe.
+    Un bonifico puo' avere piu' righe (pagamento multiplo); una fattura puo' essere coperta
+    da piu' movimenti (pagamento parziale)."""
+    __tablename__ = "riconciliazioni"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    movimento_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("movimenti_cassa.id", ondelete="CASCADE"), nullable=False, index=True)
+    fattura_attiva_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("fatture_attive.id", ondelete="CASCADE"), index=True)
+    fattura_passiva_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("fatture_passive.id", ondelete="CASCADE"), index=True)
+    importo: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    data: Mapped[date] = mapped_column(Date, nullable=False)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint("importo > 0", name="ck_riconciliazioni_importo_pos"),
+        CheckConstraint("num_nonnulls(fattura_attiva_id, fattura_passiva_id) = 1", name="ck_riconciliazioni_una_fattura"),
+    )
 
 
 # ── COSTI FISSI ───────────────────────────────────────────
