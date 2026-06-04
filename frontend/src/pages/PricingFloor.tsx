@@ -27,12 +27,16 @@ interface BreakdownRow {
   risorsa_id: string;
   nome: string | null;
   ore: number;
-  costo_orario_fl: number;
+  costo_orario_diretto: number;
+  overhead_orario: number;
+  quota_overhead: number;
   costo: number;
 }
 
 interface PricingFloorResult {
   costo_manodopera: number;
+  overhead_totale: number;
+  tasso_overhead: number;
   costo_diretto_stimato: number;
   margine_target: number;
   pricing_floor: number;
@@ -193,6 +197,12 @@ export default function PricingFloor() {
                     <span className="text-muted-foreground">Costo manodopera</span>
                     <span className="font-black tabular-nums">{formatEuro(result.costo_manodopera)}</span>
                   </div>
+                  {result.overhead_totale > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">di cui overhead struttura ({formatEuro(result.tasso_overhead)}/h)</span>
+                      <span className="font-medium tabular-nums text-muted-foreground">{formatEuro(result.overhead_totale)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Costo diretto stimato</span>
                     <span className="font-black tabular-nums">{formatEuro(result.costo_diretto_stimato)}</span>
@@ -219,9 +229,16 @@ export default function PricingFloor() {
               <div className="divide-y divide-border/50">
                 {result.breakdown_per_risorsa.map((b, i) => (
                   <div key={i} className="flex justify-between py-2 text-sm">
-                    <span>{b.nome ?? "—"}</span>
+                    <span>
+                      {b.nome ?? "—"}
+                      {b.quota_overhead > 0 && (
+                        <span className="text-[11px] text-muted-foreground ml-1.5">
+                          (+{formatEuro(b.overhead_orario)}/h overhead)
+                        </span>
+                      )}
+                    </span>
                     <span className="text-muted-foreground tabular-nums">
-                      {b.ore}h × {formatEuro(b.costo_orario_fl)}/h ={" "}
+                      {b.ore}h × {formatEuro(b.costo_orario_diretto)}/h ={" "}
                       <span className="font-black text-foreground">{formatEuro(b.costo)}</span>
                     </span>
                   </div>

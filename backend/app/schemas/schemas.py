@@ -1746,6 +1746,7 @@ class PricingFloorRequest(BaseModel):
     costi_diretti_extra: Decimal = Field(Decimal("0"), ge=0)
     quota_luca_stimata: Decimal = Field(Decimal("0"), ge=0)
     margine_target: Decimal = Field(Decimal("0.30"))  # validato nell'endpoint: 0 <= target < 1
+    mese: Optional[date] = None  # mese per il tasso overhead struttura (§3.3); default = mese corrente
 
 
 # ── SALDO CASSA (Fase 2, Layer 3) ─────────────────────────
