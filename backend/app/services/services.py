@@ -2913,12 +2913,29 @@ async def update_fattura_passiva(db: AsyncSession, fattura_id: uuid.UUID, data: 
 
 
 async def list_movimenti_cassa(db: AsyncSession, skip: int = 0, limit: int = 200):
-    from app.models.models import MovimentoCassa
+    from app.models.models import MovimentoCassa, Riconciliazione
     result = await db.execute(
         select(MovimentoCassa).order_by(MovimentoCassa.data_valuta.desc()).offset(skip).limit(limit)
     )
     rows = result.scalars().all()
-    return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+    # Espone i derivati di riconciliazione (M2M/parziali) senza N+1: una sola query aggregata.
+    mov_ids = [r.id for r in rows]
+    sommati: dict = {}
+    if mov_ids:
+        agg = await db.execute(
+            select(Riconciliazione.movimento_id, func.coalesce(func.sum(Riconciliazione.importo), 0))
+            .where(Riconciliazione.movimento_id.in_(mov_ids))
+            .group_by(Riconciliazione.movimento_id)
+        )
+        sommati = {mid: Decimal(str(tot or 0)) for mid, tot in agg.all()}
+    out = []
+    for r in rows:
+        d = {c.name: getattr(r, c.name) for c in r.__table__.columns}
+        riconciliato_importo = sommati.get(r.id, Decimal("0"))
+        d["importo_riconciliato"] = float(riconciliato_importo)
+        d["residuo_movimento"] = float(abs(r.importo or Decimal("0")) - riconciliato_importo)
+        out.append(d)
+    return out
 
 
 # ── RICONCILIAZIONE BANCARIA (M2M + parziali, fonte unica — brief §2.2) ──────────
