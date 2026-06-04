@@ -1552,12 +1552,102 @@ async def calcola_proiezione_cassa(
 
 
 # ── P&L GESTIONALE MENSILE (brief §5.2, Fase 3 core — fiscale escluso) ────
-# Categorie di costi_fissi che rappresentano STIPENDI/personale GIA' incluso nel costo orario
-# fully-loaded (risorse.costo_orario_calcolato): vanno ESCLUSE dai costi fissi indivisibili per
-# evitare il doppio conteggio. Tutto il resto = overhead indivisibile NON attribuito ai clienti.
-# Nota: il +30% overhead del costo orario FL e' una scelta di Fase 1 e resta DENTRO i costi diretti;
-# i costi fissi indivisibili sono i costi di struttura, sottratti UNA sola volta.
+# ARCHITETTURA OVERHEAD (anti doppio conteggio):
+#   - risorse.costo_orario_calcolato = costo DIRETTO per ora (lordo+contributi+TFR / ore produttive).
+#     NON contiene overhead di struttura (il vecchio +30% e' stato rimosso da calcola_costo_orario).
+#   - L'overhead di struttura e' allocato SOLO nel pricing floor via calcola_tasso_overhead (§3.3).
+#   - Qui nel P&L i costi fissi di struttura indivisibili sono sottratti UNA sola volta.
+# Le categorie STIPENDI/personale restano comunque ESCLUSE dai fissi indivisibili perche' la
+# manodopera e' gia' contata nei costi diretti (costo_manodopera): evita di duplicare i salari.
 _PL_CATEGORIE_PERSONALE = {"STIPENDI", "PERSONALE", "SALARI", "RAL", "PAYROLL_DIPENDENTI"}
+
+# Ruoli con tariffa gia' fully-loaded: NON caricano overhead di struttura (brief §3.3),
+# quindi sono esclusi dal denominatore del tasso overhead.
+_RUOLI_FULLY_LOADED = {"FREELANCER", "PRESTAZIONE_OCCASIONALE"}
+
+
+async def costi_fissi_indivisibili_mese(db: AsyncSession, mese: date) -> tuple[Decimal, list, list]:
+    """Costi fissi di struttura INDIVISIBILI del mese, normalizzati EUR/mese.
+
+    FONTE UNICA condivisa da calcola_pl_gestionale (che li sottrae UNA sola volta) e da
+    calcola_tasso_overhead (numeratore §3.3). Esclude le categorie 'personale'
+    (gia' nel costo orario diretto) per non duplicare la manodopera.
+    Ritorna (totale, incluse, escluse).
+    """
+    from app.models.models import CostoFisso
+    from dateutil.relativedelta import relativedelta
+
+    mese_norm = mese.replace(day=1)
+    fine_mese = (mese_norm + relativedelta(months=1)) - timedelta(days=1)
+    res_cf = await db.execute(select(CostoFisso).where(CostoFisso.attivo == True))
+    incluse, escluse = [], []
+    totale = Decimal("0")
+    for cf in res_cf.scalars().all():
+        # filtro temporale: attivo nel mese
+        if cf.data_inizio and cf.data_inizio > fine_mese:
+            continue
+        if cf.data_fine and cf.data_fine < mese_norm:
+            continue
+        cat = (cf.categoria or "").upper()
+        div = _PERIODO_DIVISORE.get((cf.periodicita or "mensile").lower(), Decimal("1"))
+        mensile = ((cf.importo or Decimal("0")) / div).quantize(Decimal("0.01"))
+        voce = {"descrizione": cf.descrizione, "categoria": cf.categoria,
+                "periodicita": cf.periodicita, "importo_mensile": float(mensile)}
+        if cat in _PL_CATEGORIE_PERSONALE:
+            voce["motivo_esclusione"] = "personale gia' nel costo orario fully-loaded (no doppio conteggio)"
+            escluse.append(voce)
+        else:
+            incluse.append(voce)
+            totale += mensile
+    return totale, incluse, escluse
+
+
+async def calcola_tasso_overhead(db: AsyncSession, mese: date) -> dict:
+    """Tasso overhead di struttura in EUR/ora produttiva (brief §3.3):
+
+        tasso_overhead = costi_fissi_indivisibili_mensili / ore_produttive_mensili_team
+
+    Allocato SOLO ai ruoli che caricano struttura (dipendenti): i freelancer hanno
+    tariffe gia' fully-loaded e sono esclusi dal denominatore. Usato dal PRICING FLOOR;
+    NON entra nel costo orario diretto ne' nel margine/P&L (che sottrae i fissi a parte).
+    Ore produttive = _ore_vendibili_annue(...) / 12 sulle risorse attive non-freelancer.
+    Ritorna un dict con tasso + base di calcolo (per trasparenza nel breakdown).
+    """
+    from app.models.models import Risorsa
+
+    mese_norm = mese.replace(day=1)
+    fissi_mensili, _, _ = await costi_fissi_indivisibili_mese(db, mese_norm)
+    res = await db.execute(select(Risorsa).where(Risorsa.attivo == True))
+    ore_team = 0.0
+    n_dipendenti = 0
+    for r in res.scalars().all():
+        if (r.tipo_contratto or "").upper() in _RUOLI_FULLY_LOADED:
+            continue
+        ov = _ore_vendibili_annue(
+            float(r.ore_settimanali or 40),
+            float(r.giorni_ferie or 26),
+            float(r.giorni_malattia or 3),
+        ) / 12.0
+        if ov > 0:
+            ore_team += ov
+            n_dipendenti += 1
+
+    if ore_team <= 0:
+        return {
+            "tasso_overhead": Decimal("0"),
+            "costi_fissi_mensili": fissi_mensili,
+            "ore_produttive_team_mese": Decimal("0"),
+            "n_dipendenti": 0,
+            "warning": "Nessuna risorsa dipendente attiva con ore produttive > 0: tasso overhead = 0.",
+        }
+    tasso = (fissi_mensili / Decimal(str(ore_team))).quantize(Decimal("0.01"))
+    return {
+        "tasso_overhead": tasso,
+        "costi_fissi_mensili": fissi_mensili,
+        "ore_produttive_team_mese": Decimal(str(round(ore_team, 2))),
+        "n_dipendenti": n_dipendenti,
+        "warning": None,
+    }
 
 
 async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
@@ -1594,28 +1684,9 @@ async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
         warning.append("Cliente 'Italfer' non presente: riga ricavo Italfer = 0.")
     warning.append("Split retainer/one-shot non strutturato a livello commessa: TODO.")
 
-    # 2) Costi fissi indivisibili = solo gruppo (b), normalizzati EUR/mese, attivi nel mese
-    fine_mese = (mese_norm + relativedelta(months=1)) - timedelta(days=1)
-    res_cf = await db.execute(select(CostoFisso).where(CostoFisso.attivo == True))
-    incluse, escluse = [], []
-    costi_fissi_indivisibili = Decimal("0")
-    for cf in res_cf.scalars().all():
-        # filtro temporale: attivo nel mese
-        if cf.data_inizio and cf.data_inizio > fine_mese:
-            continue
-        if cf.data_fine and cf.data_fine < mese_norm:
-            continue
-        cat = (cf.categoria or "").upper()
-        div = _PERIODO_DIVISORE.get((cf.periodicita or "mensile").lower(), Decimal("1"))
-        mensile = ((cf.importo or Decimal("0")) / div).quantize(Decimal("0.01"))
-        voce = {"descrizione": cf.descrizione, "categoria": cf.categoria,
-                "periodicita": cf.periodicita, "importo_mensile": float(mensile)}
-        if cat in _PL_CATEGORIE_PERSONALE:
-            voce["motivo_esclusione"] = "personale gia' nel costo orario fully-loaded (no doppio conteggio)"
-            escluse.append(voce)
-        else:
-            incluse.append(voce)
-            costi_fissi_indivisibili += mensile
+    # 2) Costi fissi indivisibili = solo gruppo (b), normalizzati EUR/mese, attivi nel mese.
+    # FONTE UNICA condivisa col tasso overhead del pricing floor (no doppio conteggio).
+    costi_fissi_indivisibili, incluse, escluse = await costi_fissi_indivisibili_mese(db, mese_norm)
 
     risultato_operativo = margine_lordo - costi_fissi_indivisibili
 
@@ -3310,14 +3381,24 @@ async def save_imputazioni_movimento(db: AsyncSession, movimento_id: uuid.UUID, 
 
 
 # ── RISORSE (HR) ──────────────────────────────────────────
+def _ore_vendibili_annue(ore_sett: float, ferie_giorni: float, malattia_giorni: float) -> float:
+    """Ore produttive/vendibili annue di una risorsa: anno lavorativo al netto di
+    festivi (88h), ferie e malattia, con saturazione 70%. Sorgente unica condivisa
+    da calcola_costo_orario (costo diretto) e calcola_tasso_overhead (allocazione struttura)."""
+    return (ore_sett * 52 - 88 - ferie_giorni * 8 - malattia_giorni * 8) * 0.70
+
+
 def calcola_costo_orario(r) -> float:
-    """Calcola costo orario reale dalla struttura contrattuale.
-    
-    Formula: (Costo annuo / Ore vendibili anno) * 1.30 overhead
-    Ore vendibili = (ore_sett * 52 - festivi 88h - ferie 208h - malattia 24h) * 70% saturazione
-    Dipendenti CCNL Commercio: 14 mensilita, contributi 40% (dipendente) o 15.81% (apprendistato)
+    """Calcola il COSTO DIRETTO per ora produttiva dalla struttura contrattuale.
+
+    Formula: Costo annuo diretto / Ore vendibili anno (NESSUN overhead di struttura).
+    L'overhead e' allocato separatamente nel pricing floor via calcola_tasso_overhead
+    (brief 3.3), per non contarlo due volte: i costi fissi di struttura sono gia'
+    sottratti UNA sola volta nel P&L gestionale.
+    Ore vendibili = (ore_sett * 52 - festivi 88h - ferie - malattia) * 70% saturazione
+    Dipendenti CCNL Commercio: contributi + TFR su RAL
     Fondatori: compenso_fisso_mensile * 12, nessun contributo
-    Freelancer: compenso_fisso_mensile / ore_mese
+    Freelancer: compenso_fisso_mensile / ore_mese (tariffa gia' fully-loaded)
     """
     tipo = r.get('tipo_contratto', '')
     ore_sett = float(r.get('ore_settimanali', 40))
@@ -3329,10 +3410,10 @@ def calcola_costo_orario(r) -> float:
         if compenso_mensile == 0:
             return 0.0
         costo_anno = compenso_mensile * 12
-        ore_vendibili = (ore_sett * 52 - 88 - ferie_giorni * 8 - malattia_giorni * 8) * 0.70
+        ore_vendibili = _ore_vendibili_annue(ore_sett, ferie_giorni, malattia_giorni)
         if ore_vendibili <= 0:
             return 0.0
-        return round(costo_anno / ore_vendibili * 1.30, 2)
+        return round(costo_anno / ore_vendibili, 2)
 
     if tipo in ('FREELANCER', 'PRESTAZIONE_OCCASIONALE'):
         compenso_mensile = float(r.get('compenso_fisso_mensile') or 0)
@@ -3350,10 +3431,10 @@ def calcola_costo_orario(r) -> float:
     contributi = float(r.get('contributi_percentuale', 30)) / 100
     tfr = float(r.get('tfr_percentuale', 6.91)) / 100
     costo_anno = ral * (1 + contributi + tfr)
-    ore_vendibili = (ore_sett * 52 - 88 - ferie_giorni * 8 - malattia_giorni * 8) * 0.70
+    ore_vendibili = _ore_vendibili_annue(ore_sett, ferie_giorni, malattia_giorni)
     if ore_vendibili <= 0:
         return 0.0
-    return round(costo_anno / ore_vendibili * 1.30, 2)
+    return round(costo_anno / ore_vendibili, 2)
 
 
 # NOTE (D-02): list_risorse/create_risorsa/update_risorsa rimossi: erano usati solo dalle rotte
