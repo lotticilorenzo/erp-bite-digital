@@ -781,6 +781,38 @@ class Riconciliazione(Base):
     )
 
 
+# ── COSTO VARIABILE (registro forecasting cassa — brief §2.5) ──
+class CostoVariabile(Base):
+    """Registro strutturato di costi variabili (collaboratori a consumo: Benedetta €/h,
+    Francesco M. per progetto) per il FORECASTING di cassa.
+    NON e' un costo di competenza: NON entra in margine/P&L (quelli usano le fatture passive
+    imputate). Solo lo stato PREVISTO alimenta la proiezione cassa come uscita datata; SOSTENUTO
+    ne esce (gancio anti doppio conteggio quando il costo diventa una fattura passiva reale)."""
+    __tablename__ = "costi_variabili"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    descrizione: Mapped[str] = mapped_column(Text, nullable=False)
+    collaboratore_risorsa_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("risorse.id", ondelete="SET NULL"))
+    collaboratore_nome: Mapped[Optional[str]] = mapped_column(Text)  # per chi non e' in risorse
+    tipo: Mapped[str] = mapped_column(String(20), nullable=False)  # ORARIO | A_PROGETTO | UNA_TANTUM
+    importo: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    data_prevista: Mapped[date] = mapped_column(Date, nullable=False)
+    ricorrenza: Mapped[Optional[str]] = mapped_column(String(20))  # MENSILE | null (una tantum)
+    commessa_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("commesse.id", ondelete="SET NULL"))
+    progetto_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id", ondelete="SET NULL"))
+    stato: Mapped[str] = mapped_column(String(20), nullable=False, default="PREVISTO")  # PREVISTO | SOSTENUTO
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        CheckConstraint("importo > 0", name="ck_costi_variabili_importo_pos"),
+        CheckConstraint("tipo IN ('ORARIO','A_PROGETTO','UNA_TANTUM')", name="ck_costi_variabili_tipo"),
+        CheckConstraint("stato IN ('PREVISTO','SOSTENUTO')", name="ck_costi_variabili_stato"),
+        CheckConstraint("ricorrenza IS NULL OR ricorrenza IN ('MENSILE')", name="ck_costi_variabili_ricorrenza"),
+    )
+
+
 # ── COSTI FISSI ───────────────────────────────────────────
 class CostoFisso(Base):
     __tablename__ = "costi_fissi"
