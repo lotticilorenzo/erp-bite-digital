@@ -142,12 +142,16 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     logger.error(f"422 Validation Error on {request.method} {request.url.path}: {exc.errors()} - Body: {exc.body}")
+    # jsonable_encoder + custom_encoder: gli errori Pydantic v2 possono avere `ctx` con valori non
+    # JSON-nativi (Decimal dai constraint gt/ge, oggetti Exception dai field_validator). Senza questo
+    # la JSONResponse falliva la serializzazione e degradava a 500 invece del 422 corretto.
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors()},
+        content=jsonable_encoder({"detail": exc.errors()}, custom_encoder={Exception: str}),
     )
 
 @app.get("/")
