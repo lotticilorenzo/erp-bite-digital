@@ -1571,6 +1571,59 @@ class CostoFissoOut(OrmBase):
     updated_at: datetime
 
 
+# ── COSTI VARIABILI (registro forecasting cassa — brief §2.5) ──
+# Tipi via Literal: l'errore di validazione e' un literal_error con ctx serializzabile (422 pulito),
+# a differenza di un field_validator che solleva ValueError (ctx non JSON-safe -> 500 col handler app).
+CostoVarTipo = Literal["ORARIO", "A_PROGETTO", "UNA_TANTUM"]
+CostoVarStato = Literal["PREVISTO", "SOSTENUTO"]
+CostoVarRicorrenza = Literal["MENSILE"]
+
+
+class CostoVariabileCreate(BaseModel):
+    descrizione: str = Field(..., min_length=1, max_length=500)
+    collaboratore_risorsa_id: Optional[uuid.UUID] = None
+    collaboratore_nome: Optional[str] = Field(None, max_length=200)
+    tipo: CostoVarTipo
+    importo: Decimal = Field(..., gt=0)
+    data_prevista: date
+    ricorrenza: Optional[CostoVarRicorrenza] = None  # null = una tantum
+    commessa_id: Optional[uuid.UUID] = None
+    progetto_id: Optional[uuid.UUID] = None
+    stato: CostoVarStato = "PREVISTO"
+    note: Optional[str] = Field(None, max_length=1000)
+
+
+class CostoVariabileUpdate(BaseModel):
+    descrizione: Optional[str] = Field(None, min_length=1, max_length=500)
+    collaboratore_risorsa_id: Optional[uuid.UUID] = None
+    collaboratore_nome: Optional[str] = Field(None, max_length=200)
+    tipo: Optional[CostoVarTipo] = None
+    importo: Optional[Decimal] = Field(None, gt=0)
+    data_prevista: Optional[date] = None
+    ricorrenza: Optional[CostoVarRicorrenza] = None
+    commessa_id: Optional[uuid.UUID] = None
+    progetto_id: Optional[uuid.UUID] = None
+    stato: Optional[CostoVarStato] = None
+    note: Optional[str] = Field(None, max_length=1000)
+
+
+class CostoVariabileOut(OrmBase):
+    id: uuid.UUID
+    descrizione: str
+    collaboratore_risorsa_id: Optional[uuid.UUID]
+    collaboratore_nome: Optional[str]
+    tipo: str
+    importo: Decimal
+    data_prevista: date
+    ricorrenza: Optional[str]
+    commessa_id: Optional[uuid.UUID]
+    progetto_id: Optional[uuid.UUID]
+    stato: str
+    note: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+
 # ── REGOLE RICONCILIAZIONE ────────────────────────────────
 class RegolaRiconciliazioneCreate(BaseModel):
     nome: str = Field(..., min_length=1, max_length=100)

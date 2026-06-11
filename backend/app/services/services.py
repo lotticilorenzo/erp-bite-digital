@@ -1396,6 +1396,37 @@ def _zona_cassa(saldo: Decimal, soglia: Decimal) -> str:
     return "verde"
 
 
+async def _espandi_costi_variabili(db: AsyncSession, start: date, end: date):
+    """Espande il registro costi variabili (brief §2.5) in occorrenze (data, importo, descrizione)
+    nella finestra [start, end]. Solo stato PREVISTO: lo stato SOSTENUTO e' escluso (gancio anti
+    doppio conteggio — diventera'/e' gia' una fattura passiva reale). ricorrenza='MENSILE' espande
+    mensilmente da data_prevista (ancora = giorno di data_prevista); altrimenti occorrenza singola.
+    NB: questo alimenta SOLO la proiezione cassa, NON margine/P&L."""
+    from dateutil.relativedelta import relativedelta
+    from app.models.models import CostoVariabile
+
+    res = await db.execute(select(CostoVariabile).where(CostoVariabile.stato == "PREVISTO"))
+    occorrenze: list[tuple] = []
+    for cv in res.scalars().all():
+        anchor = cv.data_prevista
+        importo = cv.importo or Decimal("0")
+        if (cv.ricorrenza or "").upper() == "MENSILE":
+            k = 0
+            occ = anchor
+            while occ < start:
+                k += 1
+                occ = anchor + relativedelta(months=k)
+            while occ <= end:
+                if occ >= start and occ >= anchor:
+                    occorrenze.append((occ, importo, cv.descrizione))
+                k += 1
+                occ = anchor + relativedelta(months=k)
+        else:
+            if start <= anchor <= end:
+                occorrenze.append((anchor, importo, cv.descrizione))
+    return occorrenze
+
+
 async def calcola_proiezione_cassa(
     db: AsyncSession,
     giorni: int = 90,
@@ -1404,11 +1435,12 @@ async def calcola_proiezione_cassa(
     """Proiezione cassa rolling su `giorni`, 3 scenari (base/ottimista/pessimista).
 
     Entrate = fatture aperte collocate alla data attesa dal DSO (consumato, non ricalcolato).
-    Uscite = costi fissi espansi + uscite variabili stimate + scadenze fiscali QUANTIFICATE
+    Uscite = costi fissi espansi + registro costi variabili (PREVISTO, datati, brief §2.5)
+    + param manuale uscite_variabili_mensili (supplemento) + scadenze fiscali QUANTIFICATE
     (IVA dallo scadenzario; le voci con importo null NON entrano nel saldo). Le uscite sono
-    identiche nei 3 scenari: cambia solo la DATA delle entrate.
-    TODO(Fase 3): modulo costi variabili strutturato, saldo da estratto conto/riconciliazione;
-    importi F24/ritenute/IRPEF (oggi non quantificati) quando disponibili da cedolino/commercialista.
+    identiche nei 3 scenari: cambia solo la DATA delle entrate. I costi variabili NON toccano margine/P&L.
+    TODO(Fase 3): saldo da estratto conto/riconciliazione; importi F24/ritenute/IRPEF
+    (oggi non quantificati) quando disponibili da cedolino/commercialista.
     """
     from app.models.models import CostoFisso
 
@@ -1451,6 +1483,21 @@ async def calcola_proiezione_cassa(
         idx = (d - start).days
         if 0 <= idx <= giorni - 1:
             uscite[idx] += imp
+
+    # Registro costi variabili (brief §2.5): uscite DATATE, solo stato PREVISTO, identiche nei 3
+    # scenari (data fissa, indipendente dal DSO). NON entrano in margine/P&L. Il parametro manuale
+    # uscite_variabili_mensili resta come supplemento opzionale per cio' che non e' nel registro.
+    uscite_var_registro = Decimal("0")
+    for (d, imp, _desc) in await _espandi_costi_variabili(db, start, end):
+        idx = (d - start).days
+        if 0 <= idx <= giorni - 1:
+            uscite[idx] += imp
+            uscite_var_registro += imp
+    if uscite_var_registro > 0 and uscite_var > 0:
+        warning.append(
+            "Registro costi variabili E parametro uscite_variabili_mensili entrambi attivi: "
+            "assicurati di non contare due volte gli stessi importi."
+        )
 
     # Uscite fiscali QUANTIFICATE (consuma lo scadenzario, non ricalcola l'IVA).
     # Solo importo_stimato non null e > 0 (IVA con saldo>0) entra nel saldo, alla data fissa
@@ -1547,6 +1594,7 @@ async def calcola_proiezione_cassa(
         "vista_mensile": vista_mensile,
         "scadenze_fiscali_incluse": scadenze_fiscali_incluse,
         "scadenze_fiscali_non_quantificate": scadenze_fiscali_non_quantificate,
+        "uscite_variabili_registro": Q(uscite_var_registro),
         "warning": warning,
     }
 
@@ -3206,6 +3254,56 @@ async def delete_costo_fisso(db: AsyncSession, costo_id):
     if not cf:
         return False
     await db.delete(cf)
+    await db.commit()
+    return True
+
+
+# ── COSTI VARIABILI (registro forecasting cassa — brief §2.5) ──────────
+# I costi variabili sono un registro di FORECASTING di cassa: NON entrano in margine/P&L
+# (quelli usano le fatture passive imputate). Solo lo stato PREVISTO alimenta la proiezione.
+async def list_costi_variabili(db: AsyncSession, stato: Optional[str] = None,
+                               dal: Optional[date] = None, al: Optional[date] = None):
+    from app.models.models import CostoVariabile
+    q = select(CostoVariabile)
+    if stato:
+        q = q.where(CostoVariabile.stato == stato)
+    if dal:
+        q = q.where(CostoVariabile.data_prevista >= dal)
+    if al:
+        q = q.where(CostoVariabile.data_prevista <= al)
+    q = q.order_by(CostoVariabile.data_prevista.asc())
+    rows = (await db.execute(q)).scalars().all()
+    return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+
+
+async def create_costo_variabile(db: AsyncSession, payload: dict):
+    from app.models.models import CostoVariabile
+    cv = CostoVariabile(**{k: v for k, v in payload.items() if hasattr(CostoVariabile, k)})
+    db.add(cv)
+    await db.commit()
+    await db.refresh(cv)
+    return {c.name: getattr(cv, c.name) for c in cv.__table__.columns}
+
+
+async def update_costo_variabile(db: AsyncSession, costo_id, payload: dict):
+    from app.models.models import CostoVariabile
+    cv = (await db.execute(select(CostoVariabile).where(CostoVariabile.id == costo_id))).scalar_one_or_none()
+    if not cv:
+        return None
+    for k, v in payload.items():
+        if hasattr(cv, k):
+            setattr(cv, k, v)
+    await db.commit()
+    await db.refresh(cv)
+    return {c.name: getattr(cv, c.name) for c in cv.__table__.columns}
+
+
+async def delete_costo_variabile(db: AsyncSession, costo_id):
+    from app.models.models import CostoVariabile
+    cv = (await db.execute(select(CostoVariabile).where(CostoVariabile.id == costo_id))).scalar_one_or_none()
+    if not cv:
+        return False
+    await db.delete(cv)
     await db.commit()
     return True
 

@@ -51,6 +51,7 @@ from app.schemas.schemas import (
     CRMStageOut, CRMStageCreate, CRMStageUpdate, CRMLeadCreate, CRMLeadUpdate, CRMLeadOut, CRMActivityCreate, CRMActivityOut, CRMStatsOut,
     ProgettoTemplateOut,
     CostoFissoCreate, CostoFissoUpdate,
+    CostoVariabileCreate, CostoVariabileUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
     MovimentoCassaUpdate, RiconciliaRequest, RiconciliazioniCreate,
     ImputazioniRequest,
@@ -68,6 +69,7 @@ from app.services.services import (
     sync_fic_data, get_last_fic_sync_status, list_fatture_attive, incassa_fattura,
     list_fornitori_full, update_fornitore, list_fatture_passive, update_fattura_passiva, list_fornitori,
     list_movimenti_cassa, list_costi_fissi, create_costo_fisso, update_costo_fisso, delete_costo_fisso,
+    list_costi_variabili, create_costo_variabile, update_costo_variabile, delete_costo_variabile,
     riconcilia_movimento as svc_riconcilia_movimento, elimina_riconciliazione,
     rimuovi_riconciliazioni_movimento, list_riconciliazioni_movimento, list_riconciliazioni_fattura,
     _sum_riconciliazioni_fattura, _load_fattura,
@@ -565,6 +567,52 @@ async def delete_costo_fisso_endpoint(
     ok = await delete_costo_fisso(db, costo_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Costo non trovato")
+    return {"deleted": True}
+
+
+# ── COSTI VARIABILI (registro forecasting cassa — brief §2.5) ──
+@router.get("/costi-variabili", tags=["CostiVariabili"])
+async def get_costi_variabili(
+    stato: Optional[str] = Query(None, description="PREVISTO | SOSTENUTO"),
+    dal: Optional[date] = Query(None, description="data_prevista >= (YYYY-MM-DD)"),
+    al: Optional[date] = Query(None, description="data_prevista <= (YYYY-MM-DD)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return {"costi_variabili": await list_costi_variabili(db, stato=stato, dal=dal, al=al)}
+
+
+@router.post("/costi-variabili", tags=["CostiVariabili"], status_code=201)
+async def post_costo_variabile(
+    payload: CostoVariabileCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return await create_costo_variabile(db, payload.model_dump())
+
+
+@router.patch("/costi-variabili/{costo_id}", tags=["CostiVariabili"])
+async def patch_costo_variabile(
+    costo_id: uuid.UUID,
+    payload: CostoVariabileUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    result = await update_costo_variabile(db, costo_id, payload.model_dump(exclude_unset=True))
+    if not result:
+        raise HTTPException(status_code=404, detail="Costo variabile non trovato")
+    return result
+
+
+@router.delete("/costi-variabili/{costo_id}", tags=["CostiVariabili"])
+async def delete_costo_variabile_endpoint(
+    costo_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    ok = await delete_costo_variabile(db, costo_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Costo variabile non trovato")
     return {"deleted": True}
 
 
