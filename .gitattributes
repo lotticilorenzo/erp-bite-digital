@@ -1,0 +1,27 @@
+# Normalizzazione end-of-line.
+# Motivo: su Windows core.autocrlf=true converte i file a CRLF al checkout; il runner delle
+# migrazioni (backend/scripts/run_db_migrations.py) calcola lo sha256 dei BYTE del file .sql e
+# blocca l'avvio (crash-loop) se il checksum non combacia con schema_migrations. Forzare eol=lf
+# rende i checksum stabili e identici tra Windows e il server Linux.
+
+# Default ragionevole: git decide testo/binario, e normalizza a LF nel repo.
+* text=auto
+
+# File dove l'EOL conta (checksum migration) o per coerenza cross-OS: sempre LF.
+*.sql   text eol=lf
+*.py    text eol=lf
+*.sh    text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+
+# Binari: mai normalizzati (niente conversione EOL).
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.pdf   binary
+*.ico   binary
+*.woff2 binary
