@@ -1878,9 +1878,10 @@ async def update_config_pl_memo(db: AsyncSession, payload: dict):
 async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
     """Conto economico gestionale del mese (brief §5.2). Consuma calcola_margine_commessa (no ricalcolo).
 
+    Memo §7.6 (cliente dedicato Italfer vs costo collaboratore Paolo G.) IMPLEMENTATO e configurabile
+    via config_pl_memo; il costo collaboratore viene dal cedolino (esterno) -> NULL finche' non impostato.
     TODO(Fase 3): scadenzario fiscale IRPEF/IRES (bloccato sul commercialista),
-    split retainer vs one-shot (dato non strutturato a livello commessa),
-    memo copertura ricavo Italfer vs costo risorsa "Paolo G.".
+    split retainer vs one-shot (dato non strutturato a livello commessa).
     """
     from app.models.models import CostoFisso, FatturaAttiva, FatturaPassiva
     from dateutil.relativedelta import relativedelta
@@ -1928,7 +1929,37 @@ async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
     iva_passiva = Decimal(str(iva_p.scalar() or 0))
 
     F = lambda x: float(Decimal(x).quantize(Decimal("0.01")))
-    return {
+
+    # 4) §7.6 MEMO scostamento ricavo cliente dedicato (Italfer) vs costo collaboratore dedicato (Paolo G.).
+    # Fuori dal risultato operativo (come l'IVA). Presente SOLO se un cliente dedicato e' configurato.
+    # TODO: il costo del collaboratore viene dal cedolino (dato ESTERNO) -> configurabile, NULL finche'
+    # non impostato -> scostamento NULL (nessun importo inventato).
+    memo_cliente_dedicato = None
+    if cliente_dedicato_id:
+        from app.models.models import Cliente, Risorsa
+        cli_nome = (await db.execute(
+            select(Cliente.ragione_sociale).where(Cliente.id == cliente_dedicato_id)
+        )).scalar_one_or_none()
+        collaboratore_nome = None
+        if cfg_memo and cfg_memo.collaboratore_dedicato_id:
+            rr = (await db.execute(
+                select(Risorsa.nome, Risorsa.cognome).where(Risorsa.id == cfg_memo.collaboratore_dedicato_id)
+            )).first()
+            if rr:
+                collaboratore_nome = f"{rr.nome} {rr.cognome}".strip()
+        costo = cfg_memo.costo_collaboratore_mensile if cfg_memo else None
+        scostamento = (ricavi_italfer - costo) if costo is not None else None
+        memo_cliente_dedicato = {
+            "cliente": cli_nome,
+            "ricavo_cliente_dedicato": F(ricavi_italfer),
+            "collaboratore": collaboratore_nome,
+            "costo_collaboratore_dedicato": (F(costo) if costo is not None else None),
+            "scostamento": (F(scostamento) if scostamento is not None else None),
+            "note": ("Costo collaboratore da cedolino (esterno): impostalo via /config-pl-memo."
+                     if costo is None else None),
+        }
+
+    out = {
         "mese": str(mese_norm),
         "ricavi": {
             "retainer_oneshot": F(ricavi_retainer_oneshot),
@@ -1943,6 +1974,10 @@ async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
         "iva_memo": {"attiva": F(iva_attiva), "passiva": F(iva_passiva), "saldo": F(iva_attiva - iva_passiva)},
         "warning": warning,
     }
+    # Chiave aggiunta SOLO se configurato -> con config vuota l'output resta byte-identico (invarianza).
+    if memo_cliente_dedicato is not None:
+        out["memo_cliente_dedicato"] = memo_cliente_dedicato
+    return out
 
 
 # ── SCADENZARIO FISCALE (brief §3.2 + dashboard IVA §5.1, Fase 3) ──────────
