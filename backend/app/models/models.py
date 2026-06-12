@@ -1396,6 +1396,21 @@ class Contenuto(Base):
     )
 
 
+# ── PESO CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
+class PesoContenuto(Base):
+    """Peso per tipo di contenuto (valore enum ContenutoTipo) usato nel driver quota Luca:
+    la ripartizione pesa SUM(peso) invece di COUNT(*). Configurabile via /pesi-contenuto."""
+    __tablename__ = "pesi_contenuto"
+
+    tipo: Mapped[str] = mapped_column(String(30), primary_key=True)  # valore dell'enum ContenutoTipo
+    peso: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False, default=1)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        CheckConstraint("peso > 0", name="ck_pesi_contenuto_peso_pos"),
+    )
+
+
 class ContenutoEvento(Base):
     __tablename__ = "contenuto_eventi"
 

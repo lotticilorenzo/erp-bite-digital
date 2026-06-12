@@ -3464,6 +3464,24 @@ async def delete_costo_variabile(db: AsyncSession, costo_id):
     return True
 
 
+# ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
+async def list_pesi_contenuto(db: AsyncSession):
+    from app.models.models import PesoContenuto
+    rows = (await db.execute(select(PesoContenuto).order_by(PesoContenuto.tipo.asc()))).scalars().all()
+    return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+
+
+async def update_peso_contenuto(db: AsyncSession, tipo: str, peso):
+    from app.models.models import PesoContenuto
+    pc = (await db.execute(select(PesoContenuto).where(PesoContenuto.tipo == tipo))).scalar_one_or_none()
+    if not pc:
+        return None
+    pc.peso = peso
+    await db.commit()
+    await db.refresh(pc)
+    return {c.name: getattr(pc, c.name) for c in pc.__table__.columns}
+
+
 # ── REGOLE RICONCILIAZIONE ────────────────────────────────
 async def list_regole(db: AsyncSession):
     from app.models.models import RegolaRiconciliazione

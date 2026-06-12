@@ -52,6 +52,7 @@ from app.schemas.schemas import (
     ProgettoTemplateOut,
     CostoFissoCreate, CostoFissoUpdate,
     CostoVariabileCreate, CostoVariabileUpdate,
+    PesoContenutoUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
     MovimentoCassaUpdate, RiconciliaRequest, RiconciliazioniCreate,
     ImputazioniRequest,
@@ -71,6 +72,7 @@ from app.services.services import (
     list_fornitori_full, update_fornitore, list_fatture_passive, update_fattura_passiva, list_fornitori,
     list_movimenti_cassa, list_costi_fissi, create_costo_fisso, update_costo_fisso, delete_costo_fisso,
     list_costi_variabili, create_costo_variabile, update_costo_variabile, delete_costo_variabile,
+    list_pesi_contenuto, update_peso_contenuto,
     riconcilia_movimento as svc_riconcilia_movimento, elimina_riconciliazione,
     rimuovi_riconciliazioni_movimento, list_riconciliazioni_movimento, list_riconciliazioni_fattura,
     _sum_riconciliazioni_fattura, _load_fattura,
@@ -645,6 +647,28 @@ async def delete_costo_variabile_endpoint(
     if not ok:
         raise HTTPException(status_code=404, detail="Costo variabile non trovato")
     return {"deleted": True}
+
+
+# ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
+@router.get("/pesi-contenuto", tags=["PesiContenuto"])
+async def get_pesi_contenuto(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return {"pesi_contenuto": await list_pesi_contenuto(db)}
+
+
+@router.patch("/pesi-contenuto/{tipo}", tags=["PesiContenuto"])
+async def patch_peso_contenuto(
+    tipo: str,
+    payload: PesoContenutoUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    result = await update_peso_contenuto(db, tipo, payload.peso)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Tipo contenuto '{tipo}' non trovato")
+    return result
 
 
 # ── REGOLE RICONCILIAZIONE ────────────────────────────────

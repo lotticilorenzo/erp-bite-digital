@@ -1624,6 +1624,17 @@ class CostoVariabileOut(OrmBase):
     updated_at: datetime
 
 
+# ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
+class PesoContenutoOut(OrmBase):
+    tipo: str
+    peso: Decimal
+    updated_at: datetime
+
+
+class PesoContenutoUpdate(BaseModel):
+    peso: Decimal = Field(..., gt=0)
+
+
 # ── REGOLE RICONCILIAZIONE ────────────────────────────────
 class RegolaRiconciliazioneCreate(BaseModel):
     nome: str = Field(..., min_length=1, max_length=100)
