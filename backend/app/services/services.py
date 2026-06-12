@@ -1140,6 +1140,162 @@ async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None)
     return result
 
 
+# ── DASHBOARD LIQUIDITÀ (brief §5.1) — tutto DERIVATO, nessun ricalcolo ──────────
+async def calcola_dashboard_liquidita(
+    db: AsyncSession,
+    soglia_uscita: Decimal = Decimal("500"),
+    orizzonte_giorni: int = 90,
+) -> dict:
+    """KPI liquidità: prossima uscita significativa + fatture scadute per cliente.
+    Consuma gli helper di espansione uscite esistenti (NON ricalcola e NON tocca
+    calcola_proiezione_cassa, così il suo output resta invariato)."""
+    oggi = date.today()
+    fine = oggi + timedelta(days=max(int(orizzonte_giorni), 1))
+
+    # §5.1a — occorrenze datate delle uscite (costi fissi + variabili PREVISTO + fiscali quantificate)
+    occ: list[tuple] = []
+    for (d, imp, desc) in await _espandi_costi_fissi(db, oggi, fine, Decimal("0")):
+        occ.append((d, desc, Decimal(str(imp)), "COSTO_FISSO"))
+    for (d, imp, desc) in await _espandi_costi_variabili(db, oggi, fine):
+        occ.append((d, desc, Decimal(str(imp)), "COSTO_VARIABILE"))
+    scad = await calcola_scadenzario_fiscale(db, oggi, fine)
+    for s in scad.get("scadenze", []):
+        imp = s.get("importo_stimato")
+        if imp is None:
+            continue
+        impd = Decimal(str(imp))
+        if impd <= 0:
+            continue
+        occ.append((date.fromisoformat(s["data"]), s["voce"], impd, "FISCALE"))
+
+    candidati = sorted(
+        [(d, voce, imp, cat) for (d, voce, imp, cat) in occ if d >= oggi and imp > soglia_uscita],
+        key=lambda o: o[0],
+    )
+    prossima_uscita = None
+    if candidati:
+        d, voce, imp, cat = candidati[0]
+        prossima_uscita = {"data": str(d), "voce": voce, "importo": float(imp), "categoria": cat}
+
+    # §5.1b — fatture attive scadute (residuo>0, scadenza passata)
+    rows = await db.execute(text(
+        """
+        SELECT fa.id, fa.cliente_id, COALESCE(c.ragione_sociale, '?') AS ragione_sociale,
+               fa.numero, fa.data_scadenza, fa.importo_residuo,
+               (CURRENT_DATE - fa.data_scadenza) AS giorni_ritardo
+        FROM fatture_attive fa
+        LEFT JOIN clienti c ON c.id = fa.cliente_id
+        WHERE fa.importo_residuo > 0 AND fa.data_scadenza < CURRENT_DATE
+        ORDER BY fa.data_scadenza ASC
+        """
+    ))
+    dettaglio = []
+    per_cliente: dict = {}
+    totale_scaduto = Decimal("0")
+    for r in rows.all():
+        residuo = Decimal(str(r.importo_residuo or 0))
+        totale_scaduto += residuo
+        dettaglio.append({
+            "fattura_id": str(r.id),
+            "cliente_id": str(r.cliente_id) if r.cliente_id else None,
+            "ragione_sociale": r.ragione_sociale,
+            "numero": r.numero,
+            "data_scadenza": str(r.data_scadenza),
+            "importo_residuo": float(residuo),
+            "giorni_ritardo": int(r.giorni_ritardo),
+        })
+        pc = per_cliente.setdefault(r.ragione_sociale, {"ragione_sociale": r.ragione_sociale, "tot": Decimal("0"), "n": 0})
+        pc["tot"] += residuo
+        pc["n"] += 1
+    per_cliente_list = sorted(
+        [{"ragione_sociale": v["ragione_sociale"], "totale_scaduto": float(v["tot"]), "num_fatture": v["n"]}
+         for v in per_cliente.values()],
+        key=lambda x: x["totale_scaduto"], reverse=True,
+    )
+
+    return {
+        "oggi": str(oggi),
+        "soglia_uscita": float(soglia_uscita),
+        "orizzonte_giorni": int(orizzonte_giorni),
+        "prossima_uscita_significativa": prossima_uscita,
+        "fatture_scadute": {
+            "totale_scaduto": float(totale_scaduto),
+            "num_fatture": len(dettaglio),
+            "per_cliente": per_cliente_list,
+            "dettaglio": dettaglio,
+        },
+    }
+
+
+# ── KPI CONCENTRAZIONE CLIENTI (brief §5.3) — consuma get_marginalita_clienti ────
+async def calcola_kpi_clienti(
+    db: AsyncSession,
+    mese: date,
+    soglia_margine_pct: Decimal = Decimal("20"),
+    soglia_alert_clienti: int = 2,
+) -> dict:
+    """KPI clienti: n. clienti a margine basso (+alert) e ricavo medio/cliente con trend MoM.
+    Consuma get_marginalita_clienti (FONTE UNICA del margine) — nessuna formula nuova."""
+    from dateutil.relativedelta import relativedelta
+
+    mese_norm = mese.replace(day=1)
+    soglia = float(soglia_margine_pct)
+    correnti = await get_marginalita_clienti(db, mese_norm)
+
+    # §5.3a — clienti con margine sotto soglia (esclusi i fatturato=0: non significativi)
+    bassi = [c for c in correnti if c["fatturato"] > 0 and c["margine_percentuale"] < soglia]
+    count = len(bassi)
+    clienti_margine_basso = {
+        "soglia_margine_pct": soglia,
+        "soglia_alert_clienti": int(soglia_alert_clienti),
+        "count": count,
+        "alert": count > int(soglia_alert_clienti),
+        "clienti": [
+            {"cliente_id": str(c["cliente_id"]), "ragione_sociale": c["ragione_sociale"],
+             "margine_percentuale": c["margine_percentuale"], "fatturato": c["fatturato"]}
+            for c in bassi
+        ],
+    }
+
+    # §5.3b — ricavo medio per cliente + trend mese-su-mese
+    def _medio(lst):
+        attivi = [c for c in lst if c["fatturato"] > 0]
+        tot = sum(c["fatturato"] for c in attivi)
+        n = len(attivi)
+        return tot, n, (tot / n if n else None)
+
+    tot_c, n_c, med_c = _medio(correnti)
+    mese_prec = mese_norm - relativedelta(months=1)
+    precedenti = await get_marginalita_clienti(db, mese_prec)
+    tot_p, n_p, med_p = _medio(precedenti)
+
+    trend = None
+    if med_c is not None and med_p:
+        delta = med_c - med_p
+        trend = {
+            "delta_euro": round(delta, 2),
+            "delta_pct": round(delta / med_p * 100, 1),
+            "segno": "+" if delta >= 0 else "-",
+        }
+
+    ricavo_medio_cliente = {
+        "mese": str(mese_norm),
+        "ricavo_totale": round(tot_c, 2),
+        "n_clienti": n_c,
+        "ricavo_medio": round(med_c, 2) if med_c is not None else None,
+        "mese_precedente": str(mese_prec),
+        "n_clienti_precedente": n_p,
+        "ricavo_medio_precedente": round(med_p, 2) if med_p is not None else None,
+        "trend": trend,
+    }
+
+    return {
+        "mese": str(mese_norm),
+        "clienti_margine_basso": clienti_margine_basso,
+        "ricavo_medio_cliente": ricavo_medio_cliente,
+    }
+
+
 # ── DSO ENGINE + RISCHIO CONCENTRAZIONE (Fase 2, brief §3.1/§5.3) ──────────
 DSO_FALLBACK_GIORNI = 30          # se < 2 fatture incassate
 DSO_PESSIMISTA_BUFFER = 15        # giorni extra sullo scenario pessimista

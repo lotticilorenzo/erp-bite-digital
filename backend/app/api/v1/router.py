@@ -64,6 +64,7 @@ from app.services.services import (
     list_tasks, get_task, create_task, update_task, delete_task,
     list_timesheet, create_timesheet, approva_timesheet,
     get_dashboard_kpi, get_marginalita_clienti, calcola_dso,
+    calcola_dashboard_liquidita, calcola_kpi_clienti,
     calcola_proiezione_cassa, get_ultimo_saldo, create_saldo, calcola_pl_gestionale,
     calcola_scadenzario_fiscale,
     sync_fic_data, get_last_fic_sync_status, list_fatture_attive, incassa_fattura,
@@ -190,6 +191,36 @@ async def dashboard_kpi(
 ):
     response.headers["Cache-Control"] = "private, max-age=120"
     return await get_dashboard_kpi(db, mese)
+
+@router.get("/dashboard/liquidita", tags=["Report"])
+async def dashboard_liquidita(
+    response: Response,
+    soglia_uscita: float = Query(500, ge=0, description="Soglia €: uscite oltre questa sono 'significative'"),
+    orizzonte_giorni: int = Query(90, ge=7, le=365),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """Dashboard liquidità (brief §5.1): prossima uscita significativa + fatture scadute per cliente.
+    Derivato dagli helper esistenti; non ricalcola margine/proiezione."""
+    response.headers["Cache-Control"] = "private, max-age=120"
+    from decimal import Decimal
+    return await calcola_dashboard_liquidita(db, Decimal(str(soglia_uscita)), orizzonte_giorni)
+
+
+@router.get("/dashboard/kpi-clienti", tags=["Report"])
+async def dashboard_kpi_clienti(
+    response: Response,
+    mese: Optional[date] = Query(None, description="Mese YYYY-MM-01 (default: mese corrente)"),
+    soglia_margine_pct: float = Query(20, ge=0, le=100, description="Soglia % margine basso"),
+    soglia_alert_clienti: int = Query(2, ge=0, description="Alert se i clienti sotto soglia superano questo numero"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """KPI concentrazione clienti (brief §5.3): clienti a margine basso (+alert) e ricavo medio/cliente
+    con trend mese-su-mese. Consuma get_marginalita_clienti (nessuna formula nuova)."""
+    response.headers["Cache-Control"] = "private, max-age=120"
+    from decimal import Decimal
+    return await calcola_kpi_clienti(db, mese or date.today(), Decimal(str(soglia_margine_pct)), soglia_alert_clienti)
 
 @router.get("/analytics/forecast", tags=["Analytics"])
 async def get_analytics_forecast(
