@@ -1854,6 +1854,27 @@ async def calcola_tasso_overhead(db: AsyncSession, mese: date) -> dict:
     }
 
 
+# ── CONFIG MEMO CLIENTE/COLLABORATORE DEDICATO (P&L §7.6) ──
+async def get_config_pl_memo(db: AsyncSession):
+    """Config singleton del memo §7.6 (riga id=1, creata dalla migration). Ritorna il record o None."""
+    from app.models.models import ConfigPlMemo
+    return (await db.execute(select(ConfigPlMemo).where(ConfigPlMemo.id == 1))).scalar_one_or_none()
+
+
+async def update_config_pl_memo(db: AsyncSession, payload: dict):
+    from app.models.models import ConfigPlMemo
+    cfg = (await db.execute(select(ConfigPlMemo).where(ConfigPlMemo.id == 1))).scalar_one_or_none()
+    if cfg is None:
+        cfg = ConfigPlMemo(id=1)
+        db.add(cfg)
+    for k, v in payload.items():
+        if hasattr(cfg, k):
+            setattr(cfg, k, v)
+    await db.commit()
+    await db.refresh(cfg)
+    return {c.name: getattr(cfg, c.name) for c in cfg.__table__.columns}
+
+
 async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
     """Conto economico gestionale del mese (brief §5.2). Consuma calcola_margine_commessa (no ricalcolo).
 
@@ -1871,6 +1892,9 @@ async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
     commesse = await list_commesse(db, mese_norm)
     coeff_cache: dict = {}
     quota_cache: dict = {}
+    # §7.6: "cliente dedicato" (Italfer) ora da config (id), non piu' match stringa hardcoded.
+    cfg_memo = await get_config_pl_memo(db)
+    cliente_dedicato_id = cfg_memo.cliente_dedicato_id if cfg_memo else None
     ricavi_totale = Decimal("0")
     ricavi_italfer = Decimal("0")
     costi_diretti = Decimal("0")
@@ -1880,8 +1904,7 @@ async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
         ricavi_totale += m["ricavo"]
         costi_diretti += m["costo_manodopera"] + m["costi_diretti_totali"] + m["quota_luca"]
         margine_lordo += m["margine_lordo_euro"]
-        nome_cli = (c.cliente.ragione_sociale if c.cliente else "") or ""
-        if "italfer" in nome_cli.lower():
+        if cliente_dedicato_id and c.cliente_id == cliente_dedicato_id:
             ricavi_italfer += m["ricavo"]
     ricavi_retainer_oneshot = ricavi_totale - ricavi_italfer
     if ricavi_italfer == 0:

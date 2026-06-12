@@ -841,6 +841,23 @@ class SaldoCassa(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+# ── CONFIG MEMO CLIENTE/COLLABORATORE DEDICATO (P&L §7.6) ──
+class ConfigPlMemo(Base):
+    """Config singleton (id=1) per il memo §7.6: cliente dedicato (Italfer), collaboratore dedicato
+    (Paolo G.) e costo mensile del collaboratore (NULL = da cedolino, esterno). Inerte se tutto NULL."""
+    __tablename__ = "config_pl_memo"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    cliente_dedicato_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("clienti.id", ondelete="SET NULL"))
+    collaboratore_dedicato_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("risorse.id", ondelete="SET NULL"))
+    costo_collaboratore_mensile: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        CheckConstraint("id = 1", name="ck_config_pl_memo_singleton"),
+    )
+
+
 # ── REGOLE RICONCILIAZIONE ────────────────────────────────
 class RegolaRiconciliazione(Base):
     __tablename__ = "regole_riconciliazione"
