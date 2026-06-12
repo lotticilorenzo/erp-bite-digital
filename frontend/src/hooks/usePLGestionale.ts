@@ -8,15 +8,24 @@ export interface VoceCostoFisso {
   importo_mensile: number;
   motivo_esclusione?: string;
 }
+export interface MemoClienteDedicato {
+  cliente: string | null;
+  ricavo_cliente_dedicato: number;
+  collaboratore: string | null;
+  costo_collaboratore_dedicato: number | null;
+  scostamento: number | null;
+  note: string | null;
+}
 export interface PLGestionale {
   mese: string;
-  ricavi: { retainer_oneshot: number; italfer: number; totale: number };
+  ricavi: { retainer: number; one_shot: number; cliente_dedicato: number; totale: number };
   costi_diretti: number;
   margine_lordo_aggregato: number;
   costi_fissi_indivisibili: number;
   costi_fissi_dettaglio: { incluse: VoceCostoFisso[]; escluse: VoceCostoFisso[] };
   risultato_operativo_gestionale: number;
   iva_memo: { attiva: number; passiva: number; saldo: number };
+  memo_cliente_dedicato?: MemoClienteDedicato;
   warning: string[];
 }
 

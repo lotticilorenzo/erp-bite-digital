@@ -69,8 +69,11 @@ export default function PLGestionale() {
           <Card>
             <CardHeader><CardTitle className="text-base capitalize">{meseLabel}</CardTitle></CardHeader>
             <CardContent className="divide-y-0">
-              <Riga label="Ricavi da retainer / one-shot" valore={pl.ricavi.retainer_oneshot} />
-              <Riga label="Ricavi Italfer" valore={pl.ricavi.italfer} />
+              <Riga label="Ricavi da retainer" valore={pl.ricavi.retainer} />
+              <Riga label="Ricavi one-shot" valore={pl.ricavi.one_shot} />
+              {pl.ricavi.cliente_dedicato > 0 && (
+                <Riga label="Ricavi cliente dedicato" valore={pl.ricavi.cliente_dedicato} />
+              )}
               <Riga label="Ricavi totali" valore={pl.ricavi.totale} subtotale />
               <Riga label="Costi diretti produzione" valore={pl.costi_diretti} segno="-" />
               <Riga label="Margine lordo aggregato" valore={pl.margine_lordo_aggregato} subtotale />
@@ -92,6 +95,27 @@ export default function PLGestionale() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Memo cliente dedicato — staccato, fuori dal risultato (solo se configurato) */}
+          {pl.memo_cliente_dedicato && (
+            <Card className="border-dashed bg-muted/20">
+              <CardContent className="pt-5">
+                <p className="text-[10px] uppercase tracking-widest font-black text-muted-foreground">
+                  Memo — Cliente dedicato <span className="normal-case font-medium">(fuori dal risultato operativo)</span>
+                </p>
+                <div className="flex flex-wrap gap-x-8 gap-y-1 mt-2 text-sm">
+                  <span>Cliente: <b>{pl.memo_cliente_dedicato.cliente ?? "—"}</b></span>
+                  <span>Ricavo: <b className="tabular-nums">{formatEuro(pl.memo_cliente_dedicato.ricavo_cliente_dedicato)}</b></span>
+                  <span>Collaboratore: <b>{pl.memo_cliente_dedicato.collaboratore ?? "—"}</b></span>
+                  <span>Costo: <b className="tabular-nums">{pl.memo_cliente_dedicato.costo_collaboratore_dedicato != null ? formatEuro(pl.memo_cliente_dedicato.costo_collaboratore_dedicato) : "da definire"}</b></span>
+                  <span>Scostamento: <b className="tabular-nums">{pl.memo_cliente_dedicato.scostamento != null ? formatEuro(pl.memo_cliente_dedicato.scostamento) : "—"}</b></span>
+                </div>
+                {pl.memo_cliente_dedicato.note && (
+                  <p className="text-xs text-muted-foreground mt-2">{pl.memo_cliente_dedicato.note}</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Dettaglio costi fissi */}
           <Collapsible open={openDett} onOpenChange={setOpenDett}>
