@@ -83,9 +83,10 @@ async def _build_quota_cache_mese(db: AsyncSession, mese_norm: date) -> dict:
     """Aggregato pro-mese per la quota pro-forma (1 query). Evita N+1 nell'helper margine.
 
     proforma = Σ risorse attive con quota_proforma_mensile configurata (destinatari).
-    totale/per_cliente = contenuti del mese con cliente RISOLVIBILE
+    totale/per_cliente = contenuti del mese con cliente RISOLVIBILE, PESATI per tipo (brief §7.5):
+    n = SUM(peso) dalla tabella configurabile pesi_contenuto (LEFT JOIN; tipo senza riga pesa 1).
     (commessa→cliente, fallback progetto→cliente). I contenuti senza cliente sono esclusi,
-    così Σ quote sui clienti == proforma (ripartizione al 100%).
+    così Σ quote sui clienti == proforma (ripartizione al 100%, numeratore e denominatore stessa mappa).
     Mese contenuto = COALESCE(pubblicato_at, data_consegna_prevista, created_at).
     """
     pf = await db.execute(text(
@@ -96,20 +97,23 @@ async def _build_quota_cache_mese(db: AsyncSession, mese_norm: date) -> dict:
 
     rows = await db.execute(text(
         """
-        SELECT COALESCE(comm.cliente_id, prog.cliente_id) AS cliente_id, COUNT(*) AS n
+        SELECT COALESCE(comm.cliente_id, prog.cliente_id) AS cliente_id,
+               SUM(COALESCE(pc.peso, 1)) AS n
         FROM contenuti ct
         LEFT JOIN commesse comm ON comm.id = ct.commessa_id
         LEFT JOIN progetti prog ON prog.id = ct.progetto_id
+        LEFT JOIN pesi_contenuto pc ON pc.tipo = ct.tipo::text
         WHERE date_trunc('month', COALESCE(ct.pubblicato_at, ct.data_consegna_prevista::timestamptz, ct.created_at))::date = :mese
           AND COALESCE(comm.cliente_id, prog.cliente_id) IS NOT NULL
         GROUP BY 1
         """
     ), {"mese": mese_norm})
     per_cliente: dict = {}
-    totale = 0
+    totale = Decimal("0")
     for r in rows.all():
-        per_cliente[r.cliente_id] = int(r.n)
-        totale += int(r.n)
+        peso_cli = Decimal(str(r.n or 0))
+        per_cliente[r.cliente_id] = peso_cli
+        totale += peso_cli
     return {"proforma": proforma, "totale": totale, "per_cliente": per_cliente}
 
 
