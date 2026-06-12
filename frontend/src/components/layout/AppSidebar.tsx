@@ -17,6 +17,7 @@ import {
   Calculator,
   LineChart,
   Scale,
+  SlidersHorizontal,
   CalendarClock,
   ShoppingCart,
   Target,
@@ -80,6 +81,7 @@ const navItems = [
       { title: "Proiezione Cassa", url: "/proiezione-cassa", icon: LineChart },
       { title: "P&L Gestionale", url: "/pl-gestionale", icon: Scale },
       { title: "Scadenzario Fiscale", url: "/scadenzario-fiscale", icon: CalendarClock },
+      { title: "Impostazioni Finanza", url: "/impostazioni-finanza", icon: SlidersHorizontal },
     ],
   },
   {
