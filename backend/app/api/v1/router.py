@@ -51,6 +51,7 @@ from app.schemas.schemas import (
     CRMStageOut, CRMStageCreate, CRMStageUpdate, CRMLeadCreate, CRMLeadUpdate, CRMLeadOut, CRMActivityCreate, CRMActivityOut, CRMStatsOut,
     ProgettoTemplateOut,
     CostoFissoCreate, CostoFissoUpdate,
+    ConfigPlMemoUpdate,
     CostoVariabileCreate, CostoVariabileUpdate,
     PesoContenutoUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
@@ -66,6 +67,7 @@ from app.services.services import (
     list_timesheet, create_timesheet, approva_timesheet,
     get_dashboard_kpi, get_marginalita_clienti, calcola_dso,
     calcola_dashboard_liquidita, calcola_kpi_clienti,
+    get_config_pl_memo, update_config_pl_memo,
     calcola_proiezione_cassa, get_ultimo_saldo, create_saldo, calcola_pl_gestionale,
     calcola_scadenzario_fiscale,
     sync_fic_data, get_last_fic_sync_status, list_fatture_attive, incassa_fattura,
@@ -364,6 +366,28 @@ async def report_pl_gestionale(
     """P&L gestionale mensile (Fase 3 core, fiscale escluso): ricavi, costi diretti, margine lordo
     aggregato, costi fissi indivisibili, risultato operativo + IVA memo. Solo lettura."""
     return await calcola_pl_gestionale(db, mese or date.today())
+
+
+# ── CONFIG MEMO CLIENTE/COLLABORATORE DEDICATO (P&L §7.6) ──
+@router.get("/config-pl-memo", tags=["Report"])
+async def get_config_pl_memo_endpoint(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    cfg = await get_config_pl_memo(db)
+    if cfg is None:
+        return {"id": 1, "cliente_dedicato_id": None, "collaboratore_dedicato_id": None,
+                "costo_collaboratore_mensile": None, "updated_at": None}
+    return {c.name: getattr(cfg, c.name) for c in cfg.__table__.columns}
+
+
+@router.patch("/config-pl-memo", tags=["Report"])
+async def patch_config_pl_memo(
+    payload: ConfigPlMemoUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return await update_config_pl_memo(db, payload.model_dump(exclude_unset=True))
 
 
 @router.get("/report/scadenzario-fiscale", tags=["Report"])

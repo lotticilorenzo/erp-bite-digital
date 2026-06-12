@@ -1858,14 +1858,36 @@ async def calcola_tasso_overhead(db: AsyncSession, mese: date) -> dict:
     }
 
 
+# ── CONFIG MEMO CLIENTE/COLLABORATORE DEDICATO (P&L §7.6) ──
+async def get_config_pl_memo(db: AsyncSession):
+    """Config singleton del memo §7.6 (riga id=1, creata dalla migration). Ritorna il record o None."""
+    from app.models.models import ConfigPlMemo
+    return (await db.execute(select(ConfigPlMemo).where(ConfigPlMemo.id == 1))).scalar_one_or_none()
+
+
+async def update_config_pl_memo(db: AsyncSession, payload: dict):
+    from app.models.models import ConfigPlMemo
+    cfg = (await db.execute(select(ConfigPlMemo).where(ConfigPlMemo.id == 1))).scalar_one_or_none()
+    if cfg is None:
+        cfg = ConfigPlMemo(id=1)
+        db.add(cfg)
+    for k, v in payload.items():
+        if hasattr(cfg, k):
+            setattr(cfg, k, v)
+    await db.commit()
+    await db.refresh(cfg)
+    return {c.name: getattr(cfg, c.name) for c in cfg.__table__.columns}
+
+
 async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
     """Conto economico gestionale del mese (brief §5.2). Consuma calcola_margine_commessa (no ricalcolo).
 
+    Memo §7.6 (cliente dedicato Italfer vs costo collaboratore Paolo G.) IMPLEMENTATO e configurabile
+    via config_pl_memo; il costo collaboratore viene dal cedolino (esterno) -> NULL finche' non impostato.
     TODO(Fase 3): scadenzario fiscale IRPEF/IRES (bloccato sul commercialista),
-    split retainer vs one-shot (dato non strutturato a livello commessa),
-    memo copertura ricavo Italfer vs costo risorsa "Paolo G.".
+    split retainer vs one-shot (dato non strutturato a livello commessa).
     """
-    from app.models.models import CostoFisso, FatturaAttiva, FatturaPassiva
+    from app.models.models import CostoFisso, FatturaAttiva, FatturaPassiva, ProjectType
     from dateutil.relativedelta import relativedelta
 
     mese_norm = mese.replace(day=1)
@@ -1875,8 +1897,12 @@ async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
     commesse = await list_commesse(db, mese_norm)
     coeff_cache: dict = {}
     quota_cache: dict = {}
+    # §7.6: "cliente dedicato" (Italfer) ora da config (id), non piu' match stringa hardcoded.
+    cfg_memo = await get_config_pl_memo(db)
+    cliente_dedicato_id = cfg_memo.cliente_dedicato_id if cfg_memo else None
     ricavi_totale = Decimal("0")
     ricavi_italfer = Decimal("0")
+    ricavi_retainer = Decimal("0")   # §5.2: quota RETAINER dei ricavi non-dedicati
     costi_diretti = Decimal("0")
     margine_lordo = Decimal("0")
     for c in commesse:
@@ -1884,13 +1910,26 @@ async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
         ricavi_totale += m["ricavo"]
         costi_diretti += m["costo_manodopera"] + m["costi_diretti_totali"] + m["quota_luca"]
         margine_lordo += m["margine_lordo_euro"]
-        nome_cli = (c.cliente.ragione_sociale if c.cliente else "") or ""
-        if "italfer" in nome_cli.lower():
+        if cliente_dedicato_id and c.cliente_id == cliente_dedicato_id:
             ricavi_italfer += m["ricavo"]
-    ricavi_retainer_oneshot = ricavi_totale - ricavi_italfer
+            continue
+        # §5.2: split del ricavo commessa per progetti.tipo (RETAINER vs ONE_OFF).
+        # Aggiustamenti (commessa-level, senza tipo) ripartiti PRO-RATA: retainer_part pro-rata
+        # l'INTERO ricavo commessa sulla quota righe RETAINER; one_shot e' il residuo (sotto).
+        righe_ret = Decimal("0")
+        righe_sum = Decimal("0")
+        for riga in c.righe_progetto:
+            v = riga.valore_fatturabile_calc
+            righe_sum += v
+            if riga.progetto is not None and riga.progetto.tipo == ProjectType.RETAINER:
+                righe_ret += v
+        if righe_sum > 0:
+            ricavi_retainer += (m["ricavo"] * righe_ret / righe_sum)
+        # righe_sum == 0 (soli aggiustamenti / 0 righe) -> retainer_part 0: il ricavo cade nel residuo one_shot.
+    # §5.2: one_shot come RESIDUO -> retainer + one_shot + cliente_dedicato == totale ESATTO (al centesimo).
+    ricavi_one_shot = (ricavi_totale - ricavi_italfer) - ricavi_retainer
     if ricavi_italfer == 0:
         warning.append("Cliente 'Italfer' non presente: riga ricavo Italfer = 0.")
-    warning.append("Split retainer/one-shot non strutturato a livello commessa: TODO.")
 
     # 2) Costi fissi indivisibili = solo gruppo (b), normalizzati EUR/mese, attivi nel mese.
     # FONTE UNICA condivisa col tasso overhead del pricing floor (no doppio conteggio).
@@ -1909,12 +1948,51 @@ async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
     iva_passiva = Decimal(str(iva_p.scalar() or 0))
 
     F = lambda x: float(Decimal(x).quantize(Decimal("0.01")))
-    return {
+
+    # 4) §7.6 MEMO scostamento ricavo cliente dedicato (Italfer) vs costo collaboratore dedicato (Paolo G.).
+    # Fuori dal risultato operativo (come l'IVA). Presente SOLO se un cliente dedicato e' configurato.
+    # TODO: il costo del collaboratore viene dal cedolino (dato ESTERNO) -> configurabile, NULL finche'
+    # non impostato -> scostamento NULL (nessun importo inventato).
+    memo_cliente_dedicato = None
+    if cliente_dedicato_id:
+        from app.models.models import Cliente, Risorsa
+        cli_nome = (await db.execute(
+            select(Cliente.ragione_sociale).where(Cliente.id == cliente_dedicato_id)
+        )).scalar_one_or_none()
+        collaboratore_nome = None
+        if cfg_memo and cfg_memo.collaboratore_dedicato_id:
+            rr = (await db.execute(
+                select(Risorsa.nome, Risorsa.cognome).where(Risorsa.id == cfg_memo.collaboratore_dedicato_id)
+            )).first()
+            if rr:
+                collaboratore_nome = f"{rr.nome} {rr.cognome}".strip()
+        costo = cfg_memo.costo_collaboratore_mensile if cfg_memo else None
+        scostamento = (ricavi_italfer - costo) if costo is not None else None
+        memo_cliente_dedicato = {
+            "cliente": cli_nome,
+            "ricavo_cliente_dedicato": F(ricavi_italfer),
+            "collaboratore": collaboratore_nome,
+            "costo_collaboratore_dedicato": (F(costo) if costo is not None else None),
+            "scostamento": (F(scostamento) if scostamento is not None else None),
+            "note": ("Costo collaboratore da cedolino (esterno): impostalo via /config-pl-memo."
+                     if costo is None else None),
+        }
+
+    # §5.2: valori ricavi quantizzati; one_shot = residuo dei quantizzati -> la somma
+    # retainer + one_shot + cliente_dedicato e' ESATTAMENTE == totale al centesimo (invarianza).
+    _q = lambda x: Decimal(x).quantize(Decimal("0.01"))
+    ric_totale_q = _q(ricavi_totale)
+    ric_dedicato_q = _q(ricavi_italfer)
+    ric_retainer_q = _q(ricavi_retainer)
+    ric_one_shot_q = ric_totale_q - ric_dedicato_q - ric_retainer_q
+
+    out = {
         "mese": str(mese_norm),
         "ricavi": {
-            "retainer_oneshot": F(ricavi_retainer_oneshot),
-            "italfer": F(ricavi_italfer),
-            "totale": F(ricavi_totale),
+            "retainer": float(ric_retainer_q),
+            "one_shot": float(ric_one_shot_q),
+            "cliente_dedicato": float(ric_dedicato_q),
+            "totale": float(ric_totale_q),
         },
         "costi_diretti": F(costi_diretti),
         "margine_lordo_aggregato": F(margine_lordo),
@@ -1924,6 +2002,10 @@ async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
         "iva_memo": {"attiva": F(iva_attiva), "passiva": F(iva_passiva), "saldo": F(iva_attiva - iva_passiva)},
         "warning": warning,
     }
+    # Chiave aggiunta SOLO se configurato -> con config vuota l'output resta byte-identico (invarianza).
+    if memo_cliente_dedicato is not None:
+        out["memo_cliente_dedicato"] = memo_cliente_dedicato
+    return out
 
 
 # ── SCADENZARIO FISCALE (brief §3.2 + dashboard IVA §5.1, Fase 3) ──────────

@@ -1571,6 +1571,21 @@ class CostoFissoOut(OrmBase):
     updated_at: datetime
 
 
+# ── CONFIG MEMO CLIENTE/COLLABORATORE DEDICATO (P&L §7.6) ──
+class ConfigPlMemoOut(OrmBase):
+    id: int
+    cliente_dedicato_id: Optional[uuid.UUID]
+    collaboratore_dedicato_id: Optional[uuid.UUID]
+    costo_collaboratore_mensile: Optional[Decimal]
+    updated_at: datetime
+
+
+class ConfigPlMemoUpdate(BaseModel):
+    cliente_dedicato_id: Optional[uuid.UUID] = None
+    collaboratore_dedicato_id: Optional[uuid.UUID] = None
+    costo_collaboratore_mensile: Optional[Decimal] = Field(None, ge=0)
+
+
 # ── COSTI VARIABILI (registro forecasting cassa — brief §2.5) ──
 # Tipi via Literal: l'errore di validazione e' un literal_error con ctx serializzabile (422 pulito),
 # a differenza di un field_validator che solleva ValueError (ctx non JSON-safe -> 500 col handler app).
