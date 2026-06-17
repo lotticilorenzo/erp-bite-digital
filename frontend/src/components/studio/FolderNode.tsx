@@ -15,6 +15,8 @@ import {
   Plus,
   Circle,
   Users,
+  List,
+  FileText,
 } from "lucide-react";
 import type { StudioNode } from "@/types/studio";
 import { useStudio } from "@/hooks/useStudio";
@@ -74,7 +76,7 @@ export function FolderNode({
   const [isOpen, setIsOpen] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(node.nome);
-  const [createMode, setCreateMode] = useState<"folder" | "task" | null>(null);
+  const [createMode, setCreateMode] = useState<"folder" | "task" | "lista" | "documento" | null>(null);
   const [newChildName, setNewChildName] = useState("");
   const renameRef = useRef<HTMLInputElement>(null);
   const newChildRef = useRef<HTMLInputElement>(null);
@@ -126,7 +128,26 @@ export function FolderNode({
     onError: () => toast.error("Errore nella creazione"),
   });
 
-  const isFolder = node.tipo === "folder";
+  const createChildNodeMutation = useMutation({
+    mutationFn: ({ nome, tipo }: { nome: string; tipo: "lista" | "documento" }) =>
+      api.post("/studio/nodes", {
+        nome,
+        tipo,
+        parent_id: node.id,
+        order: node.children.length,
+      }),
+    onSuccess: (_, { tipo }) => {
+      queryClient.invalidateQueries({ queryKey: ["studio-hierarchy"] });
+      setCreateMode(null);
+      setNewChildName("");
+      setIsOpen(true);
+      toast.success(tipo === "lista" ? "Lista creata" : "Documento creato");
+    },
+    onError: () => toast.error("Errore nella creazione"),
+  });
+
+  const isFolder = node.tipo === "folder" || node.tipo === "lista";
+  const canAddChildren = isFolder || node.tipo === "project";
   const isDropDisabled = draggedSubtreeIds.has(node.id);
 
   const { attributes, listeners, setActivatorNodeRef, setNodeRef, transform, isDragging } = useDraggable({
@@ -179,7 +200,7 @@ export function FolderNode({
     setNewChildName("");
   };
 
-  const beginCreate = (mode: "folder" | "task") => {
+  const beginCreate = (mode: "folder" | "task" | "lista" | "documento") => {
     setCreateMode(mode);
     setNewChildName("");
     setIsOpen(true);
@@ -194,6 +215,11 @@ export function FolderNode({
 
     if (createMode === "folder") {
       createChildFolderMutation.mutate(trimmed);
+      return;
+    }
+
+    if (createMode === "lista" || createMode === "documento") {
+      createChildNodeMutation.mutate({ nome: trimmed, tipo: createMode });
       return;
     }
 
@@ -334,7 +360,7 @@ export function FolderNode({
         {node.is_private && <Lock className="h-2.5 w-2.5 text-amber-500/50 mr-1 shrink-0 self-start mt-0.5" />}
 
         <div className="flex items-center gap-0.5 shrink-0 self-start mt-0.5">
-          {isFolder && (
+          {canAddChildren && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                 <button className="h-6 w-6 rounded-md border border-primary/20 bg-primary/5 text-primary/90 hover:bg-primary/10 transition-all flex items-center justify-center">
@@ -342,15 +368,37 @@ export function FolderNode({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-card border-border text-white w-48 shadow-2xl rounded-xl">
+                {node.tipo === "folder" && (
+                  <DropdownMenuItem
+                    className="gap-2 text-xs font-bold cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      beginCreate("folder");
+                    }}
+                  >
+                    <FolderPlus className="h-3.5 w-3.5" />
+                    Nuova Sottocartella
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   className="gap-2 text-xs font-bold cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation();
-                    beginCreate("folder");
+                    beginCreate("lista");
                   }}
                 >
-                  <FolderPlus className="h-3.5 w-3.5" />
-                  Nuova Sottocartella
+                  <List className="h-3.5 w-3.5 text-violet-400" />
+                  Nuova Lista
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="gap-2 text-xs font-bold cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    beginCreate("documento");
+                  }}
+                >
+                  <FileText className="h-3.5 w-3.5 text-sky-400" />
+                  Nuovo Documento
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="gap-2 text-xs font-bold cursor-pointer"
@@ -373,17 +421,39 @@ export function FolderNode({
                 </button>
               </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="bg-card border-border text-white w-44 shadow-2xl rounded-xl">
-              {isFolder && (
+              {canAddChildren && (
                 <>
+                  {node.tipo === "folder" && (
+                    <DropdownMenuItem
+                      className="gap-2 text-[11px] font-bold cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        beginCreate("folder");
+                      }}
+                    >
+                      <FolderPlus className="h-3 w-3 text-primary" />
+                      Nuova Sottocartella
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem
                     className="gap-2 text-[11px] font-bold cursor-pointer"
                     onClick={(e) => {
                       e.stopPropagation();
-                      beginCreate("folder");
+                      beginCreate("lista");
                     }}
                   >
-                    <FolderPlus className="h-3 w-3 text-primary" />
-                    Nuova Sottocartella
+                    <List className="h-3 w-3 text-violet-400" />
+                    Nuova Lista
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="gap-2 text-[11px] font-bold cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      beginCreate("documento");
+                    }}
+                  >
+                    <FileText className="h-3 w-3 text-sky-400" />
+                    Nuovo Documento
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className="gap-2 text-[11px] font-bold cursor-pointer"
@@ -444,13 +514,22 @@ export function FolderNode({
             >
               {createMode === "folder" ? (
                 <FolderPlus className="h-3.5 w-3.5 text-primary/70 shrink-0" />
+              ) : createMode === "lista" ? (
+                <List className="h-3.5 w-3.5 text-violet-400 shrink-0" />
+              ) : createMode === "documento" ? (
+                <FileText className="h-3.5 w-3.5 text-sky-400 shrink-0" />
               ) : (
                 <ListTodo className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
               )}
               <input
                 ref={newChildRef}
                 className="flex-1 bg-card/80 border border-primary/40 rounded px-1.5 text-[10px] font-bold text-white outline-none min-w-0"
-                placeholder={createMode === "folder" ? "Nome cartella..." : "Nome task..."}
+                placeholder={
+                  createMode === "folder" ? "Nome cartella..."
+                  : createMode === "lista" ? "Nome lista..."
+                  : createMode === "documento" ? "Nome documento..."
+                  : "Nome task..."
+                }
                 value={newChildName}
                 onChange={(e) => setNewChildName(e.target.value)}
                 onBlur={commitNewChild}
@@ -518,6 +597,10 @@ function NodeIcon({ type, isOpen }: { type: string; isOpen?: boolean }) {
       return <ListTodo className="h-3.5 w-3.5 text-emerald-400 shrink-0" />;
     case "client":
       return <Users className="h-3.5 w-3.5 text-amber-400 shrink-0" />;
+    case "lista":
+      return <List className="h-3.5 w-3.5 text-violet-400 shrink-0" />;
+    case "documento":
+      return <FileText className="h-3.5 w-3.5 text-sky-400 shrink-0" />;
     default:
       return null;
   }

@@ -23,7 +23,7 @@ export interface StudioState {
 export interface StudioNode {
   id: string;
   parent_id: string | null;
-  tipo: "folder" | "project" | "task" | "dashboard";
+  tipo: "folder" | "project" | "task" | "dashboard" | "lista" | "documento";
   nome: string;
   icon?: string;
   color?: string;

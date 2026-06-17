@@ -11,6 +11,8 @@ import {
   Hash,
   ListTodo,
   Zap,
+  List,
+  FileText,
 } from "lucide-react";
 import {
   SidebarMenu,
@@ -181,7 +183,7 @@ export function StudioSidebar() {
     if (!overNode) return;
 
     if (dropTarget.position === "inside") {
-      if (overNode.tipo !== "folder") return;
+      if (overNode.tipo !== "folder" && overNode.tipo !== "lista") return;
       moveMutation.mutate({
         itemId: activeId,
         parentId: overNode.id,
@@ -415,6 +417,10 @@ function DragPreviewIcon({ type }: { type: StudioNode["tipo"] }) {
       return <Hash className="h-3.5 w-3.5 shrink-0 text-blue-400" />;
     case "task":
       return <ListTodo className="h-3.5 w-3.5 shrink-0 text-emerald-400" />;
+    case "lista":
+      return <List className="h-3.5 w-3.5 shrink-0 text-violet-400" />;
+    case "documento":
+      return <FileText className="h-3.5 w-3.5 shrink-0 text-sky-400" />;
     default:
       return <FolderClosed className="h-3.5 w-3.5 shrink-0 text-primary" />;
   }
