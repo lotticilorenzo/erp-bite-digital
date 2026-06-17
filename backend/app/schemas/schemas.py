@@ -677,6 +677,10 @@ class TaskAttachmentOut(OrmBase):
     user: Optional[UserOut] = None
 
 # ── TASK ──────────────────────────────────────────────────
+class AssegnatarioOut(BaseModel):
+    id: uuid.UUID
+    nome: str
+
 class TaskCreate(BaseModel):
     progetto_id: Optional[uuid.UUID] = None
     commessa_id: Optional[uuid.UUID] = None
@@ -690,6 +694,8 @@ class TaskCreate(BaseModel):
     data_scadenza: Optional[date] = None
     stima_minuti: Optional[int] = Field(None, ge=0, le=999999)
     priorita: Optional[str] = "media"
+    tags: Optional[List[str]] = None
+    assegnatari: Optional[List[uuid.UUID]] = None
 
     @model_validator(mode="after")
     def validate_date_range(self):
@@ -710,6 +716,9 @@ class TaskUpdate(BaseModel):
     data_scadenza: Optional[date] = None
     stima_minuti: Optional[int] = Field(None, ge=0, le=999999)
     priorita: Optional[str] = Field(None, max_length=20)
+    tags: Optional[List[str]] = None
+    assegnatari: Optional[List[uuid.UUID]] = None
+
 class TaskOut(OrmBase):
     id: uuid.UUID
     clickup_task_id: Optional[str] = None
@@ -733,6 +742,8 @@ class TaskOut(OrmBase):
     assegnatario: Optional[UserOut] = None
     revisore: Optional[UserOut] = None
     attachments: List[TaskAttachmentOut] = []
+    tags: List[str] = []
+    assegnatari: List[AssegnatarioOut] = []
 
 
 # ── TIMER SESSION ─────────────────────────────────────────

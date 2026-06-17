@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any, Optional, List
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, text
+from sqlalchemy import select, func, and_, or_, text, delete
 from sqlalchemy.orm import selectinload, joinedload
 
 from app.models.models import (
@@ -21,6 +21,7 @@ from app.models.models import (
     ProgettoTeam, ServizioProgetto, MovimentoCassa,
     BudgetCategory, WikiCategoria,
     Notification, Pianificazione,
+    TaskAssegnatario,
 )
 from app.schemas.schemas import (
     UserCreate, UserUpdate, ClienteCreate, ClienteUpdate,
@@ -2137,10 +2138,12 @@ async def list_tasks(
         selectinload(Task.revisore),
         selectinload(Task.attachments),
         selectinload(Task.timer_sessions),
+        selectinload(Task.assegnatari_m2m).selectinload(TaskAssegnatario.user),
         selectinload(Task.subtasks).selectinload(Task.assegnatario),
         selectinload(Task.subtasks).selectinload(Task.revisore),
         selectinload(Task.subtasks).selectinload(Task.attachments),
         selectinload(Task.subtasks).selectinload(Task.timer_sessions),
+        selectinload(Task.subtasks).selectinload(Task.assegnatari_m2m).selectinload(TaskAssegnatario.user),
         selectinload(Task.subtasks).selectinload(Task.subtasks),
     )
 
@@ -2251,10 +2254,12 @@ async def _get_task_record(db: AsyncSession, task_id: uuid.UUID) -> Optional[Tas
             selectinload(Task.revisore),
             selectinload(Task.attachments),
             selectinload(Task.timer_sessions),
+            selectinload(Task.assegnatari_m2m).selectinload(TaskAssegnatario.user),
             selectinload(Task.subtasks).selectinload(Task.assegnatario),
             selectinload(Task.subtasks).selectinload(Task.revisore),
             selectinload(Task.subtasks).selectinload(Task.attachments),
             selectinload(Task.subtasks).selectinload(Task.timer_sessions),
+            selectinload(Task.subtasks).selectinload(Task.assegnatari_m2m).selectinload(TaskAssegnatario.user),
             selectinload(Task.subtasks).selectinload(Task.subtasks),
         ).where(Task.id == task_id, Task.is_deleted == False)
     )
@@ -2266,9 +2271,16 @@ async def get_task(db: AsyncSession, task_id: uuid.UUID, current_user: User) -> 
 
 async def create_task(db: AsyncSession, data: Any, current_user: User) -> Task: # data: TaskCreate
     ensure_erp_access_user(current_user)
-    t = Task(**data.model_dump())
+    data_dict = data.model_dump()
+    assegnatari_ids = data_dict.pop("assegnatari", None) or []
+    t = Task(**data_dict)
     db.add(t)
     await db.flush()
+    if assegnatari_ids:
+        for user_id in assegnatari_ids:
+            db.add(TaskAssegnatario(task_id=t.id, user_id=user_id))
+        t.assegnatario_id = assegnatari_ids[0]
+        await db.flush()
     return await _get_task_record(db, t.id)
 
 async def update_task(
@@ -2283,10 +2295,37 @@ async def update_task(
     if not t:
         return None
     prima = {"stato": t.stato, "titolo": t.titolo}
-    for field, val in data.model_dump(exclude_none=True).items():
+    data_dict = data.model_dump(exclude_none=True)
+    assegnatari_ids = data_dict.pop("assegnatari", None)
+    for field, val in data_dict.items():
         setattr(t, field, val)
+    if assegnatari_ids is not None:
+        await db.execute(delete(TaskAssegnatario).where(TaskAssegnatario.task_id == task_id))
+        for user_id in assegnatari_ids:
+            db.add(TaskAssegnatario(task_id=task_id, user_id=user_id))
+        t.assegnatario_id = assegnatari_ids[0] if assegnatari_ids else None
     await write_audit(db, by_user_id, "tasks", task_id, "UPDATE", prima)
     await db.flush()
+    if assegnatari_ids is not None:
+        # M2M modificato: populate_existing bypassa l'identity-map cache
+        # senza lazy-load (safe in async)
+        res = await db.execute(
+            select(Task).options(
+                selectinload(Task.assegnatario),
+                selectinload(Task.revisore),
+                selectinload(Task.attachments),
+                selectinload(Task.timer_sessions),
+                selectinload(Task.assegnatari_m2m).selectinload(TaskAssegnatario.user),
+                selectinload(Task.subtasks).selectinload(Task.assegnatario),
+                selectinload(Task.subtasks).selectinload(Task.revisore),
+                selectinload(Task.subtasks).selectinload(Task.attachments),
+                selectinload(Task.subtasks).selectinload(Task.timer_sessions),
+                selectinload(Task.subtasks).selectinload(Task.assegnatari_m2m).selectinload(TaskAssegnatario.user),
+                selectinload(Task.subtasks).selectinload(Task.subtasks),
+            ).where(Task.id == task_id, Task.is_deleted == False)
+            .execution_options(populate_existing=True)
+        )
+        return res.unique().scalar_one_or_none()
     return await _get_task_record(db, t.id)
 
 async def delete_task(db: AsyncSession, task_id: uuid.UUID, by_user_id: uuid.UUID, current_user: User) -> bool:

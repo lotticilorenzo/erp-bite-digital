@@ -8,7 +8,7 @@ from sqlalchemy import (
     JSON, func
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from app.models.base import Base
 import enum
 
@@ -414,6 +414,7 @@ class Task(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    tags: Mapped[List[str]] = mapped_column(ARRAY(String), server_default="{}", default=list)
 
     assegnatario: Mapped[Optional["User"]] = relationship(foreign_keys=[assegnatario_id], back_populates="tasks_assegnati")
     revisore: Mapped[Optional["User"]] = relationship(foreign_keys=[revisore_id])
@@ -429,10 +430,36 @@ class Task(Base):
     timer_sessions: Mapped[List["TimerSession"]] = relationship("TimerSession", back_populates="task", cascade="all, delete-orphan")
     commenti: Mapped[List["TaskComment"]] = relationship("TaskComment", back_populates="task", cascade="all, delete-orphan", order_by="TaskComment.created_at")
     attachments: Mapped[List["TaskAttachment"]] = relationship("TaskAttachment", back_populates="task", cascade="all, delete-orphan")
+    assegnatari_m2m: Mapped[List["TaskAssegnatario"]] = relationship("TaskAssegnatario", back_populates="task", cascade="all, delete-orphan")
 
     @property
     def tempo_trascorso_minuti(self) -> int:
         return sum(s.durata_minuti for s in self.timer_sessions if s.durata_minuti)
+
+    @property
+    def assegnatari(self) -> List[dict]:
+        try:
+            m2m = self.assegnatari_m2m
+        except Exception:
+            m2m = []
+        result = []
+        for ta in (m2m or []):
+            if ta.user:
+                result.append({"id": ta.user_id, "nome": f"{ta.user.nome} {ta.user.cognome}"})
+        if not result and self.assegnatario:
+            result.append({"id": self.assegnatario_id, "nome": f"{self.assegnatario.nome} {self.assegnatario.cognome}"})
+        return result
+
+
+# ── TASK ASSEGNATARI M2M ──────────────────────────────────────
+class TaskAssegnatario(Base):
+    __tablename__ = "task_assegnatari"
+
+    task_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+
+    task: Mapped["Task"] = relationship(back_populates="assegnatari_m2m")
+    user: Mapped["User"] = relationship()
 
 
 # ── TASK COMMENTS ─────────────────────────────────────────────
