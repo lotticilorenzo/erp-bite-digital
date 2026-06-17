@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { 
-  Plus, 
-  Play, 
-  CheckCircle2, 
-  Trash2, 
+import {
+  Plus,
+  Play,
+  CheckCircle2,
+  Trash2,
   Save,
   Briefcase,
   History,
   StopCircle,
   AlertCircle,
-  Clock3
+  Clock3,
+  X,
+  Check,
+  ChevronsUpDown,
+  Tag,
 } from "lucide-react";
 import { 
   Dialog, 
@@ -29,13 +33,27 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import type { User } from "@/types";
 import { TASK_STATUSES, isTaskDone, TASK_DONE_STATUS } from "@/lib/taskStatus";
 
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -49,6 +67,8 @@ type TaskFormData = {
   data_inizio: string;
   data_scadenza: string;
   assegnatario_id: string;
+  assegnatari: string[];
+  tags: string[];
   stima_minuti: number | null;
 };
 
@@ -61,6 +81,8 @@ function createEmptyTaskFormData(): TaskFormData {
     data_inizio: "",
     data_scadenza: "",
     assegnatario_id: "none",
+    assegnatari: [],
+    tags: [],
     stima_minuti: null,
   };
 }
@@ -69,7 +91,8 @@ function createTaskFormData(task: StudioTaskRecord | null): TaskFormData {
   if (!task) {
     return createEmptyTaskFormData();
   }
-
+  const assegnatari = task.assegnatari?.map((a: { id: string; nome: string }) => a.id) ||
+    (task.assegnatario_id ? [task.assegnatario_id] : []);
   return {
     titolo: task.title,
     descrizione: task.desc || "",
@@ -78,6 +101,8 @@ function createTaskFormData(task: StudioTaskRecord | null): TaskFormData {
     data_inizio: task.data_inizio || "",
     data_scadenza: task.due_date || "",
     assegnatario_id: task.assegnatario_id || "none",
+    assegnatari,
+    tags: task.tags || [],
     stima_minuti: task.stima_minuti ?? null,
   };
 }
@@ -117,6 +142,8 @@ export function StudioTaskModal() {
 
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [assegnatariOpen, setAssegnatariOpen] = useState(false);
+  const [tagInput, setTagInput] = useState("");
 
   const [debouncedTitolo, setDebouncedTitolo] = useState("");
 
@@ -173,10 +200,13 @@ export function StudioTaskModal() {
       }
     }
 
+    const primaryAssegnatario = formData.assegnatari[0] ?? null;
     const payload = {
       ...formData,
       commessa_id: formData.commessa_id === "none" ? null : formData.commessa_id,
-      assegnatario_id: formData.assegnatario_id === "none" ? null : formData.assegnatario_id,
+      assegnatario_id: primaryAssegnatario,
+      assegnatari: formData.assegnatari.length > 0 ? formData.assegnatari : undefined,
+      tags: formData.tags,
       progetto_id: nav.selectedListId,
     };
 
@@ -185,7 +215,6 @@ export function StudioTaskModal() {
       data_inizio: payload.data_inizio || null,
       data_scadenza: payload.data_scadenza || null,
       stima_minuti: effectiveStimaMinuti,
-      assegnatario_id: payload.assegnatario_id || null,
       commessa_id: payload.commessa_id || null,
     };
 
@@ -537,43 +566,127 @@ export function StudioTaskModal() {
                 </div>
               )}
 
-              <div className="space-y-4">
-                 <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Eseguito da</span>
-                 <Select 
-                   value={formData.assegnatario_id} 
-                   onValueChange={(val) => setFormData(prev => ({ ...prev, assegnatario_id: val }))}
-                 >
-                   <SelectTrigger className="w-full bg-muted/30 border-border hover:bg-muted/50 h-12 rounded-xl px-4 lowercase first-letter:uppercase">
-                     <SelectValue placeholder="Seleziona assegnatario" />
-                   </SelectTrigger>
-                   <SelectContent className="bg-card border-border text-white">
-                      <SelectItem value="none">Nessun assegnatario</SelectItem>
-                      {utenti?.map((u: User) => (
-                        <SelectItem key={u.id} value={u.id}>{u.nome} {u.cognome}</SelectItem>
-                      ))}
-                   </SelectContent>
-                 </Select>
+              <div className="space-y-3">
+                <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Eseguito da</span>
+                <Popover open={assegnatariOpen} onOpenChange={setAssegnatariOpen}>
+                  <PopoverTrigger asChild>
+                    <button className="w-full flex items-center justify-between bg-muted/30 border border-border hover:bg-muted/50 h-10 rounded-xl px-4 text-xs font-bold text-left transition-colors">
+                      <span className={cn("truncate", formData.assegnatari.length === 0 && "text-muted-foreground")}>
+                        {formData.assegnatari.length === 0
+                          ? "Seleziona assegnatari"
+                          : formData.assegnatari
+                              .map(id => utenti?.find((u: User) => u.id === id))
+                              .filter((u): u is User => !!u)
+                              .map(u => u.nome)
+                              .join(", ")}
+                      </span>
+                      <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0 ml-2" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-0 bg-card border-border shadow-2xl" align="end">
+                    <Command>
+                      <CommandInput placeholder="Cerca..." className="text-xs h-9" />
+                      <CommandList>
+                        <CommandEmpty className="text-xs py-3 text-center text-muted-foreground">Nessun utente trovato</CommandEmpty>
+                        <CommandGroup>
+                          {utenti?.map((u: User) => {
+                            const selected = formData.assegnatari.includes(u.id);
+                            return (
+                              <CommandItem
+                                key={u.id}
+                                value={`${u.nome} ${u.cognome}`}
+                                onSelect={() => {
+                                  const next = selected
+                                    ? formData.assegnatari.filter(id => id !== u.id)
+                                    : [...formData.assegnatari, u.id];
+                                  setFormData(prev => ({ ...prev, assegnatari: next, assegnatario_id: next[0] ?? "none" }));
+                                }}
+                                className="text-xs cursor-pointer"
+                              >
+                                <Check className={cn("h-3 w-3 mr-2 shrink-0", selected ? "opacity-100 text-primary" : "opacity-0")} />
+                                {u.nome} {u.cognome}
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
 
-                 {capacity && (
-                   <div className={`p-3 rounded-xl border ${
-                     (capacity as any).percentuale_carico >= 100 ? "bg-red-500/10 border-red-500/30" :
-                     (capacity as any).percentuale_carico > 90 ? "bg-yellow-500/10 border-yellow-500/30" :
-                     "bg-emerald-500/10 border-emerald-500/30"
-                   }`}>
-                     <div className="flex items-center gap-2 mb-1">
-                       {(capacity as any).percentuale_carico >= 100 ? <AlertCircle className="h-3 w-3 text-red-500" /> : <Clock3 className="h-3 w-3 text-emerald-500" />}
-                       <span className={`text-[10px] font-black uppercase ${
-                         (capacity as any).percentuale_carico >= 100 ? "text-red-500" : "text-emerald-500"
-                       }`}>
-                         {(capacity as any).percentuale_carico >= 100 ? "Capacità Massima" : "Disponibilità Team"}
-                       </span>
-                     </div>
-                     <p className="text-[10px] font-bold text-muted-foreground leading-tight">
-                       {(capacity as any).ore_gia_assegnate}h assegnate oggi su {(capacity as any).ore_disponibili_oggi}h totali.
-                       {(capacity as any).percentuale_carico >= 100 ? " Carico massimo raggiunto." : ` Rimangono ${(capacity as any).ore_rimanenti}h.`}
-                     </p>
-                   </div>
-                 )}
+                {formData.assegnatari.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {formData.assegnatari.map(id => {
+                      const u = utenti?.find((u: User) => u.id === id);
+                      if (!u) return null;
+                      const initials = `${u.nome[0] ?? ""}${u.cognome?.[0] ?? ""}`.toUpperCase();
+                      return (
+                        <span key={id} className="flex items-center gap-1 text-[10px] font-bold bg-primary/10 border border-primary/20 text-primary rounded-lg px-2 py-0.5">
+                          <span className="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center text-[8px] font-black">{initials}</span>
+                          {u.nome}
+                          <button onClick={() => setFormData(prev => ({ ...prev, assegnatari: prev.assegnatari.filter(a => a !== id), assegnatario_id: prev.assegnatari.filter(a => a !== id)[0] ?? "none" }))}>
+                            <X className="h-2.5 w-2.5 ml-0.5 opacity-60 hover:opacity-100" />
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {capacity && (
+                  <div className={`p-3 rounded-xl border ${
+                    (capacity as any).percentuale_carico >= 100 ? "bg-red-500/10 border-red-500/30" :
+                    (capacity as any).percentuale_carico > 90 ? "bg-yellow-500/10 border-yellow-500/30" :
+                    "bg-emerald-500/10 border-emerald-500/30"
+                  }`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      {(capacity as any).percentuale_carico >= 100 ? <AlertCircle className="h-3 w-3 text-red-500" /> : <Clock3 className="h-3 w-3 text-emerald-500" />}
+                      <span className={`text-[10px] font-black uppercase ${
+                        (capacity as any).percentuale_carico >= 100 ? "text-red-500" : "text-emerald-500"
+                      }`}>
+                        {(capacity as any).percentuale_carico >= 100 ? "Capacità Massima" : "Disponibilità Team"}
+                      </span>
+                    </div>
+                    <p className="text-[10px] font-bold text-muted-foreground leading-tight">
+                      {(capacity as any).ore_gia_assegnate}h assegnate oggi su {(capacity as any).ore_disponibili_oggi}h totali.
+                      {(capacity as any).percentuale_carico >= 100 ? " Carico massimo raggiunto." : ` Rimangono ${(capacity as any).ore_rimanenti}h.`}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em] flex items-center gap-1.5">
+                  <Tag className="h-3 w-3" /> Tag
+                </span>
+                {formData.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {formData.tags.map(tag => (
+                      <span key={tag} className="flex items-center gap-1 text-[10px] font-bold bg-slate-500/10 border border-slate-500/20 text-slate-300 rounded-lg px-2 py-0.5">
+                        {tag}
+                        <button onClick={() => setFormData(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tag) }))}>
+                          <X className="h-2.5 w-2.5 ml-0.5 opacity-60 hover:opacity-100" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <input
+                  className="w-full bg-muted/30 border border-border h-9 rounded-xl px-3 text-xs text-white placeholder:text-muted-foreground/50 outline-none focus:border-primary/50 transition-colors"
+                  placeholder="Aggiungi tag... (Invio)"
+                  value={tagInput}
+                  onChange={e => setTagInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const t = tagInput.trim().toLowerCase();
+                      if (t && !formData.tags.includes(t)) {
+                        setFormData(prev => ({ ...prev, tags: [...prev.tags, t] }));
+                      }
+                      setTagInput("");
+                    }
+                  }}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
