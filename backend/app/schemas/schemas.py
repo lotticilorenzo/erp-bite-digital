@@ -125,6 +125,8 @@ class StudioNodeType(str, enum.Enum):
     PROJECT = "project"
     TASK = "task"
     DASHBOARD = "dashboard"
+    LISTA = "lista"
+    DOCUMENTO = "documento"
 
 class StudioNodeBase(BaseModel):
     nome: str

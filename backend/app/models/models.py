@@ -53,6 +53,8 @@ class StudioNodeType(str, enum.Enum):
     PROJECT = "project"
     TASK = "task"
     DASHBOARD = "dashboard"
+    LISTA = "lista"
+    DOCUMENTO = "documento"
 
 class CommessaStatus(str, enum.Enum):
     APERTA = "APERTA"
