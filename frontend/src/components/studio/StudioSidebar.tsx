@@ -278,7 +278,7 @@ export function StudioSidebar() {
             <div className="flex items-center justify-between px-2 mb-2 group/header">
               <div>
                 <h4 className="text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground/40 group-hover:text-primary/60 transition-colors">
-                  {search ? `Risultati (${filteredHierarchy.length})` : "Struttura Studio"}
+                  {search ? `Risultati (${filteredHierarchy.length})` : "Progetti"}
                 </h4>
               </div>
               <DropdownMenu>

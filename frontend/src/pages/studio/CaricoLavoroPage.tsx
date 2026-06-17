@@ -259,7 +259,7 @@ export default function CaricoLavoroPage() {
               delay={0.1}
             />
             <KpiCard 
-              title="Ore stimate" 
+              title="Ore programmate"
               value={`${kpis.hours.toFixed(1)}h`} 
               icon={Clock} 
               color="text-purple-500"
@@ -268,7 +268,7 @@ export default function CaricoLavoroPage() {
               delay={0.2}
             />
             <KpiCard 
-              title="Persone Team" 
+              title="Persone coinvolte"
               value={kpis.users} 
               icon={Users} 
               color="text-sky-500"
@@ -496,7 +496,7 @@ export default function CaricoLavoroPage() {
           <div className="space-y-8">
             <div className="flex items-center gap-4">
               <h2 className="text-4xl font-[900] text-foreground tracking-tighter uppercase italic">
-                Dettaglio <span className="text-primary not-italic">Assegnatari</span>
+                Dettaglio <span className="text-primary not-italic">task di periodo</span>
               </h2>
               <div className="h-px flex-1 bg-gradient-to-r from-border/80 via-border/20 to-transparent" />
             </div>
