@@ -1,4 +1,4 @@
-import { 
+﻿import { 
   Moon, 
   Sun, 
   Check, 
@@ -54,7 +54,7 @@ export function ThemeSettingsContent() {
           onClick={() => setMode(mode === "dark" ? "light" : "dark")}
           className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${mode === 'dark' ? 'bg-primary' : 'bg-accent'}`}
         >
-          <span className={`pointer-events-none block h-4 w-4 rounded-full bg-white shadow-lg ring-0 transition-transform duration-300 ${mode === 'dark' ? 'translate-x-5' : 'translate-x-0'}`} />
+          <span className={`pointer-events-none block h-4 w-4 rounded-full bg-card shadow-lg ring-0 transition-transform duration-300 ${mode === 'dark' ? 'translate-x-5' : 'translate-x-0'}`} />
         </button>
       </div>
 

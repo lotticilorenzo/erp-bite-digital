@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import type { CategoriaFornitore } from "@/types";
@@ -106,12 +106,12 @@ export default function SupplierCategoryManager() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {isLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-20 bg-white/5 rounded-xl animate-pulse" />
+              <div key={i} className="h-20 bg-card/5 rounded-xl animate-pulse" />
             ))
           ) : categorie.map((cat) => (
             <div 
               key={cat.id} 
-              className="group relative flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5 hover:border-primary/30 transition-all hover:bg-white/10"
+              className="group relative flex items-center justify-between p-4 bg-card/5 rounded-xl border border-white/5 hover:border-primary/30 transition-all hover:bg-card/10"
             >
               <div className="flex items-center gap-4">
                 <div 

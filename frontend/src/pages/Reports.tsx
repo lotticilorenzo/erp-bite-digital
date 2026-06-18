@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Building2,
@@ -93,7 +93,7 @@ function getStatusBadgeClasses(status: CommessaStatus) {
       return "bg-amber-500/10 text-amber-400 border-amber-500/20";
     case "APERTA":
     default:
-      return "bg-white/5 text-white border-border/50";
+      return "bg-card/5 text-white border-border/50";
   }
 }
 
@@ -872,7 +872,7 @@ export default function Reports() {
               </p>
             )}
           </DialogHeader>
-          <div className="flex-1 bg-white">
+          <div className="flex-1 bg-card">
             {previewCommessa && (
               <PDFViewer width="100%" height="100%" showToolbar={false} style={{ border: "none" }}>
                 <CommessaReportPDF commessa={previewCommessa} timesheets={previewTimesheets} />

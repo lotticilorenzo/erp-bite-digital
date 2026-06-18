@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+﻿import { useState, useMemo, useEffect, useRef } from "react";
 import {
   BarChart,
   Bar,
@@ -625,7 +625,7 @@ export default function CaricoLavoroPage() {
                                 <Badge variant="secondary" className={cn(
                                   "rounded-full uppercase text-[9px] font-black px-3 py-0.5 border-none",
                                   u.status === 'sovraccarico' ? 'bg-destructive text-destructive-foreground' :
-                                  u.status === 'vicino' ? 'bg-amber-500 text-slate-900' :
+                                  u.status === 'vicino' ? 'bg-amber-500 text-foreground' :
                                   'bg-emerald-500 text-emerald-950'
                                 )}>
                                   {u.status === 'sovraccarico' ? 'Sovraccarico' : u.status === 'vicino' ? 'Quasi pieno' : 'Disponibile'}
@@ -657,11 +657,11 @@ export default function CaricoLavoroPage() {
                             />
                           </div>
                           <div className="flex justify-between gap-4 mt-4">
-                            <div className="flex-1 bg-white/[0.03] rounded-2xl p-3 border border-white/[0.05]">
+                            <div className="flex-1 bg-card/[0.03] rounded-2xl p-3 border border-white/[0.05]">
                               <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-1">Occupate</p>
                               <p className="text-sm font-black text-foreground">{u.actualTotal.toFixed(1)}h</p>
                             </div>
-                            <div className="flex-1 bg-white/[0.03] rounded-2xl p-3 border border-white/[0.05]">
+                            <div className="flex-1 bg-card/[0.03] rounded-2xl p-3 border border-white/[0.05]">
                               <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-1">Capacità</p>
                               <p className="text-sm font-black text-foreground">{u.total.toFixed(1)}h</p>
                             </div>
@@ -701,7 +701,7 @@ export default function CaricoLavoroPage() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-3 shrink-0 ml-4">
-                                <Badge variant="outline" className="text-[9px] font-black bg-white/[0.03] border-border/60 py-1">
+                                <Badge variant="outline" className="text-[9px] font-black bg-card/[0.03] border-border/60 py-1">
                                   {task.stima_minuti || 0}'
                                 </Badge>
                                 <div className={cn(
@@ -763,7 +763,7 @@ export default function CaricoLavoroPage() {
                             key={t.id}
                             className={cn(
                               "border-rose-500/5 hover:bg-rose-500/[0.04] cursor-pointer transition-colors group",
-                              idx % 2 === 0 ? "bg-transparent" : "bg-white/[0.01]"
+                              idx % 2 === 0 ? "bg-transparent" : "bg-card/[0.01]"
                             )}
                             onClick={() => selectTask(t.id)}
                           >

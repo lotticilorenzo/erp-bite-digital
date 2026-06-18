@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { MoreVertical, Plus, Search, UserCircle2, Users, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -153,7 +153,7 @@ export function ChatSidebar({
                   'relative flex-1 cursor-pointer rounded-xl py-2 text-[11px] font-black uppercase tracking-widest transition-all',
                   category === tab.id
                     ? 'scale-[1.02] bg-primary text-primary-foreground shadow-[0_4px_12px_hsl(var(--primary)/0.3)]'
-                    : 'border border-border/5 bg-background/40 text-muted-foreground hover:bg-white/10 hover:text-foreground'
+                    : 'border border-border/5 bg-background/40 text-muted-foreground hover:bg-card/10 hover:text-foreground'
                 )}
               >
                 {tab.label}
@@ -190,7 +190,7 @@ export function ChatSidebar({
                       onClick={() => onStartDirectChat(candidate.id)}
                       className={cn(
                         'group relative flex w-full items-center gap-3 border-b border-border/5 p-4 transition-all',
-                        isUserActive ? 'bg-primary/5 border-r-2 border-r-primary' : 'hover:bg-white/[0.02]'
+                        isUserActive ? 'bg-primary/5 border-r-2 border-r-primary' : 'hover:bg-card/[0.02]'
                       )}
                     >
                       <div className="relative">
@@ -248,7 +248,7 @@ export function ChatSidebar({
                     onClick={() => onSelectChannel(channel.id)}
                     className={cn(
                       'group relative flex w-full items-center gap-3 border-b border-border/5 p-4 transition-all duration-300',
-                      isActive ? 'border-r-2 border-r-primary bg-primary/5 shadow-inner' : 'hover:bg-white/[0.02]'
+                      isActive ? 'border-r-2 border-r-primary bg-primary/5 shadow-inner' : 'hover:bg-card/[0.02]'
                     )}
                   >
                     <Avatar className="h-10 w-10 shrink-0 rounded-xl border border-border/20 shadow-sm transition-transform group-hover:scale-105">

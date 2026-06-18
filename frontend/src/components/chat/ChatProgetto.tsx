@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+﻿import { useState, useRef, useEffect } from "react";
 import { useChat } from "@/hooks/useChat";
 import { useAuth } from "@/hooks/useAuth";
 import { ChatMessageBubble } from "./ChatMessageBubble";
@@ -135,7 +135,7 @@ export function ChatProgetto({ progettoId, teamMembers = [] }: ChatProgettoProps
       
       <div className="flex-1 flex flex-col h-[calc(100vh-250px)]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+        <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-card/[0.02]">
           <div className="flex items-center gap-3">
              <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
                 <MessageSquare size={20} />
@@ -149,7 +149,7 @@ export function ChatProgetto({ progettoId, teamMembers = [] }: ChatProgettoProps
              <Button 
                 variant="ghost" 
                 size="icon" 
-                className={cn("rounded-xl transition-all", showSearch ? "bg-primary text-white" : "hover:bg-white/5")}
+                className={cn("rounded-xl transition-all", showSearch ? "bg-primary text-white" : "hover:bg-card/5")}
                 onClick={() => setShowSearch(!showSearch)}
              >
                 <Search size={18} />
@@ -267,7 +267,7 @@ export function ChatProgetto({ progettoId, teamMembers = [] }: ChatProgettoProps
                    value={searchTerm} 
                    onChange={(e) => setSearchTerm(e.target.value)}
                    placeholder="Cerca nei messaggi..." 
-                   className="pl-10 bg-white/5 border-white/10 rounded-xl"
+                   className="pl-10 bg-card/5 border-white/10 rounded-xl"
                  />
               </div>
            </form>
@@ -284,7 +284,7 @@ export function ChatProgetto({ progettoId, teamMembers = [] }: ChatProgettoProps
                      <div
                        key={msg.id}
                        onClick={() => handleJumpToMessage(msg.id)}
-                       className="p-3 rounded-2xl bg-white/5 border border-white/5 hover:border-primary/50 transition-all cursor-pointer group"
+                       className="p-3 rounded-2xl bg-card/5 border border-white/5 hover:border-primary/50 transition-all cursor-pointer group"
                        title="Clicca per andare al messaggio"
                      >
                         <div className="flex items-center justify-between mb-1">

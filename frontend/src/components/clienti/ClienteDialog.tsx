@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -65,9 +65,9 @@ function Field({
 }
 
 const INPUT_CLS =
-  "bg-white/5 border-white/10 text-white placeholder:text-slate-700 h-10 rounded-xl px-3 text-sm focus:ring-1 focus:ring-primary/30 focus:border-primary/40 transition-colors";
+  "bg-card/5 border-white/10 text-white placeholder:text-foreground h-10 rounded-xl px-3 text-sm focus:ring-1 focus:ring-primary/30 focus:border-primary/40 transition-colors";
 const SELECT_CLS =
-  "bg-white/5 border border-white/10 text-white h-10 rounded-xl px-3 text-sm focus:ring-1 focus:ring-primary/30 outline-none transition-colors";
+  "bg-card/5 border border-white/10 text-white h-10 rounded-xl px-3 text-sm focus:ring-1 focus:ring-primary/30 outline-none transition-colors";
 
 interface ClienteDialogProps {
   cliente?: Cliente | null;
@@ -569,7 +569,7 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
 
             <Field label="Note Commerciali" className="col-span-full">
               <Textarea
-                className="bg-white/5 border-white/10 text-white placeholder:text-slate-700 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-primary/30 focus:border-primary/40 resize-none"
+                className="bg-card/5 border-white/10 text-white placeholder:text-foreground rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-primary/30 focus:border-primary/40 resize-none"
                 rows={3}
                 placeholder="Accordi particolari, preferenze, note interne..."
                 value={form.note ?? ""}
@@ -605,7 +605,7 @@ export function ClienteDialog({ cliente, open, onOpenChange }: ClienteDialogProp
             </Field>
 
             <div className="col-span-full opacity-50">
-              <div className="flex items-center gap-3 p-4 rounded-xl border border-dashed border-white/5 bg-white/[0.01] text-[10px] text-muted-foreground/30">
+              <div className="flex items-center gap-3 p-4 rounded-xl border border-dashed border-white/5 bg-card/[0.01] text-[10px] text-muted-foreground/30">
                 <Globe className="h-3 w-3" />
                 <span>
                   Puoi incollare qui il link alla cartella condivisa del cliente per averla sempre a portata di mano.

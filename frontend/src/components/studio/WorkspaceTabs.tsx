@@ -1,4 +1,4 @@
-import { X, Hash, ListTodo, LayoutDashboard, Columns2, ExternalLink } from "lucide-react";
+﻿import { X, Hash, ListTodo, LayoutDashboard, Columns2, ExternalLink } from "lucide-react";
 import { useStudio } from "@/hooks/useStudio";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -34,7 +34,7 @@ export function WorkspaceTabs() {
                   "group relative h-8 px-3 flex items-center gap-2 rounded-t-md cursor-pointer transition-all duration-200 select-none",
                   isActive
                     ? "bg-card text-primary font-bold shadow-[0_-2px_10px_rgba(0,0,0,0.1)] border-t border-x border-border/50"
-                    : "text-muted-foreground hover:bg-white/5"
+                    : "text-muted-foreground hover:bg-card/5"
                 )}
               >
                 <TabIcon type={tab.type} isActive={isActive} />
@@ -99,7 +99,7 @@ export function WorkspaceTabs() {
                     closeTab(tab.id);
                   }}
                   className={cn(
-                    "p-0.5 rounded-md hover:bg-slate-800 transition-colors",
+                    "p-0.5 rounded-md hover:bg-card transition-colors",
                     isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                   )}
                 >

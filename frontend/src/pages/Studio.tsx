@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from "react";
+﻿import React, { useRef, useState, useCallback } from "react";
 import { useStudio } from "@/hooks/useStudio";
 import { StudioTopbar } from "@/components/studio/StudioTopbar";
 import StudioHome from "@/pages/studio/StudioHome";
@@ -148,7 +148,7 @@ export default function StudioPage() {
                 </div>
                 <button
                   onClick={closeSplit}
-                  className="h-5 w-5 rounded-md flex items-center justify-center text-muted-foreground/40 hover:text-white hover:bg-white/10 transition-all shrink-0"
+                  className="h-5 w-5 rounded-md flex items-center justify-center text-muted-foreground/40 hover:text-white hover:bg-card/10 transition-all shrink-0"
                   title="Chiudi split"
                 >
                   <X className="h-3 w-3" />

@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { ClienteTable } from "@/components/clienti/ClienteTable";
 import { ClienteDialog } from "@/components/clienti/ClienteDialog";
 import { useClienti } from "@/hooks/useClienti";
@@ -46,7 +46,7 @@ export default function ClientiPage() {
           <h1 className="text-4xl font-black tracking-tighter text-foreground uppercase italic underline decoration-primary/30 decoration-8 underline-offset-[12px] mb-4">
             Clienti
           </h1>
-          <p className="text-slate-500 text-xs font-black uppercase tracking-[0.2em] mt-2">
+          <p className="text-muted-foreground text-xs font-black uppercase tracking-[0.2em] mt-2">
             Gestione integrale del portfolio aziendale e contatti operativi.
           </p>
         </header>

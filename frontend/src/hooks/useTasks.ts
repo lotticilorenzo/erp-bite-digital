@@ -37,7 +37,7 @@ export function useTasks(filters?: {
           id: st.id,
           title: st.titolo,
           stateId: st.stato,
-          subtasks: [] 
+          subtasks: []
         })),
         progetto_id: t.progetto_id,
         progetto: t.progetto,
@@ -46,6 +46,8 @@ export function useTasks(filters?: {
         stima_minuti: t.stima_minuti,
         tempo_trascorso_minuti: t.tempo_trascorso_minuti || 0,
         assegnatario_id: t.assegnatario_id,
+        assegnatari: t.assegnatari || [],
+        tags: t.tags || [],
         priorita: t.priorita || "media",
       });
 
@@ -74,7 +76,9 @@ export function useTask(id: string | null) {
         commessa_id: data.commessa_id,
         parent_id: data.parent_id,
         stima_minuti: data.stima_minuti,
-        tempo_trascorso_minuti: data.tempo_trascorso_minuti || 0
+        tempo_trascorso_minuti: data.tempo_trascorso_minuti || 0,
+        assegnatari: data.assegnatari || [],
+        tags: data.tags || [],
       } as TaskSO;
     },
     enabled: !!id && id !== "new",

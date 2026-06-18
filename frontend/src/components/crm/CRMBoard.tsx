@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { 
   Plus, 
 } from "lucide-react";
@@ -127,7 +127,7 @@ function DroppableColumn({
           <div className="flex items-center gap-3">
             <div className="h-3 w-3 rounded-full shadow-[0_0_12px_hsl(var(--primary)/0.3)]" style={{ backgroundColor: stage.colore }} />
             <h3 className="text-[11px] font-black uppercase tracking-widest text-[#475569]">{stage.nome}</h3>
-            <Badge variant="outline" className="text-[9px] font-bold bg-white/5 border-white/5 text-[#64748b] h-4.5 px-1.5 flex items-center justify-center">
+            <Badge variant="outline" className="text-[9px] font-bold bg-card/5 border-white/5 text-[#64748b] h-4.5 px-1.5 flex items-center justify-center">
               {leads.length}
             </Badge>
           </div>
@@ -140,7 +140,7 @@ function DroppableColumn({
             <Plus className="h-4 w-4" />
           </Button>
         </div>
-        <div className="flex items-center gap-1.5 text-[10px] font-black text-[#94a3b8] tabular-nums bg-white/5 w-fit px-2 py-0.5 rounded-full border border-white/5">
+        <div className="flex items-center gap-1.5 text-[10px] font-black text-[#94a3b8] tabular-nums bg-card/5 w-fit px-2 py-0.5 rounded-full border border-white/5">
           €{totalValue.toLocaleString()}
         </div>
       </div>
@@ -152,7 +152,7 @@ function DroppableColumn({
         ))}
         <Button 
           variant="ghost" 
-          className="w-full justify-start h-12 px-4 text-[10px] font-black uppercase tracking-widest text-[#475569] hover:text-primary hover:bg-white/5 group border border-dashed border-white/5 rounded-2xl"
+          className="w-full justify-start h-12 px-4 text-[10px] font-black uppercase tracking-widest text-[#475569] hover:text-primary hover:bg-card/5 group border border-dashed border-white/5 rounded-2xl"
           onClick={onNewLead}
         >
           <Plus className="h-4 w-4 mr-3 group-hover:scale-125 transition-transform" />

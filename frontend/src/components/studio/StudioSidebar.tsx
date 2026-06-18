@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+﻿import React, { useEffect, useMemo, useRef } from "react";
 import {
   Plus,
   Search,
@@ -315,7 +315,7 @@ export function StudioSidebar() {
               {isLoading ? (
                 <div className="px-3 py-4 space-y-3">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-4 w-full bg-slate-800/50 animate-pulse rounded" />
+                    <div key={i} className="h-4 w-full bg-card/50 animate-pulse rounded" />
                   ))}
                 </div>
               ) : filteredHierarchy.length === 0 ? (
@@ -341,7 +341,7 @@ export function StudioSidebar() {
               className={`rounded-xl border border-dashed px-3 py-3 transition-all cursor-pointer ${
                 isRootOver
                   ? "border-primary/60 bg-primary/10 text-primary"
-                  : "border-white/10 bg-white/[0.02] text-muted-foreground/70 hover:border-primary/30 hover:text-primary"
+                  : "border-white/10 bg-card/[0.02] text-muted-foreground/70 hover:border-primary/30 hover:text-primary"
               }`}
             >
               {isCreatingWorkspace ? (

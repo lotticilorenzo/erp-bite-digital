@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
@@ -73,7 +73,7 @@ function ToggleCard({ checked, icon: Icon, label, onChange }: ToggleCardProps) {
       >
         <span
           className={cn(
-            "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+            "inline-block h-4 w-4 transform rounded-full bg-card transition-transform",
             checked ? "translate-x-6" : "translate-x-1"
           )}
         />
@@ -204,7 +204,7 @@ export default function NotificationSettings() {
               )}
             >
               <span className={cn(
-                "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                "inline-block h-4 w-4 transform rounded-full bg-card transition-transform",
                 prefs.dnd.enabled ? "translate-x-6" : "translate-x-1"
               )} />
             </button>

@@ -1,4 +1,4 @@
-import { Fragment, useState, useMemo } from "react";
+﻿import { Fragment, useState, useMemo } from "react";
 import { 
   Table, 
   TableBody, 
@@ -117,7 +117,7 @@ export function TimesheetTable({
     if (s.includes("manage") || s.includes("pm")) return "bg-amber-500/10 text-amber-400 border-amber-500/20";
     if (s.includes("social")) return "bg-sky-500/10 text-sky-400 border-sky-500/20";
     if (s.includes("content") || s.includes("copy")) return "bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20";
-    return "bg-slate-500/10 text-slate-400 border-slate-500/20"; // default
+    return "bg-muted/10 text-muted-foreground border-border/20"; // default
   };
 
   const getStatusBadge = (stato: string) => {
@@ -129,7 +129,7 @@ export function TimesheetTable({
       case "RIFIUTATO":
         return <Badge className="bg-red-500/10 text-red-400 border-red-500/20"><XCircle className="w-3 h-3 mr-1" /> RIFIUTATO</Badge>;
       default:
-        return <Badge className="bg-slate-500/10 text-slate-400 border-slate-500/20">BOZZA</Badge>;
+        return <Badge className="bg-muted/10 text-muted-foreground border-border/20">BOZZA</Badge>;
     }
   };
 

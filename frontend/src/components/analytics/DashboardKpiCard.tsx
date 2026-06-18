@@ -1,4 +1,4 @@
-import type { LucideIcon } from "lucide-react";
+﻿import type { LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -53,7 +53,7 @@ export function DashboardKpiCard({
             <div className="relative z-10 text-2xl font-black tracking-tighter text-foreground">
               {loading ? (
                 <div className="flex flex-col gap-2 py-1">
-                  <div className="h-8 w-24 animate-pulse rounded-lg bg-white/5" />
+                  <div className="h-8 w-24 animate-pulse rounded-lg bg-card/5" />
                 </div>
               ) : (
                 value

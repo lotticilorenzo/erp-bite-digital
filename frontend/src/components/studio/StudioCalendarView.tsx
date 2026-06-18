@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -81,7 +81,7 @@ export function StudioCalendarView() {
   };
 
   const STATE_COLORS: Record<string, string> = {
-    DA_FARE:    "bg-slate-500/20 border-slate-500/30 text-slate-300",
+    DA_FARE:    "bg-muted/20 border-border/30 text-muted-foreground",
     IN_CORSO:   "bg-violet-500/20 border-violet-500/30 text-violet-300",
     REVISIONE:  "bg-amber-500/20 border-amber-500/30 text-amber-300",
     COMPLETATO: "bg-emerald-500/20 border-emerald-500/30 text-emerald-300",
@@ -163,7 +163,7 @@ export function StudioCalendarView() {
               key={i}
               className={cn(
                 "min-h-[100px] p-1.5 border-r border-b border-border/10 transition-colors group relative",
-                "hover:bg-white/[0.02]",
+                "hover:bg-card/[0.02]",
                 !isCurrentMonth && "opacity-25",
                 isCurrentDay && "bg-primary/5",
               )}

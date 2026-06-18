@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { Square, Timer, ChevronUp } from "lucide-react";
 import { useActiveTimer, useStopTimer, useStartTimer } from "@/hooks/useTimer";
 import { useTasks } from "@/hooks/useTasks";
@@ -92,16 +92,16 @@ export function TimerBar() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="p-2 hover:bg-white/5 rounded-xl transition-colors border border-transparent hover:border-white/10 text-muted-foreground"
+                  className="p-2 hover:bg-card/5 rounded-xl transition-colors border border-transparent hover:border-white/10 text-muted-foreground"
                 >
                   <ChevronUp className="w-4 h-4" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" side="top" sideOffset={12} className="w-64 bg-[#121216] border-white/10 text-gray-200 rounded-xl shadow-2xl p-2">
+              <DropdownMenuContent align="end" side="top" sideOffset={12} className="w-64 bg-[#121216] border-white/10 text-muted-foreground rounded-xl shadow-2xl p-2">
                 <DropdownMenuLabel className="text-[9px] font-black tracking-widest uppercase opacity-50 px-2 py-1.5">
                   Switch rapido
                 </DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-white/5" />
+                <DropdownMenuSeparator className="bg-card/5" />
                 <div className="max-h-[300px] overflow-y-auto space-y-1">
                   {tasks?.filter(t => t.id !== activeTimer.task_id).map((task) => (
                     <DropdownMenuItem

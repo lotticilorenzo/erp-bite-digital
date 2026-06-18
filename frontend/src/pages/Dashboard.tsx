@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, parseISO, subMonths } from "date-fns";
 import { it } from "date-fns/locale";
@@ -750,7 +750,7 @@ export default function DashboardPage() {
                   <span className="text-xs font-bold text-foreground">Costi Diretti</span>
                   <span className="text-[9px] text-faint uppercase">Mancanti in commessa</span>
                 </div>
-                <Badge className="bg-slate-500/20 text-slate-400 border-slate-500/20 h-6">
+                <Badge className="bg-muted/20 text-muted-foreground border-border/20 h-6">
                   {currentCommesse.filter(c => !c.costi_diretti || c.costi_diretti === 0).length}
                 </Badge>
               </div>

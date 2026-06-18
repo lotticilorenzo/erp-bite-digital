@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+﻿import { useState, useEffect, useRef, useCallback } from "react";
 import DOMPurify from "dompurify";
 import {
   Bold,
@@ -262,7 +262,7 @@ export function DocumentEditor({ node, className }: DocumentEditorProps) {
               key={i}
               title={btn.title}
               onClick={btn.action}
-              className="p-1.5 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-white/[0.06] transition-colors"
+              className="p-1.5 rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-card/[0.06] transition-colors"
             >
               {btn.icon}
             </button>

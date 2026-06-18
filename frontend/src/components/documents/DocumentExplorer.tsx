@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+﻿import { useState, useRef, useEffect, useCallback } from "react";
 import {
   FilePlus,
   FolderPlus,
@@ -155,14 +155,14 @@ export function DocumentExplorer({ selectedId, onSelect, className }: DocumentEx
             <button
               title="Nuovo file"
               onClick={() => handleCreate(null, "FILE")}
-              className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-primary transition-colors"
+              className="p-1 rounded hover:bg-card/10 text-muted-foreground hover:text-primary transition-colors"
             >
               <FilePlus size={14} />
             </button>
             <button
               title="Nuova cartella"
               onClick={() => handleCreate(null, "FOLDER")}
-              className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-primary transition-colors"
+              className="p-1 rounded hover:bg-card/10 text-muted-foreground hover:text-primary transition-colors"
             >
               <FolderPlus size={14} />
             </button>
@@ -213,7 +213,7 @@ export function DocumentExplorer({ selectedId, onSelect, className }: DocumentEx
                     "w-full flex items-center gap-2 h-[28px] px-3 rounded-md text-[12px] font-medium transition-colors",
                     selectedId === node.id
                       ? "bg-primary/10 text-primary"
-                      : "hover:bg-white/[0.04] text-foreground/70"
+                      : "hover:bg-card/[0.04] text-foreground/70"
                   )}
                 >
                   {node.tipo === "FOLDER" ? (

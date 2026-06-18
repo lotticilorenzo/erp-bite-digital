@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+﻿import { Button } from "@/components/ui/button";
 import { 
   CheckCircle2, 
   Trash2, 
@@ -67,7 +67,7 @@ export function BulkActionsHeader({ selectedIds, onClearSelection }: BulkActions
             variant="ghost" 
             size="icon" 
             onClick={onClearSelection}
-            className="w-6 h-6 rounded-full hover:bg-white/10 text-muted-foreground hover:text-white"
+            className="w-6 h-6 rounded-full hover:bg-card/10 text-muted-foreground hover:text-white"
           >
             <X className="w-3 h-3" />
           </Button>

@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from "react";
+﻿import { type ReactNode, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { format, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
@@ -48,7 +48,7 @@ function euro(value: number) {
 function statusClasses(status: string) {
   if (status === "CONVERTED") return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
   if (status === "ACCEPTED") return "bg-blue-500/10 text-blue-300 border-blue-500/20";
-  return "bg-slate-500/10 text-slate-300 border-slate-500/20";
+  return "bg-muted/10 text-muted-foreground border-border/20";
 }
 
 function deltaClass(delta: number) {

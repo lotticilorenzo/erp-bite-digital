@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+﻿import React, { useEffect } from "react";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
@@ -59,7 +59,7 @@ export default function ProgettiPage() {
             <h1 className="text-4xl font-black tracking-tighter text-foreground uppercase italic underline decoration-primary/30 decoration-8 underline-offset-[12px] mb-4">
               Progetti
             </h1>
-            <p className="text-slate-500 text-xs font-black uppercase tracking-[0.2em] mt-2">
+            <p className="text-muted-foreground text-xs font-black uppercase tracking-[0.2em] mt-2">
               Monitoraggio operativo di budget, marginalità e performance creativa.
             </p>
           </header>
@@ -92,7 +92,7 @@ export default function ProgettiPage() {
           <DialogContent className="bg-card/90 backdrop-blur-xl border-border/50 text-white rounded-2xl">
             <DialogHeader>
               <DialogTitle className="text-xl font-black uppercase italic tracking-tight">Sei sicuro?</DialogTitle>
-              <DialogDescription className="text-slate-400 font-medium">
+              <DialogDescription className="text-muted-foreground font-medium">
                 Questa azione eliminerà permanentemente <strong>{progettoToDelete?.nome}</strong>. Questa operazione non è reversibile.
               </DialogDescription>
             </DialogHeader>

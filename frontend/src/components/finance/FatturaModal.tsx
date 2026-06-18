@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { 
   Dialog, 
   DialogContent, 
@@ -193,7 +193,7 @@ function FatturaModalForm({ onOpenChange, type, fattura }: Omit<FatturaModalProp
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Main Info */}
               <div className="space-y-6">
-                <div className="space-y-4 bg-white/5 p-6 rounded-2xl border border-border/50">
+                <div className="space-y-4 bg-card/5 p-6 rounded-2xl border border-border/50">
                    <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
                         <FileText className="h-3 w-3" /> Numero Documento
@@ -234,7 +234,7 @@ function FatturaModalForm({ onOpenChange, type, fattura }: Omit<FatturaModalProp
                    </div>
                 </div>
 
-                <div className="space-y-4 bg-white/5 p-6 rounded-2xl border border-border/50">
+                <div className="space-y-4 bg-card/5 p-6 rounded-2xl border border-border/50">
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
                       <Building2 className="h-3 w-3" /> {isAttiva ? "Cliente" : "Fornitore"}
@@ -306,14 +306,14 @@ function FatturaModalForm({ onOpenChange, type, fattura }: Omit<FatturaModalProp
             <div className="space-y-4">
                <div className="flex items-center justify-between">
                   <h3 className="text-sm font-black uppercase italic tracking-tighter text-white">Line Items</h3>
-                  <Button type="button" size="sm" onClick={handleAddItem} className="bg-white/5 border-border/50 text-[10px] font-black uppercase gap-2 rounded-xl">
+                  <Button type="button" size="sm" onClick={handleAddItem} className="bg-card/5 border-border/50 text-[10px] font-black uppercase gap-2 rounded-xl">
                     <Plus className="h-4 w-4" /> Aggiungi Riga
                   </Button>
                </div>
                
                <div className="space-y-3">
                   {formData.items.map((item: any, idx: number) => (
-                    <div key={idx} className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-border/30 group">
+                    <div key={idx} className="flex items-center gap-4 bg-card/5 p-4 rounded-2xl border border-border/30 group">
                       <div className="flex-[4] space-y-1">
                         <Input 
                           placeholder="Descrizione..." 

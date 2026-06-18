@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+﻿import React, { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -111,7 +111,7 @@ export function TaskPlanningDialog({ open, onOpenChange, task }: TaskPlanningDia
               name="titolo"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-[10px] font-black uppercase tracking-widest text-slate-500">Titolo Task</FormLabel>
+                  <FormLabel className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Titolo Task</FormLabel>
                   <FormControl>
                     <Input {...field} className="bg-muted border-border font-medium" placeholder="Es: Design Homepage" />
                   </FormControl>
@@ -125,7 +125,7 @@ export function TaskPlanningDialog({ open, onOpenChange, task }: TaskPlanningDia
               name="descrizione"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-[10px] font-black uppercase tracking-widest text-slate-500">Descrizione (opzionale)</FormLabel>
+                  <FormLabel className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Descrizione (opzionale)</FormLabel>
                   <FormControl>
                     <textarea
                       {...field}
@@ -145,7 +145,7 @@ export function TaskPlanningDialog({ open, onOpenChange, task }: TaskPlanningDia
                 name="progetto_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[10px] font-black uppercase tracking-widest text-slate-500">Progetto</FormLabel>
+                    <FormLabel className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Progetto</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger className="bg-muted border-border">
@@ -170,7 +170,7 @@ export function TaskPlanningDialog({ open, onOpenChange, task }: TaskPlanningDia
                 name="stima_minuti"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[10px] font-black uppercase tracking-widest text-slate-500">Stima (Minuti)</FormLabel>
+                    <FormLabel className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Stima (Minuti)</FormLabel>
                     <FormControl>
                       <Input type="number" {...field} className="bg-muted border-border" />
                     </FormControl>
@@ -181,7 +181,7 @@ export function TaskPlanningDialog({ open, onOpenChange, task }: TaskPlanningDia
             </div>
 
             <DialogFooter className="pt-4 gap-2">
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-slate-400">
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground">
                 Annulla
               </Button>
               <Button type="submit" disabled={createTask.isPending || updateTask.isPending} className="bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-widest text-[10px]">

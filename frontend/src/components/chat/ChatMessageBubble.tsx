@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { ChatMessage, ChatReaction } from "@/types/chat";
@@ -156,7 +156,7 @@ export function ChatMessageBubble({
             <div
               className={cn(
                 "flex items-center gap-3 rounded-2xl px-4 py-3",
-                isMe ? "border border-white/20 bg-white/10" : "border border-border/50 bg-background/50"
+                isMe ? "border border-white/20 bg-card/10" : "border border-border/50 bg-background/50"
               )}
             >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20">
@@ -188,7 +188,7 @@ export function ChatMessageBubble({
             }
             window.open(text, "_blank");
           }}
-          className="mt-1 flex min-w-[200px] items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-3 text-left transition-all hover:bg-white/10"
+          className="mt-1 flex min-w-[200px] items-center gap-4 rounded-2xl border border-white/10 bg-card/5 p-3 text-left transition-all hover:bg-card/10"
         >
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20 transition-transform group-hover/file:scale-110">
             <FileIcon className="h-5 w-5 text-primary" />
@@ -212,7 +212,7 @@ export function ChatMessageBubble({
             className={cn(
               "rounded-md px-1.5 py-0.5 font-black",
               isMe
-                ? "bg-white/20 text-white"
+                ? "bg-card/20 text-white"
                 : "bg-primary/15 text-primary"
             )}
           >
@@ -328,7 +328,7 @@ export function ChatMessageBubble({
             {isEditing ? (
               <div className="flex min-w-[200px] flex-col gap-2">
                 <textarea
-                  className="w-full resize-none rounded-xl border border-white/20 bg-white/10 p-2 text-xs focus:outline-none focus:ring-1 focus:ring-white/50"
+                  className="w-full resize-none rounded-xl border border-white/20 bg-card/10 p-2 text-xs focus:outline-none focus:ring-1 focus:ring-white/50"
                   value={editContent}
                   onChange={(event) => setEditContent(event.target.value)}
                   autoFocus

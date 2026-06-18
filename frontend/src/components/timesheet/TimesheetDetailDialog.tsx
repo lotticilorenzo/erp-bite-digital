@@ -1,4 +1,4 @@
-import { format, parseISO } from "date-fns";
+﻿import { format, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 import { 
   Dialog, 
@@ -60,7 +60,7 @@ export function TimesheetDetailDialog({
                     ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' 
                     : timesheet.stato === 'PENDING'
                     ? 'border-blue-500/30 text-blue-400 bg-blue-500/10'
-                    : 'border-slate-500/30 text-slate-400 bg-slate-500/10'
+                    : 'border-border/30 text-muted-foreground bg-muted/10'
                 }`}>
                   {timesheet.stato}
                 </Badge>

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+﻿import { useState, useRef, useEffect } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -278,7 +278,7 @@ export function FolderNode({
         style={{ ...style, paddingLeft: `${depth * 12 + 8}px` }}
         className={`
           flex items-start gap-1 group/node py-1 px-2 rounded-md cursor-pointer transition-all duration-150 select-none
-          ${isActive ? "bg-primary/10 text-primary font-bold shadow-sm" : "hover:bg-white/5 text-muted-foreground hover:text-white"}
+          ${isActive ? "bg-primary/10 text-primary font-bold shadow-sm" : "hover:bg-card/5 text-muted-foreground hover:text-white"}
           ${isInsideOver && isFolder ? "bg-primary/20 border border-primary/40 rounded-md shadow-[0_0_0_1px_hsl(var(--primary)/0.2)]" : ""}
           ${isDragging ? "opacity-30 pointer-events-none" : ""}
         `}
@@ -291,7 +291,7 @@ export function FolderNode({
           {...attributes}
           {...listeners}
           onClick={(e) => e.stopPropagation()}
-          className="mt-0.5 h-6 w-5 shrink-0 rounded-md text-muted-foreground/30 transition-all hover:bg-white/5 hover:text-primary cursor-grab active:cursor-grabbing flex items-center justify-center"
+          className="mt-0.5 h-6 w-5 shrink-0 rounded-md text-muted-foreground/30 transition-all hover:bg-card/5 hover:text-primary cursor-grab active:cursor-grabbing flex items-center justify-center"
           title="Trascina"
         >
           <GripVertical className="h-3.5 w-3.5" />
@@ -337,7 +337,7 @@ export function FolderNode({
               className={`min-w-0 break-words whitespace-normal transition-all duration-300 ${
                 isFolder
                   ? "text-[10px] font-black uppercase tracking-[0.1em] leading-[1.2] text-muted-foreground/80 group-hover/node:text-primary"
-                  : "text-[11px] font-medium leading-[1.25] text-slate-300 group-hover/node:text-white"
+                  : "text-[11px] font-medium leading-[1.25] text-muted-foreground group-hover/node:text-white"
               }`}
               style={{
                 display: "-webkit-box",
@@ -416,7 +416,7 @@ export function FolderNode({
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                <button className="h-6 w-6 rounded-md border border-white/10 bg-white/[0.03] text-muted-foreground hover:text-white hover:bg-white/5 transition-all flex items-center justify-center">
+                <button className="h-6 w-6 rounded-md border border-white/10 bg-card/[0.03] text-muted-foreground hover:text-white hover:bg-card/5 transition-all flex items-center justify-center">
                   <MoreVertical className="h-3 w-3" />
                 </button>
               </DropdownMenuTrigger>

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect, useState } from "react";
+﻿import { useMemo, useRef, useEffect, useState } from "react";
 import {
   addDays,
   differenceInDays,
@@ -52,11 +52,11 @@ const GROUP_HEADER_H = 32;
 const LEFT_W = 260;
 
 const STATUS_STYLES: Record<string, { bar: string; text: string; label: string }> = {
-  DA_FARE: { bar: "bg-slate-400", text: "text-slate-400", label: "Da Fare" },
+  DA_FARE: { bar: "bg-muted", text: "text-muted-foreground", label: "Da Fare" },
   IN_CORSO: { bar: "bg-violet-500", text: "text-violet-400", label: "In Corso" },
   COMPLETATO: { bar: "bg-emerald-500", text: "text-emerald-400", label: "Completato" },
   REVISIONE: { bar: "bg-amber-400", text: "text-amber-400", label: "Revisione" },
-  todo: { bar: "bg-slate-400", text: "text-slate-400", label: "Da Fare" },
+  todo: { bar: "bg-muted", text: "text-muted-foreground", label: "Da Fare" },
   "in-progress": { bar: "bg-violet-500", text: "text-violet-400", label: "In Corso" },
   done: { bar: "bg-emerald-500", text: "text-emerald-400", label: "Completato" },
   review: { bar: "bg-amber-400", text: "text-amber-400", label: "Revisione" },
@@ -70,7 +70,7 @@ type DragState = {
   deltaDays: number;
 };
 
-const getFallbackStyle = () => ({ bar: "bg-slate-500", text: "text-slate-400", label: "Sconosciuto" });
+const getFallbackStyle = () => ({ bar: "bg-muted", text: "text-muted-foreground", label: "Sconosciuto" });
 const getStyle = (state: string) => STATUS_STYLES[state] || getFallbackStyle();
 
 // Difensivo contro date corrotte nel seed (es. "0464-06-06"): isValid accetterebbe l'anno 464

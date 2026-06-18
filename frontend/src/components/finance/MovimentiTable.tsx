@@ -1,4 +1,4 @@
-import { 
+﻿import { 
   Table, 
   TableBody, 
   TableCell, 
@@ -51,7 +51,7 @@ export function MovimentiTable({ data, onRiconcilia, onImputa }: MovimentiTableP
           {data.map((item) => {
             const isEntry = Number(item.importo) > 0;
             return (
-              <TableRow key={item.id} className="group border-border/30 hover:bg-white/5 transition-colors duration-300">
+              <TableRow key={item.id} className="group border-border/30 hover:bg-card/5 transition-colors duration-300">
                 <TableCell className="text-[10px] font-black text-white uppercase tabular-nums text-center">
                   {format(new Date(item.data_valuta), "dd MMM yyyy", { locale: it })}
                 </TableCell>
@@ -100,7 +100,7 @@ export function MovimentiTable({ data, onRiconcilia, onImputa }: MovimentiTableP
                       );
                     }
                     return (
-                      <Badge className="bg-slate-500/10 text-slate-500 border-slate-500/20 font-bold px-2 py-0.5 uppercase text-[9px] tracking-widest">
+                      <Badge className="bg-muted/10 text-muted-foreground border-border/20 font-bold px-2 py-0.5 uppercase text-[9px] tracking-widest">
                         Da riconciliare
                       </Badge>
                     );

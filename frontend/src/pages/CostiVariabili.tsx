@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { Coins, Plus, Pencil, Trash2, ArrowLeftRight, Info } from "lucide-react";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
@@ -33,7 +33,7 @@ const TIPI = [
 
 function StatoBadge({ stato }: { stato: string }) {
   return stato === "SOSTENUTO" ? (
-    <Badge className="bg-slate-500/10 text-slate-400 border-slate-500/20 text-[10px] font-bold uppercase tracking-widest">Sostenuto</Badge>
+    <Badge className="bg-muted/10 text-muted-foreground border-border/20 text-[10px] font-bold uppercase tracking-widest">Sostenuto</Badge>
   ) : (
     <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20 text-[10px] font-bold uppercase tracking-widest">Previsto</Badge>
   );

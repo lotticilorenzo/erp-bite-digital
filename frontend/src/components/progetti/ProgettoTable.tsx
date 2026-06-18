@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+﻿import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Table,
@@ -156,7 +156,7 @@ export function ProgettoTable({ progetti, onEdit, onDelete, isLoading }: Progett
                   variants={item}
                   key={progetto.id}
                   onClick={() => navigate(`/progetti/${progetto.id}`)}
-                  className="border-border hover:bg-white/[0.02] cursor-pointer group transition-colors border-b"
+                  className="border-border hover:bg-card/[0.02] cursor-pointer group transition-colors border-b"
                 >
                   <TableCell className="py-4 pl-6">
                     <div className="flex flex-col">
@@ -194,7 +194,7 @@ export function ProgettoTable({ progetti, onEdit, onDelete, isLoading }: Progett
                         className={`w-2 h-2 rounded-full ${
                           progetto.stato === "ATTIVO"
                             ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
-                            : "bg-slate-500"
+                            : "bg-muted"
                         }`}
                       />
                       <span className={progetto.stato === "ATTIVO" ? "text-emerald-400" : "text-muted-foreground"}>

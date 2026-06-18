@@ -1,4 +1,4 @@
-import type { TaskStatus } from "@/types";
+﻿import type { TaskStatus } from "@/types";
 
 /**
  * Fonte di verità UNICA per gli stati dei task di Studio OS.
@@ -15,7 +15,7 @@ export interface TaskStatusDef {
 }
 
 export const TASK_STATUSES: TaskStatusDef[] = [
-  { value: "DA_FARE", label: "Da Fare", color: "#64748b", accent: "border-slate-500/40", bg: "bg-slate-500/5" },
+  { value: "DA_FARE", label: "Da Fare", color: "#64748b", accent: "border-border/40", bg: "bg-muted/5" },
   { value: "BOZZE_IDEE", label: "Bozze / Idee", color: "#8b5cf6", accent: "border-violet-500/40", bg: "bg-violet-500/5" },
   { value: "DA_CORREGGERE", label: "Da Correggere", color: "#f43f5e", accent: "border-rose-500/40", bg: "bg-rose-500/5" },
   { value: "IN_REVIEW", label: "In Review", color: "#f59e0b", accent: "border-amber-500/40", bg: "bg-amber-500/5" },

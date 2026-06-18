@@ -1,4 +1,4 @@
-import { 
+﻿import { 
   Bell, 
   Check, 
   Info, 
@@ -45,7 +45,7 @@ export function NotificationCenter() {
         <Button 
           variant="ghost" 
           size="icon" 
-          className="relative hover:bg-white/5 active:scale-95 transition-all duration-200"
+          className="relative hover:bg-card/5 active:scale-95 transition-all duration-200"
         >
           <Bell className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
           {unreadCount > 0 && (

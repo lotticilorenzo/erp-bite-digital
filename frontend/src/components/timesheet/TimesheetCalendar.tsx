@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, parseISO, addWeeks } from "date-fns";
 import { it } from "date-fns/locale";
 import { Plus, Briefcase, CheckCircle2, User as UserIcon, ChevronLeft, ChevronRight, LayoutGrid, LayoutList } from "lucide-react";
@@ -141,7 +141,7 @@ export function TimesheetCalendar({ timesheets, currentMonth, onView, onAdd }: T
               className={`p-2 border-r border-b border-border/20 transition-colors group relative flex flex-col ${
                 viewType === "month" ? 'min-h-[140px]' : 'min-h-[500px]'
               } ${
-                viewType === "month" && !isCurrentMonth ? 'opacity-30 bg-muted/5' : 'bg-transparent hover:bg-white/5'
+                viewType === "month" && !isCurrentMonth ? 'opacity-30 bg-muted/5' : 'bg-transparent hover:bg-card/5'
               } ${i % 7 >= 5 ? 'bg-muted/5' : ''} ${isToday ? 'bg-primary/[0.02]' : ''}`}
             >
               <div className="flex justify-between items-start mb-3 sticky top-0 bg-transparent z-10 backdrop-blur-[2px] pb-1">

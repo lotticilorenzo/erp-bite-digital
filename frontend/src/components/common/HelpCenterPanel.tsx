@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+﻿import { useState, useMemo } from "react";
 import { Search, X, ChevronDown, CheckCircle2, BookOpen, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
@@ -312,7 +312,7 @@ export function HelpCenterPanel({ open, onOpenChange }: HelpCenterPanelProps) {
                 </div>
                 <button 
                   onClick={() => onOpenChange(false)}
-                  className="p-2 rounded-full hover:bg-white/5 text-muted-foreground hover:text-white transition-colors"
+                  className="p-2 rounded-full hover:bg-card/5 text-muted-foreground hover:text-white transition-colors"
                 >
                   <X className="h-5 w-5" />
                 </button>

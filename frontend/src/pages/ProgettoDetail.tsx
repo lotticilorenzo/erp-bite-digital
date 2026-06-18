@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ChevronLeft,
@@ -152,7 +152,7 @@ export default function ProgettoDetailPage() {
               <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/20 text-[10px] font-black uppercase">
                 {progetto.tipo}
               </Badge>
-              <Badge variant="outline" className={progetto.stato === "ATTIVO" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] font-black uppercase" : "bg-slate-500/10 text-slate-400 border-slate-500/20 text-[10px] font-black uppercase"}>
+              <Badge variant="outline" className={progetto.stato === "ATTIVO" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] font-black uppercase" : "bg-muted/10 text-muted-foreground border-border/20 text-[10px] font-black uppercase"}>
                 {progetto.stato}
               </Badge>
               {progetto.delivery_attesa > 0 && (!progetto.team || progetto.team.length === 0) && (
@@ -260,7 +260,7 @@ export default function ProgettoDetailPage() {
                     <div>
                       <h4 className="text-[10px] font-black text-[#475569] mb-3 uppercase tracking-widest">Note Operative</h4>
                       <div className="p-5 rounded-2xl bg-muted/10 border border-border/50">
-                        <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
                           {progetto.note || "Nessuna nota aggiuntiva per questo progetto."}
                         </p>
                       </div>
@@ -363,7 +363,7 @@ export default function ProgettoDetailPage() {
                       {commesseCorrelate.map(c => (
                         <div
                           key={c.id}
-                          className="p-4 rounded-2xl bg-white/5 border border-border/50 cursor-pointer hover:bg-white/10 transition-colors flex items-center justify-between"
+                          className="p-4 rounded-2xl bg-card/5 border border-border/50 cursor-pointer hover:bg-card/10 transition-colors flex items-center justify-between"
                           onClick={() => navigate(`/commesse/${c.id}`)}
                         >
                           <div>
@@ -383,7 +383,7 @@ export default function ProgettoDetailPage() {
                       <div className="w-12 h-12 bg-muted/20 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Layers className="w-6 h-6 text-[#475569]" />
                       </div>
-                      <p className="text-sm font-bold text-slate-400 uppercase tracking-tight">Nessuna commessa registrata</p>
+                      <p className="text-sm font-bold text-muted-foreground uppercase tracking-tight">Nessuna commessa registrata</p>
                       <p className="text-[10px] text-[#475569] mt-1 font-black uppercase tracking-widest">Inizia a generare commesse per questo progetto</p>
                     </div>
                   )}

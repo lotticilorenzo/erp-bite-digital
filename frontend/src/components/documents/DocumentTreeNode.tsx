@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+﻿import { useState, useRef, useEffect, useCallback } from "react";
 import {
   ChevronRight,
   Folder,
@@ -118,7 +118,7 @@ export function DocumentTreeNode({
           "group/row flex items-center gap-0.5 h-[28px] px-1 rounded-md cursor-pointer transition-colors relative",
           isSelected
             ? "bg-primary/10 text-primary"
-            : "hover:bg-white/[0.04] text-foreground/75 hover:text-foreground"
+            : "hover:bg-card/[0.04] text-foreground/75 hover:text-foreground"
         )}
         style={{ paddingLeft: `${depth * 12 + 4}px` }}
         onClick={handleRowClick}
@@ -171,7 +171,7 @@ export function DocumentTreeNode({
               <>
                 <button
                   title="Nuovo file"
-                  className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
+                  className="p-1 rounded hover:bg-card/10 text-muted-foreground hover:text-foreground transition-colors"
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsOpen(true);
@@ -182,7 +182,7 @@ export function DocumentTreeNode({
                 </button>
                 <button
                   title="Nuova cartella"
-                  className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
+                  className="p-1 rounded hover:bg-card/10 text-muted-foreground hover:text-foreground transition-colors"
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsOpen(true);
@@ -198,7 +198,7 @@ export function DocumentTreeNode({
               <DropdownMenuTrigger asChild>
                 <button
                   title="Altro"
-                  className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
+                  className="p-1 rounded hover:bg-card/10 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <MoreHorizontal size={12} />
                 </button>

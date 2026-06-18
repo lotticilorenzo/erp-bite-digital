@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { useNavigate } from "react-router-dom";
 import { semaforoMargine, type Semaforo } from "@/lib/utils";
 import {
@@ -298,7 +298,7 @@ function CommessaStatusBadge({ status }: { status: CommessaStatus }) {
   const styles: Record<string, string> = {
     APERTA: "bg-blue-500/10 text-blue-400 border-blue-500/20",
     PRONTA_CHIUSURA: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-    CHIUSA: "bg-slate-500/10 text-slate-400 border-slate-500/20",
+    CHIUSA: "bg-muted/10 text-muted-foreground border-border/20",
     FATTURATA: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
     INCASSATA: "bg-purple-500/10 text-purple-400 border-purple-500/20",
   };

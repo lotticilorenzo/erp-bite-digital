@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { 
   X, 
   Send, 
@@ -77,7 +77,7 @@ export function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
       shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-[100] flex flex-col rounded-3xl animate-in slide-in-from-right duration-500 ease-out
     `}>
       {/* Header */}
-      <div className="p-6 border-b border-border/30 flex items-center justify-between bg-white/5 backdrop-blur-md sticky top-0 z-10 rounded-t-3xl">
+      <div className="p-6 border-b border-border/30 flex items-center justify-between bg-card/5 backdrop-blur-md sticky top-0 z-10 rounded-t-3xl">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-[0_0_20px_hsl(var(--primary)/0.2)]">
             <Sparkles className="h-6 w-6 text-white" />

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { 
   Users, 
   CheckCircle2, 
@@ -206,7 +206,7 @@ export default function StudioOverviewPage() {
                     {stats.team_stats.map((member) => (
                        <div 
                          key={member.id}
-                         className="flex items-center justify-between p-4 rounded-3xl hover:bg-white/[0.03] transition-colors group"
+                         className="flex items-center justify-between p-4 rounded-3xl hover:bg-card/[0.03] transition-colors group"
                        >
                           <div className="flex items-center gap-4">
                              <Avatar className="h-10 w-10 border-2 border-background ring-2 ring-primary/20 group-hover:ring-primary/40 transition-all">

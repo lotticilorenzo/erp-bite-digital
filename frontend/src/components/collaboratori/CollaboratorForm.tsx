@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+﻿import React, { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -188,7 +188,7 @@ export function CollaboratorForm({ open, onOpenChange, collaborator }: Collabora
               <Users className="h-6 w-6 text-primary" />
               {isEdit ? "Modifica Collaboratore" : "Nuovo Collaboratore"}
             </DialogTitle>
-            <DialogDescription className="text-slate-400">
+            <DialogDescription className="text-muted-foreground">
               {isEdit ? "Aggiorna le informazioni professionali e bancarie." : "Aggiungi un nuovo membro al team."}
             </DialogDescription>
           </div>
@@ -238,7 +238,7 @@ export function CollaboratorForm({ open, onOpenChange, collaborator }: Collabora
                           <FormLabel className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Email</FormLabel>
                           <FormControl>
                             <div className="relative">
-                              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                               <Input {...field} className="pl-10 bg-background border-border" placeholder="email@esempio.it" />
                             </div>
                           </FormControl>
@@ -254,7 +254,7 @@ export function CollaboratorForm({ open, onOpenChange, collaborator }: Collabora
                           <FormLabel className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Telefono</FormLabel>
                           <FormControl>
                             <div className="relative">
-                              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                               <Input {...field} className="pl-10 bg-background border-border" />
                             </div>
                           </FormControl>
@@ -367,7 +367,7 @@ export function CollaboratorForm({ open, onOpenChange, collaborator }: Collabora
                         <FormLabel className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Indirizzo</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <MapPin className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                            <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                             <Textarea {...field} className="pl-10 bg-background border-border min-h-[80px]" />
                           </div>
                         </FormControl>
@@ -389,7 +389,7 @@ export function CollaboratorForm({ open, onOpenChange, collaborator }: Collabora
                           <FormLabel className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Ore Settimanali</FormLabel>
                           <FormControl>
                             <div className="relative">
-                              <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                              <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                               <Input type="number" {...field} className="pl-10 bg-background border-border" />
                             </div>
                           </FormControl>
@@ -405,7 +405,7 @@ export function CollaboratorForm({ open, onOpenChange, collaborator }: Collabora
                           <FormLabel className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Costo Orario (€)</FormLabel>
                           <FormControl>
                             <div className="relative">
-                              <Euro className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                              <Euro className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                               <Input type="number" step="0.01" {...field} className="pl-10 bg-background border-border" />
                             </div>
                           </FormControl>
@@ -428,7 +428,7 @@ export function CollaboratorForm({ open, onOpenChange, collaborator }: Collabora
                           <FormLabel className="text-[10px] font-black uppercase tracking-widest text-[#475569]">IBAN</FormLabel>
                           <FormControl>
                             <div className="relative">
-                              <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                              <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                               <Input {...field} className="pl-10 bg-background border-border" />
                             </div>
                           </FormControl>
@@ -446,7 +446,7 @@ export function CollaboratorForm({ open, onOpenChange, collaborator }: Collabora
                           <FormLabel className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Banca</FormLabel>
                           <FormControl>
                             <div className="relative">
-                              <Building className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                              <Building className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                               <Input {...field} className="pl-10 bg-background border-border" />
                             </div>
                           </FormControl>
@@ -490,7 +490,7 @@ export function CollaboratorForm({ open, onOpenChange, collaborator }: Collabora
             </ScrollArea>
 
             <DialogFooter className="pt-4 border-t border-border gap-2">
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-slate-400">
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground">
                 Annulla
               </Button>
               <Button type="submit" disabled={mutation.isPending} className="bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-widest text-[10px] min-w-[120px]">

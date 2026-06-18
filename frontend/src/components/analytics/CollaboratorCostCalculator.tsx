@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+﻿import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Calculator, 
@@ -83,7 +83,7 @@ export function CollaboratorCostCalculator() {
               Calcola il preventivo ideale basato sul costo reale dei tuoi collaboratori.
             </CardDescription>
           </div>
-          <Button variant="ghost" size="icon" onClick={handleReset} className="hover:bg-white/5">
+          <Button variant="ghost" size="icon" onClick={handleReset} className="hover:bg-card/5">
             <RefreshCcw className="w-4 h-4" />
           </Button>
         </div>
@@ -98,10 +98,10 @@ export function CollaboratorCostCalculator() {
                 <Users className="w-4 h-4" /> Collaboratore
               </Label>
               <Select value={selectedRisorsaId} onValueChange={setSelectedRisorsaId}>
-                <SelectTrigger className="h-12 bg-white/5 border-white/10 text-lg">
+                <SelectTrigger className="h-12 bg-card/5 border-white/10 text-lg">
                   <SelectValue placeholder="Seleziona un collaboratore..." />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-900 border-white/10 text-white">
+                <SelectContent className="bg-card border-white/10 text-white">
                   <SelectItem value="manual" className="cursor-pointer">Rate Manuale</SelectItem>
                   {risorse?.filter(r => r.attivo).map(r => (
                     <SelectItem key={r.id} value={r.id} className="cursor-pointer">
@@ -126,7 +126,7 @@ export function CollaboratorCostCalculator() {
                     type="number" 
                     value={customHourlyRate} 
                     onChange={(e) => setCustomHourlyRate(Number(e.target.value))}
-                    className="h-12 bg-white/5 border-white/10 text-xl font-medium"
+                    className="h-12 bg-card/5 border-white/10 text-xl font-medium"
                   />
                   <span className="text-muted-foreground">€/ora</span>
                 </div>
@@ -172,7 +172,7 @@ export function CollaboratorCostCalculator() {
                     type="number" 
                     value={margin} 
                     onChange={(e) => setMargin(Number(e.target.value))}
-                    className="h-10 bg-white/5 border-white/10 text-right pr-6 font-bold"
+                    className="h-10 bg-card/5 border-white/10 text-right pr-6 font-bold"
                   />
                   <Percent className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 </div>
@@ -189,7 +189,7 @@ export function CollaboratorCostCalculator() {
                 animate={{ opacity: 1, x: 0 }}
                 className="space-y-6"
               >
-                <div className="p-8 rounded-3xl bg-white/5 border border-white/10 relative overflow-hidden group/result">
+                <div className="p-8 rounded-3xl bg-card/5 border border-white/10 relative overflow-hidden group/result">
                   <div className="absolute top-0 right-0 p-4 opacity-10 group-hover/result:opacity-20 transition-opacity">
                     <TrendingUp className="w-24 h-24" />
                   </div>
@@ -203,11 +203,11 @@ export function CollaboratorCostCalculator() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1 p-4 rounded-2xl bg-white/5 border border-white/5">
+                      <div className="space-y-1 p-4 rounded-2xl bg-card/5 border border-white/5">
                         <p className="text-xs text-muted-foreground uppercase font-bold">Costo Totale</p>
                         <p className="text-xl font-bold text-rose-400">{formatCurrency(results.totalCost)}</p>
                       </div>
-                      <div className="space-y-1 p-4 rounded-2xl bg-white/5 border border-white/5">
+                      <div className="space-y-1 p-4 rounded-2xl bg-card/5 border border-white/5">
                         <p className="text-xs text-muted-foreground uppercase font-bold">Utile Previsto</p>
                         <p className="text-xl font-bold text-emerald-400">+{formatCurrency(results.profit)}</p>
                       </div>
@@ -226,7 +226,7 @@ export function CollaboratorCostCalculator() {
                               Il costo orario utilizzato ({formatCurrency(results.hourlyRate)}/h) include RAL, contributi INPS/INAIL, TFR e una quota overhead del 30% per i costi di struttura.
                             </p>
                             <p className="text-xs opacity-80 pt-2 border-t border-white/10">
-                              Formula: <code className="bg-white/10 p-0.5 rounded">Costo / (1 - Margine%)</code>
+                              Formula: <code className="bg-card/10 p-0.5 rounded">Costo / (1 - Margine%)</code>
                             </p>
                           </TooltipContent>
                         </Tooltip>

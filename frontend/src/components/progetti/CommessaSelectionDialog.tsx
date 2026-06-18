@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+﻿import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Dialog,
@@ -188,7 +188,7 @@ export function CommessaSelectionDialog({ progetto, open, onOpenChange, onSucces
               </>
             )}
           </DialogTitle>
-          <DialogDescription className="text-slate-400 text-xs">
+          <DialogDescription className="text-muted-foreground text-xs">
             {existingCommessa 
               ? `È già presente una commessa per ${progetto.cliente?.ragione_sociale} nel mese di ${monthName}. Vuoi aggiungere questo progetto?`
               : `Non esiste ancora una commessa per questo cliente in ${monthName}. Creiamone una ora.`
@@ -241,7 +241,7 @@ export function CommessaSelectionDialog({ progetto, open, onOpenChange, onSucces
                     {availableProjects.map(p => (
                       <div 
                         key={p.id} 
-                        className="flex items-center justify-between p-2 rounded-xl hover:bg-white/5 transition-colors group cursor-pointer"
+                        className="flex items-center justify-between p-2 rounded-xl hover:bg-card/5 transition-colors group cursor-pointer"
                         onClick={() => toggleProject(p.id)}
                       >
                         <div className="flex items-center gap-3">
@@ -273,7 +273,7 @@ export function CommessaSelectionDialog({ progetto, open, onOpenChange, onSucces
                 <AlertCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
                    <p className="text-[11px] font-bold text-emerald-400 uppercase tracking-tight">Consiglio</p>
-                   <p className="text-[10px] text-slate-300 leading-relaxed">
+                   <p className="text-[10px] text-muted-foreground leading-relaxed">
                      L'uso di una singola commessa mensile per cliente è la strada consigliata per una fatturazione pulita e un monitoraggio dei costi centralizzato.
                    </p>
                 </div>

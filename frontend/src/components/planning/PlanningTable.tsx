@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import {
   Table,
   TableBody,
@@ -154,7 +154,7 @@ export function PlanningTable({ plans, onOpen, onEdit, onApprove, onDelete, onCo
                          <Button
                             variant="outline"
                             size="sm"
-                            className="h-8 bg-slate-500/10 text-slate-200 border-slate-400/20 hover:bg-slate-500/20 hover:text-white"
+                            className="h-8 bg-muted/10 text-muted-foreground border-border/20 hover:bg-muted/20 hover:text-white"
                             onClick={(e) => {
                               e.stopPropagation();
                               onApprove(plan);
@@ -219,7 +219,7 @@ export function PlanningTable({ plans, onOpen, onEdit, onApprove, onDelete, onCo
 
 function PlanningStatusBadge({ status }: { status: PianificazioneStatus }) {
   const styles: Record<string, string> = {
-    PENDING: "bg-slate-500/10 text-slate-300 border-slate-500/20",
+    PENDING: "bg-muted/10 text-muted-foreground border-border/20",
     ACCEPTED: "bg-blue-500/10 text-blue-300 border-blue-500/20",
     CONVERTED: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
   };

@@ -1,4 +1,4 @@
-import { Calendar, User as UserIcon } from "lucide-react";
+﻿import { Calendar, User as UserIcon } from "lucide-react";
 import type { CRMLead } from "@/types/crm";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -21,7 +21,7 @@ export function CRMLeadCard({ lead, isOverlay = false }: { lead: CRMLead; isOver
       />
       
       {/* Animated Probability Bar Container */}
-      <div className="absolute top-0 left-0 w-full h-[3px] bg-white/5">
+      <div className="absolute top-0 left-0 w-full h-[3px] bg-card/5">
         <div 
           className="h-full bg-gradient-to-r from-primary/40 to-primary shadow-[0_0_8px_rgba(168,85,247,0.5)] transition-all duration-1000"
           style={{ width: `${lead.probabilita_chiusura}%` }}
@@ -33,7 +33,7 @@ export function CRMLeadCard({ lead, isOverlay = false }: { lead: CRMLead; isOver
            <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: lead.stadio?.colore }} />
            {lead.fonte || 'Lead Direct'}
         </span>
-        <div className="px-2.5 py-1 rounded-xl bg-white/5 border border-white/5 text-[11px] font-black text-white tabular-nums group-hover:bg-primary/10 group-hover:text-primary transition-all">
+        <div className="px-2.5 py-1 rounded-xl bg-card/5 border border-white/5 text-[11px] font-black text-white tabular-nums group-hover:bg-primary/10 group-hover:text-primary transition-all">
           €{Number(lead.valore_stimato).toLocaleString()}
         </div>
       </div>
@@ -43,7 +43,7 @@ export function CRMLeadCard({ lead, isOverlay = false }: { lead: CRMLead; isOver
           {lead.nome_azienda}
         </h3>
         <div className="flex items-center gap-3">
-          <div className="h-7 w-7 rounded-xl bg-white/5 flex items-center justify-center border border-white/5">
+          <div className="h-7 w-7 rounded-xl bg-card/5 flex items-center justify-center border border-white/5">
              <UserIcon className="h-3.5 w-3.5 text-[#64748b]" />
           </div>
           <span className="text-[11px] font-bold text-[#64748b] leading-none">{lead.nome_contatto || 'Contatto da definire'}</span>
@@ -51,7 +51,7 @@ export function CRMLeadCard({ lead, isOverlay = false }: { lead: CRMLead; isOver
       </div>
       
       <div className="flex items-center justify-between pt-4 border-t border-white/5">
-        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white/5 border border-white/5 text-[9px] font-black uppercase tracking-tighter ${isExpired ? 'text-red-400 border-red-500/20' : 'text-[#64748b]'}`}>
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-card/5 border border-white/5 text-[9px] font-black uppercase tracking-tighter ${isExpired ? 'text-red-400 border-red-500/20' : 'text-[#64748b]'}`}>
           <Calendar className="h-3 w-3" />
           {lead.data_prossimo_followup ? format(new Date(lead.data_prossimo_followup), "d MMM", { locale: it }) : 'Prossimo FP'}
         </div>

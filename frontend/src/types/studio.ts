@@ -1,4 +1,4 @@
-import type { Cliente } from "./index";
+﻿import type { Cliente } from "./index";
 
 export type StudioView = "home" | "dash" | "list" | "kanban" | "cal" | "gantt" | "team" | "carico-lavoro" | "overview" | "chat";
 
@@ -58,7 +58,7 @@ export type TaskSO = {
   id: string;
   title: string;
   desc?: string;
-  assignees: string[]; // User IDs
+  assignees: string[]; // User IDs (legacy compat)
   data_inizio: string | null;
   due_date: string | null;
   state_id: string;
@@ -70,6 +70,8 @@ export type TaskSO = {
   commessa_id?: string;
   parent_id?: string;
   assegnatario_id?: string;
+  assegnatari: { id: string; nome: string }[];
+  tags: string[];
   stima_minuti?: number;
   tempo_trascorso_minuti?: number;
   priorita?: string | null;
@@ -141,7 +143,7 @@ export const DEFAULT_STATES: StudioStatus[] = [
 export const PRIORITIES: { id: string; label: string; color: string; bg: string }[] = [
   { id: "alta",   label: "Alta",   color: "text-red-400",    bg: "bg-red-500/15" },
   { id: "media",  label: "Media",  color: "text-yellow-400", bg: "bg-yellow-500/15" },
-  { id: "bassa",  label: "Bassa",  color: "text-slate-400",  bg: "bg-slate-500/15" },
+  { id: "bassa",  label: "Bassa",  color: "text-muted-foreground",  bg: "bg-muted/15" },
 ];
 
 export const AGILE_STATES: StudioStatus[] = [

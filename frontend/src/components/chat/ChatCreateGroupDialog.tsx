@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ImagePlus, Loader2, Search, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -213,7 +213,7 @@ export function ChatCreateGroupDialog({ open, onOpenChange, users }: ChatCreateG
                   {selectedMembers.map((member) => (
                     <span
                       key={member.id}
-                      className="inline-flex items-center rounded-full bg-white/8 px-3 py-1 text-[11px] font-bold"
+                      className="inline-flex items-center rounded-full bg-card/8 px-3 py-1 text-[11px] font-bold"
                     >
                       {member.nome} {member.cognome}
                     </span>
@@ -245,7 +245,7 @@ export function ChatCreateGroupDialog({ open, onOpenChange, users }: ChatCreateG
                   return (
                     <label
                       key={candidate.id}
-                      className="flex cursor-pointer items-center gap-4 px-4 py-3 transition-colors hover:bg-white/5"
+                      className="flex cursor-pointer items-center gap-4 px-4 py-3 transition-colors hover:bg-card/5"
                     >
                       <Checkbox
                         checked={isSelected}

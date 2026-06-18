@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import type { LucideIcon } from "lucide-react";
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,7 @@ export function EmptyState({
       <h3 className="text-xl font-black text-white uppercase italic tracking-tighter mb-2">
         {title}
       </h3>
-      <p className="max-w-[300px] text-sm font-medium text-slate-500 leading-relaxed mb-8">
+      <p className="max-w-[300px] text-sm font-medium text-muted-foreground leading-relaxed mb-8">
         {description}
       </p>
 

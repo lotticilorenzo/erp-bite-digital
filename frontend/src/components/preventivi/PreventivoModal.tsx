@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+﻿import React, { useState, useMemo } from "react";
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
   DialogDescription
@@ -181,7 +181,7 @@ const PreventivoModalContent: React.FC<Omit<Props, "isOpen">> = ({ onClose, prev
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-8 space-y-8 scrollbar-thin scrollbar-thumb-white/10 pb-8">
           {/* SEZIONE 1: INFO GENERALI */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white/5 p-6 rounded-[2rem] border border-white/5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-card/5 p-6 rounded-[2rem] border border-white/5">
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 ml-1">
                 <Building2 className="w-3 h-3" /> Partner / Cliente
@@ -262,7 +262,7 @@ const PreventivoModalContent: React.FC<Omit<Props, "isOpen">> = ({ onClose, prev
                       placeholder="Descrizione della prestazione o prodotto..." 
                       value={voce.descrizione}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateVoce(index, "descrizione", e.target.value)}
-                      className="bg-[#0f0f10] border-white/5 h-11 rounded-xl text-xs focus:bg-white/5 transition-all"
+                      className="bg-[#0f0f10] border-white/5 h-11 rounded-xl text-xs focus:bg-card/5 transition-all"
                       required
                     />
                   </div>
@@ -320,7 +320,7 @@ const PreventivoModalContent: React.FC<Omit<Props, "isOpen">> = ({ onClose, prev
                   value={formData.note} 
                   onChange={(e) => setFormData({ ...formData, note: e.target.value })}
                   placeholder="Es. Pagamento 30gg d.f., Consegna stimata in 4 settimane..."
-                  className="bg-white/5 border-white/5 rounded-[1.5rem] min-h-[120px] text-xs leading-relaxed focus:bg-white/10 transition-all"
+                  className="bg-card/5 border-white/5 rounded-[1.5rem] min-h-[120px] text-xs leading-relaxed focus:bg-card/10 transition-all"
                 />
               </div>
               <div className="flex items-center gap-2 p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10">

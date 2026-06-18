@@ -1,4 +1,4 @@
-// force reload
+﻿// force reload
 import React, { useState, useMemo, useRef } from "react";
 import {
   ChevronRight,
@@ -45,7 +45,7 @@ import { cn } from "@/lib/utils";
 const PRIORITY_COLORS: Record<string, { bg: string; text: string; label: string }> = {
   alta:    { bg: "bg-red-500/15",    text: "text-red-400",    label: "Alta" },
   media:   { bg: "bg-yellow-500/15", text: "text-yellow-400", label: "Media" },
-  bassa:   { bg: "bg-slate-500/15",  text: "text-slate-400",  label: "Bassa" },
+  bassa:   { bg: "bg-muted/15",  text: "text-muted-foreground",  label: "Bassa" },
 };
 
 function formatTime(ms: number): string {
@@ -480,7 +480,7 @@ function TaskRow({ task, depth, utenti, getUserInitials, getUserName, style }: T
     <>
       <tr
       className={cn(
-        "group border-b border-border/5 hover:bg-white/5 transition-all cursor-pointer select-none",
+        "group border-b border-border/5 hover:bg-card/5 transition-all cursor-pointer select-none",
         isTimerActive && "bg-primary/5 border-primary/20"
       )}
       onClick={handleRowClick}
@@ -495,7 +495,7 @@ function TaskRow({ task, depth, utenti, getUserInitials, getUserName, style }: T
             {hasSubtasks ? (
               <button
                 onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
-                className="p-1 rounded-md hover:bg-white/10 text-muted-foreground/40 hover:text-white transition-colors shrink-0"
+                className="p-1 rounded-md hover:bg-card/10 text-muted-foreground/40 hover:text-white transition-colors shrink-0"
               >
                 {expanded ? (
                   <ChevronDown className="h-3.5 w-3.5" />

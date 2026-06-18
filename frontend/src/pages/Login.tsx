@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,7 +66,7 @@ export default function LoginPage() {
           <CardTitle className="text-3xl font-black tracking-tighter uppercase italic text-white drop-shadow-sm">
             Bite ERP <span className="text-primary italic">v4</span>
           </CardTitle>
-          <CardDescription className="text-slate-500 font-medium">
+          <CardDescription className="text-muted-foreground font-medium">
             Bentornato nell'hub operativo dello studio.
           </CardDescription>
         </CardHeader>
@@ -98,12 +98,12 @@ export default function LoginPage() {
             </div>
             <div className="space-y-2">
               <div className="relative group/input">
-                <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-500 group-focus-within/input:text-primary transition-colors" />
+                <Lock className="absolute left-3 top-3 w-4 h-4 text-muted-foreground group-focus-within/input:text-primary transition-colors" />
                 <Input
                   type="password"
                   placeholder="Password"
                   autoComplete="current-password"
-                  className="pl-10 bg-white/[0.03] border-white/10 rounded-xl focus:border-primary/40 focus:ring-primary/20 transition-all"
+                  className="pl-10 bg-card/[0.03] border-white/10 rounded-xl focus:border-primary/40 focus:ring-primary/20 transition-all"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required

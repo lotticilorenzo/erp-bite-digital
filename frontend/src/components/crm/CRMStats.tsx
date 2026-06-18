@@ -1,4 +1,4 @@
-import { BarChart3, Target, TrendingUp, Users } from "lucide-react";
+﻿import { BarChart3, Target, TrendingUp, Users } from "lucide-react";
 import type { CRMStats as CRMStatsType } from "@/types/crm";
 
 export function CRMStats({ stats }: { stats: CRMStatsType }) {
@@ -46,7 +46,7 @@ export function CRMStats({ stats }: { stats: CRMStatsType }) {
           </div>
 
           <div className="relative z-10">
-            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2">{card.label}</div>
+            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mb-2">{card.label}</div>
             <div className="text-3xl font-black text-white tabular-nums tracking-tighter group-hover:text-primary transition-colors">{card.value}</div>
           </div>
         </div>

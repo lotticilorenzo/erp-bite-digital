@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
@@ -167,7 +167,7 @@ export default function Fornitori() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <div className="w-px h-6 bg-white/5" />
+        <div className="w-px h-6 bg-card/5" />
 
         <Select value={filterCategoria} onValueChange={setFilterCategoria}>
           <SelectTrigger className="w-[180px] h-9 bg-transparent border-none text-xs font-black uppercase tracking-widest text-muted-foreground focus:ring-0">
@@ -189,7 +189,7 @@ export default function Fornitori() {
 
       <div className="rounded-xl border border-white/5 bg-card/30 overflow-hidden backdrop-blur-md">
         <Table>
-          <TableHeader className="bg-white/5">
+          <TableHeader className="bg-card/5">
             <TableRow>
               <TableHead>Nome Fornitore</TableHead>
               <TableHead>Categoria</TableHead>
@@ -204,7 +204,7 @@ export default function Fornitori() {
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
                   <TableCell colSpan={6}>
-                    <div className="h-12 w-full animate-pulse bg-white/5 rounded" />
+                    <div className="h-12 w-full animate-pulse bg-card/5 rounded" />
                   </TableCell>
                 </TableRow>
               ))
@@ -216,7 +216,7 @@ export default function Fornitori() {
               </TableRow>
             ) : (
               filteredFornitori.map((f) => (
-                <TableRow key={f.id} className="group hover:bg-white/5 transition-colors">
+                <TableRow key={f.id} className="group hover:bg-card/5 transition-colors">
                   <TableCell>
                     <div className="flex flex-col">
                       <span className="font-medium">{f.ragione_sociale}</span>
@@ -262,7 +262,7 @@ export default function Fornitori() {
                         Attivo
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="bg-gray-500/10 text-gray-500 border-gray-500/20 font-normal">
+                      <Badge variant="outline" className="bg-muted/10 text-muted-foreground border-border/20 font-normal">
                         Inattivo
                       </Badge>
                     )}

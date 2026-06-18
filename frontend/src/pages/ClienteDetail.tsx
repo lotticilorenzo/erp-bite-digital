@@ -1,4 +1,4 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
+﻿import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { marginColorClass } from "@/lib/utils";
 import {
@@ -277,9 +277,9 @@ export default function ClienteDetailPage() {
         ) : (
           <button
             onClick={() => setIsClienteDialogOpen(true)}
-            className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/[0.03] border border-dashed border-white/10 hover:border-blue-500/30 hover:bg-blue-500/5 transition-all group"
+            className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-card/[0.03] border border-dashed border-white/10 hover:border-blue-500/30 hover:bg-blue-500/5 transition-all group"
           >
-            <div className="h-10 w-10 rounded-xl bg-white/5 flex items-center justify-center text-muted-foreground group-hover:text-blue-400 transition-colors">
+            <div className="h-10 w-10 rounded-xl bg-card/5 flex items-center justify-center text-muted-foreground group-hover:text-blue-400 transition-colors">
               <FolderOpen className="w-5 h-5" />
             </div>
             <div className="text-left">
@@ -638,7 +638,7 @@ export default function ClienteDetailPage() {
                            </td>
                            <td className="px-6 py-4 text-center">
                              <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                p.stato === 'ATTIVO' ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : "bg-slate-500/10 text-slate-500 border border-slate-500/20"
+                                p.stato === 'ATTIVO' ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : "bg-muted/10 text-muted-foreground border border-border/20"
                              }`}>
                                {p.stato}
                              </div>
@@ -697,7 +697,7 @@ export default function ClienteDetailPage() {
             <CardContent className="space-y-5 text-sm">
 
               {/* Identificativo */}
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-card/[0.03] border border-white/5">
                 <ClientAvatar name={cliente.ragione_sociale} logoUrl={cliente.logo_url} size="md" className="rounded-xl shrink-0" />
                 <div>
                   <p className="font-black text-white leading-tight">{cliente.ragione_sociale}</p>
@@ -710,7 +710,7 @@ export default function ClienteDetailPage() {
                     {cliente.tipologia && (
                       <span className="text-[9px] text-muted-foreground/60">{cliente.tipologia}</span>
                     )}
-                    <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${cliente.attivo ? "bg-emerald-500/10 text-emerald-400" : "bg-slate-500/10 text-slate-400"}`}>
+                    <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${cliente.attivo ? "bg-emerald-500/10 text-emerald-400" : "bg-muted/10 text-muted-foreground"}`}>
                       {cliente.attivo ? "Attivo" : "Inattivo"}
                     </span>
                   </div>
@@ -748,7 +748,7 @@ export default function ClienteDetailPage() {
               {(cliente.indirizzo || cliente.comune) && (
                 <div className="space-y-2">
                   <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40">Indirizzo</p>
-                  <div className="text-xs text-white/70 leading-relaxed bg-white/[0.03] rounded-xl p-3 border border-white/5">
+                  <div className="text-xs text-white/70 leading-relaxed bg-card/[0.03] rounded-xl p-3 border border-white/5">
                     {cliente.indirizzo && <p>{cliente.indirizzo}</p>}
                     <p>
                       {[cliente.cap, cliente.comune, cliente.provincia].filter(Boolean).join(" ")}
@@ -809,7 +809,7 @@ export default function ClienteDetailPage() {
               {cliente.note && (
                 <div className="space-y-1.5">
                   <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40">Note</p>
-                  <p className="text-xs text-muted-foreground/70 italic bg-white/[0.03] rounded-xl p-3 border border-white/5 leading-relaxed">{cliente.note}</p>
+                  <p className="text-xs text-muted-foreground/70 italic bg-card/[0.03] rounded-xl p-3 border border-white/5 leading-relaxed">{cliente.note}</p>
                 </div>
               )}
 
@@ -871,7 +871,7 @@ export default function ClienteDetailPage() {
                           Anteprima del report consolidato per il cliente {cliente.ragione_sociale}.
                         </DialogDescription>
                       </DialogHeader>
-                      <div className="flex-1 w-full h-full bg-slate-100">
+                      <div className="flex-1 w-full h-full bg-muted">
                         <PDFViewer width="100%" height="100%" className="border-none">
                           <ClienteReportPDF 
                             cliente={cliente} 

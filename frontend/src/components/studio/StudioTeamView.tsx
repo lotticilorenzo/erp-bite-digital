@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+﻿import { useState, useMemo } from "react";
 import { 
   Users, 
   Calendar, 
@@ -318,25 +318,25 @@ function TeamMemberCard({
               {isFinanceOrAdmin && (
                 <div className="grid grid-cols-2 gap-4 pb-4 border-b border-border/10">
                   <div className="space-y-3">
-                     <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                     <div className="flex items-center gap-2 text-[9px] font-bold text-muted-foreground uppercase tracking-tight">
                         <Mail className="h-3 w-3 text-primary/60" />
                         {user.email || "—"}
                      </div>
-                     <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                     <div className="flex items-center gap-2 text-[9px] font-bold text-muted-foreground uppercase tracking-tight">
                         <Phone className="h-3 w-3 text-primary/60" />
                         {user.telefono || "—"}
                      </div>
-                     <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                     <div className="flex items-center gap-2 text-[9px] font-bold text-muted-foreground uppercase tracking-tight">
                         <Euro className="h-3 w-3 text-primary/60" />
                         P.IVA: {user.piva || "—"}
                      </div>
                   </div>
                   <div className="space-y-3">
-                     <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                     <div className="flex items-center gap-2 text-[9px] font-bold text-muted-foreground uppercase tracking-tight">
                         <CreditCard className="h-3 w-3 text-primary/60" />
                         IBAN: {user.iban ? `****${user.iban.slice(-4)}` : "—"}
                      </div>
-                     <div className="flex items-center gap-2 text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                     <div className="flex items-center gap-2 text-[9px] font-bold text-muted-foreground uppercase tracking-tight">
                         <MapPin className="h-3 w-3 text-primary/60" />
                         <span className="truncate">{user.indirizzo || "—"}</span>
                      </div>
@@ -396,11 +396,11 @@ function TaskItem({
 
   const statusColor = useMemo(() => {
     switch (task.state_id) {
-      case "DA_FARE": return "bg-slate-500";
+      case "DA_FARE": return "bg-muted";
       case "IN_CORSO": return "bg-primary";
       case "REVISIONE": return "bg-amber-500";
       case "COMPLETATO": return "bg-emerald-500";
-      default: return "bg-slate-500";
+      default: return "bg-muted";
     }
   }, [task.state_id]);
 

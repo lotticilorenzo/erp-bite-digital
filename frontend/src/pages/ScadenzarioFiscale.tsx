@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { CalendarClock, AlertTriangle } from "lucide-react";
 import { formatEuro } from "@/lib/utils";
 import { useScadenzarioFiscale, type Certezza, type ScadenzaFiscale } from "@/hooks/useScadenzarioFiscale";
@@ -16,7 +16,7 @@ import {
 const CERTEZZA_BADGE: Record<Certezza, string> = {
   ALTA: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
   MEDIA: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  DA_ALLINEARE: "bg-slate-500/10 text-slate-400 border-slate-500/20",
+  DA_ALLINEARE: "bg-muted/10 text-muted-foreground border-border/20",
 };
 const CERTEZZA_LABEL: Record<Certezza, string> = { ALTA: "Alta", MEDIA: "Media", DA_ALLINEARE: "Da allineare" };
 
