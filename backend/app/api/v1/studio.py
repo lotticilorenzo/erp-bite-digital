@@ -706,12 +706,14 @@ async def move_studio_node(
     parent_id = payload.parent_id
     order = payload.order
 
-    # Fetch del nodo – filtriamo i soft-deleted.
-    # NON carichiamo children con selectinload: non servono qui e causano
-    # MissingGreenlet se db.refresh() viene chiamato dopo il commit.
+    # Carichiamo il nodo con children eager-loaded: quando _place_node imposta
+    # node.parent_id, SQLAlchemy sincronizza la relazione bidirezionale
+    # (parent_node.children ↔ node.parent). Senza selectinload SQLAlchemy
+    # tenta un lazy-load sincrono in contesto async → MissingGreenlet → 500.
     result = await db.execute(
         select(StudioNode)
         .where(StudioNode.id == node_id, StudioNode.is_deleted == False)
+        .options(selectinload(StudioNode.children))
     )
     node = result.scalar_one_or_none()
     if not node:
@@ -724,7 +726,17 @@ async def move_studio_node(
         raise HTTPException(status_code=403, detail="Non hai i permessi per spostare questo nodo")
 
     if parent_id is not None:
-        parent_node = await _get_node_or_404(db, parent_id)
+        # Carichiamo parent_node con children per lo stesso motivo: il sync
+        # bidirezionale append(node) su parent_node.children richiede la
+        # collection già in memoria altrimenti → MissingGreenlet.
+        result_parent = await db.execute(
+            select(StudioNode)
+            .where(StudioNode.id == parent_id, StudioNode.is_deleted == False)
+            .options(selectinload(StudioNode.children))
+        )
+        parent_node = result_parent.scalar_one_or_none()
+        if not parent_node:
+            raise HTTPException(status_code=404, detail="Nodo destinazione non trovato")
         await _ensure_node_visible(db, current_user, parent_node)
 
         # Circular dependency check – scorriamo gli antenati del parent proposto
@@ -750,10 +762,11 @@ async def move_studio_node(
         requested_order=order,
     )
 
-    await db.flush()
-    # Costruiamo la risposta PRIMA del commit mentre l'ORM ha ancora i valori aggiornati
-    # in memoria. NON chiamare db.refresh() dopo il commit: causerebbe lazy-load
-    # di 'children' fuori dal contesto greenlet async (MissingGreenlet).
+    # PRIMA del flush: updated_at ha onupdate=func.now() (server-side).
+    # Dopo flush, SQLAlchemy espira updated_at; accedervi fuori da await
+    # triggherebbe _load_expired sincrono → MissingGreenlet. Costruiamo
+    # dopo PRIMA che flush lo espiri; parent_id e order sono già aggiornati
+    # in memory da _place_node.
     dopo = _node_to_dict(node)
     dopo_extended = {
         **dopo,
