@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { 
   DndContext, 
   DragOverlay, 
@@ -285,7 +285,7 @@ const PlanningPage: React.FC = () => {
 
   // Project color helper
   const getProjectColor = (projectId?: string) => {
-    if (!projectId) return 'border-slate-700 bg-slate-800/50';
+    if (!projectId) return 'border-border bg-card/50';
     const colors = [
       'border-purple-500/50 bg-purple-500/10 text-purple-400',
       'border-blue-500/50 bg-blue-500/10 text-blue-400',
@@ -334,7 +334,7 @@ const PlanningPage: React.FC = () => {
             <Users className="h-8 w-8 text-primary" />
             Execution Hub
           </h1>
-          <p className="text-slate-500 text-xs font-black uppercase tracking-[0.2em] mt-2">
+          <p className="text-muted-foreground text-xs font-black uppercase tracking-[0.2em] mt-2">
             Gestione carichi di lavoro, allocazione dinamica e analisi team.
           </p>
         </header>
@@ -384,7 +384,7 @@ const PlanningPage: React.FC = () => {
               variant="ghost" 
               size="icon" 
               onClick={() => setCurrentDate(view === 'week' ? subWeeks(currentDate, 1) : subMonths(currentDate, 1))}
-              className="hover:bg-white/5 text-slate-400 h-8 w-8"
+              className="hover:bg-card/5 text-muted-foreground h-8 w-8"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -400,7 +400,7 @@ const PlanningPage: React.FC = () => {
               variant="ghost" 
               size="icon" 
               onClick={() => setCurrentDate(view === 'week' ? addWeeks(currentDate, 1) : addMonths(currentDate, 1))}
-              className="hover:bg-white/5 text-slate-400 h-8 w-8"
+              className="hover:bg-card/5 text-muted-foreground h-8 w-8"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -463,7 +463,7 @@ const PlanningPage: React.FC = () => {
                               </Avatar>
                               <div className="min-w-0">
                                 <div className="text-xs font-black text-white truncate">{risorsa.nome} {risorsa.cognome}</div>
-                                <div className="text-[9px] font-bold text-slate-500 uppercase truncate">{risorsa.ruolo || 'Team Member'}</div>
+                                <div className="text-[9px] font-bold text-muted-foreground uppercase truncate">{risorsa.ruolo || 'Team Member'}</div>
                               </div>
                             </div>
                             
@@ -532,10 +532,10 @@ const PlanningPage: React.FC = () => {
                         </Avatar>
                         <div>
                           <h3 className="text-lg font-black text-white">{risorsa.nome} {risorsa.cognome}</h3>
-                          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{risorsa.ruolo || 'Resource'}</p>
+                          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{risorsa.ruolo || 'Resource'}</p>
                         </div>
                       </div>
-                      <Badge className="bg-white/5 border-white/10 text-muted-foreground font-black uppercase text-[10px]">
+                      <Badge className="bg-card/5 border-white/10 text-muted-foreground font-black uppercase text-[10px]">
                         Capacità: {risorsa.ore_settimanali}h/sett
                       </Badge>
                     </div>
@@ -551,7 +551,7 @@ const PlanningPage: React.FC = () => {
                           return (
                             <div key={weekOffset} className="space-y-2">
                               <div className="flex justify-between text-xs items-center">
-                                <span className="font-bold text-slate-400 capitalize">
+                                <span className="font-bold text-muted-foreground capitalize">
                                   Settimana {format(weekStart, 'dd MMM', { locale: it })}: {weekData.load}h
                                 </span>
                                 <span className={`font-black ${percentage > 100 ? 'text-destructive animate-pulse' : percentage > 80 ? 'text-amber-400' : 'text-primary'}`}>
@@ -587,7 +587,7 @@ const PlanningPage: React.FC = () => {
                       <h3 className="text-sm font-black uppercase tracking-widest text-white">
                         Timeline Team
                       </h3>
-                      <p className="mt-1 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                      <p className="mt-1 text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
                         Vista aggregata per risorsa con assenze sovrapposte e drag orizzontale sulle date.
                       </p>
                     </div>
@@ -641,7 +641,7 @@ const PlanningPage: React.FC = () => {
               
               <div className="p-3">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                   <Input 
                     placeholder="Filtra per titolo o progetto..." 
                     value={backlogSearch}
@@ -666,7 +666,7 @@ const PlanningPage: React.FC = () => {
                   ))}
                   {backlogTasks.length === 0 && (
                     <div className="text-center py-20 opacity-30 space-y-4">
-                      <div className="mx-auto h-16 w-16 rounded-full border-2 border-dashed border-slate-700 flex items-center justify-center">
+                      <div className="mx-auto h-16 w-16 rounded-full border-2 border-dashed border-border flex items-center justify-center">
                         <Users className="h-8 w-8" />
                       </div>
                       <p className="text-[10px] font-black uppercase tracking-[0.2em]">Pianificazione completa</p>
@@ -731,9 +731,9 @@ const CalendarCell: React.FC<{
       ref={setNodeRef}
       className={`
         p-2 min-h-[140px] transition-all duration-300 border-r border-b border-border/20
-        ${isOver ? 'bg-primary/10 shadow-[inset_0_0_20px_hsl(var(--primary)/0.2)]' : 'hover:bg-white/[0.01]'}
+        ${isOver ? 'bg-primary/10 shadow-[inset_0_0_20px_hsl(var(--primary)/0.2)]' : 'hover:bg-card/[0.01]'}
         ${isAbsent ? 'bg-[#ef4444]/5 border-dashed border-[#ef4444]/20' : ''}
-        ${id.startsWith('disabled') ? 'bg-slate-900/50 cursor-not-allowed opacity-40' : ''}
+        ${id.startsWith('disabled') ? 'bg-card/50 cursor-not-allowed opacity-40' : ''}
       `}
     >
       {isAbsent ? (
@@ -778,7 +778,7 @@ const DraggableTask: React.FC<{
     zIndex: 50,
   } : undefined;
 
-  const projectColor = getProjectColor ? getProjectColor(task.progetto_id) : 'border-slate-700 bg-slate-800/50';
+  const projectColor = getProjectColor ? getProjectColor(task.progetto_id) : 'border-border bg-card/50';
 
   return (
     <div
@@ -791,7 +791,7 @@ const DraggableTask: React.FC<{
         ${isDragging ? 'opacity-20 grayscale' : 'opacity-100'}
         ${isMini 
           ? `p-2 ${projectColor} border-y border-r border-border/50 hover:scale-[1.02] shadow-sm` 
-          : `p-4 bg-card/80 border-slate-700 hover:border-primary/50 shadow-lg border-y border-r`
+          : `p-4 bg-card/80 border-border hover:border-primary/50 shadow-lg border-y border-r`
         }
       `}
     >
@@ -821,7 +821,7 @@ const DraggableTask: React.FC<{
         {isMini && task.stima_minuti && (
           <div className="flex items-center gap-1.5">
              <div className="h-1 w-1 rounded-full bg-primary/50" />
-             <span className="text-[8px] font-black uppercase text-slate-500 tracking-widest">
+             <span className="text-[8px] font-black uppercase text-muted-foreground tracking-widest">
                {Math.round(task.stima_minuti / 60)}h
              </span>
           </div>
@@ -830,7 +830,7 @@ const DraggableTask: React.FC<{
         {!isMini && (
           <div className="flex items-center gap-2 mt-1">
             <div className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.2)]" />
-            <span className="text-[9px] font-black uppercase text-slate-500 tracking-[0.1em] truncate">
+            <span className="text-[9px] font-black uppercase text-muted-foreground tracking-[0.1em] truncate">
               {task.progetto_id ? (progettiMap?.[task.progetto_id]?.nome ?? 'Progetto') : 'Backlog Generale'}
             </span>
           </div>

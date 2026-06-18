@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ChevronLeft,
@@ -265,7 +265,7 @@ export default function CommessaDetailPage() {
   const STATO_COLORS: Record<string, string> = {
     APERTA: "text-blue-400 bg-blue-500/10 border-blue-500/20",
     PRONTA_CHIUSURA: "text-amber-400 bg-amber-500/10 border-amber-500/20",
-    CHIUSA: "text-slate-400 bg-slate-500/10 border-slate-500/20",
+    CHIUSA: "text-muted-foreground bg-muted/10 border-border/20",
     FATTURATA: "text-purple-400 bg-purple-500/10 border-purple-500/20",
     INCASSATA: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
   };
@@ -627,7 +627,7 @@ export default function CommessaDetailPage() {
               </CardTitle>
               <Dialog open={isAddingProject} onOpenChange={setIsAddingProject}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-8 rounded-xl bg-white/5 border-white/5 text-[10px] font-black uppercase tracking-widest gap-2">
+                  <Button variant="outline" size="sm" className="h-8 rounded-xl bg-card/5 border-white/5 text-[10px] font-black uppercase tracking-widest gap-2">
                     <Plus className="w-3.5 h-3.5" /> Associa Progetto
                   </Button>
                 </DialogTrigger>
@@ -655,7 +655,7 @@ export default function CommessaDetailPage() {
                             placeholder="es. 2500"
                             value={progettoAmounts.importo_fisso}
                             onChange={e => setProgettoAmounts(a => ({ ...a, importo_fisso: e.target.value }))}
-                            className="bg-white/5 border-white/5 h-10 rounded-xl"
+                            className="bg-card/5 border-white/5 h-10 rounded-xl"
                             autoFocus
                           />
                         </div>
@@ -667,7 +667,7 @@ export default function CommessaDetailPage() {
                             placeholder="es. 0"
                             value={progettoAmounts.importo_variabile}
                             onChange={e => setProgettoAmounts(a => ({ ...a, importo_variabile: e.target.value }))}
-                            className="bg-white/5 border-white/5 h-10 rounded-xl"
+                            className="bg-card/5 border-white/5 h-10 rounded-xl"
                           />
                         </div>
                         <div>
@@ -678,7 +678,7 @@ export default function CommessaDetailPage() {
                             placeholder="es. 40"
                             value={progettoAmounts.delivery_attesa}
                             onChange={e => setProgettoAmounts(a => ({ ...a, delivery_attesa: e.target.value }))}
-                            className="bg-white/5 border-white/5 h-10 rounded-xl"
+                            className="bg-card/5 border-white/5 h-10 rounded-xl"
                           />
                         </div>
                       </div>
@@ -710,7 +710,7 @@ export default function CommessaDetailPage() {
                             placeholder="Cerca progetti del cliente..."
                             value={searchProject}
                             onChange={e => setSearchProject(e.target.value)}
-                            className="pl-10 bg-white/5 border-white/5 h-10 rounded-xl"
+                            className="pl-10 bg-card/5 border-white/5 h-10 rounded-xl"
                           />
                         </div>
                         <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
@@ -721,7 +721,7 @@ export default function CommessaDetailPage() {
                                 key={p.id}
                                 onClick={() => !isAssociated && setPendingProject({ id: p.id, nome: p.nome })}
                                 className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
-                                  isAssociated ? 'bg-emerald-500/10 border-emerald-500/20 opacity-60 cursor-default' : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-primary/40'
+                                  isAssociated ? 'bg-emerald-500/10 border-emerald-500/20 opacity-60 cursor-default' : 'bg-card/5 border-white/5 hover:bg-card/10 hover:border-primary/40'
                                 }`}
                               >
                                 <div className="flex flex-col">
@@ -784,7 +784,7 @@ export default function CommessaDetailPage() {
                       <TableCell className="text-right text-purple-400 font-black tabular-nums">{riga.delivery_consuntiva} / {riga.delivery_attesa}h</TableCell>
                       <TableCell className="pr-6 text-right">
                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button onClick={() => navigate(`/progetti/${riga.progetto_id}`)} variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-white/5 text-[#475569] hover:text-white">
+                            <Button onClick={() => navigate(`/progetti/${riga.progetto_id}`)} variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-card/5 text-[#475569] hover:text-white">
                                <Edit2 className="w-3.5 h-3.5" />
                             </Button>
                             <Button 
@@ -988,8 +988,8 @@ export default function CommessaDetailPage() {
           {/* ═══ CLICKUP PROGRESS ══════════════════════════════ */}
           <Card className="bg-card border-border text-white overflow-hidden">
             <CardHeader className="pb-3 uppercase">
-              <CardTitle className="text-[11px] font-black flex items-center gap-2 text-slate-500">
-                <div className={`w-2 h-2 rounded-full ${isClickupLoading ? 'bg-slate-500 animate-pulse' : 'bg-[#7b68ee]'}`} />
+              <CardTitle className="text-[11px] font-black flex items-center gap-2 text-muted-foreground">
+                <div className={`w-2 h-2 rounded-full ${isClickupLoading ? 'bg-muted animate-pulse' : 'bg-[#7b68ee]'}`} />
                 Progresso ClickUp
               </CardTitle>
             </CardHeader>
@@ -1008,7 +1008,7 @@ export default function CommessaDetailPage() {
                     </div>
                     <span className="text-lg font-black text-purple-400">{clickupData.percentage}%</span>
                   </div>
-                  <div className="h-2 w-full bg-slate-800/50 rounded-full overflow-hidden p-[1px] border border-white/5">
+                  <div className="h-2 w-full bg-card/50 rounded-full overflow-hidden p-[1px] border border-white/5">
                     <div 
                       className="h-full bg-[#7b68ee] rounded-full shadow-[0_0_10px_rgba(123,104,238,0.4)] transition-all duration-1000" 
                       style={{ width: `${clickupData.percentage}%` }} 
@@ -1336,7 +1336,7 @@ function ChecklistItem({ label, checked, subtext }: { label: string; checked: bo
     <div className="flex items-start gap-3">
       <div className={cn(
         "mt-0.5 rounded-full p-0.5",
-        checked ? "bg-emerald-500/20 text-emerald-500" : "bg-slate-500/20 text-slate-500"
+        checked ? "bg-emerald-500/20 text-emerald-500" : "bg-muted/20 text-muted-foreground"
       )}>
         {checked ? <CheckCircle2 className="h-3 w-3" /> : <div className="h-3 w-3" />}
       </div>
@@ -1353,7 +1353,7 @@ function ComparisonItem({ label, planned, actual, symbol, invert = false }: any)
   const isPositiveStatus = invert ? diff <= 0 : diff >= 0;
   
   return (
-    <div className="space-y-1.5 p-3 rounded-xl bg-white/5 border border-white/5">
+    <div className="space-y-1.5 p-3 rounded-xl bg-card/5 border border-white/5">
       <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{label}</p>
       <div className="flex flex-col">
         <div className="flex items-baseline gap-1.5">

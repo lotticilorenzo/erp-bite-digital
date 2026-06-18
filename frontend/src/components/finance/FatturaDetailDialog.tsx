@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import {
   Dialog,
   DialogContent,
@@ -186,7 +186,7 @@ export function FatturaDetailDialog({
             <div className="flex flex-col items-end gap-3">
               {getStatusBadge(fattura.stato_pagamento)}
               <div className="flex items-center gap-2">
-                 <Button onClick={handleDownloadPdf} variant="outline" size="sm" className="bg-white/5 border-border/50 text-xs font-bold rounded-xl h-9 hover:bg-white/10">
+                 <Button onClick={handleDownloadPdf} variant="outline" size="sm" className="bg-card/5 border-border/50 text-xs font-bold rounded-xl h-9 hover:bg-card/10">
                     <Download className="h-3.5 w-3.5 mr-2" />
                     Scarica PDF
                  </Button>
@@ -208,13 +208,13 @@ export function FatturaDetailDialog({
                 <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">
                   {isAttiva ? "Cliente / Destinatario" : "Fornitore / Mittente"}
                 </h3>
-                <div className="bg-white/5 border border-border/50 rounded-2xl p-5 space-y-4">
+                <div className="bg-card/5 border border-border/50 rounded-2xl p-5 space-y-4">
                   <div className="flex items-start gap-4">
                     <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
                       <Building2 className="h-6 w-6 text-primary" />
                     </div>
                     <div 
-                      className="cursor-pointer group/entity hover:bg-white/10 transition-all"
+                      className="cursor-pointer group/entity hover:bg-card/10 transition-all"
                       onClick={() => navigate(isAttiva ? `/clienti/${entity?.id}` : `/fornitori?selected_id=${entity?.id}`)}
                     >
                       <h4 className="font-black text-white text-lg leading-tight uppercase group-hover/entity:text-primary transition-colors">
@@ -258,7 +258,7 @@ export function FatturaDetailDialog({
               <div className="space-y-3">
                 <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Dettagli Documento</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white/5 border border-border/50 rounded-2xl p-4">
+                  <div className="bg-card/5 border border-border/50 rounded-2xl p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Calendar className="h-3.5 w-3.5 text-primary" />
                       <span className="text-[9px] font-black uppercase text-[#475569]">Data Emissione</span>
@@ -267,7 +267,7 @@ export function FatturaDetailDialog({
                       {fattura.data_emissione ? format(new Date(fattura.data_emissione), "dd/MM/yyyy") : "—"}
                     </div>
                   </div>
-                  <div className="bg-white/5 border border-border/50 rounded-2xl p-4">
+                  <div className="bg-card/5 border border-border/50 rounded-2xl p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <CreditCard className="h-3.5 w-3.5 text-primary" />
                       <span className="text-[9px] font-black uppercase text-[#475569]">Scadenza</span>
@@ -306,10 +306,10 @@ export function FatturaDetailDialog({
           {/* Righe Fattura */}
           <div className="space-y-4">
             <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Elenco Prestazioni / Prodotti</h3>
-            <div className="rounded-2xl border border-border/50 bg-white/5 overflow-hidden">
+            <div className="rounded-2xl border border-border/50 bg-card/5 overflow-hidden">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-white/5 border-b border-border/50">
+                  <tr className="bg-card/5 border-b border-border/50">
                     <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-[#475569]">Descrizione</th>
                     <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-[#475569] text-center w-24">Quantità</th>
                     <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-[#475569] text-right w-32">Prezzo Unit.</th>
@@ -319,7 +319,7 @@ export function FatturaDetailDialog({
                 <tbody className="divide-y divide-white/5">
                   {items.length > 0 ? (
                     items.map((item: any, idx: number) => (
-                      <tr key={idx} className="hover:bg-white/5 transition-colors">
+                      <tr key={idx} className="hover:bg-card/5 transition-colors">
                         <td className="px-6 py-4">
                           <span className="text-xs font-bold text-white leading-relaxed block max-w-md">
                             {item.description || item.name || "N/A"}
@@ -382,7 +382,7 @@ export function FatturaDetailDialog({
               <h3 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] flex items-center gap-2">
                 <Link2 className="h-3.5 w-3.5" /> Riconciliazioni collegate
               </h3>
-              <div className="rounded-2xl border border-border/50 bg-white/5 divide-y divide-white/5">
+              <div className="rounded-2xl border border-border/50 bg-card/5 divide-y divide-white/5">
                 {riconciliazioni.map((r) => (
                   <div key={r.id} className="flex items-center justify-between px-5 py-3">
                     <span className="text-xs font-bold text-white">
@@ -409,7 +409,7 @@ export function FatturaDetailDialog({
                 <Button
                   variant="outline"
                   onClick={handleSollecito}
-                  className="flex-1 border-border bg-white/5 text-white font-black uppercase text-[10px] h-12 rounded-2xl gap-2 hover:bg-white/10"
+                  className="flex-1 border-border bg-card/5 text-white font-black uppercase text-[10px] h-12 rounded-2xl gap-2 hover:bg-card/10"
                 >
                   <Mail className="h-4 w-4" />
                   Invia Sollecito

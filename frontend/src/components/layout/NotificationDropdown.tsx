@@ -1,4 +1,4 @@
-import {
+﻿import {
   Bell,
   AlertTriangle,
   AlertCircle,
@@ -54,7 +54,7 @@ export function NotificationDropdown() {
       case "INFO":
         return <Info className="h-4 w-4 text-emerald-500" />;
       default:
-        return <Bell className="h-4 w-4 text-slate-400" />;
+        return <Bell className="h-4 w-4 text-muted-foreground" />;
     }
   };
 
@@ -66,10 +66,10 @@ export function NotificationDropdown() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative hover:bg-white/5 transition-colors group">
+        <Button variant="ghost" size="icon" className="relative hover:bg-card/5 transition-colors group">
           <Bell
             className={cn(
-              "h-5 w-5 text-slate-400 group-hover:text-white transition-colors",
+              "h-5 w-5 text-muted-foreground group-hover:text-white transition-colors",
               hasUrgent && "animate-pulse text-rose-500"
             )}
           />
@@ -92,7 +92,7 @@ export function NotificationDropdown() {
                 e.stopPropagation();
                 markAllAsRead();
               }}
-              className="text-[10px] h-7 px-2 font-black uppercase tracking-wider text-slate-400 hover:text-white"
+              className="text-[10px] h-7 px-2 font-black uppercase tracking-wider text-muted-foreground hover:text-white"
             >
               Segna tutte come lette
             </Button>
@@ -101,13 +101,13 @@ export function NotificationDropdown() {
 
         <Tabs defaultValue="all" className="w-full">
           <TabsList className="w-full grid grid-cols-3 bg-transparent border-b border-border rounded-none h-10 p-0">
-            <TabsTrigger value="all" className="data-[state=active]:bg-white/5 data-[state=active]:text-white text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-none">
+            <TabsTrigger value="all" className="data-[state=active]:bg-card/5 data-[state=active]:text-white text-muted-foreground text-[10px] font-black uppercase tracking-widest rounded-none">
               Tutte
             </TabsTrigger>
-            <TabsTrigger value="unread" className="data-[state=active]:bg-white/5 data-[state=active]:text-white text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-none">
+            <TabsTrigger value="unread" className="data-[state=active]:bg-card/5 data-[state=active]:text-white text-muted-foreground text-[10px] font-black uppercase tracking-widest rounded-none">
               Non Lette
             </TabsTrigger>
-            <TabsTrigger value="important" className="data-[state=active]:bg-white/5 data-[state=active]:text-white text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-none">
+            <TabsTrigger value="important" className="data-[state=active]:bg-card/5 data-[state=active]:text-white text-muted-foreground text-[10px] font-black uppercase tracking-widest rounded-none">
               Importanti
             </TabsTrigger>
           </TabsList>
@@ -149,7 +149,7 @@ function NotificationList({
     return (
       <div className="p-12 text-center">
         <Bell className="h-8 w-8 text-[#1e293b] mx-auto mb-3" />
-        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Nessuna notifica</p>
+        <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">Nessuna notifica</p>
       </div>
     );
   }
@@ -161,7 +161,7 @@ function NotificationList({
           key={n.id}
           onClick={() => onClick(n)}
           className={cn(
-            "w-full text-left p-4 flex gap-4 transition-all hover:bg-white/5 border-b border-border/50 group",
+            "w-full text-left p-4 flex gap-4 transition-all hover:bg-card/5 border-b border-border/50 group",
             !n.isRead && "bg-primary/5"
           )}
         >
@@ -178,17 +178,17 @@ function NotificationList({
               <p
                 className={cn(
                   "text-xs font-black uppercase tracking-tight",
-                  n.isRead ? "text-slate-200" : "text-white"
+                  n.isRead ? "text-muted-foreground" : "text-white"
                 )}
               >
                 {n.title}
               </p>
               {!n.isRead && <div className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.2)]" />}
             </div>
-            <p className="text-[11px] text-slate-400 leading-relaxed group-hover:text-slate-300 transition-colors">
+            <p className="text-[11px] text-muted-foreground leading-relaxed group-hover:text-muted-foreground transition-colors">
               {n.description}
             </p>
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-600 group-hover:text-slate-500">
+            <p className="text-[9px] font-black uppercase tracking-widest text-foreground group-hover:text-muted-foreground">
               {formatDistanceToNow(parseISO(n.timestamp), { addSuffix: true, locale: it })}
             </p>
           </div>
