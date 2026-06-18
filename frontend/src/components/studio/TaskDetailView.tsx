@@ -672,18 +672,38 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
                 <UserIcon className="h-3 w-3" />
                 Assegnato a
               </label>
-              <Select value={formData.assegnatario_id} onValueChange={val => setFormData(p => ({ ...p, assegnatario_id: val }))}>
-                <SelectTrigger className="w-full bg-white/5 border-white/5 hover:bg-white/[0.08] h-11 rounded-xl px-4 text-xs font-bold text-white">
-                  <SelectValue placeholder="Senz'assegnatario" />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-900 border-white/10 text-white rounded-xl shadow-2xl p-1">
-                  <SelectItem value="none" className="opacity-50 italic">Senz'assegnatario</SelectItem>
-                  {utenti?.map((u: User) => (
-                    <SelectItem key={u.id} value={u.id}>{u.nome} {u.cognome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {task.assegnatari && task.assegnatari.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {task.assegnatari.map(a => {
+                    const parts = a.nome.split(" ");
+                    const initials = (parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "");
+                    return (
+                      <span key={a.id} className="flex items-center gap-1.5 text-[11px] font-bold bg-primary/10 border border-primary/20 text-primary rounded-lg px-2.5 py-1">
+                        <span className="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center text-[8px] font-black uppercase">{initials}</span>
+                        {a.nome}
+                      </span>
+                    );
+                  })}
+                </div>
+              ) : (
+                <span className="text-xs text-muted-foreground/50 ml-1">—</span>
+              )}
             </div>
+
+            {task.tags && task.tags.length > 0 && (
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.15em] ml-1">
+                  Tag
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {task.tags.map(tag => (
+                    <span key={tag} className="text-[10px] font-bold bg-slate-500/10 border border-slate-500/20 text-slate-300 rounded-lg px-2 py-0.5">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-3 pt-4 border-t border-white/5">
               <label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.15em] ml-1 flex items-center gap-2">
