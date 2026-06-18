@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { 
@@ -145,11 +145,11 @@ export default function CRM() {
               placeholder="Cerca per azienda..." 
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="pl-12 bg-white/5 border-white/5 h-12 rounded-2xl focus:ring-primary/20 text-white placeholder:text-[#334155]"
+              className="pl-12 bg-card/5 border-white/5 h-12 rounded-2xl focus:ring-primary/20 text-white placeholder:text-[#334155]"
             />
           </div>
 
-          <div className="flex items-center gap-1 bg-white/5 p-1 rounded-2xl border border-white/5 ml-2">
+          <div className="flex items-center gap-1 bg-card/5 p-1 rounded-2xl border border-white/5 ml-2">
              <FilterBtn active={filterType === "all"} onClick={() => setFilterType("all")} label="Tutti" />
              <FilterBtn active={filterType === "hot"} onClick={() => setFilterType("hot")} icon={<Flame className="w-3 h-3" />} label="Hot" color="text-orange-400" />
              <FilterBtn active={filterType === "no_activity"} onClick={() => setFilterType("no_activity")} icon={<Clock3 className="w-3 h-3" />} label="Da Sollecitare" color="text-red-400" />
@@ -158,7 +158,7 @@ export default function CRM() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button onClick={exportCsv} variant="outline" className="h-12 rounded-2xl bg-white/5 border-white/5 text-[#475569] font-black uppercase text-[10px] tracking-widest px-6 hover:bg-white/10">
+          <Button onClick={exportCsv} variant="outline" className="h-12 rounded-2xl bg-card/5 border-white/5 text-[#475569] font-black uppercase text-[10px] tracking-widest px-6 hover:bg-card/10">
             <Download className="h-4 w-4 mr-2" />
             Esporta CSV
           </Button>
@@ -173,7 +173,7 @@ export default function CRM() {
       {view === "list" && (
         <div className="bg-card/40 rounded-3xl border border-white/5 overflow-x-auto backdrop-blur-sm">
           <table className="w-full text-left">
-            <thead className="bg-white/5 text-[10px] font-black uppercase tracking-widest text-[#475569]">
+            <thead className="bg-card/5 text-[10px] font-black uppercase tracking-widest text-[#475569]">
               <tr>
                 <th className="px-8 py-5">Azienda</th>
                 <th className="px-8 py-5">Stadio</th>
@@ -188,7 +188,7 @@ export default function CRM() {
               {filteredLeads.map(lead => (
                 <tr 
                   key={lead.id} 
-                  className="group hover:bg-white/5 cursor-pointer transition-colors"
+                  className="group hover:bg-card/5 cursor-pointer transition-colors"
                   onClick={() => navigate(`/crm/${lead.id}`)}
                 >
                   <td className="px-8 py-5">
@@ -198,7 +198,7 @@ export default function CRM() {
                     </div>
                   </td>
                   <td className="px-8 py-5">
-                    <Badge variant="outline" className="bg-white/5 text-[#64748b] border-white/5 font-bold uppercase text-[9px]">
+                    <Badge variant="outline" className="bg-card/5 text-[#64748b] border-white/5 font-bold uppercase text-[9px]">
                       {lead.stadio?.nome}
                     </Badge>
                   </td>
@@ -207,7 +207,7 @@ export default function CRM() {
                   </td>
                   <td className="px-8 py-5">
                     <div className="flex items-center gap-3">
-                      <div className="h-1.5 w-16 bg-white/5 rounded-full overflow-hidden">
+                      <div className="h-1.5 w-16 bg-card/5 rounded-full overflow-hidden">
                         <div className={`h-full ${(lead.lead_score || 0) > 70 ? 'bg-orange-400' : 'bg-primary'}`} style={{ width: `${lead.lead_score || 0}%` }} />
                       </div>
                       <span className="text-[11px] font-black tabular-nums text-white">{lead.lead_score || 0}</span>
@@ -234,7 +234,7 @@ export default function CRM() {
                       <DropdownMenuContent align="end" className="bg-card/95 border-white/10 backdrop-blur-xl rounded-2xl p-2 min-w-[170px] shadow-2xl">
                         <DropdownMenuItem 
                           onClick={() => navigate(`/crm/${lead.id}`)}
-                          className="flex items-center gap-2 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-[#64748b] hover:text-white hover:bg-white/5 rounded-xl cursor-pointer"
+                          className="flex items-center gap-2 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-[#64748b] hover:text-white hover:bg-card/5 rounded-xl cursor-pointer"
                         >
                           <Edit2 className="w-3 h-3 text-primary" /> Dettagli Lead
                         </DropdownMenuItem>
@@ -244,7 +244,7 @@ export default function CRM() {
                         >
                           <ArrowRightLeft className="w-3 h-3" /> Chiudi Vinto
                         </DropdownMenuItem>
-                        <DropdownMenuSeparator className="bg-white/5 my-1" />
+                        <DropdownMenuSeparator className="bg-card/5 my-1" />
                         <DropdownMenuItem 
                           onClick={() => deleteLead.mutate(lead.id)}
                           className="flex items-center gap-2 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-400 hover:bg-red-500/10 rounded-xl cursor-pointer"
@@ -260,7 +260,7 @@ export default function CRM() {
           </table>
           {filteredLeads.length === 0 && (
              <div className="text-center py-20">
-               <div className="h-20 w-20 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-6">
+               <div className="h-20 w-20 rounded-full bg-card/5 flex items-center justify-center mx-auto mb-6">
                  <Search className="h-10 w-10 text-[#1e293b]" />
                </div>
                <h3 className="text-xl font-black text-white mb-2">Nessun lead trovato</h3>
@@ -294,7 +294,7 @@ export default function CRM() {
               />
            </div>
 
-           <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-8">
+           <div className="bg-card/5 border border-white/10 rounded-[2.5rem] p-8">
               <div className="flex items-center justify-between mb-8">
                  <div>
                     <h3 className="text-xl font-black italic uppercase tracking-tighter text-white">Cronologia <span className="text-primary not-italic">Automazioni</span></h3>
@@ -315,7 +315,7 @@ export default function CRM() {
 
       {view === "settings" && (
         <div className="flex-1 overflow-y-auto space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-500 pb-8 pr-1 custom-scrollbar">
-           <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-12">
+           <div className="bg-card/5 border border-white/10 rounded-[2.5rem] p-12">
               <div className="flex items-center justify-between mb-12">
                 <div>
                   <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white">Pipeline <span className="text-primary not-italic">Stages</span></h3>
@@ -331,7 +331,7 @@ export default function CRM() {
 
               <div className="space-y-4 max-w-4xl">
                 {stages.map((stage) => (
-                  <div key={stage.id} className="group p-6 rounded-3xl bg-white/5 border border-white/5 hover:border-primary/30 transition-all flex items-center gap-6">
+                  <div key={stage.id} className="group p-6 rounded-3xl bg-card/5 border border-white/5 hover:border-primary/30 transition-all flex items-center gap-6">
                     <div className="h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 border border-white/10" style={{ backgroundColor: `${stage.colore}20` }}>
                       <div className="h-3 w-3 rounded-full" style={{ backgroundColor: stage.colore }} />
                     </div>
@@ -414,7 +414,7 @@ function FilterBtn({ active, onClick, icon, label, color = "text-white" }: any) 
       size="sm" 
       onClick={onClick}
       className={`rounded-xl h-8 px-3 text-[8px] font-black uppercase tracking-widest transition-all gap-1.5 ${
-        active ? 'bg-white/10 text-white' : 'text-[#475569] hover:text-[#64748b]'
+        active ? 'bg-card/10 text-white' : 'text-[#475569] hover:text-[#64748b]'
       }`}
     >
       {icon && <span className={color}>{icon}</span>}
@@ -426,7 +426,7 @@ function FilterBtn({ active, onClick, icon, label, color = "text-white" }: any) 
 function AutomationCard({ title, description, icon, enabled: initialEnabled, badge }: any) {
   const [enabled, setEnabled] = React.useState(initialEnabled);
   return (
-    <div className="bg-white/5 border border-white/10 p-8 rounded-[2.5rem] hover:bg-white/[0.07] transition-all group relative overflow-hidden">
+    <div className="bg-card/5 border border-white/10 p-8 rounded-[2.5rem] hover:bg-card/[0.07] transition-all group relative overflow-hidden">
         <div className="absolute top-6 right-6">
             {badge ? (
                 <Badge className="bg-primary text-[8px] font-black uppercase px-2 h-5 rounded-full">{badge}</Badge>
@@ -434,7 +434,7 @@ function AutomationCard({ title, description, icon, enabled: initialEnabled, bad
                 <div className={`h-2 w-2 rounded-full ${enabled ? 'bg-emerald-400 shadow-[0_0_10px_#34d399]' : 'bg-[#1e293b]'}`} />
             )}
         </div>
-        <div className="p-4 bg-white/5 rounded-2xl w-fit mb-6 group-hover:bg-primary/10 transition-colors">
+        <div className="p-4 bg-card/5 rounded-2xl w-fit mb-6 group-hover:bg-primary/10 transition-colors">
             {icon}
         </div>
         <h4 className="text-lg font-black italic uppercase tracking-tighter mb-2 text-white">{title}</h4>

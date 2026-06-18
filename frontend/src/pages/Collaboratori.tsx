@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { 
   Users, 
@@ -159,14 +159,14 @@ const CollaboratoriPage: React.FC = () => {
               <Users className="h-10 w-10 text-primary" />
               Collaboratori
             </h1>
-            <p className="text-slate-500 text-xs font-black uppercase tracking-[0.2em] mt-2">
+            <p className="text-muted-foreground text-xs font-black uppercase tracking-[0.2em] mt-2">
               Gestione integrale del team, dei servizi specialistici e delle tariffe operative.
             </p>
           </header>
           
           <div className="flex items-center gap-3">
             <div className="relative group/search">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within/search:text-primary transition-colors" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within/search:text-primary transition-colors" />
               <Input 
                 placeholder="Cerca collaboratore..." 
                 value={searchTerm}
@@ -176,7 +176,7 @@ const CollaboratoriPage: React.FC = () => {
             </div>
             <div className="flex items-center gap-2 px-2">
               <Switch id="toggle-inattive" checked={mostraInattive} onCheckedChange={setMostraInattive} />
-              <Label htmlFor="toggle-inattive" className="text-[10px] font-black uppercase tracking-widest text-slate-500 cursor-pointer whitespace-nowrap">
+              <Label htmlFor="toggle-inattive" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground cursor-pointer whitespace-nowrap">
                 Mostra inattive
               </Label>
             </div>
@@ -210,10 +210,10 @@ const CollaboratoriPage: React.FC = () => {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">{stat.label}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">{stat.label}</p>
                     <p className="text-2xl font-black text-white glow-primary">{stat.value}</p>
                   </div>
-                  <div className={`p-3 rounded-xl bg-slate-800/50 ${stat.color} group-hover:scale-110 transition-transform`}>
+                  <div className={`p-3 rounded-xl bg-card/50 ${stat.color} group-hover:scale-110 transition-transform`}>
                     <stat.icon className="h-5 w-5" />
                   </div>
                 </div>
@@ -286,7 +286,7 @@ const ServiceDialog = ({ open, onOpenChange, risorsa }: { open: boolean, onOpenC
         <DialogContent className="bg-card border-border text-white">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black uppercase">Aggiungi Servizio</DialogTitle>
-            <DialogDescription className="text-slate-400">
+            <DialogDescription className="text-muted-foreground">
               Imposta un servizio specifico e la relativa tariffa per {risorsa?.nome}.
             </DialogDescription>
           </DialogHeader>
@@ -313,14 +313,14 @@ const ServiceDialog = ({ open, onOpenChange, risorsa }: { open: boolean, onOpenC
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Costo Orario (€)</label>
                 <div className="relative">
-                  <Euro className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+                  <Euro className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                   <Input name="costo_orario" type="number" step="0.01" className="pl-9 bg-background border-border" />
                 </div>
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Costo Fisso (€)</label>
                 <div className="relative">
-                  <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+                  <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                   <Input name="costo_fisso" type="number" step="0.01" className="pl-9 bg-background border-border" />
                 </div>
               </div>
@@ -370,7 +370,7 @@ const CollaboratorCard: React.FC<{
                 {risorsa.nome} {risorsa.cognome}
               </CardTitle>
               <div className="flex items-center gap-1.5 mt-1">
-                <Badge className="bg-white/5 border-white/10 text-[#64748b] font-black uppercase text-[9px] h-5">
+                <Badge className="bg-card/5 border-white/10 text-[#64748b] font-black uppercase text-[9px] h-5">
                   {risorsa.ruolo || 'Team Member'}
                 </Badge>
                 {!risorsa.attivo && (
@@ -383,7 +383,7 @@ const CollaboratorCard: React.FC<{
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-slate-500 hover:text-white h-8 w-8">
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-white h-8 w-8">
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -412,13 +412,13 @@ const CollaboratorCard: React.FC<{
             <span>Carico Settimanale</span>
             <span className="text-primary">{risorsa.ore_settimanali}h disp.</span>
           </div>
-          <Progress value={45} className="h-1.5 bg-slate-800/50 [&>div]:bg-primary shadow-sm" />
+          <Progress value={45} className="h-1.5 bg-card/50 [&>div]:bg-primary shadow-sm" />
         </div>
 
         {/* Services Section */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Servizi & Tariffe</h4>
+            <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Servizi & Tariffe</h4>
             <Button 
                variant="ghost" 
                size="sm" 
@@ -432,14 +432,14 @@ const CollaboratorCard: React.FC<{
           <div className="space-y-2">
             {risorsa.servizi && risorsa.servizi.length > 0 ? (
               risorsa.servizi.map((service) => (
-                <div key={service.id} className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.04] transition-colors">
+                <div key={service.id} className="flex items-center justify-between p-2.5 rounded-xl bg-card/[0.02] border border-white/[0.05] hover:bg-card/[0.04] transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 rounded-lg bg-slate-800/50 flex items-center justify-center">
-                      <Briefcase className="h-4 w-4 text-slate-400" />
+                    <div className="h-8 w-8 rounded-lg bg-card/50 flex items-center justify-center">
+                      <Briefcase className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <div>
                       <p className="text-xs font-black text-white">{service.nome_servizio}</p>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase">
                         {service.costo_orario ? `€${service.costo_orario}/h` : `€${service.costo_fisso} fisso`}
                       </p>
                     </div>
@@ -450,7 +450,7 @@ const CollaboratorCard: React.FC<{
                 </div>
               ))
             ) : (
-              <div className="py-8 text-center border-2 border-dashed border-slate-800/50 rounded-2xl opacity-20">
+              <div className="py-8 text-center border-2 border-dashed border-border/50 rounded-2xl opacity-20">
                 <p className="text-[10px] font-black uppercase tracking-widest">Nessun servizio definito</p>
               </div>
             )}
@@ -458,7 +458,7 @@ const CollaboratorCard: React.FC<{
         </div>
 
         {/* Action Button */}
-        <Button variant="outline" onClick={() => navigate(`/analytics?collaboratore=${risorsa.id}`)} className="w-full h-11 bg-white/[0.02] border-border hover:bg-primary/5 hover:border-primary/30 transition-all font-black uppercase tracking-widest text-[10px] gap-2">
+        <Button variant="outline" onClick={() => navigate(`/analytics?collaboratore=${risorsa.id}`)} className="w-full h-11 bg-card/[0.02] border-border hover:bg-primary/5 hover:border-primary/30 transition-all font-black uppercase tracking-widest text-[10px] gap-2">
           Vedi Analisi Costi
           <ExternalLink className="h-3 w-3" />
         </Button>

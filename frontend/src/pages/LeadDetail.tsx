@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { 
   ChevronLeft, 
@@ -174,7 +174,7 @@ export default function LeadDetailPage() {
             <div>
               {isEditing ? (
                 <input 
-                  className="bg-white/5 border border-white/10 rounded-lg px-3 py-1 text-2xl font-black text-white focus:ring-1 focus:ring-primary outline-none"
+                  className="bg-card/5 border border-white/10 rounded-lg px-3 py-1 text-2xl font-black text-white focus:ring-1 focus:ring-primary outline-none"
                   value={formData.nome_azienda}
                   onChange={(e) => setFormData({ ...formData, nome_azienda: e.target.value })}
                 />
@@ -182,7 +182,7 @@ export default function LeadDetailPage() {
                 <h1 className="text-3xl font-black text-white tracking-tighter uppercase italic leading-none">{lead.nome_azienda}</h1>
               )}
               <div className="flex items-center gap-3 mt-1.5">
-                <Badge variant="outline" className="bg-white/5 border-white/5 text-[9px] font-black uppercase text-[#64748b]">
+                <Badge variant="outline" className="bg-card/5 border-white/5 text-[9px] font-black uppercase text-[#64748b]">
                   {lead.fonte || 'Lead Direct'}
                 </Badge>
                 <div className="flex items-center gap-1.5">
@@ -224,14 +224,14 @@ export default function LeadDetailPage() {
                 <>
                   <Button 
                     variant="outline" 
-                    className="h-12 px-6 rounded-2xl bg-white/5 border-white/10 text-white font-black uppercase tracking-widest text-[10px] hover:bg-white/10"
+                    className="h-12 px-6 rounded-2xl bg-card/5 border-white/10 text-white font-black uppercase tracking-widest text-[10px] hover:bg-card/10"
                     onClick={handleStartEdit}
                   >
                     Modifica
                   </Button>
                   <Button 
                     variant="outline" 
-                    className="h-12 px-6 rounded-2xl bg-white/5 border-white/10 text-white font-black uppercase tracking-widest text-[10px] hover:bg-white/10"
+                    className="h-12 px-6 rounded-2xl bg-card/5 border-white/10 text-white font-black uppercase tracking-widest text-[10px] hover:bg-card/10"
                     onClick={() => convertLeadToClient.mutate(lead.id)}
                   >
                     <ArrowRightLeft className="w-4 h-4 mr-2 text-emerald-400" />
@@ -348,7 +348,7 @@ export default function LeadDetailPage() {
         {/* Center Main Section */}
         <div className="lg:col-span-2 flex flex-col gap-6 overflow-hidden">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="bg-card/40 border border-white/5 rounded-[32px] overflow-hidden backdrop-blur-xl flex-1 flex flex-col">
-            <TabsList className="bg-white/5 p-2 h-16 border-b border-white/5 gap-2 flex justify-start shrink-0">
+            <TabsList className="bg-card/5 p-2 h-16 border-b border-white/5 gap-2 flex justify-start shrink-0">
                <TabsTrigger value="timeline" className="data-[state=active]:bg-primary rounded-2xl px-6 font-black uppercase tracking-widest text-[9px] gap-2">
                   <Clock className="w-3 h-3" /> Timeline
                </TabsTrigger>
@@ -362,9 +362,9 @@ export default function LeadDetailPage() {
             
             <TabsContent value="timeline" className="flex-1 p-8 overflow-y-auto space-y-8 custom-scrollbar">
                {/* Activity Input */}
-               <div className="bg-white/5 p-4 rounded-3xl border border-white/5 focus-within:border-primary/40 transition-all">
+               <div className="bg-card/5 p-4 rounded-3xl border border-white/5 focus-within:border-primary/40 transition-all">
                   <textarea 
-                    className="w-full bg-transparent border-none p-2 text-sm text-white placeholder:text-slate-500 focus:ring-0 min-h-[80px] resize-none"
+                    className="w-full bg-transparent border-none p-2 text-sm text-white placeholder:text-muted-foreground focus:ring-0 min-h-[80px] resize-none"
                     placeholder="Logga una nota o un aggiornamento..."
                     value={newActivity}
                     onChange={(e) => setNewActivity(e.target.value)}
@@ -380,7 +380,7 @@ export default function LeadDetailPage() {
                   </div>
                </div>
 
-               <div className="space-y-8 relative before:absolute before:inset-y-0 before:left-4 before:w-[1px] before:bg-white/5">
+               <div className="space-y-8 relative before:absolute before:inset-y-0 before:left-4 before:w-[1px] before:bg-card/5">
                   <TimelineItem 
                     tipo="CREAZIONE" 
                     data={lead.created_at} 
@@ -401,7 +401,7 @@ export default function LeadDetailPage() {
 
             <TabsContent value="email" className="flex-1 p-8 animate-in slide-in-from-right-4 duration-500">
                <div className="space-y-6 h-full flex flex-col">
-                  <div className="bg-white/5 border border-white/5 p-6 rounded-[32px] space-y-4 flex-1 flex flex-col">
+                  <div className="bg-card/5 border border-white/5 p-6 rounded-[32px] space-y-4 flex-1 flex flex-col">
                      <div className="flex items-center gap-4 py-3 border-b border-white/5">
                         <span className="text-[10px] font-black uppercase text-[#475569] w-12">A:</span>
                         <span className="text-sm font-bold text-white">{lead.email || 'Nessuna mail selezionabile'}</span>
@@ -417,7 +417,7 @@ export default function LeadDetailPage() {
                         />
                      </div>
                      <textarea 
-                        className="flex-1 w-full bg-transparent border-none p-4 text-sm text-slate-300 placeholder:text-slate-600 focus:ring-0 min-h-[200px] resize-none font-mono"
+                        className="flex-1 w-full bg-transparent border-none p-4 text-sm text-muted-foreground placeholder:text-foreground focus:ring-0 min-h-[200px] resize-none font-mono"
                         placeholder="Caro [Nome], ti scrivo per..."
                         value={emailBody}
                         onChange={(e) => setEmailBody(e.target.value)}
@@ -438,7 +438,7 @@ export default function LeadDetailPage() {
                </div>
             </TabsContent>
 
-            <TabsContent value="tasks" className="p-8 text-center text-slate-500 italic text-sm">
+            <TabsContent value="tasks" className="p-8 text-center text-muted-foreground italic text-sm">
                Nessun task pianificato per questo lead. 
                <br />
                <Button variant="link" onClick={() => navigate("/planning")} className="text-primary mt-2 uppercase font-black text-[10px]">Crea primo task</Button>
@@ -461,7 +461,7 @@ export default function LeadDetailPage() {
                     className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
                       lead.stadio_id === s.id 
                         ? 'bg-primary/20 border-primary/40 text-white shadow-lg' 
-                        : 'bg-white/5 border-white/5 text-[#475569] hover:bg-white/10'
+                        : 'bg-card/5 border-white/5 text-[#475569] hover:bg-card/10'
                     }`}
                    >
                      <span className="text-[10px] font-black uppercase tracking-widest">{s.nome}</span>
@@ -501,7 +501,7 @@ export default function LeadDetailPage() {
 function SidebarEditableItem({ label, value, icon, isLink = false, isEditing, editValue, onChange, type = "text" }: any) {
   return (
     <div className="flex items-center gap-3 group">
-      <div className="h-8 w-8 rounded-xl bg-white/5 flex items-center justify-center border border-white/5 group-hover:scale-110 transition-transform">
+      <div className="h-8 w-8 rounded-xl bg-card/5 flex items-center justify-center border border-white/5 group-hover:scale-110 transition-transform">
         {icon}
       </div>
       <div className="flex-1 min-w-0">
@@ -509,7 +509,7 @@ function SidebarEditableItem({ label, value, icon, isLink = false, isEditing, ed
         {isEditing ? (
           <input 
             type={type}
-            className="w-full bg-white/5 border border-white/10 rounded px-2 py-0.5 text-xs text-white outline-none focus:ring-1 focus:ring-primary"
+            className="w-full bg-card/5 border border-white/10 rounded px-2 py-0.5 text-xs text-white outline-none focus:ring-1 focus:ring-primary"
             value={editValue}
             onChange={(e) => onChange(e.target.value)}
           />
@@ -527,7 +527,7 @@ function EditableInfoItem({ label, value, isEditing, editValue, onChange }: any)
        <span className="text-[10px] font-black text-[#475569] uppercase tracking-tighter shrink-0">{label}</span>
        {isEditing ? (
           <input 
-            className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-0.5 text-[10px] text-white text-right outline-none focus:ring-1 focus:ring-primary"
+            className="flex-1 bg-card/5 border border-white/10 rounded px-2 py-0.5 text-[10px] text-white text-right outline-none focus:ring-1 focus:ring-primary"
             value={editValue}
             onChange={(e) => onChange(e.target.value)}
           />
@@ -553,12 +553,12 @@ function TimelineItem({ tipo, data, titolo, desc }: { tipo: string, data?: strin
        <div className="absolute left-1.5 top-0 h-5 w-5 rounded-full bg-card flex items-center justify-center border-2 border-white/5 shadow-xl">
           {getIcon()}
        </div>
-       <div className="bg-white/5 border border-white/5 p-5 rounded-[24px] group hover:border-white/10 transition-all">
+       <div className="bg-card/5 border border-white/5 p-5 rounded-[24px] group hover:border-white/10 transition-all">
           <div className="flex items-center justify-between mb-2">
              <span className="text-[10px] font-black uppercase text-white group-hover:text-primary transition-colors">{titolo}</span>
              <span className="text-[9px] font-bold text-[#475569]">{data ? format(new Date(data), "d MMM, HH:mm") : 'Oggi'}</span>
           </div>
-          <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-wrap">{desc}</p>
+          <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{desc}</p>
        </div>
     </div>
   );
