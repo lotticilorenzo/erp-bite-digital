@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus,
   Play,
@@ -345,7 +345,7 @@ export function StudioTaskModal() {
                   />
                   {estimate?.confidenza && estimate.confidenza !== "NESSUNA" && (
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">
                         Stima basata sullo storico: ~{estimate.stima_minuti} min
                       </span>
                       <Badge 
@@ -376,7 +376,7 @@ export function StudioTaskModal() {
                     </div>
                     <div className="space-y-2">
                       {task?.subtasks?.map((sub: any) => (
-                        <div key={sub.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors group border border-transparent hover:border-border/50">
+                        <div key={sub.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-card/5 transition-colors group border border-transparent hover:border-border/50">
                           <button 
                             onClick={() => handleToggleSubtask(sub)}
                             className={`h-5 w-5 rounded-md border-2 border-border transition-colors flex items-center justify-center ${
@@ -402,11 +402,11 @@ export function StudioTaskModal() {
                       ))}
                       
                       {isAddingSubtask ? (
-                        <form onSubmit={handleCreateSubtask} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-primary/20">
+                        <form onSubmit={handleCreateSubtask} className="flex items-center gap-3 p-3 rounded-xl bg-card/5 border border-primary/20">
                            <div className="h-5 w-5 rounded-md border-2 border-primary/50 shrink-0" />
                            <input 
                              autoFocus
-                             className="flex-1 bg-transparent border-none outline-none text-sm text-white placeholder:text-slate-600"
+                             className="flex-1 bg-transparent border-none outline-none text-sm text-white placeholder:text-foreground"
                              placeholder="Titolo subtask... (Invio per salvare)"
                              value={newSubtaskTitle}
                              onChange={(e) => setNewSubtaskTitle(e.target.value)}
@@ -435,7 +435,7 @@ export function StudioTaskModal() {
                     </div>
                     <div className="space-y-2">
                        {sessions.map((session) => (
-                         <div key={session.id} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/10">
+                         <div key={session.id} className="flex items-center justify-between p-3 rounded-xl bg-card/5 border border-white/10">
                             <div className="flex flex-col">
                                <span className="text-xs font-bold text-white">
                                  {format(new Date(session.started_at), "dd MMM yyyy HH:mm")}
@@ -517,7 +517,7 @@ export function StudioTaskModal() {
                       <div className="absolute top-0 left-0 w-[2px] h-full bg-primary opacity-50" />
                       <div className="flex flex-col gap-4">
                         <div>
-                          <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 block">Tempo Totale (Acc.)</span>
+                          <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-1 block">Tempo Totale (Acc.)</span>
                           <div className="text-3xl font-black text-white tabular-nums tracking-tighter">
                               {task ? formatTime((task.tempo_trascorso_minuti || 0) * 60 * 1000 + timer.getElapsed(task.id)) : "00:00:00"}
                           </div>
@@ -526,12 +526,12 @@ export function StudioTaskModal() {
                         {task?.stima_minuti && task.stima_minuti > 0 && (
                           <div className="space-y-2">
                              <div className="flex justify-between items-end">
-                                <span className="text-[9px] font-bold text-slate-400 uppercase">Progresso Stima</span>
+                                <span className="text-[9px] font-bold text-muted-foreground uppercase">Progresso Stima</span>
                                 <span className="text-[9px] font-black text-white italic">
                                   {Math.round(((task.tempo_trascorso_minuti || 0) + (timer.getElapsed(task.id) / 60000)))} / {task.stima_minuti} min
                                 </span>
                              </div>
-                             <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                             <div className="h-1.5 w-full bg-card/5 rounded-full overflow-hidden">
                                 <div 
                                   className={`h-full transition-all duration-500 ${
                                     ((task.tempo_trascorso_minuti || 0) + (timer.getElapsed(task.id) / 60000)) > task.stima_minuti 
@@ -541,7 +541,7 @@ export function StudioTaskModal() {
                                   style={{ width: `${Math.min(100, (((task.tempo_trascorso_minuti || 0) + (timer.getElapsed(task.id) / 60000)) / task.stima_minuti) * 100)}%` }}
                                 />
                              </div>
-                             <p className="text-[9px] font-medium text-slate-500 italic">
+                             <p className="text-[9px] font-medium text-muted-foreground italic">
                                {((task.tempo_trascorso_minuti || 0) + (timer.getElapsed(task.id) / 60000)) > task.stima_minuti 
                                  ? `Sopra stima di ${Math.round(((task.tempo_trascorso_minuti || 0) + (timer.getElapsed(task.id) / 60000)) - task.stima_minuti)} min`
                                  : `Rimanenti ~${Math.round(task.stima_minuti - ((task.tempo_trascorso_minuti || 0) + (timer.getElapsed(task.id) / 60000)))} min`
@@ -662,7 +662,7 @@ export function StudioTaskModal() {
                 {formData.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {formData.tags.map(tag => (
-                      <span key={tag} className="flex items-center gap-1 text-[10px] font-bold bg-slate-500/10 border border-slate-500/20 text-slate-300 rounded-lg px-2 py-0.5">
+                      <span key={tag} className="flex items-center gap-1 text-[10px] font-bold bg-muted/10 border border-border/20 text-muted-foreground rounded-lg px-2 py-0.5">
                         {tag}
                         <button onClick={() => setFormData(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tag) }))}>
                           <X className="h-2.5 w-2.5 ml-0.5 opacity-60 hover:opacity-100" />

@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from "react";
+﻿import { useMemo, useState, useEffect, useRef } from "react";
 import {
   Play,
   CheckCircle2,
@@ -275,14 +275,14 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
           </Badge>
           <div className="h-4 w-[1px] bg-border/50" />
           <div className="flex items-center gap-2">
-            <div className={`h-2 w-2 rounded-full ${isTimerActive ? "bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.5)]" : "bg-slate-600"}`} />
+            <div className={`h-2 w-2 rounded-full ${isTimerActive ? "bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.5)]" : "bg-muted"}`} />
             <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
               {isTimerActive ? "In Registrazione" : "In Pausa"}
             </span>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-3 px-3 py-1 bg-white/5 rounded-full border border-white/5">
+          <div className="flex items-center gap-3 px-3 py-1 bg-card/5 rounded-full border border-white/5">
             {isSaving ? (
               <div className="flex items-center gap-2">
                 <CloudUpload className="h-3 w-3 text-primary animate-bounce" />
@@ -318,13 +318,13 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
                 <input
                   autoFocus
                   placeholder="Titolo dell'attività..."
-                  className="text-4xl font-black text-white bg-transparent border-none outline-none w-full placeholder:text-slate-800 tracking-tighter"
+                  className="text-4xl font-black text-white bg-transparent border-none outline-none w-full placeholder:text-foreground tracking-tighter"
                   value={formData.titolo}
                   onChange={e => setFormData(p => ({ ...p, titolo: e.target.value }))}
                 />
                 <textarea
                   placeholder="Aggiungi una descrizione dettagliata..."
-                  className="w-full bg-transparent border-none outline-none text-base text-muted-foreground font-medium leading-relaxed resize-none min-h-[150px] placeholder:text-slate-800/50"
+                  className="w-full bg-transparent border-none outline-none text-base text-muted-foreground font-medium leading-relaxed resize-none min-h-[150px] placeholder:text-foreground/50"
                   value={formData.descrizione}
                   onChange={e => setFormData(p => ({ ...p, descrizione: e.target.value }))}
                 />
@@ -348,7 +348,7 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
                   {task.subtasks?.map((sub: any) => (
                     <div
                       key={sub.id}
-                      className="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/[0.03] border border-transparent hover:border-white/5 transition-all group"
+                      className="flex items-center gap-3 p-3 rounded-2xl hover:bg-card/[0.03] border border-transparent hover:border-white/5 transition-all group"
                     >
                       <div className={`h-5 w-5 rounded-lg border-2 flex items-center justify-center transition-all ${
                         isTaskDone(sub.stateId)
@@ -372,12 +372,12 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
                   {isAddingSubtask ? (
                     <form
                       onSubmit={handleCreateSubtask}
-                      className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-primary/20"
+                      className="flex items-center gap-3 p-3 rounded-2xl bg-card/[0.03] border border-primary/20"
                     >
                       <div className="h-5 w-5 rounded-lg border-2 border-primary/30 shrink-0" />
                       <input
                         autoFocus
-                        className="flex-1 bg-transparent border-none outline-none text-sm text-white placeholder:text-slate-700"
+                        className="flex-1 bg-transparent border-none outline-none text-sm text-white placeholder:text-foreground"
                         placeholder="Nuovo elemento... (Invio per confermare)"
                         value={newSubtaskTitle}
                         onChange={e => setNewSubtaskTitle(e.target.value)}
@@ -446,7 +446,7 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
                               ? "border-emerald-500/20 bg-emerald-500/5 cursor-default"
                               : isSel
                                 ? "border-primary/40 bg-primary/10 cursor-pointer"
-                                : "border-border/30 hover:border-border/60 cursor-pointer hover:bg-white/[0.02]"
+                                : "border-border/30 hover:border-border/60 cursor-pointer hover:bg-card/[0.02]"
                           }`}
                         >
                           {!s.salvato_timesheet ? (
@@ -513,7 +513,7 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
                   {attachments.map((att: any) => (
                     <div
                       key={att.id}
-                      className="flex items-center gap-3 p-3 rounded-xl border border-border/30 bg-white/[0.02] hover:bg-white/[0.05] transition-all group relative overflow-hidden"
+                      className="flex items-center gap-3 p-3 rounded-xl border border-border/30 bg-card/[0.02] hover:bg-card/[0.05] transition-all group relative overflow-hidden"
                     >
                       <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                         <FileIcon className="h-4 w-4 text-primary" />
@@ -570,7 +570,7 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
               <div className="flex flex-col gap-4 relative z-10">
                 {/* Live clock */}
                 <div className="space-y-1">
-                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block">Tempo Totale</span>
+                  <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest block">Tempo Totale</span>
                   <div className="text-4xl font-black text-white tabular-nums tracking-tighter leading-none">
                     {formatMs(totalMs)}
                   </div>
@@ -632,10 +632,10 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
             <div className="space-y-2">
               <label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.15em] ml-1">Stato</label>
               <Select value={formData.stato} onValueChange={val => setFormData(p => ({ ...p, stato: val }))}>
-                <SelectTrigger className="w-full bg-white/5 border-white/5 hover:bg-white/[0.08] h-11 rounded-xl px-4 text-xs font-black uppercase tracking-widest text-primary">
+                <SelectTrigger className="w-full bg-card/5 border-white/5 hover:bg-card/[0.08] h-11 rounded-xl px-4 text-xs font-black uppercase tracking-widest text-primary">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-900 border-white/10 text-white rounded-xl shadow-2xl p-1">
+                <SelectContent className="bg-card border-white/10 text-white rounded-xl shadow-2xl p-1">
                   {TASK_STATUSES.map(s => (
                     <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                   ))}
@@ -657,7 +657,7 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
                     className={`flex-1 h-9 rounded-xl flex items-center justify-center gap-1.5 text-[10px] font-black uppercase tracking-wider transition-all border ${
                       formData.priorita === p.id
                         ? `${p.bg} ${p.color} border-current/30 scale-[1.03] shadow-lg`
-                        : "bg-white/5 text-muted-foreground/40 border-white/5 hover:bg-white/10"
+                        : "bg-card/5 text-muted-foreground/40 border-white/5 hover:bg-card/10"
                     }`}
                   >
                     <Flag className="h-2.5 w-2.5 fill-current" />
@@ -697,7 +697,7 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
                 </label>
                 <div className="flex flex-wrap gap-1.5">
                   {task.tags.map(tag => (
-                    <span key={tag} className="text-[10px] font-bold bg-slate-500/10 border border-slate-500/20 text-slate-300 rounded-lg px-2 py-0.5">
+                    <span key={tag} className="text-[10px] font-bold bg-muted/10 border border-border/20 text-muted-foreground rounded-lg px-2 py-0.5">
                       {tag}
                     </span>
                   ))}
@@ -712,19 +712,19 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
               </label>
               <div className="space-y-2">
                 <div className="flex flex-col gap-1">
-                  <span className="text-[9px] font-black text-slate-600 uppercase tracking-tighter ml-1">Inizio</span>
+                  <span className="text-[9px] font-black text-foreground uppercase tracking-tighter ml-1">Inizio</span>
                   <input
                     type="date"
-                    className="w-full bg-white/5 border-none h-10 rounded-xl px-4 text-xs font-bold text-white outline-none focus:ring-1 focus:ring-primary/30"
+                    className="w-full bg-card/5 border-none h-10 rounded-xl px-4 text-xs font-bold text-white outline-none focus:ring-1 focus:ring-primary/30"
                     value={formData.data_inizio}
                     onChange={e => setFormData(p => ({ ...p, data_inizio: e.target.value }))}
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <span className="text-[9px] font-black text-slate-600 uppercase tracking-tighter ml-1">Scadenza</span>
+                  <span className="text-[9px] font-black text-foreground uppercase tracking-tighter ml-1">Scadenza</span>
                   <input
                     type="date"
-                    className="w-full bg-white/5 border-none h-10 rounded-xl px-4 text-xs font-bold text-white outline-none focus:ring-1 focus:ring-primary/30"
+                    className="w-full bg-card/5 border-none h-10 rounded-xl px-4 text-xs font-bold text-white outline-none focus:ring-1 focus:ring-primary/30"
                     value={formData.data_scadenza}
                     onChange={e => setFormData(p => ({ ...p, data_scadenza: e.target.value }))}
                   />
@@ -737,7 +737,7 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
                 <Clock className="h-3 w-3" />
                 Budget Tempo
               </label>
-              <div className="flex items-center gap-3 bg-white/5 p-3 rounded-2xl border border-white/5">
+              <div className="flex items-center gap-3 bg-card/5 p-3 rounded-2xl border border-white/5">
                 <input
                   type="number"
                   min={0}
@@ -745,7 +745,7 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
                   value={formData.stima_minuti}
                   onChange={e => setFormData(p => ({ ...p, stima_minuti: parseInt(e.target.value) || 0 }))}
                 />
-                <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest pr-2">min</span>
+                <span className="text-[10px] font-black text-foreground uppercase tracking-widest pr-2">min</span>
               </div>
             </div>
           </div>
