@@ -93,23 +93,30 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Traccia quale task è già stato caricato nel form. `useTasks` restituisce un
+  // nuovo array (e quindi un nuovo oggetto `task`) a ogni refetch, e studio-tasks
+  // viene invalidato a ogni mutazione nell'app: senza questa guardia il form si
+  // resetterebbe allo stato server a ogni refetch in background, cancellando il
+  // testo non ancora salvato mentre l'utente sta scrivendo.
+  const hydratedTaskIdRef = useRef<string | null>(null);
   // ───────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (task) {
-      setFormData({
-        titolo: task.title,
-        descrizione: task.desc || "",
-        commessa_id: task.commessa_id || "none",
-        stato: task.state_id,
-        data_inizio: task.data_inizio || "",
-        data_scadenza: task.due_date || "",
-        assegnatario_id: task.assegnatario_id || "none",
-        stima_minuti: task.stima_minuti || 0,
-        priorita: task.priorita || "media",
-      });
-      setLastSaved(new Date());
-    }
+    if (!task) return;
+    if (hydratedTaskIdRef.current === task.id) return;
+    hydratedTaskIdRef.current = task.id;
+    setFormData({
+      titolo: task.title,
+      descrizione: task.desc || "",
+      commessa_id: task.commessa_id || "none",
+      stato: task.state_id,
+      data_inizio: task.data_inizio || "",
+      data_scadenza: task.due_date || "",
+      assegnatario_id: task.assegnatario_id || "none",
+      stima_minuti: task.stima_minuti || 0,
+      priorita: task.priorita || "media",
+    });
+    setLastSaved(new Date());
   }, [task]);
 
   // Auto-save logic
