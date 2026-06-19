@@ -30,7 +30,6 @@ import { useStudio } from "@/hooks/useStudio";
 import { format, startOfMonth } from "date-fns";
 import { it } from "date-fns/locale";
 import { GanttChart } from "@/components/gantt/GanttChart";
-import { StudioTaskModal } from "@/components/studio/StudioTaskModal";
 import ChatProgetto from "@/components/chat/ChatProgetto";
 import { useCommesse, useUpdateCommessa, useCreateCommessa } from "@/hooks/useCommesse";
 import { toast } from "sonner";
@@ -497,9 +496,10 @@ export default function ProgettoDetailPage() {
         </TabsContent>
       </Tabs>
 
-      <StudioTaskModal />
+      {/* StudioTaskModal è montato globalmente in DashboardLayout: niente istanza locale
+          (un secondo modale sullo stesso nav.selectedTaskId causava doppio overlay/focus). */}
 
-      <CommessaSelectionDialog 
+      <CommessaSelectionDialog
         progetto={progetto}
         open={isCommessaDialogOpen}
         onOpenChange={setIsCommessaDialogOpen}

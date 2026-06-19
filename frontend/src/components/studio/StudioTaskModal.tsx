@@ -145,6 +145,19 @@ export function StudioTaskModal() {
   const [assegnatariOpen, setAssegnatariOpen] = useState(false);
   const [tagInput, setTagInput] = useState("");
 
+  // Il modale è montato in modo permanente nel layout: senza questo reset il draft
+  // sopravvive alla chiusura e, riaprendo con lo stesso formSourceId (es. "Nuovo task"
+  // nello stesso progetto), il form ricomparirebbe precompilato col contenuto precedente.
+  useEffect(() => {
+    if (!nav.selectedTaskId) {
+      setFormDraft(null);
+      setIsAddingSubtask(false);
+      setNewSubtaskTitle("");
+      setTagInput("");
+      setAssegnatariOpen(false);
+    }
+  }, [nav.selectedTaskId]);
+
   const [debouncedTitolo, setDebouncedTitolo] = useState("");
 
   useEffect(() => {
