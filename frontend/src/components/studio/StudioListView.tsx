@@ -108,7 +108,7 @@ export function StudioListView() {
   const getUserInitials = (id?: string | null) => {
     if (!id) return null;
     const u = (utenti as any[]).find((u) => u.id === id);
-    return u ? `${u.nome[0]}${u.cognome[0]}`.toUpperCase() : null;
+    return u ? `${u.nome?.[0] ?? ""}${u.cognome?.[0] ?? ""}`.toUpperCase() : null;
   };
 
   const getUserName = (id?: string | null) => {
