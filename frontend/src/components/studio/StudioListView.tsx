@@ -104,6 +104,15 @@ export function StudioListView() {
   const [filterAssignee, setFilterAssignee] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [filterPriority, setFilterPriority] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const getUserInitials = (id?: string | null) => {
     if (!id) return null;
@@ -157,13 +166,26 @@ export function StudioListView() {
     else { setSortKey(key); setSortDir("asc"); }
   };
 
+  // Appiattisce le righe visibili (task top-level + subtask delle righe espanse)
+  // in un'unica lista: così il virtualizer può posizionare OGNI riga in modo
+  // assoluto. In precedenza le subtask espanse erano renderizzate fuori dal flusso
+  // virtualizzato e si sovrapponevano alle righe sottostanti.
+  const visibleRows = useMemo<{ task: TaskSO | SubtaskSO; depth: number }[]>(() => {
+    const rows: { task: TaskSO | SubtaskSO; depth: number }[] = [];
+    for (const t of tasks) {
+      rows.push({ task: t, depth: 0 });
+      if (expandedIds.has(t.id) && t.subtasks?.length) {
+        for (const sub of t.subtasks) rows.push({ task: sub, depth: 1 });
+      }
+    }
+    return rows;
+  }, [tasks, expandedIds]);
+
   // Virtualization
   const parentRef = useRef<HTMLDivElement>(null);
 
-  // Flatten tasks for virtualization (subtasks are handled separately if not using a flat tree)
-  // For now, virtualization will apply to the top-level tasks.
   const virtualizer = useVirtualizer({
-    count: tasks.length,
+    count: visibleRows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 48, // Estimated height of a row
     overscan: 10,
@@ -373,7 +395,7 @@ export function StudioListView() {
             </TableRow>
           </TableHeader>
           <TableBody style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
-            {tasks.length === 0 ? (
+            {visibleRows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="h-48 text-center">
                   <p className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/30 italic">
@@ -383,13 +405,14 @@ export function StudioListView() {
               </TableRow>
             ) : (
               virtualizer.getVirtualItems().map((virtualRow) => {
-                const task = tasks[virtualRow.index];
+                const row = visibleRows[virtualRow.index];
                 return (
                   <TaskRow
-                    key={task.id}
-                    task={task}
-                    depth={0}
-                    utenti={utenti as any[]}
+                    key={row.task.id}
+                    task={row.task}
+                    depth={row.depth}
+                    isExpanded={expandedIds.has(row.task.id)}
+                    onToggle={toggleExpanded}
                     getUserInitials={getUserInitials}
                     getUserName={getUserName}
                     style={{
@@ -414,14 +437,14 @@ export function StudioListView() {
 interface TaskRowProps {
   task: TaskSO | SubtaskSO;
   depth: number;
-  utenti: any[];
+  isExpanded: boolean;
+  onToggle: (id: string) => void;
   getUserInitials: (id?: string | null) => string | null;
   getUserName: (id?: string | null) => string | null;
   style?: React.CSSProperties;
 }
 
-function TaskRow({ task, depth, utenti, getUserInitials, getUserName, style }: TaskRowProps) {
-  const [expanded, setExpanded] = useState(false);
+function TaskRow({ task, depth, isExpanded, onToggle, getUserInitials, getUserName, style }: TaskRowProps) {
   const { timer, selectTask, openTab } = useStudio();
   const { updateTask } = useTaskMutations();
 
@@ -477,7 +500,6 @@ function TaskRow({ task, depth, utenti, getUserInitials, getUserName, style }: T
   };
 
   return (
-    <>
       <tr
       className={cn(
         "group border-b border-border/5 hover:bg-card/5 transition-all cursor-pointer select-none",
@@ -494,10 +516,10 @@ function TaskRow({ task, depth, utenti, getUserInitials, getUserName, style }: T
           >
             {hasSubtasks ? (
               <button
-                onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+                onClick={(e) => { e.stopPropagation(); onToggle(task.id); }}
                 className="p-1 rounded-md hover:bg-card/10 text-muted-foreground/40 hover:text-white transition-colors shrink-0"
               >
-                {expanded ? (
+                {isExpanded ? (
                   <ChevronDown className="h-3.5 w-3.5" />
                 ) : (
                   <ChevronRight className="h-3.5 w-3.5" />
@@ -707,19 +729,5 @@ function TaskRow({ task, depth, utenti, getUserInitials, getUserName, style }: T
           </div>
         </TableCell>
       </tr>
-
-      {expanded &&
-        hasSubtasks &&
-        subtasks.map((sub) => (
-          <TaskRow
-            key={sub.id}
-            task={sub}
-            depth={depth + 1}
-            utenti={utenti}
-            getUserInitials={getUserInitials}
-            getUserName={getUserName}
-          />
-        ))}
-    </>
   );
 }
