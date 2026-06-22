@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { ChatMessage, ChatReaction } from "@/types/chat";
@@ -58,6 +58,16 @@ export function ChatMessageBubble({
   const [editContent, setEditContent] = useState(message.contenuto);
   const [protectedAttachment, setProtectedAttachment] = useState<{ path: string; url: string } | null>(null);
 
+  const formatSafeTime = (dateStr: string | null | undefined) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? '' : format(d, 'HH:mm');
+    } catch {
+      return '';
+    }
+  };
+
   const attachmentPath = message.contenuto;
   const isAttachmentMessage = message.tipo === "allegato" || message.tipo === "immagine" || message.tipo === "audio";
   const isProtectedUpload = attachmentPath.startsWith("/api/v1/uploads/");
@@ -66,9 +76,9 @@ export function ChatMessageBubble({
   const resolvedAttachmentUrl =
     isLegacyUpload
       ? attachmentPath
-      : protectedAttachment?.path === attachmentPath
-        ? protectedAttachment.url
-        : null;
+      : isProtectedUpload
+        ? (protectedAttachment?.path === attachmentPath ? protectedAttachment.url : null)
+        : attachmentPath;
 
   useEffect(() => {
     if (!isProtectedUpload) {
@@ -258,7 +268,7 @@ export function ChatMessageBubble({
           <div className="mb-0.5 flex items-center gap-2 px-1">
             <span className="text-xs font-black uppercase tracking-wider text-white">{message.autore_nome}</span>
             <span className="text-[10px] font-bold uppercase text-muted-foreground/60">
-              {format(new Date(message.created_at), "HH:mm")}
+              {formatSafeTime(message.created_at)}
             </span>
           </div>
         )}

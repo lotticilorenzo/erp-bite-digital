@@ -74,6 +74,23 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     refetchInterval: 60000,
   });
 
+  useEffect(() => {
+    if (channels && channels.length > 0) {
+      setUnreadCounts((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        channels.forEach((channel) => {
+          const val = channel.unread_count ?? 0;
+          if (next[channel.id] !== val) {
+            next[channel.id] = val;
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }
+  }, [channels]);
+
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ['chat-users'],
     queryFn: async () => {
@@ -159,11 +176,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             break;
           case 'new_message':
             queryClient.setQueryData<ChatChannel[]>(['chat-channels'], (old) => {
-              return (old || []).map((channel) => channel.id === data.message.canale_id ? {
+              const updated = (old || []).map((channel) => channel.id === data.message.canale_id ? {
                 ...channel,
                 last_message: data.message.tipo !== 'testo' ? '[Allegato]' : data.message.contenuto,
                 last_message_at: data.message.created_at,
               } : channel);
+              return [...updated].sort((a, b) => {
+                const dateA = new Date(a.last_message_at || a.created_at || 0).getTime();
+                const dateB = new Date(b.last_message_at || b.created_at || 0).getTime();
+                return dateB - dateA;
+              });
             });
 
             if (data.message.canale_id === currentChannelId) {
@@ -172,6 +194,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 if (existing.some((message) => message.id === data.message.id)) return existing;
                 return [...existing, data.message];
               });
+              if (ws.current?.readyState === WebSocket.OPEN && currentChannelId) {
+                ws.current.send(JSON.stringify({ type: 'message_seen', channel_id: currentChannelId }));
+              }
             } else {
               setUnreadCounts((prev) => ({
                 ...prev,

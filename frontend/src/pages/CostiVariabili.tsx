@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Coins, Plus, Pencil, Trash2, ArrowLeftRight, Info } from "lucide-react";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
@@ -210,7 +210,7 @@ function CostoVariabileDialog({ editing, onClose }: { editing: CostoVariabile | 
       tipo: tipo as any,
       importo: Number(importo),
       data_prevista: dataPrevista,
-      ricorrenza: ricorrenza === "none" ? null : "MENSILE",
+      ricorrenza: ricorrenza === "none" ? null : (ricorrenza as any),
       progetto_id: progettoId === "none" ? null : progettoId,
       stato: stato as any,
       note: note.trim() || null,

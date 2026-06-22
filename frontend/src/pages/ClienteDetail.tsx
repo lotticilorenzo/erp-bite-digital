@@ -1,4 +1,4 @@
-﻿import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { marginColorClass } from "@/lib/utils";
 import {
@@ -239,15 +239,6 @@ export default function ClienteDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {cliente.google_drive_url && (
-            <Button
-              variant="outline"
-              onClick={() => window.open(cliente.google_drive_url!, "_blank")}
-              className="bg-card border-border hover:bg-muted text-blue-400 border-blue-500/20"
-            >
-              <FolderOpen className="w-4 h-4 mr-2" /> Google Drive
-            </Button>
-          )}
           <Button 
             variant="outline" 
             onClick={() => setIsClienteDialogOpen(true)}

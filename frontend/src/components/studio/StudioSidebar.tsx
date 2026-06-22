@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import {
   Plus,
   Search,
@@ -25,6 +25,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { useStudio } from "@/hooks/useStudio";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -48,6 +57,15 @@ import {
   parseStudioDropId,
   ROOT_APPEND_DROP_ID,
 } from "./studioTreeDnd";
+
+interface PendingMove {
+  itemId: string;
+  parentId: string | null;
+  order?: number;
+  itemName: string;
+  targetName: string;
+  actionType: "inside" | "before" | "after" | "root";
+}
 
 function filterNodes(nodes: StudioNode[], query: string): StudioNode[] {
   if (!query.trim()) return nodes;
@@ -96,6 +114,7 @@ export function StudioSidebar() {
   const [newWorkspaceName, setNewWorkspaceName] = React.useState("");
   const [isDraggingNode, setIsDraggingNode] = React.useState(false);
   const [activeDragNodeId, setActiveDragNodeId] = React.useState<string | null>(null);
+  const [pendingMove, setPendingMove] = React.useState<PendingMove | null>(null);
 
   useEffect(() => {
     if (isCreatingWorkspace) {
@@ -133,9 +152,11 @@ export function StudioSidebar() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["studio-hierarchy"] });
+      setPendingMove(null);
     },
     onError: () => {
       toast.error("Impossibile spostare l'elemento");
+      setPendingMove(null);
     },
   });
 
@@ -165,45 +186,78 @@ export function StudioSidebar() {
     if (!over) return;
 
     const activeId = String(active.id);
+    const activeNode = findNodeById(hierarchy, activeId);
+    if (!activeNode) return;
+    const itemName = activeNode.nome;
+
     const dropTarget = parseStudioDropId(String(over.id));
     if (!dropTarget) return;
 
+    let targetParentId: string | null = null;
+    let targetOrder = 0;
+    let targetName = "";
+    let actionType: "inside" | "before" | "after" | "root" = "inside";
+
     if (dropTarget.kind === "root") {
-      moveMutation.mutate({
-        itemId: activeId,
-        parentId: null,
-        order: hierarchy.filter((node) => node.id !== activeId).length,
-      });
-      return;
+      targetParentId = null;
+      targetOrder = hierarchy.filter((node) => node.id !== activeId).length;
+      targetName = "Workspace (Livello principale)";
+      actionType = "root";
+    } else {
+      if (dropTarget.nodeId === activeId) return;
+      const overNode = findNodeById(hierarchy, dropTarget.nodeId);
+      if (!overNode) return;
+
+      if (dropTarget.position === "inside") {
+        if (overNode.tipo !== "folder" && overNode.tipo !== "lista") return;
+        targetParentId = overNode.id;
+        targetOrder = overNode.children.filter((child) => child.id !== activeId).length;
+        targetName = overNode.nome;
+        actionType = "inside";
+      } else {
+        const siblings = overNode.parent_id
+          ? findNodeById(hierarchy, overNode.parent_id)?.children ?? []
+          : hierarchy;
+        const siblingsWithoutActive = siblings.filter((node) => node.id !== activeId);
+        const targetIndex = siblingsWithoutActive.findIndex((node) => node.id === overNode.id);
+        if (targetIndex === -1) return;
+        
+        targetParentId = overNode.parent_id ?? null;
+        targetOrder = dropTarget.position === "after" ? targetIndex + 1 : targetIndex;
+        targetName = overNode.nome;
+        actionType = dropTarget.position;
+      }
     }
 
-    if (dropTarget.nodeId === activeId) return;
-
-    const overNode = findNodeById(hierarchy, dropTarget.nodeId);
-    if (!overNode) return;
-
-    if (dropTarget.position === "inside") {
-      if (overNode.tipo !== "folder" && overNode.tipo !== "lista") return;
-      moveMutation.mutate({
-        itemId: activeId,
-        parentId: overNode.id,
-        order: overNode.children.filter((child) => child.id !== activeId).length,
-      });
-      return;
+    // Identificare spostamento nullo (No-Op)
+    const currentParentId = activeNode.parent_id ?? null;
+    if (targetParentId === currentParentId) {
+       const currentSiblings = currentParentId
+         ? findNodeById(hierarchy, currentParentId)?.children ?? []
+         : hierarchy;
+       const activeIndexOrigin = currentSiblings.findIndex(n => n.id === activeId);
+       
+       if (targetOrder === activeIndexOrigin) {
+           return; // No-Op: rilasciato esattamente nello stesso punto logico
+       }
     }
 
-    const siblings = overNode.parent_id
-      ? findNodeById(hierarchy, overNode.parent_id)?.children ?? []
-      : hierarchy;
-    const siblingsWithoutActive = siblings.filter((node) => node.id !== activeId);
-    const targetIndex = siblingsWithoutActive.findIndex((node) => node.id === overNode.id);
-    if (targetIndex === -1) return;
-    const targetOrder = dropTarget.position === "after" ? targetIndex + 1 : targetIndex;
-
-    moveMutation.mutate({
+    setPendingMove({
       itemId: activeId,
-      parentId: overNode.parent_id ?? null,
+      parentId: targetParentId,
       order: targetOrder,
+      itemName,
+      targetName,
+      actionType,
+    });
+  };
+
+  const confirmMove = () => {
+    if (!pendingMove) return;
+    moveMutation.mutate({
+      itemId: pendingMove.itemId,
+      parentId: pendingMove.parentId,
+      order: pendingMove.order,
     });
   };
 
@@ -392,6 +446,38 @@ export function StudioSidebar() {
       </DndContext>
 
       <ProgettoDialog open={isProgettoModalOpen} onOpenChange={setIsProgettoModalOpen} />
+
+      <Dialog open={!!pendingMove} onOpenChange={(open) => !open && setPendingMove(null)}>
+        <DialogContent className="sm:max-w-[425px] bg-card border-border/40 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">Conferma Spostamento</DialogTitle>
+            <DialogDescription className="text-muted-foreground mt-2 text-sm leading-relaxed">
+              Sei sicuro di voler spostare <strong className="text-white">"{pendingMove?.itemName}"</strong>{" "}
+              {pendingMove?.actionType === "inside" && "dentro"}
+              {pendingMove?.actionType === "before" && "prima di"}
+              {pendingMove?.actionType === "after" && "dopo di"}
+              {pendingMove?.actionType === "root" && "nel"} <strong className="text-white">"{pendingMove?.targetName}"</strong>?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2">
+            <Button
+              variant="ghost"
+              onClick={() => setPendingMove(null)}
+              disabled={moveMutation.isPending}
+              className="mt-2 sm:mt-0 text-muted-foreground hover:text-white"
+            >
+              Annulla
+            </Button>
+            <Button
+              onClick={confirmMove}
+              disabled={moveMutation.isPending}
+              className="bg-primary hover:bg-primary/90 text-white font-bold"
+            >
+              {moveMutation.isPending ? "Spostamento in corso..." : "Conferma Spostamento"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

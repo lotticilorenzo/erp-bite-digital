@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { MoreVertical, Plus, Search, UserCircle2, Users, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -49,6 +49,16 @@ export function ChatSidebar({
   const [searchQuery, setSearchQuery] = useState('');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+
+  const formatSafeTime = (dateStr: string | null | undefined) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? '' : format(d, 'HH:mm');
+    } catch {
+      return '';
+    }
+  };
 
   const filteredChannels = useMemo(() => {
     let list = channels;
@@ -270,7 +280,7 @@ export function ChatSidebar({
                         </span>
                         {channel.last_message_at && (
                           <span className="ml-1 shrink-0 text-[9px] font-medium text-muted-foreground/50">
-                            {format(new Date(channel.last_message_at), 'HH:mm')}
+                            {formatSafeTime(channel.last_message_at)}
                           </span>
                         )}
                       </div>

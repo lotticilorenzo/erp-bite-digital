@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -188,11 +188,12 @@ export function FolderNode({
   };
 
   const commitRename = () => {
+    if (!isRenaming) return;
     const trimmed = renameValue.trim();
+    setIsRenaming(false);
     if (trimmed && trimmed !== node.nome) {
       renameMutation.mutate(trimmed);
     }
-    setIsRenaming(false);
   };
 
   const resetCreator = () => {
@@ -207,19 +208,21 @@ export function FolderNode({
   };
 
   const commitNewChild = async () => {
+    const mode = createMode;
     const trimmed = newChildName.trim();
-    if (!createMode || !trimmed) {
-      resetCreator();
-      return;
-    }
+    
+    if (!mode) return;
+    resetCreator();
+    
+    if (!trimmed) return;
 
-    if (createMode === "folder") {
+    if (mode === "folder") {
       createChildFolderMutation.mutate(trimmed);
       return;
     }
 
-    if (createMode === "lista" || createMode === "documento") {
-      createChildNodeMutation.mutate({ nome: trimmed, tipo: createMode });
+    if (mode === "lista" || mode === "documento") {
+      createChildNodeMutation.mutate({ nome: trimmed, tipo: mode });
       return;
     }
 
@@ -241,7 +244,6 @@ export function FolderNode({
         });
         queryClient.invalidateQueries({ queryKey: ["studio-hierarchy"] });
         setIsOpen(true);
-        resetCreator();
         toast.success("Task creata");
         openTab({
           type: "TASK",

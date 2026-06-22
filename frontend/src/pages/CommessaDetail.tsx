@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ChevronLeft,
@@ -44,7 +44,8 @@ import {
   DialogHeader, 
   DialogTitle, 
   DialogTrigger,
-  DialogFooter
+  DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { 
   Plus, 
@@ -103,7 +104,15 @@ export default function CommessaDetailPage() {
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [searchProject, setSearchProject] = useState("");
   const [pendingProject, setPendingProject] = useState<{ id: string; nome: string } | null>(null);
+  const [projectToRemove, setProjectToRemove] = useState<string | null>(null);
+  const [stateRegressTarget, setStateRegressTarget] = useState<string | null>(null);
   const [progettoAmounts, setProgettoAmounts] = useState({ importo_fisso: "", importo_variabile: "0", delivery_attesa: "" });
+
+  // Reset scopeDraft whenever commessa ID changes (prevents stale draft from previous page)
+  React.useEffect(() => {
+    setScopeDraft(null);
+  }, [id]);
+
   const editOreContratto =
     scopeDraft && scopeDraft.commessaId === commessa?.id
       ? scopeDraft.value
@@ -194,7 +203,12 @@ export default function CommessaDetailPage() {
   };
 
   const handleRemoveProject = async (progettoId: string) => {
-    if (!commessa || !id || !confirm("Sicuro di voler rimuovere il progetto da questa commessa?")) return;
+    setProjectToRemove(progettoId);
+  };
+
+  const handleRemoveProjectConfirmed = async () => {
+    const progettoId = projectToRemove;
+    if (!commessa || !id || !progettoId) return;
     
     try {
         const newRighe = (commessa.righe_progetto || [])
@@ -220,6 +234,7 @@ export default function CommessaDetailPage() {
     } catch (e) {
         toast.error("Errore imprevisto");
     }
+    setProjectToRemove(null);
   };
 
   if (isLoading) {
@@ -289,11 +304,16 @@ export default function CommessaDetailPage() {
   const handleRegressoStato = () => {
     const prevState = currentStateIndex > 0 ? STATI_SEQUENZA[currentStateIndex - 1] : null;
     if (!prevState || !id || !canEdit) return;
-    if (!confirm(`Sei sicuro di voler tornare a: ${STATO_LABELS[prevState]}?`)) return;
+    setStateRegressTarget(prevState);
+  };
+
+  const handleRegressoStatoConfirmed = () => {
+    const prevState = stateRegressTarget;
+    if (!prevState || !id || !canEdit) return;
     updateCommessa(
       { id, data: { stato: prevState } },
       {
-        onSuccess: () => toast.success(`Commessa retrocessa a: ${STATO_LABELS[prevState]}`),
+        onSuccess: () => { toast.success(`Commessa retrocessa a: ${STATO_LABELS[prevState]}`); setStateRegressTarget(null); },
         onError: () => toast.error("Errore nell'aggiornamento dello stato"),
       }
     );
@@ -1327,6 +1347,36 @@ export default function CommessaDetailPage() {
         onOpenChange={setIsPlanningDialogOpen}
         plan={commessa?.pianificazione}
       />
+
+      <Dialog open={!!projectToRemove} onOpenChange={(v) => { if (!v) setProjectToRemove(null); }}>
+        <DialogContent className="bg-card border-border text-white">
+          <DialogHeader>
+            <DialogTitle>Rimuovi Progetto</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Sei sicuro di voler rimuovere questo progetto dalla commessa? L'azione può essere annullata riassociando il progetto.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setProjectToRemove(null)} className="text-muted-foreground hover:text-white hover:bg-muted">Annulla</Button>
+            <Button onClick={handleRemoveProjectConfirmed} className="bg-red-600 hover:bg-red-700 text-white">Sì, rimuovi</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!stateRegressTarget} onOpenChange={(v) => { if (!v) setStateRegressTarget(null); }}>
+        <DialogContent className="bg-card border-border text-white">
+          <DialogHeader>
+            <DialogTitle>Torna allo Stato Precedente</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Sei sicuro di voler tornare a: <strong>{stateRegressTarget ? STATO_LABELS[stateRegressTarget] : ""}</strong>?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setStateRegressTarget(null)} className="text-muted-foreground hover:text-white hover:bg-muted">Annulla</Button>
+            <Button onClick={handleRegressoStatoConfirmed} className="bg-amber-600 hover:bg-amber-700 text-white">Sì, retrocedi</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

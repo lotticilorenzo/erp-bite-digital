@@ -1,4 +1,4 @@
-﻿// force reload
+// force reload
 import React, { useState, useMemo, useRef } from "react";
 import {
   ChevronRight,
@@ -74,7 +74,7 @@ type SortKey = "title" | "due_date" | "stato" | "assegnatario";
 type SortDir = "asc" | "desc";
 
 export function StudioListView() {
-  const { nav, openNewTask } = useStudio();
+  const { nav, openNewTask, getFolderProjects } = useStudio();
   const { data } = useTasks();
   const { data: utenti = [] } = useUsers();
   const { createTask } = useTaskMutations();
@@ -86,9 +86,10 @@ export function StudioListView() {
     const title = quickAddTitle.trim();
     if (!title) { setQuickAddActive(false); return; }
     try {
+      const targetProjectId = nav.selectedListId || (nav.selectedFolderId ? getFolderProjects(nav.selectedFolderId)[0]?.id : undefined);
       await createTask.mutateAsync({
         titolo: title,
-        progetto_id: nav.selectedListId || undefined,
+        progetto_id: targetProjectId,
         stato: "DA_FARE",
       });
       setQuickAddTitle("");
@@ -188,6 +189,10 @@ export function StudioListView() {
     count: visibleRows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 48, // Estimated height of a row
+    getItemKey: (index) => {
+      const row = visibleRows[index];
+      return row ? `${row.task.id}-${row.depth}` : index;
+    },
     overscan: 10,
   });
 

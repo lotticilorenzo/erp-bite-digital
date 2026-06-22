@@ -82,10 +82,16 @@ export default function CommessePage() {
       setSelectedPlanning(null);
       setIsPlanningDialogOpen(true);
     };
+    const openCommessaListener = () => {
+      setSelectedCommessa(null);
+      setIsDialogOpen(true);
+    };
     window.addEventListener('open-new-planning-dialog', openPlanningListener);
+    window.addEventListener('open-new-commessa-dialog', openCommessaListener);
     
     return () => {
       window.removeEventListener('open-new-planning-dialog', openPlanningListener);
+      window.removeEventListener('open-new-commessa-dialog', openCommessaListener);
     };
   }, []);
 

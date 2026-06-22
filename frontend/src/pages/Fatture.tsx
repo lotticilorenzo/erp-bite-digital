@@ -245,7 +245,7 @@ export default function Fatture() {
       </div>
 
       <Card className="bg-background/50 border-border/50 rounded-3xl overflow-hidden shadow-2xl">
-        <Tabs defaultValue="attive" className="w-full">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "attive" | "passive")} className="w-full">
           <div className="px-8 pt-6 pb-2 border-b border-border/50 bg-card/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <TabsList className="bg-background/80 border border-border/50 p-1 h-11 rounded-xl">
               <TabsTrigger 

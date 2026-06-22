@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
 import { semaforoMargine, type Semaforo } from "@/lib/utils";
 import {
@@ -356,7 +356,7 @@ function CommessaScopeBadge({ oreReali, oreContratto }: { oreReali: number; oreC
       <Badge variant="outline" className={`${color} font-black text-[9px] px-1.5 py-0 justify-center tracking-tighter`}>
         {label}
       </Badge>
-      <div className="w-16 h-1bg-muted rounded-full overflow-hidden">
+      <div className="w-16 h-1 bg-muted rounded-full overflow-hidden">
         <div 
           className={`h-full ${percentage >= 100 ? 'bg-red-500' : percentage >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`} 
           style={{ width: `${Math.min(100, percentage)}%` }} 

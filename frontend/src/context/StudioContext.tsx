@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect, useCallback, useMemo } from 
 import type { StudioState, StudioView, StudioTimer, SpaceSO } from "@/types/studio";
 import { useClienti } from "@/hooks/useClienti";
 import { useProgetti } from "@/hooks/useProgetti";
+import { useTasks } from "@/hooks/useTasks";
 import { useActiveTimer, useStartTimer, useStopTimer, useSaveTimerToTimesheet } from "@/hooks/useTimer";
 import type { Cliente, Progetto } from "@/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -48,6 +49,34 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const { data: clienti = [], isLoading: isLoadingClienti } = useClienti();
   const { data: progetti = [], isLoading: isLoadingProgetti } = useProgetti();
+  const { data: tasks = [] } = useTasks({ parent_only: false });
+
+  // Sync tab titles re-actively when tasks or projects change
+  useEffect(() => {
+    setNav(prev => {
+      let changed = false;
+      const updatedTabs = prev.openTabs.map(tab => {
+        if (tab.type === "TASK") {
+          const t = tasks.find(x => x.id === tab.linkedId);
+          if (t && t.title !== tab.title) {
+            changed = true;
+            return { ...tab, title: t.title };
+          }
+        } else if (tab.type === "PROJECT") {
+          const p = progetti.find(x => x.id === tab.linkedId);
+          if (p && p.nome !== tab.title) {
+            changed = true;
+            return { ...tab, title: p.nome };
+          }
+        }
+        return tab;
+      });
+      if (changed) {
+        return { ...prev, openTabs: updatedTabs };
+      }
+      return prev;
+    });
+  }, [tasks, progetti]);
 
   // Navigation State
   const [nav, setNav] = useState<StudioState>(() => {
@@ -105,15 +134,20 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
   const closeTab = useCallback((id: string) => {
     setNav(prev => {
+      const closedTab = prev.openTabs.find(t => t.id === id);
       const newTabs = prev.openTabs.filter(t => t.id !== id);
       const newActiveId = prev.activeTabId === id 
         ? (newTabs.length > 0 ? newTabs[newTabs.length - 1].id : null)
         : prev.activeTabId;
       
+      const isTaskClosed = closedTab?.type === "TASK";
+      const isSelectedTaskClosed = isTaskClosed && prev.selectedTaskId === closedTab?.linkedId;
+      
       return {
         ...prev,
         openTabs: newTabs,
-        activeTabId: newActiveId
+        activeTabId: newActiveId,
+        selectedTaskId: isSelectedTaskClosed ? null : prev.selectedTaskId
       };
     });
   }, []);

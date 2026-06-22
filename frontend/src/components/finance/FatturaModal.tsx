@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { 
   Dialog, 
   DialogContent, 
@@ -119,6 +119,18 @@ function FatturaModalForm({ onOpenChange, type, fattura }: Omit<FatturaModalProp
   const createMutation = useCreateFattura();
   const updateMutation = useUpdateFattura();
 
+  // Deduce existing VAT rate from fattura data (round to nearest standard aliquota)
+  const initialAliquota = (() => {
+    if (!fattura) return 22;
+    const netto = Number(fattura.importo_netto);
+    const iva = Number(fattura.importo_iva);
+    if (!netto || netto === 0) return 22;
+    const rate = Math.round((iva / netto) * 100);
+    if ([0, 4, 10, 22].includes(rate)) return rate;
+    return 22;
+  })();
+
+  const [aliquotaIva, setAliquotaIva] = useState<number>(initialAliquota);
   const [formData, setFormData] = useState<FatturaFormData>(() => getInitialFatturaFormData(fattura));
 
   const handleAddItem = () => {
@@ -144,14 +156,28 @@ function FatturaModalForm({ onOpenChange, type, fattura }: Omit<FatturaModalProp
     recalculateTotals(newItems);
   };
 
-  const recalculateTotals = (items: FatturaItem[]) => {
+  const recalculateTotals = (items: FatturaItem[], aliquota: number = aliquotaIva) => {
+    // In edit mode with empty items, preserve the original invoice totals
+    if (items.length === 0 && isEdit) return;
     const netto = items.reduce((acc, item) => acc + (item.amount || 0), 0);
-    const iva = netto * 0.22; // Default 22% VAT for simulation
+    const iva = netto * (aliquota / 100);
     setFormData((prev) => ({
       ...prev,
       importo_netto: netto,
       importo_iva: iva,
       importo_totale: netto + iva
+    }));
+  };
+
+  const handleAliquotaChange = (value: string) => {
+    const aliquota = Number(value);
+    setAliquotaIva(aliquota);
+    // Ricalcola IVA con la nuova aliquota partendo dall'imponibile corrente
+    const iva = formData.importo_netto * (aliquota / 100);
+    setFormData((prev) => ({
+      ...prev,
+      importo_iva: iva,
+      importo_totale: prev.importo_netto + iva,
     }));
   };
 
@@ -270,16 +296,31 @@ function FatturaModalForm({ onOpenChange, type, fattura }: Omit<FatturaModalProp
                      {new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(formData.importo_totale)}
                    </p>
                    <div className="flex gap-4 w-full">
-                      <div className="flex-1 bg-background/30 p-3 rounded-xl">
-                        <span className="text-[8px] font-black uppercase text-[#475569] block">Imponibile</span>
-                        <span className="text-sm font-bold text-white">{new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(formData.importo_netto)}</span>
-                      </div>
-                      <div className="flex-1 bg-background/30 p-3 rounded-xl">
-                        <span className="text-[8px] font-black uppercase text-[#475569] block">IVA (22%)</span>
-                        <span className="text-sm font-bold text-white">{new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(formData.importo_iva)}</span>
-                      </div>
-                   </div>
-                </div>
+                       <div className="flex-1 bg-background/30 p-3 rounded-xl">
+                         <span className="text-[8px] font-black uppercase text-[#475569] block">Imponibile</span>
+                         <span className="text-sm font-bold text-white">{new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(formData.importo_netto)}</span>
+                       </div>
+                       <div className="flex-1 bg-background/30 p-3 rounded-xl">
+                         <span className="text-[8px] font-black uppercase text-[#475569] block">IVA ({aliquotaIva}%)</span>
+                         <span className="text-sm font-bold text-white">{new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(formData.importo_iva)}</span>
+                       </div>
+                    </div>
+                 </div>
+
+                 <div className="space-y-2">
+                   <Label className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Aliquota IVA</Label>
+                   <Select value={String(aliquotaIva)} onValueChange={handleAliquotaChange}>
+                     <SelectTrigger className="bg-background/50 border-border h-10 font-bold">
+                       <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent className="bg-card border-border text-white">
+                       <SelectItem value="22">22% — Standard</SelectItem>
+                       <SelectItem value="10">10% — Ridotta</SelectItem>
+                       <SelectItem value="4">4% — Super ridotta</SelectItem>
+                       <SelectItem value="0">0% — Esente / Fuori campo</SelectItem>
+                     </SelectContent>
+                   </Select>
+                 </div>
 
                 <div className="space-y-4">
                    <Label className="text-[10px] font-black uppercase tracking-widest text-[#475569]">Stato Pagamento</Label>

@@ -76,7 +76,19 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
   const startRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      
+      let options = {};
+      if (typeof MediaRecorder.isTypeSupported === 'function') {
+        if (MediaRecorder.isTypeSupported("audio/webm")) {
+          options = { mimeType: "audio/webm" };
+        } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+          options = { mimeType: "audio/mp4" };
+        } else if (MediaRecorder.isTypeSupported("audio/ogg")) {
+          options = { mimeType: "audio/ogg" };
+        }
+      }
+      
+      const recorder = new MediaRecorder(stream, options);
       audioChunksRef.current = [];
 
       recorder.ondataavailable = (e) => {
@@ -85,8 +97,11 @@ export function ChatInput({ onSend, replyTo, onCancelReply, teamMembers, onTypin
 
       recorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const file = new File([blob], `vocale_${Date.now()}.webm`, { type: "audio/webm" });
+        const mimeType = recorder.mimeType || "audio/webm";
+        const ext = mimeType.includes("mp4") ? "mp4" : mimeType.includes("ogg") ? "ogg" : "webm";
+        
+        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+        const file = new File([blob], `vocale_${Date.now()}.${ext}`, { type: mimeType });
 
         if (onUpload) {
           setIsUploading(true);

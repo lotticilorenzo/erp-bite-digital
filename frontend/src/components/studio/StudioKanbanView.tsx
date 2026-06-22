@@ -293,16 +293,31 @@ export function StudioKanbanView() {
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
+  const filteredTasks = useMemo(() => {
+    if (nav.selectedListId) {
+      return tasks.filter(t => t.progetto_id === nav.selectedListId);
+    }
+    if (nav.selectedFolderId) {
+      return tasks.filter(t => {
+        if (t.progetto && (t.progetto as any).cliente_id) {
+          return (t.progetto as any).cliente_id === nav.selectedFolderId;
+        }
+        return true;
+      });
+    }
+    return tasks;
+  }, [tasks, nav.selectedListId, nav.selectedFolderId]);
+
   const grouped = useMemo(() => {
     const map: Record<string, TaskSO[]> = {};
     COLUMNS.forEach(c => { map[c.id] = []; });
-    tasks.forEach(t => {
+    filteredTasks.forEach(t => {
       const stateUp = (t.state_id || "DA_FARE").toUpperCase();
       if (map[stateUp]) map[stateUp].push(t);
       else map["DA_FARE"].push(t);
     });
     return map;
-  }, [tasks]);
+  }, [filteredTasks]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveTask((event.active.data.current as { task: TaskSO } | undefined)?.task ?? null);

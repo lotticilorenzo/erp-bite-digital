@@ -1,4 +1,4 @@
-﻿import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import {
   Play,
   CheckCircle2,
@@ -141,7 +141,7 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
     }, 1500);
 
     return () => clearTimeout(timerId);
-  }, [formData]);
+  }, [formData, task]);
 
   if (!task) {
     return (
@@ -200,6 +200,15 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
       toast.success("Subtask creata");
     } catch {
       toast.error("Errore nella creazione della subtask");
+    }
+  };
+
+  const handleToggleSubtask = async (sub: any) => {
+    const newStatus = isTaskDone(sub.stateId) ? "DA_FARE" : "COMPLETATO";
+    try {
+      await updateTask.mutateAsync({ id: sub.id, data: { stato: newStatus } });
+    } catch {
+      toast.error("Errore nell'aggiornamento della subtask");
     }
   };
 
@@ -269,6 +278,24 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
     const file = e.target.files?.[0];
     if (file) {
       uploadAttachment.mutate(file);
+    }
+  };
+
+  const handleDownloadAttachment = async (att: any) => {
+    try {
+      const response = await api.get(`/studio/tasks/${taskId}/attachments/${att.id}/download`, {
+        responseType: "blob",
+      });
+      const blobUrl = window.URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.setAttribute("download", att.filename);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      toast.error("Errore durante il download dell'allegato");
     }
   };
 
@@ -355,7 +382,8 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
                   {task.subtasks?.map((sub: any) => (
                     <div
                       key={sub.id}
-                      className="flex items-center gap-3 p-3 rounded-2xl hover:bg-card/[0.03] border border-transparent hover:border-white/5 transition-all group"
+                      onClick={() => handleToggleSubtask(sub)}
+                      className="flex items-center gap-3 p-3 rounded-2xl hover:bg-card/[0.03] border border-transparent hover:border-white/5 transition-all group cursor-pointer select-none"
                     >
                       <div className={`h-5 w-5 rounded-lg border-2 flex items-center justify-center transition-all ${
                         isTaskDone(sub.stateId)
@@ -388,7 +416,10 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
                         placeholder="Nuovo elemento... (Invio per confermare)"
                         value={newSubtaskTitle}
                         onChange={e => setNewSubtaskTitle(e.target.value)}
-                        onBlur={() => !newSubtaskTitle && setIsAddingSubtask(false)}
+                        onBlur={() => {
+                          setIsAddingSubtask(false);
+                          setNewSubtaskTitle("");
+                        }}
                       />
                     </form>
                   ) : (
@@ -533,7 +564,7 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
                       </div>
                       <div className="absolute right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
-                          onClick={() => window.open(`${api.defaults.baseURL?.replace("/api/v1", "")}/${att.file_path}`, "_blank")}
+                          onClick={() => handleDownloadAttachment(att)}
                           className="p-1.5 hover:text-primary transition-colors"
                         >
                           <Download className="h-3 w-3" />
@@ -744,15 +775,36 @@ export function TaskDetailView({ taskId, onClose }: { taskId: string; onClose?: 
                 <Clock className="h-3 w-3" />
                 Budget Tempo
               </label>
-              <div className="flex items-center gap-3 bg-card/5 p-3 rounded-2xl border border-white/5">
-                <input
-                  type="number"
-                  min={0}
-                  className="w-full bg-transparent border-none text-xl font-black text-primary outline-none text-center"
-                  value={formData.stima_minuti}
-                  onChange={e => setFormData(p => ({ ...p, stima_minuti: parseInt(e.target.value) || 0 }))}
-                />
-                <span className="text-[10px] font-black text-foreground uppercase tracking-widest pr-2">min</span>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 flex items-center gap-1.5 bg-card/5 p-2 rounded-xl border border-white/5">
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full bg-transparent border-none text-base font-black text-primary outline-none text-center"
+                    value={Math.floor((formData.stima_minuti || 0) / 60)}
+                    onChange={e => {
+                      const h = parseInt(e.target.value) || 0;
+                      const m = (formData.stima_minuti || 0) % 60;
+                      setFormData(p => ({ ...p, stima_minuti: h * 60 + m }));
+                    }}
+                  />
+                  <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest pr-1">ore</span>
+                </div>
+                <div className="flex-1 flex items-center gap-1.5 bg-card/5 p-2 rounded-xl border border-white/5">
+                  <input
+                    type="number"
+                    min={0}
+                    max={59}
+                    className="w-full bg-transparent border-none text-base font-black text-primary outline-none text-center"
+                    value={(formData.stima_minuti || 0) % 60}
+                    onChange={e => {
+                      const h = Math.floor((formData.stima_minuti || 0) / 60);
+                      const m = Math.min(59, Math.max(0, parseInt(e.target.value) || 0));
+                      setFormData(p => ({ ...p, stima_minuti: h * 60 + m }));
+                    }}
+                  />
+                  <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest pr-1">min</span>
+                </div>
               </div>
             </div>
           </div>

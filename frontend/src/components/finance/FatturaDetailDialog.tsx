@@ -1,9 +1,10 @@
-﻿import React from "react";
+import React from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { useNavigate } from "react-router-dom";
 
@@ -52,6 +53,7 @@ export function FatturaDetailDialog({
   const incassaMutation = useIncassaFattura();
   const updateMutation = useUpdateFattura();
   const { data: riconciliazioni = [] } = useRiconciliazioniFattura(fattura?.id ?? null, type, open && !!fattura);
+  const [markPaidConfirm, setMarkPaidConfirm] = React.useState(false);
 
   if (!fattura) return null;
 
@@ -160,6 +162,7 @@ export function FatturaDetailDialog({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl bg-card/95 backdrop-blur-2xl border-border/50 text-white rounded-[32px] overflow-hidden p-0 shadow-2xl">
         <div className="absolute top-0 left-0 w-full h-[6px] bg-gradient-to-r from-primary via-purple-500 to-blue-500" />
@@ -399,7 +402,7 @@ export function FatturaDetailDialog({
           {fattura.importo_residuo > 0 && (
             <div className="pt-4 flex gap-4">
               <Button 
-                onClick={handleMarkAsPaid}
+                onClick={() => setMarkPaidConfirm(true)}
                 className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-[10px] h-12 rounded-2xl gap-2 shadow-lg shadow-emerald-500/20"
               >
                 <CheckCircle2 className="h-4 w-4" />
@@ -420,5 +423,27 @@ export function FatturaDetailDialog({
         </div>
       </DialogContent>
     </Dialog>
+
+    <Dialog open={markPaidConfirm} onOpenChange={setMarkPaidConfirm}>
+      <DialogContent className="bg-card border-border text-white max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Conferma Pagamento</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Stai per segnare questa fattura come <strong className="text-emerald-400">pagata oggi</strong>. Questa azione aggiornerà lo stato della fattura e non può essere facilmente annullata.
+        </p>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setMarkPaidConfirm(false)} className="text-muted-foreground hover:text-white">Annulla</Button>
+          <Button
+            onClick={async () => { setMarkPaidConfirm(false); await handleMarkAsPaid(); }}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            <CheckCircle2 className="h-4 w-4 mr-2" />
+            Sì, conferma pagamento
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

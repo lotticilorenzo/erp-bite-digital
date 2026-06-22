@@ -754,6 +754,7 @@ async def move_studio_node(
             row = res_parent.one_or_none()
             curr_id = row[0] if row else None
 
+    old_parent_id = node.parent_id
     prima = _node_to_dict(node)
     await _place_node(
         db,
@@ -761,6 +762,8 @@ async def move_studio_node(
         parent_id=parent_id,
         requested_order=order,
     )
+    if old_parent_id != parent_id:
+        await _normalize_sibling_orders(db, old_parent_id, exclude_id=node.id)
 
     # PRIMA del flush: updated_at ha onupdate=func.now() (server-side).
     # Dopo flush, SQLAlchemy espira updated_at; accedervi fuori da await
@@ -864,6 +867,46 @@ async def list_task_attachments(
         .order_by(TaskAttachment.created_at.desc())
     )
     return result.scalars().all()
+
+@router.get("/tasks/{task_id}/attachments/{attachment_id}/download")
+async def download_task_attachment(
+    task_id: uuid.UUID,
+    attachment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from fastapi.responses import FileResponse
+    import mimetypes
+    from urllib.parse import quote
+    
+    task = await _get_task_or_404(db, task_id)
+    await _ensure_task_access(db, current_user, task)
+    
+    attachment = await db.get(TaskAttachment, attachment_id)
+    if not attachment or attachment.task_id != task_id:
+        raise HTTPException(status_code=404, detail="Allegato non trovato")
+        
+    if not os.path.exists(attachment.file_path):
+        raise HTTPException(status_code=404, detail="File fisico non trovato")
+        
+    mime_type, _ = mimetypes.guess_type(attachment.file_path)
+    mime_type = mime_type or attachment.content_type or "application/octet-stream"
+    
+    ext = os.path.splitext(attachment.filename)[1].lower()
+    inline_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".mov", ".avi", ".webm", ".ogg", ".wav", ".mp3", ".pdf"}
+    disposition = "inline" if ext in inline_exts else "attachment"
+    
+    safe_filename = quote(attachment.filename)
+    
+    return FileResponse(
+        path=attachment.file_path,
+        media_type=mime_type,
+        headers={
+            "Content-Disposition": f"{disposition}; filename*=UTF-8''{safe_filename}",
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, max-age=3600",
+        }
+    )
 
 @router.delete("/tasks/{task_id}/attachments/{attachment_id}")
 async def delete_task_attachment(

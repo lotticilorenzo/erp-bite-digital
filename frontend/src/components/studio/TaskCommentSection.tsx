@@ -78,7 +78,9 @@ export function TaskCommentSection({ taskId }: TaskCommentSectionProps) {
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      if (text.trim()) addMutation.mutate(text.trim());
+      if (text.trim() && !addMutation.isPending) {
+        addMutation.mutate(text.trim());
+      }
     }
     if (e.key === "Escape") setMentionQuery(null);
   }, [text, addMutation]);
@@ -184,7 +186,7 @@ export function TaskCommentSection({ taskId }: TaskCommentSectionProps) {
           />
           <Button
             size="sm"
-            onClick={() => text.trim() && addMutation.mutate(text.trim())}
+            onClick={() => text.trim() && !addMutation.isPending && addMutation.mutate(text.trim())}
             disabled={!text.trim() || addMutation.isPending}
             className="h-9 w-9 p-0 shrink-0"
           >
