@@ -1358,14 +1358,19 @@ CONCENTRAZIONE_TOP1_PCT = 25
 CONCENTRAZIONE_TOP3_PCT = 60
 
 
-async def _dso_storico_per_cliente(db: AsyncSession) -> tuple[dict, int]:
-    """Storico DSO per cliente da fatture incassate completamente (1 query, no N+1).
+async def _dso_storico_per_cliente(db: AsyncSession, finestra_mesi: int = 12) -> tuple[dict, int, Optional[float]]:
+    """Storico DSO per cliente da fatture incassate completamente nella FINESTRA ROLLING (spec §4.1).
 
     Incassata completa = importo_residuo=0 AND data_ultimo_incasso NOT NULL.
-    giorni = data_ultimo_incasso − data_emissione; i giorni NEGATIVI (dato sporco) sono esclusi.
-    R2 (implementata): data_ultimo_incasso e' scritta SOLO dalla riconciliazione bancaria
-    (_recompute_fattura), mai dalla sync FiC. E' quindi una data di incasso reale.
+    giorni = data_ultimo_incasso − data_emissione (misura da DATA FATTURA, §6.1); NEGATIVI esclusi.
+    Finestra: solo fatture con data_emissione negli ultimi `finestra_mesi` mesi.
+    Ritorna (storico_per_cliente, scartati, media_aziendale). media_aziendale = DSO medio PONDERATO
+    su TUTTE le fatture incassate nella finestra (ogni incasso pesa 1): stabile e non distorto dai
+    clienti con pochissime fatture. None se non ci sono incassi nella finestra.
     """
+    from dateutil.relativedelta import relativedelta
+    cutoff = date.today() - relativedelta(months=max(int(finestra_mesi), 1))
+    p = {"cutoff": cutoff}
     rows = await db.execute(text(
         """
         SELECT cliente_id,
@@ -1379,9 +1384,10 @@ async def _dso_storico_per_cliente(db: AsyncSession) -> tuple[dict, int]:
           AND data_emissione IS NOT NULL
           AND cliente_id IS NOT NULL
           AND data_ultimo_incasso >= data_emissione
+          AND data_emissione >= :cutoff
         GROUP BY cliente_id
         """
-    ))
+    ), p)
     storico: dict = {}
     for r in rows.all():
         storico[r.cliente_id] = {
@@ -1390,34 +1396,38 @@ async def _dso_storico_per_cliente(db: AsyncSession) -> tuple[dict, int]:
             "dso_min": int(r.dso_min),
             "dso_max": int(r.dso_max),
         }
-    # Conteggio scartati (giorni negativi) per il warning.
+    # Media aziendale ponderata (tutte le fatture incassate nella finestra).
+    med = await db.execute(text(
+        "SELECT AVG(data_ultimo_incasso - data_emissione) FROM fatture_attive "
+        "WHERE importo_residuo = 0 AND data_ultimo_incasso IS NOT NULL AND data_emissione IS NOT NULL "
+        "AND data_ultimo_incasso >= data_emissione AND data_emissione >= :cutoff"
+    ), p)
+    mv = med.scalar()
+    media_aziendale = float(mv) if mv is not None else None
+    # Conteggio scartati (giorni negativi) nella finestra.
     neg = await db.execute(text(
         "SELECT COUNT(*) FROM fatture_attive "
         "WHERE importo_residuo = 0 AND data_ultimo_incasso IS NOT NULL "
-        "AND data_emissione IS NOT NULL AND data_ultimo_incasso < data_emissione"
-    ))
+        "AND data_emissione IS NOT NULL AND data_ultimo_incasso < data_emissione "
+        "AND data_emissione >= :cutoff"
+    ), p)
     scartati = int(neg.scalar() or 0)
-    return storico, scartati
+    return storico, scartati, media_aziendale
 
 
-def _dso_cliente(storico: dict, cliente_id) -> dict:
-    """DSO effettivo del cliente: storico se ≥2 fatture, altrimenti fallback 30."""
+def _dso_cliente(storico: dict, cliente_id, campione_min: int, media_aziendale: Optional[float]) -> dict:
+    """DSO effettivo (spec §4.1): PROPRIO se n >= campione_min; altrimenti EREDITATO dalla media
+    aziendale; se nemmeno quella è disponibile, ultima rete = costante DSO_FALLBACK_GIORNI."""
     s = storico.get(cliente_id)
-    if not s or s["n"] < 2:
-        return {
-            "dso_medio": float(DSO_FALLBACK_GIORNI),
-            "dso_min": None,
-            "dso_max": None,
-            "n_fatture_storiche": s["n"] if s else 0,
-            "is_fallback": True,
-        }
-    return {
-        "dso_medio": round(s["dso_medio"], 1),
-        "dso_min": s["dso_min"],
-        "dso_max": s["dso_max"],
-        "n_fatture_storiche": s["n"],
-        "is_fallback": False,
-    }
+    if s and s["n"] >= campione_min:
+        return {"dso_medio": round(s["dso_medio"], 1), "dso_min": s["dso_min"], "dso_max": s["dso_max"],
+                "n_fatture_finestra": s["n"], "fonte": "proprio", "is_fallback": False}
+    n = s["n"] if s else 0
+    if media_aziendale is not None:
+        return {"dso_medio": round(media_aziendale, 1), "dso_min": None, "dso_max": None,
+                "n_fatture_finestra": n, "fonte": "aziendale", "is_fallback": True}
+    return {"dso_medio": float(DSO_FALLBACK_GIORNI), "dso_min": None, "dso_max": None,
+            "n_fatture_finestra": n, "fonte": "fallback_costante", "is_fallback": True}
 
 
 async def calcola_dso_aziendale(db: AsyncSession, dal: date = None, al: date = None) -> dict:
@@ -1457,7 +1467,13 @@ async def calcola_dso(db: AsyncSession, window_mesi: int = 12) -> dict:
     from dateutil.relativedelta import relativedelta
 
     warning: list[str] = []
-    storico, scartati = await _dso_storico_per_cliente(db)
+    # Parametri dal registro (effective-dated, data operativa = oggi), fallback ai valori spec.
+    oggi = date.today()
+    par_f = await get_parametro(db, "dso_finestra_mesi", oggi)
+    finestra_mesi = int(par_f["valore"]) if par_f and par_f.get("valore") is not None else 12
+    par_c = await get_parametro(db, "dso_campione_minimo", oggi)
+    campione_min = int(par_c["valore"]) if par_c and par_c.get("valore") is not None else 5
+    storico, scartati, media_aziendale = await _dso_storico_per_cliente(db, finestra_mesi)
     if scartati:
         warning.append(f"{scartati} fatture con data_ultimo_incasso < data_emissione escluse dallo storico (dato sporco).")
 
@@ -1474,14 +1490,15 @@ async def calcola_dso(db: AsyncSession, window_mesi: int = 12) -> dict:
 
     clienti = []
     for cid in cliente_ids:
-        d = _dso_cliente(storico, cid)
+        d = _dso_cliente(storico, cid, campione_min, media_aziendale)
         clienti.append({
             "cliente_id": str(cid),
             "cliente": nomi.get(cid, "?"),
             "dso_medio": d["dso_medio"],
             "dso_min": d["dso_min"],
             "dso_max": d["dso_max"],
-            "n_fatture_storiche": d["n_fatture_storiche"],
+            "n_fatture_finestra": d["n_fatture_finestra"],
+            "fonte": d["fonte"],              # proprio | aziendale | fallback_costante (provenienza, §4.1)
             "is_fallback": d["is_fallback"],
         })
     clienti.sort(key=lambda x: x["dso_medio"], reverse=True)
@@ -1489,19 +1506,18 @@ async def calcola_dso(db: AsyncSession, window_mesi: int = 12) -> dict:
     # 2) Scenari per ogni fattura aperta
     fatture_aperte = []
     for f in fatture_aperte_rows:
-        d = _dso_cliente(storico, f.cliente_id)
+        d = _dso_cliente(storico, f.cliente_id, campione_min, media_aziendale)
         emiss = f.data_emissione
         if emiss is None:
             warning.append(f"Fattura {f.numero or f.id}: data_emissione mancante, scenari non calcolabili.")
             base = ott = pess = None
-        elif d["is_fallback"]:
-            base = emiss + timedelta(days=DSO_FALLBACK_GIORNI)
-            ott = emiss + timedelta(days=DSO_FALLBACK_GIORNI)
-            pess = emiss + timedelta(days=DSO_FALLBACK_PESSIMISTA)
         else:
-            base = emiss + timedelta(days=round(d["dso_medio"]))
-            ott = emiss + timedelta(days=d["dso_min"])
-            pess = emiss + timedelta(days=d["dso_max"] + DSO_PESSIMISTA_BUFFER)
+            # base sempre sul dso_medio effettivo (proprio o media aziendale); min/max solo se PROPRIO.
+            medio = round(d["dso_medio"])
+            base = emiss + timedelta(days=medio)
+            ott = emiss + timedelta(days=d["dso_min"] if d["dso_min"] is not None else medio)
+            pess_gg = (d["dso_max"] + DSO_PESSIMISTA_BUFFER) if d["dso_max"] is not None else (medio + DSO_PESSIMISTA_BUFFER)
+            pess = emiss + timedelta(days=pess_gg)
         fatture_aperte.append({
             "id": str(f.id),
             "numero": f.numero,
