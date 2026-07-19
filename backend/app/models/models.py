@@ -1085,6 +1085,33 @@ class FatturaAttivaAllocazione(Base):
     )
 
 
+class ProgettoRata(Base):
+    """Rata a milestone di un progetto (spec v2 §4.4/§4.5). Al raggiungimento della milestone
+    genera una scadenza attiva (solo cassa). Σ percentuali = 100% (vincolo applicativo).
+    Quadratura (invariante 23): il resto di arrotondamento va all'ultima rata (numero max)."""
+    __tablename__ = "progetto_rate"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    progetto_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id", ondelete="CASCADE"), nullable=False)
+    numero: Mapped[int] = mapped_column(Integer, nullable=False)
+    percentuale: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    milestone: Mapped[str] = mapped_column(String(30), nullable=False)  # accordo_siglato|approvazione_layout|messa_online|altro
+    milestone_descrizione: Mapped[Optional[str]] = mapped_column(String(200))
+    raggiunta: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    data_raggiungimento: Mapped[Optional[date]] = mapped_column(Date)
+    scadenza_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("scadenze.id", ondelete="SET NULL"))
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+
+    __table_args__ = (
+        CheckConstraint("percentuale > 0 AND percentuale <= 100", name="ck_rate_percentuale"),
+        CheckConstraint("milestone IN ('accordo_siglato','approvazione_layout','messa_online','altro')", name="ck_rate_milestone"),
+        UniqueConstraint("progetto_id", "numero", name="uq_rate_progetto_numero"),
+    )
+
+
 # ── IMPUTAZIONI MOVIMENTI CASSA ───────────────────────────
 class MovimentoCassaImputazione(Base):
     __tablename__ = "movimenti_cassa_imputazioni"
