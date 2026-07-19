@@ -1742,6 +1742,8 @@ class MovimentoCassaUpdate(BaseModel):
     fattura_attiva_id: Optional[uuid.UUID] = None
     fattura_passiva_id: Optional[uuid.UUID] = None
     note: Optional[str] = Field(None, max_length=1000)
+    data_competenza: Optional[date] = None  # spec §5.1: se assente resta = data_valuta
+    ripartizione_competenza_mesi: Optional[int] = Field(None, ge=1)  # risconto gestionale (>=1)
 
 
 class RiconciliaRequest(BaseModel):

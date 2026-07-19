@@ -498,9 +498,13 @@ async def patch_movimento_cassa(
 
     # Campi scalari non legati alla riconciliazione (la riconciliazione la gestisce il service)
     data = payload.model_dump(exclude_unset=True)
-    for k in ("categoria", "descrizione", "note", "fattura_attiva_id", "fattura_passiva_id"):
+    for k in ("categoria", "descrizione", "note", "fattura_attiva_id", "fattura_passiva_id",
+              "data_competenza", "ripartizione_competenza_mesi"):
         if k in data:
             setattr(mov, k, data[k])
+    # spec §5.1: la competenza non si azzera mai — se svuotata, ricade sulla cassa (data_valuta)
+    if "data_competenza" in data and data["data_competenza"] is None:
+        mov.data_competenza = mov.data_valuta
 
     # Riconciliazione 1:1 -> crea una riga piena via service (valida i vincoli)
     if payload.riconciliato is True and (payload.fattura_attiva_id or payload.fattura_passiva_id):
