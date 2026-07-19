@@ -1652,6 +1652,52 @@ class CostoVariabileOut(OrmBase):
     updated_at: datetime
 
 
+# ── PARAMETRI (registro centralizzato effective-dated — spec v2 §19) ──
+ParametroGruppo = Literal["fiscalita", "tesoreria", "budget", "marginalita", "soci_risorse", "chiusura", "preventivatore", "clienti"]
+ParametroTipo = Literal["percentuale", "euro", "intero", "booleano", "enum", "data", "testo"]
+ParametroScope = Literal["globale", "con_override_entita"]
+ParametroFonte = Literal["utente", "commercialista", "direzione"]
+
+
+class ParametroCreate(BaseModel):
+    chiave: str = Field(..., min_length=1, max_length=100)
+    gruppo: ParametroGruppo
+    descrizione: Optional[str] = None
+    tipo: ParametroTipo
+    valore: Optional[str] = None  # serializzato; interpretato secondo `tipo`
+    valido_da: date
+    scope: ParametroScope = "globale"
+    fonte: Optional[ParametroFonte] = None
+    nota: Optional[str] = None
+
+
+class ParametroUpdate(BaseModel):
+    gruppo: Optional[ParametroGruppo] = None
+    descrizione: Optional[str] = None
+    tipo: Optional[ParametroTipo] = None
+    valore: Optional[str] = None
+    valido_da: Optional[date] = None
+    scope: Optional[ParametroScope] = None
+    fonte: Optional[ParametroFonte] = None
+    nota: Optional[str] = None
+
+
+class ParametroOut(OrmBase):
+    id: uuid.UUID
+    chiave: str
+    gruppo: str
+    descrizione: Optional[str]
+    tipo: str
+    valore: Optional[str]
+    valido_da: date
+    scope: str
+    fonte: Optional[str]
+    nota: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    updated_by: Optional[uuid.UUID]
+
+
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
 class PesoContenutoOut(OrmBase):
     tipo: str

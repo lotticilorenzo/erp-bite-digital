@@ -53,6 +53,7 @@ from app.schemas.schemas import (
     CostoFissoCreate, CostoFissoUpdate,
     ConfigPlMemoUpdate,
     CostoVariabileCreate, CostoVariabileUpdate,
+    ParametroCreate, ParametroUpdate,
     PesoContenutoUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
     MovimentoCassaUpdate, RiconciliaRequest, RiconciliazioniCreate,
@@ -74,6 +75,7 @@ from app.services.services import (
     list_fornitori_full, update_fornitore, list_fatture_passive, update_fattura_passiva, list_fornitori,
     list_movimenti_cassa, list_costi_fissi, create_costo_fisso, update_costo_fisso, delete_costo_fisso,
     list_costi_variabili, create_costo_variabile, update_costo_variabile, delete_costo_variabile,
+    list_parametri, list_parametro_storico, create_parametro, update_parametro,
     list_pesi_contenuto, update_peso_contenuto,
     riconcilia_movimento as svc_riconcilia_movimento, elimina_riconciliazione,
     rimuovi_riconciliazioni_movimento, list_riconciliazioni_movimento, list_riconciliazioni_fattura,
@@ -671,6 +673,48 @@ async def delete_costo_variabile_endpoint(
     if not ok:
         raise HTTPException(status_code=404, detail="Costo variabile non trovato")
     return {"deleted": True}
+
+
+# ── PARAMETRI (registro centralizzato effective-dated — spec v2 §19) ──
+@router.get("/parametri", tags=["Parametri"])
+async def get_parametri_endpoint(
+    gruppo: Optional[str] = Query(None, description="filtro gruppo"),
+    data: Optional[date] = Query(None, description="valido_da <= data (YYYY-MM-DD)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return {"parametri": await list_parametri(db, gruppo=gruppo, data_riferimento=data)}
+
+
+@router.get("/parametri/{chiave}", tags=["Parametri"])
+async def get_parametro_storico_endpoint(
+    chiave: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return {"chiave": chiave, "storico": await list_parametro_storico(db, chiave)}
+
+
+@router.post("/parametri", tags=["Parametri"], status_code=201)
+async def post_parametro(
+    payload: ParametroCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return await create_parametro(db, payload.model_dump(), updated_by=current_user.id)
+
+
+@router.patch("/parametri/{parametro_id}", tags=["Parametri"])
+async def patch_parametro(
+    parametro_id: uuid.UUID,
+    payload: ParametroUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    result = await update_parametro(db, parametro_id, payload.model_dump(exclude_unset=True), updated_by=current_user.id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Parametro non trovato")
+    return result
 
 
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──

@@ -3591,6 +3591,103 @@ async def delete_costo_variabile(db: AsyncSession, costo_id):
     return True
 
 
+# ── REGISTRO PARAMETRI effective-dated (spec v2 §19.4) ─────────────────────
+def _tipizza_parametro(tipo: str, valore):
+    """Converte `valore` (TEXT) secondo `tipo`. None resta None (parametro non impostato)."""
+    if valore is None:
+        return None
+    if tipo in ("percentuale", "euro"):
+        return Decimal(str(valore))
+    if tipo == "intero":
+        return int(valore)
+    if tipo == "booleano":
+        return str(valore).strip().lower() in ("true", "1", "t", "yes", "si", "sì")
+    if tipo == "data":
+        return date.fromisoformat(str(valore))
+    return str(valore)  # enum | testo
+
+
+async def get_parametro(db: AsyncSession, chiave: str, data_riferimento: Optional[date] = None):
+    """Resolver effective-dated: riga con valido_da MASSIMA tra quelle <= data_riferimento
+    (default oggi). None + log se nessuna riga applicabile. `valore` gia' tipizzato."""
+    from app.models.models import Parametro
+    d = data_riferimento or date.today()
+    q = (select(Parametro)
+         .where(Parametro.chiave == chiave, Parametro.valido_da <= d)
+         .order_by(Parametro.valido_da.desc())
+         .limit(1))
+    row = (await db.execute(q)).scalar_one_or_none()
+    if row is None:
+        logger.warning("Parametro '%s' non risolto per data %s (nessuna riga valido_da <= data)", chiave, d)
+        return None
+    return {
+        "chiave": row.chiave, "gruppo": row.gruppo, "tipo": row.tipo,
+        "valore": _tipizza_parametro(row.tipo, row.valore),
+        "valido_da": row.valido_da, "scope": row.scope, "fonte": row.fonte,
+    }
+
+
+async def get_parametri_gruppo(db: AsyncSession, gruppo: str, data_riferimento: Optional[date] = None) -> dict:
+    """Legge un dominio intero in 1 query: per ogni chiave del gruppo la riga effective
+    (valido_da massima <= data). Restituisce {chiave: valore_tipizzato}."""
+    from app.models.models import Parametro
+    d = data_riferimento or date.today()
+    q = (select(Parametro)
+         .where(Parametro.gruppo == gruppo, Parametro.valido_da <= d)
+         .order_by(Parametro.chiave, Parametro.valido_da.desc())
+         .distinct(Parametro.chiave))
+    rows = (await db.execute(q)).scalars().all()
+    return {r.chiave: _tipizza_parametro(r.tipo, r.valore) for r in rows}
+
+
+async def list_parametri(db: AsyncSession, gruppo: Optional[str] = None, data_riferimento: Optional[date] = None):
+    """Lista righe (storico incluso) con filtro opzionale gruppo/data. Per la gestione UI."""
+    from app.models.models import Parametro
+    q = select(Parametro)
+    if gruppo:
+        q = q.where(Parametro.gruppo == gruppo)
+    if data_riferimento:
+        q = q.where(Parametro.valido_da <= data_riferimento)
+    q = q.order_by(Parametro.gruppo, Parametro.chiave, Parametro.valido_da.desc())
+    rows = (await db.execute(q)).scalars().all()
+    return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+
+
+async def list_parametro_storico(db: AsyncSession, chiave: str):
+    """Tutte le righe di una chiave (storico versioni), piu' recenti prima."""
+    from app.models.models import Parametro
+    q = select(Parametro).where(Parametro.chiave == chiave).order_by(Parametro.valido_da.desc())
+    rows = (await db.execute(q)).scalars().all()
+    return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+
+
+async def create_parametro(db: AsyncSession, payload: dict, updated_by=None):
+    from app.models.models import Parametro
+    data = {k: v for k, v in payload.items() if hasattr(Parametro, k)}
+    if updated_by is not None:
+        data["updated_by"] = updated_by
+    p = Parametro(**data)
+    db.add(p)
+    await db.commit()
+    await db.refresh(p)
+    return {c.name: getattr(p, c.name) for c in p.__table__.columns}
+
+
+async def update_parametro(db: AsyncSession, parametro_id, payload: dict, updated_by=None):
+    from app.models.models import Parametro
+    p = (await db.execute(select(Parametro).where(Parametro.id == parametro_id))).scalar_one_or_none()
+    if not p:
+        return None
+    for k, v in payload.items():
+        if hasattr(p, k):
+            setattr(p, k, v)
+    if updated_by is not None:
+        p.updated_by = updated_by
+    await db.commit()
+    await db.refresh(p)
+    return {c.name: getattr(p, c.name) for c in p.__table__.columns}
+
+
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
 async def list_pesi_contenuto(db: AsyncSession):
     from app.models.models import PesoContenuto
