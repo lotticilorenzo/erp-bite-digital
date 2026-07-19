@@ -899,6 +899,45 @@ class Parametro(Base):
     )
 
 
+class Scadenza(Base):
+    """Tabella scadenze unificata (spec v2 §5.2): attive/passive/fiscali/contributive/finanziarie.
+    FONTE UNICA futura per proiezione cassa e scadenzario; in questa fase e' SOLO struttura+CRUD,
+    NON popolata dalle fatture e NON collegata ai calcoli (anti doppio conteggio).
+    `importo_residuo` e `stato` sono derivati dal service (residuo = importo - incassato)."""
+    __tablename__ = "scadenze"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tipo: Mapped[str] = mapped_column(String(20), nullable=False)  # attiva|passiva|fiscale|contributiva|finanziaria
+    data_attesa: Mapped[date] = mapped_column(Date, nullable=False)
+    importo: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    stato: Mapped[str] = mapped_column(String(20), nullable=False, default="aperta")  # aperta|parziale|chiusa|scaduta
+    importo_incassato: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    importo_residuo: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    controparte_tipo: Mapped[Optional[str]] = mapped_column(String(20))  # cliente|fornitore|erario|inps|banca|altro
+    controparte_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))  # polimorfico, no FK
+    progetto_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id", ondelete="SET NULL"))
+    commessa_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("commesse.id", ondelete="SET NULL"))
+    categoria_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))  # nessuna tabella categorie generica
+    documento_rif: Mapped[Optional[str]] = mapped_column(String(200))
+    origine: Mapped[str] = mapped_column(String(20), nullable=False)  # fic|manuale|ricorrenza|f24|progetto
+    milestone: Mapped[Optional[str]] = mapped_column(String(100))
+    fattura_attiva_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("fatture_attive.id", ondelete="SET NULL"))
+    fattura_passiva_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("fatture_passive.id", ondelete="SET NULL"))
+    impatta_cassa_bite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)  # spec §10.0
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+
+    __table_args__ = (
+        CheckConstraint("importo > 0", name="ck_scadenze_importo_pos"),
+        CheckConstraint("tipo IN ('attiva','passiva','fiscale','contributiva','finanziaria')", name="ck_scadenze_tipo"),
+        CheckConstraint("stato IN ('aperta','parziale','chiusa','scaduta')", name="ck_scadenze_stato"),
+        CheckConstraint("controparte_tipo IS NULL OR controparte_tipo IN ('cliente','fornitore','erario','inps','banca','altro')", name="ck_scadenze_controparte_tipo"),
+        CheckConstraint("origine IN ('fic','manuale','ricorrenza','f24','progetto')", name="ck_scadenze_origine"),
+    )
+
+
 # ── COSTI FISSI ───────────────────────────────────────────
 class CostoFisso(Base):
     __tablename__ = "costi_fissi"
