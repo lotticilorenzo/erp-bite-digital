@@ -4759,6 +4759,151 @@ async def list_servizi_catalogo(db: AsyncSession):
     return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
 
 
+# ── BUDGET & FORECAST: strutture versionate (spec §13). Nessun calcolo: solo CRUD + versioning. ──
+async def _versione_o_404(db: AsyncSession, versione_id):
+    from app.models.models import BudgetVersione
+    v = (await db.execute(select(BudgetVersione).where(BudgetVersione.id == versione_id))).scalar_one_or_none()
+    if not v:
+        raise HTTPException(status_code=404, detail="Versione budget non trovata")
+    return v
+
+
+def _assert_modificabile(v):
+    """§13: una versione approvata/archiviata e' IMMUTABILE. Le correzioni entrano come NUOVA
+    versione forecast, non riscrivendo la storia (stesso principio del lock di competenza)."""
+    if v.stato != "bozza":
+        raise HTTPException(status_code=400, detail=(
+            f"Versione {v.tipo} {v.anno} v{v.versione} in stato '{v.stato}': immutabile. "
+            "Crea una nuova versione forecast per registrare la correzione."))
+
+
+async def list_budget_versioni(db: AsyncSession, anno=None, tipo=None, stato=None):
+    from app.models.models import BudgetVersione
+    q = select(BudgetVersione)
+    if anno:
+        q = q.where(BudgetVersione.anno == anno)
+    if tipo:
+        q = q.where(BudgetVersione.tipo == tipo)
+    if stato:
+        q = q.where(BudgetVersione.stato == stato)
+    q = q.order_by(BudgetVersione.anno.desc(), BudgetVersione.tipo, BudgetVersione.versione.desc())
+    rows = (await db.execute(q)).scalars().all()
+    return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+
+
+async def create_budget_versione(db: AsyncSession, payload: dict, user_id=None):
+    from app.models.models import BudgetVersione
+    data = {k: v for k, v in payload.items() if hasattr(BudgetVersione, k)}
+    if not data.get("versione"):  # auto-incrementa per (anno, tipo)
+        mx = (await db.execute(select(func.max(BudgetVersione.versione)).where(
+            BudgetVersione.anno == data["anno"], BudgetVersione.tipo == data["tipo"]))).scalar()
+        data["versione"] = int(mx or 0) + 1
+    if user_id is not None:
+        data["created_by"] = user_id
+    v = BudgetVersione(**data)
+    db.add(v)
+    await db.commit()
+    await db.refresh(v)
+    return {c.name: getattr(v, c.name) for c in v.__table__.columns}
+
+
+async def update_budget_versione(db: AsyncSession, versione_id, payload: dict):
+    v = await _versione_o_404(db, versione_id)
+    for k, val in payload.items():
+        if hasattr(v, k) and k not in ("id", "created_by", "approvato_at", "approvato_by"):
+            setattr(v, k, val)
+    await db.commit()
+    await db.refresh(v)
+    return {c.name: getattr(v, c.name) for c in v.__table__.columns}
+
+
+async def delete_budget_versione(db: AsyncSession, versione_id):
+    v = await _versione_o_404(db, versione_id)
+    if v.stato != "bozza":
+        raise HTTPException(status_code=400, detail=f"Versione in stato '{v.stato}': eliminabile solo in bozza.")
+    await db.delete(v)  # le righe seguono per ON DELETE CASCADE
+    await db.commit()
+    return {"deleted": True}
+
+
+async def approva_budget_versione(db: AsyncSession, versione_id, user_id=None):
+    v = await _versione_o_404(db, versione_id)
+    v.stato = "approvato"
+    v.approvato_at = datetime.now(timezone.utc)
+    v.approvato_by = user_id
+    await db.commit()
+    await db.refresh(v)
+    return {c.name: getattr(v, c.name) for c in v.__table__.columns}
+
+
+async def list_budget_righe(db: AsyncSession, versione_id):
+    from app.models.models import BudgetRiga
+    rows = (await db.execute(select(BudgetRiga).where(BudgetRiga.versione_id == versione_id)
+                             .order_by(BudgetRiga.mese, BudgetRiga.voce_tipo))).scalars().all()
+    return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+
+
+async def create_budget_righe(db: AsyncSession, versione_id, righe: list):
+    from app.models.models import BudgetRiga
+    v = await _versione_o_404(db, versione_id)
+    _assert_modificabile(v)
+    create = []
+    for r in righe:
+        data = {k: val for k, val in r.items() if hasattr(BudgetRiga, k)}
+        data["versione_id"] = versione_id
+        if data.get("anno") is None:   # default = anno della versione (model_dump passa None esplicito)
+            data["anno"] = v.anno
+        create.append(BudgetRiga(**data))
+    db.add_all(create)
+    await db.commit()
+    return {"create": len(create)}
+
+
+async def update_budget_riga(db: AsyncSession, riga_id, payload: dict):
+    from app.models.models import BudgetRiga
+    r = (await db.execute(select(BudgetRiga).where(BudgetRiga.id == riga_id))).scalar_one_or_none()
+    if not r:
+        return None
+    _assert_modificabile(await _versione_o_404(db, r.versione_id))
+    for k, val in payload.items():
+        if hasattr(r, k) and k not in ("id", "versione_id"):
+            setattr(r, k, val)
+    await db.commit()
+    await db.refresh(r)
+    return {c.name: getattr(r, c.name) for c in r.__table__.columns}
+
+
+async def delete_budget_riga(db: AsyncSession, riga_id):
+    from app.models.models import BudgetRiga
+    r = (await db.execute(select(BudgetRiga).where(BudgetRiga.id == riga_id))).scalar_one_or_none()
+    if not r:
+        return None
+    _assert_modificabile(await _versione_o_404(db, r.versione_id))
+    await db.delete(r)
+    await db.commit()
+    return {"deleted": True}
+
+
+async def totali_budget_versione(db: AsyncSession, versione_id):
+    """Aggregati di sola lettura: per voce_tipo (anno) e per mese."""
+    from app.models.models import BudgetRiga
+    await _versione_o_404(db, versione_id)
+    per_voce = (await db.execute(
+        select(BudgetRiga.voce_tipo, func.coalesce(func.sum(BudgetRiga.importo), 0))
+        .where(BudgetRiga.versione_id == versione_id).group_by(BudgetRiga.voce_tipo)
+    )).all()
+    per_mese = (await db.execute(
+        select(BudgetRiga.mese, BudgetRiga.voce_tipo, func.coalesce(func.sum(BudgetRiga.importo), 0))
+        .where(BudgetRiga.versione_id == versione_id).group_by(BudgetRiga.mese, BudgetRiga.voce_tipo)
+        .order_by(BudgetRiga.mese)
+    )).all()
+    return {
+        "versione_id": str(versione_id),
+        "per_voce_tipo": {v: float(t) for v, t in per_voce},
+        "per_mese": [{"mese": m, "voce_tipo": v, "importo": float(t)} for m, v, t in per_mese],
+    }
+
+
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
 async def list_pesi_contenuto(db: AsyncSession):
     from app.models.models import PesoContenuto

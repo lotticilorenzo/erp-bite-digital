@@ -1953,6 +1953,58 @@ class RefreshOvhRequest(BaseModel):
     base: Optional[Decimal] = None
 
 
+# ── BUDGET & FORECAST (spec v2 §13) ──
+BudgetTipo = Literal["budget", "forecast"]
+BudgetStato = Literal["bozza", "approvato", "archiviato"]
+BudgetVoceTipo = Literal["ricavo", "costo_diretto", "costo_struttura", "altro"]
+
+
+class BudgetVersioneCreate(BaseModel):
+    anno: int = Field(..., ge=2000, le=2100)
+    tipo: BudgetTipo
+    versione: Optional[int] = Field(None, ge=1)  # auto-incrementa se assente
+    periodo_riferimento: Optional[date] = None
+    note: Optional[str] = None
+
+
+class BudgetVersioneUpdate(BaseModel):
+    stato: Optional[BudgetStato] = None
+    periodo_riferimento: Optional[date] = None
+    periodo_snapshot: Optional[date] = None
+    note: Optional[str] = None
+
+
+class BudgetRigaCreate(BaseModel):
+    anno: Optional[int] = None  # default = anno della versione
+    mese: int = Field(..., ge=1, le=12)
+    voce_tipo: BudgetVoceTipo
+    voce_ce_id: Optional[uuid.UUID] = None
+    categoria_id: Optional[uuid.UUID] = None
+    cliente_id: Optional[uuid.UUID] = None
+    commessa_id: Optional[uuid.UUID] = None
+    centro_costo_id: Optional[uuid.UUID] = None
+    importo: Decimal
+    note: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _un_solo_asse(self):
+        # §13.3: una riga vive su UN SOLO asse di dettaglio (no doppio conteggio).
+        assi = [self.cliente_id, self.commessa_id, self.centro_costo_id]
+        if sum(1 for a in assi if a is not None) > 1:
+            raise ValueError("Una riga budget puo' avere UN SOLO asse tra cliente/commessa/centro_costo (§13.3)")
+        return self
+
+
+class BudgetRigheBulk(BaseModel):
+    righe: List[BudgetRigaCreate] = Field(..., min_length=1)
+
+
+class BudgetRigaUpdate(BaseModel):
+    importo: Optional[Decimal] = None
+    voce_tipo: Optional[BudgetVoceTipo] = None
+    note: Optional[str] = None
+
+
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
 class PesoContenutoOut(OrmBase):
     tipo: str

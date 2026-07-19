@@ -60,6 +60,7 @@ from app.schemas.schemas import (
     RataCreate, RaggiungiRataRequest,
     RiapriPeriodoRequest,
     RefreshOvhRequest,
+    BudgetVersioneCreate, BudgetVersioneUpdate, BudgetRigheBulk, BudgetRigaUpdate,
     PesoContenutoUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
     MovimentoCassaCreate, MovimentoCassaUpdate, RiconciliaRequest, RiconciliazioniCreate,
@@ -92,6 +93,9 @@ from app.services.services import (
     periodo_e_bloccato,
     calcola_coefficiente_ovh, list_coefficienti_ovh_storico, calcola_varianza_assorbimento,
     calcola_liquidazione_iva, list_servizi_catalogo,
+    list_budget_versioni, create_budget_versione, update_budget_versione, delete_budget_versione,
+    approva_budget_versione, list_budget_righe, create_budget_righe, update_budget_riga,
+    delete_budget_riga, totali_budget_versione,
     list_pesi_contenuto, update_peso_contenuto,
     riconcilia_movimento as svc_riconcilia_movimento, elimina_riconciliazione,
     rimuovi_riconciliazioni_movimento, list_riconciliazioni_movimento, list_riconciliazioni_fattura,
@@ -1130,6 +1134,94 @@ async def post_riapri(
     current_user: User = Depends(require_admin),
 ):
     return await riapri_periodo(db, anno, mese, payload.motivo, current_user.id)
+
+
+# ── BUDGET & FORECAST (spec v2 §13): strutture versionate. Nessun calcolo in questa fase. ──
+@router.get("/budget/versioni", tags=["Budget"])
+async def get_budget_versioni(
+    anno: Optional[int] = Query(None), tipo: Optional[str] = Query(None), stato: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_finance_access),
+):
+    return {"versioni": await list_budget_versioni(db, anno=anno, tipo=tipo, stato=stato)}
+
+
+@router.post("/budget/versioni", tags=["Budget"], status_code=201)
+async def post_budget_versione(
+    payload: BudgetVersioneCreate,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_finance_access),
+):
+    return await create_budget_versione(db, payload.model_dump(exclude_unset=True), current_user.id)
+
+
+@router.patch("/budget/versioni/{versione_id}", tags=["Budget"])
+async def patch_budget_versione(
+    versione_id: uuid.UUID, payload: BudgetVersioneUpdate,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_finance_access),
+):
+    return await update_budget_versione(db, versione_id, payload.model_dump(exclude_unset=True))
+
+
+@router.delete("/budget/versioni/{versione_id}", tags=["Budget"])
+async def delete_budget_versione_endpoint(
+    versione_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_finance_access),
+):
+    return await delete_budget_versione(db, versione_id)
+
+
+@router.post("/budget/versioni/{versione_id}/approva", tags=["Budget"])
+async def post_approva_budget(
+    versione_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_admin),
+):
+    """Approvazione = congelamento (§13.1). Da qui la versione e' immutabile."""
+    return await approva_budget_versione(db, versione_id, current_user.id)
+
+
+@router.get("/budget/versioni/{versione_id}/righe", tags=["Budget"])
+async def get_budget_righe(
+    versione_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_finance_access),
+):
+    return {"righe": await list_budget_righe(db, versione_id)}
+
+
+@router.post("/budget/versioni/{versione_id}/righe", tags=["Budget"], status_code=201)
+async def post_budget_righe(
+    versione_id: uuid.UUID, payload: BudgetRigheBulk,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_finance_access),
+):
+    return await create_budget_righe(db, versione_id, [r.model_dump() for r in payload.righe])
+
+
+@router.get("/budget/versioni/{versione_id}/totali", tags=["Budget"])
+async def get_budget_totali(
+    versione_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_finance_access),
+):
+    return await totali_budget_versione(db, versione_id)
+
+
+@router.patch("/budget/righe/{riga_id}", tags=["Budget"])
+async def patch_budget_riga(
+    riga_id: uuid.UUID, payload: BudgetRigaUpdate,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_finance_access),
+):
+    res = await update_budget_riga(db, riga_id, payload.model_dump(exclude_unset=True))
+    if res is None:
+        raise HTTPException(status_code=404, detail="Riga budget non trovata")
+    return res
+
+
+@router.delete("/budget/righe/{riga_id}", tags=["Budget"])
+async def delete_budget_riga_endpoint(
+    riga_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_finance_access),
+):
+    res = await delete_budget_riga(db, riga_id)
+    if res is None:
+        raise HTTPException(status_code=404, detail="Riga budget non trovata")
+    return res
 
 
 # ── CATALOGO SERVIZI (preventivatore §18.6) ──
