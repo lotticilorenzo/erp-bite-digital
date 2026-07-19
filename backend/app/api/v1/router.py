@@ -56,6 +56,7 @@ from app.schemas.schemas import (
     ParametroCreate, ParametroUpdate,
     ScadenzaCreate, ScadenzaUpdate,
     RicorrenzaCreate, RicorrenzaUpdate, GeneraRicorrenzeRequest,
+    AllocazioneCreate,
     PesoContenutoUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
     MovimentoCassaUpdate, RiconciliaRequest, RiconciliazioniCreate,
@@ -80,6 +81,8 @@ from app.services.services import (
     list_parametri, list_parametro_storico, create_parametro, update_parametro,
     list_scadenze, create_scadenza, update_scadenza, delete_scadenza,
     list_ricorrenze, create_ricorrenza, update_ricorrenza, delete_ricorrenza, genera_occorrenze,
+    alloca_fattura_commessa, rimuovi_allocazione, list_allocazioni_fattura,
+    list_allocazioni_commessa, proposta_allocazione, confronto_fatturazione_commessa,
     list_pesi_contenuto, update_peso_contenuto,
     riconcilia_movimento as svc_riconcilia_movimento, elimina_riconciliazione,
     rimuovi_riconciliazioni_movimento, list_riconciliazioni_movimento, list_riconciliazioni_fattura,
@@ -826,6 +829,72 @@ async def delete_ricorrenza_endpoint(
     result = await delete_ricorrenza(db, ricorrenza_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Ricorrenza non trovata")
+    return result
+
+
+# ── ALLOCAZIONE fattura attiva -> commessa (Tabella F — spec v2 §7). Non aggancia i calcoli. ──
+@router.get("/fatture-attive/{fattura_id}/allocazioni", tags=["Allocazioni"])
+async def get_allocazioni_fattura(
+    fattura_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    result = await list_allocazioni_fattura(db, fattura_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Fattura attiva non trovata")
+    return result
+
+
+@router.post("/fatture-attive/{fattura_id}/allocazioni", tags=["Allocazioni"], status_code=201)
+async def post_allocazione(
+    fattura_id: uuid.UUID,
+    payload: AllocazioneCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return await alloca_fattura_commessa(db, fattura_id, payload.commessa_id,
+                                         payload.importo_allocato, payload.note, current_user.id)
+
+
+@router.get("/fatture-attive/{fattura_id}/proposta-allocazione", tags=["Allocazioni"])
+async def get_proposta_allocazione(
+    fattura_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return await proposta_allocazione(db, fattura_id)
+
+
+@router.delete("/allocazioni/{allocazione_id}", tags=["Allocazioni"])
+async def delete_allocazione(
+    allocazione_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    result = await rimuovi_allocazione(db, allocazione_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Allocazione non trovata")
+    return result
+
+
+@router.get("/commesse/{commessa_id}/fatture-allocate", tags=["Allocazioni"])
+async def get_fatture_allocate(
+    commessa_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return {"allocazioni": await list_allocazioni_commessa(db, commessa_id)}
+
+
+@router.get("/commesse/{commessa_id}/confronto-fatturazione", tags=["Allocazioni"])
+async def get_confronto_fatturazione(
+    commessa_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    result = await confronto_fatturazione_commessa(db, commessa_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Commessa non trovata")
     return result
 
 

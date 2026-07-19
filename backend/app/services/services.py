@@ -3925,6 +3925,164 @@ async def delete_ricorrenza(db: AsyncSession, ricorrenza_id):
     return {"soft": False, "deleted": True}
 
 
+# ── ALLOCAZIONE fattura attiva -> commessa (Tabella F — spec v2 §7). Non aggancia i calcoli. ──
+async def _allocazioni_totali(db: AsyncSession, fattura):
+    """(imponibile, allocato_totale, residuo_allocabile) per una fattura attiva."""
+    from app.models.models import FatturaAttivaAllocazione
+    imponibile = Decimal(str(fattura.importo_netto or 0))
+    allocato = (await db.execute(
+        select(func.coalesce(func.sum(FatturaAttivaAllocazione.importo_allocato), 0))
+        .where(FatturaAttivaAllocazione.fattura_attiva_id == fattura.id)
+    )).scalar() or 0
+    allocato = Decimal(str(allocato))
+    return imponibile, allocato, imponibile - allocato
+
+
+async def list_allocazioni_fattura(db: AsyncSession, fattura_attiva_id):
+    from app.models.models import FatturaAttivaAllocazione, FatturaAttiva, Commessa, Cliente
+    fattura = (await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == fattura_attiva_id))).scalar_one_or_none()
+    if not fattura:
+        return None
+    rows = (await db.execute(
+        select(FatturaAttivaAllocazione, Cliente.ragione_sociale, Commessa.mese_competenza)
+        .outerjoin(Commessa, FatturaAttivaAllocazione.commessa_id == Commessa.id)
+        .outerjoin(Cliente, Commessa.cliente_id == Cliente.id)
+        .where(FatturaAttivaAllocazione.fattura_attiva_id == fattura_attiva_id)
+        .order_by(FatturaAttivaAllocazione.created_at)
+    )).all()
+    imponibile, allocato, residuo = await _allocazioni_totali(db, fattura)
+    allocazioni = [{
+        "id": a.id, "commessa_id": a.commessa_id, "importo_allocato": float(a.importo_allocato),
+        "note": a.note, "cliente": rag, "mese_competenza": mese, "created_at": a.created_at,
+    } for (a, rag, mese) in rows]
+    return {"allocazioni": allocazioni, "imponibile": float(imponibile),
+            "allocato_totale": float(allocato), "residuo_allocabile": float(residuo)}
+
+
+async def alloca_fattura_commessa(db: AsyncSession, fattura_attiva_id, commessa_id, importo_allocato, note=None, created_by=None):
+    """Alloca `importo_allocato` a una commessa con QUADRATURA (invariante 6): la somma non puo'
+    superare l'imponibile. Se esiste gia' una riga (fattura, commessa), somma nell'unica riga."""
+    from app.models.models import FatturaAttivaAllocazione, FatturaAttiva
+    fattura = (await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == fattura_attiva_id))).scalar_one_or_none()
+    if not fattura:
+        raise HTTPException(status_code=404, detail="Fattura attiva non trovata")
+    importo_allocato = Decimal(str(importo_allocato))
+    imponibile, allocato, residuo = await _allocazioni_totali(db, fattura)
+    if importo_allocato > residuo:
+        raise HTTPException(status_code=400, detail={
+            "message": "Allocazione supera l'imponibile della fattura (invariante 6).",
+            "imponibile": float(imponibile), "gia_allocato": float(allocato),
+            "residuo_allocabile": float(residuo), "richiesto": float(importo_allocato),
+        })
+    esistente = (await db.execute(
+        select(FatturaAttivaAllocazione).where(
+            FatturaAttivaAllocazione.fattura_attiva_id == fattura_attiva_id,
+            FatturaAttivaAllocazione.commessa_id == commessa_id)
+    )).scalar_one_or_none()
+    if esistente:
+        esistente.importo_allocato = Decimal(str(esistente.importo_allocato)) + importo_allocato
+        if note:
+            esistente.note = note
+        alloc = esistente
+    else:
+        alloc = FatturaAttivaAllocazione(
+            fattura_attiva_id=fattura_attiva_id, commessa_id=commessa_id,
+            importo_allocato=importo_allocato, note=note, created_by=created_by)
+        db.add(alloc)
+    await db.commit()
+    await db.refresh(alloc)
+    _, allocato2, residuo2 = await _allocazioni_totali(db, fattura)
+    return {"id": str(alloc.id), "commessa_id": str(alloc.commessa_id),
+            "importo_allocato": float(alloc.importo_allocato),
+            "allocato_totale": float(allocato2), "residuo_allocabile": float(residuo2)}
+
+
+async def rimuovi_allocazione(db: AsyncSession, allocazione_id):
+    from app.models.models import FatturaAttivaAllocazione
+    a = (await db.execute(select(FatturaAttivaAllocazione).where(FatturaAttivaAllocazione.id == allocazione_id))).scalar_one_or_none()
+    if not a:
+        return None
+    fattura_id = a.fattura_attiva_id
+    await db.delete(a)
+    await db.commit()
+    return {"deleted": True, "fattura_attiva_id": str(fattura_id)}
+
+
+async def list_allocazioni_commessa(db: AsyncSession, commessa_id):
+    from app.models.models import FatturaAttivaAllocazione, FatturaAttiva
+    rows = (await db.execute(
+        select(FatturaAttivaAllocazione, FatturaAttiva.numero, FatturaAttiva.data_emissione)
+        .outerjoin(FatturaAttiva, FatturaAttivaAllocazione.fattura_attiva_id == FatturaAttiva.id)
+        .where(FatturaAttivaAllocazione.commessa_id == commessa_id)
+        .order_by(FatturaAttivaAllocazione.created_at)
+    )).all()
+    return [{"id": a.id, "fattura_attiva_id": a.fattura_attiva_id, "numero": num,
+             "data_emissione": dem, "importo_allocato": float(a.importo_allocato), "note": a.note}
+            for (a, num, dem) in rows]
+
+
+async def proposta_allocazione(db: AsyncSession, fattura_attiva_id):
+    """Proposta (spec §7): replica le allocazioni del mese precedente dello STESSO cliente
+    (stesse commesse, stesse proporzioni) scalate sull'imponibile. NON applica nulla."""
+    from dateutil.relativedelta import relativedelta
+    from app.models.models import FatturaAttivaAllocazione, FatturaAttiva
+    fattura = (await db.execute(select(FatturaAttiva).where(FatturaAttiva.id == fattura_attiva_id))).scalar_one_or_none()
+    if not fattura:
+        raise HTTPException(status_code=404, detail="Fattura attiva non trovata")
+    if not fattura.cliente_id or not fattura.data_emissione:
+        return {"proposta": [], "motivo": "Fattura senza cliente o data_emissione."}
+    mese_corr = fattura.data_emissione.replace(day=1)
+    mese_prec = mese_corr - relativedelta(months=1)
+    mese_prec_fine = mese_corr - timedelta(days=1)
+    rows = (await db.execute(
+        select(FatturaAttivaAllocazione.commessa_id, func.sum(FatturaAttivaAllocazione.importo_allocato))
+        .join(FatturaAttiva, FatturaAttivaAllocazione.fattura_attiva_id == FatturaAttiva.id)
+        .where(FatturaAttiva.cliente_id == fattura.cliente_id,
+               FatturaAttiva.data_emissione >= mese_prec,
+               FatturaAttiva.data_emissione <= mese_prec_fine)
+        .group_by(FatturaAttivaAllocazione.commessa_id)
+    )).all()
+    totale = sum((Decimal(str(t or 0)) for _, t in rows), Decimal("0"))
+    if totale <= 0:
+        return {"proposta": [], "motivo": "Nessuna allocazione nel mese precedente per questo cliente.",
+                "mese_riferimento": str(mese_prec)}
+    imponibile = Decimal(str(fattura.importo_netto or 0))
+    proposta = []
+    acc = Decimal("0")
+    for i, (cid, tot) in enumerate(rows):
+        prop = Decimal(str(tot or 0)) / totale
+        if i < len(rows) - 1:
+            imp = (imponibile * prop).quantize(Decimal("0.01"))
+            acc += imp
+        else:
+            imp = imponibile - acc  # residuo all'ultima riga: Σ == imponibile esatto
+        proposta.append({"commessa_id": str(cid), "proporzione": float(round(prop, 4)),
+                         "importo_proposto": float(imp)})
+    return {"mese_riferimento": str(mese_prec), "imponibile": float(imponibile), "proposta": proposta}
+
+
+async def confronto_fatturazione_commessa(db: AsyncSession, commessa_id):
+    """Vista di confronto (spec §7): accordo atteso (valore_fatturabile_calc) vs fatturato allocato.
+    SOLO lettura, non modifica alcun calcolo."""
+    from app.models.models import Commessa, FatturaAttivaAllocazione
+    commessa = (await db.execute(
+        select(Commessa).where(Commessa.id == commessa_id)
+        .options(selectinload(Commessa.righe_progetto))  # valore_fatturabile_calc itera le righe
+    )).scalar_one_or_none()
+    if not commessa:
+        return None
+    accordo = Decimal(str(commessa.valore_fatturabile_calc or 0))
+    fatturato = (await db.execute(
+        select(func.coalesce(func.sum(FatturaAttivaAllocazione.importo_allocato), 0))
+        .where(FatturaAttivaAllocazione.commessa_id == commessa_id)
+    )).scalar() or 0
+    fatturato = Decimal(str(fatturato))
+    scarto = fatturato - accordo
+    perc = float((scarto / accordo * 100).quantize(Decimal("0.1"))) if accordo > 0 else None
+    return {"commessa_id": str(commessa_id), "accordo_atteso": float(accordo),
+            "fatturato_allocato": float(fatturato), "scarto": float(scarto), "percentuale": perc}
+
+
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
 async def list_pesi_contenuto(db: AsyncSession):
     from app.models.models import PesoContenuto

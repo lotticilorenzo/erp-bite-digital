@@ -1834,6 +1834,13 @@ class GeneraRicorrenzeRequest(BaseModel):
     ricorrenza_id: Optional[uuid.UUID] = None
 
 
+# ── ALLOCAZIONE fattura attiva -> commessa (Tabella F — spec v2 §7) ──
+class AllocazioneCreate(BaseModel):
+    commessa_id: uuid.UUID
+    importo_allocato: Decimal = Field(..., gt=0)
+    note: Optional[str] = None
+
+
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
 class PesoContenutoOut(OrmBase):
     tipo: str
