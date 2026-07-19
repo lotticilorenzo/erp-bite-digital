@@ -4114,6 +4114,156 @@ async def confronto_fatturazione_commessa(db: AsyncSession, commessa_id):
             "fatturato_allocato": float(fatturato), "scarto": float(scarto), "percentuale": perc}
 
 
+# ── RATE A MILESTONE (spec §4.4/§4.5). Generano scadenze (cassa), non toccano i calcoli. ──
+async def _somma_percentuali_rate(db: AsyncSession, progetto_id) -> Decimal:
+    from app.models.models import ProgettoRata
+    s = (await db.execute(
+        select(func.coalesce(func.sum(ProgettoRata.percentuale), 0))
+        .where(ProgettoRata.progetto_id == progetto_id)
+    )).scalar() or 0
+    return Decimal(str(s))
+
+
+async def _accordo_progetto(db: AsyncSession, progetto_id):
+    """(progetto, accordo_economico). accordo = importo_fisso + importo_variabile."""
+    from app.models.models import Progetto
+    p = (await db.execute(select(Progetto).where(Progetto.id == progetto_id))).scalar_one_or_none()
+    if not p:
+        return None, None
+    return p, Decimal(str(p.importo_fisso or 0)) + Decimal(str(p.importo_variabile or 0))
+
+
+async def list_rate(db: AsyncSession, progetto_id):
+    from app.models.models import ProgettoRata
+    rows = (await db.execute(
+        select(ProgettoRata).where(ProgettoRata.progetto_id == progetto_id).order_by(ProgettoRata.numero)
+    )).scalars().all()
+    return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+
+
+async def verifica_rate(db: AsyncSession, progetto_id) -> dict:
+    somma = await _somma_percentuali_rate(db, progetto_id)
+    return {"somma_percentuali": float(somma), "completo": somma == Decimal("100"),
+            "residuo": float(Decimal("100") - somma)}
+
+
+async def create_rata(db: AsyncSession, progetto_id, payload: dict, created_by=None):
+    from app.models.models import ProgettoRata, Progetto
+    p = (await db.execute(select(Progetto).where(Progetto.id == progetto_id))).scalar_one_or_none()
+    if not p:
+        raise HTTPException(status_code=404, detail="Progetto non trovato")
+    pct = Decimal(str(payload["percentuale"]))
+    somma = await _somma_percentuali_rate(db, progetto_id)
+    if somma + pct > Decimal("100"):
+        raise HTTPException(status_code=400, detail={
+            "message": "La somma delle percentuali supererebbe 100%.",
+            "gia_allocato": float(somma), "residuo": float(Decimal("100") - somma), "richiesto": float(pct)})
+    data = {k: v for k, v in payload.items() if hasattr(ProgettoRata, k)}
+    if created_by is not None:
+        data["created_by"] = created_by
+    r = ProgettoRata(progetto_id=progetto_id, **data)
+    db.add(r)
+    await db.commit()
+    await db.refresh(r)
+    return {c.name: getattr(r, c.name) for c in r.__table__.columns}
+
+
+async def seed_rate_default(db: AsyncSession, progetto_id, created_by=None):
+    """3 rate standard (spec §4.5): 33.33/33.33/33.34 (Σ=100 esatto), solo per creazione_sito_web
+    senza rate esistenti."""
+    from app.models.models import ProgettoRata, Progetto
+    p = (await db.execute(select(Progetto).where(Progetto.id == progetto_id))).scalar_one_or_none()
+    if not p:
+        raise HTTPException(status_code=404, detail="Progetto non trovato")
+    if p.tipo_servizio != "creazione_sito_web":
+        raise HTTPException(status_code=400, detail="Rate di default solo per tipo_servizio=creazione_sito_web")
+    cnt = (await db.execute(
+        select(func.count()).select_from(ProgettoRata).where(ProgettoRata.progetto_id == progetto_id)
+    )).scalar() or 0
+    if cnt > 0:
+        raise HTTPException(status_code=400, detail="Il progetto ha gia' delle rate")
+    default = [(1, Decimal("33.33"), "accordo_siglato"), (2, Decimal("33.33"), "approvazione_layout"),
+               (3, Decimal("33.34"), "messa_online")]
+    for num, pct, ms in default:
+        db.add(ProgettoRata(progetto_id=progetto_id, numero=num, percentuale=pct, milestone=ms, created_by=created_by))
+    await db.commit()
+    return {"create": 3, "somma_percentuali": 100.0, "rate": [{"numero": n, "percentuale": float(p_), "milestone": m} for n, p_, m in default]}
+
+
+async def raggiungi_rata(db: AsyncSession, progetto_id, numero, data_raggiungimento, user_id=None):
+    """Marca la rata raggiunta e genera la scadenza attiva. Quadratura (invariante 23): l'ultima
+    rata (numero max) assorbe il resto di arrotondamento -> Σ scadenze = accordo esatto."""
+    from decimal import ROUND_HALF_UP
+    from app.models.models import ProgettoRata, Scadenza
+    rata = (await db.execute(select(ProgettoRata).where(
+        ProgettoRata.progetto_id == progetto_id, ProgettoRata.numero == numero))).scalar_one_or_none()
+    if not rata:
+        raise HTTPException(status_code=404, detail="Rata non trovata")
+    if rata.raggiunta and rata.scadenza_id:
+        raise HTTPException(status_code=400, detail="Rata gia' raggiunta con scadenza generata (idempotenza).")
+    p, accordo = await _accordo_progetto(db, progetto_id)
+    rate = (await db.execute(select(ProgettoRata).where(ProgettoRata.progetto_id == progetto_id))).scalars().all()
+    max_num = max(r.numero for r in rate)
+
+    def _r(x):
+        return x.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    if numero == max_num:
+        altri = sum((_r(accordo * Decimal(str(r.percentuale)) / 100) for r in rate if r.numero != numero), Decimal("0"))
+        importo = accordo - altri
+    else:
+        importo = _r(accordo * Decimal(str(rata.percentuale)) / 100)
+
+    par = await get_parametro(db, "termini_pagamento_default")
+    giorni = int(par["valore"]) if par and par.get("valore") is not None else 30
+    data_attesa = data_raggiungimento + timedelta(days=giorni)
+    stato, residuo = _scadenza_stato_residuo(importo, Decimal("0"), data_attesa)
+    scad = Scadenza(
+        tipo="attiva", data_attesa=data_attesa, importo=importo, stato=stato,
+        importo_incassato=Decimal("0"), importo_residuo=residuo,
+        controparte_tipo="cliente", controparte_id=p.cliente_id, progetto_id=progetto_id,
+        origine="progetto", milestone=rata.milestone,
+        documento_rif=f"Rata {numero} - {rata.milestone}", created_by=user_id)
+    db.add(scad)
+    await db.flush()
+    rata.raggiunta = True
+    rata.data_raggiungimento = data_raggiungimento
+    rata.scadenza_id = scad.id
+    await db.commit()
+    return {"rata": numero, "milestone": rata.milestone, "importo": float(importo),
+            "data_attesa": str(data_attesa), "giorni_termini": giorni, "scadenza_id": str(scad.id)}
+
+
+async def annulla_raggiungimento_rata(db: AsyncSession, progetto_id, numero):
+    from app.models.models import ProgettoRata, Scadenza
+    rata = (await db.execute(select(ProgettoRata).where(
+        ProgettoRata.progetto_id == progetto_id, ProgettoRata.numero == numero))).scalar_one_or_none()
+    if not rata:
+        raise HTTPException(status_code=404, detail="Rata non trovata")
+    if rata.scadenza_id:
+        scad = (await db.execute(select(Scadenza).where(Scadenza.id == rata.scadenza_id))).scalar_one_or_none()
+        if scad and Decimal(str(scad.importo_incassato or 0)) > 0:
+            raise HTTPException(status_code=400, detail="La scadenza ha gia' incassi: non si puo' annullare.")
+        if scad:
+            await db.delete(scad)
+    rata.raggiunta = False
+    rata.data_raggiungimento = None
+    rata.scadenza_id = None
+    await db.commit()
+    return {"rata": numero, "raggiunta": False, "scadenza_rimossa": True}
+
+
+async def delete_rata(db: AsyncSession, progetto_id, numero):
+    from app.models.models import ProgettoRata
+    rata = (await db.execute(select(ProgettoRata).where(
+        ProgettoRata.progetto_id == progetto_id, ProgettoRata.numero == numero))).scalar_one_or_none()
+    if not rata:
+        return False
+    await db.delete(rata)
+    await db.commit()
+    return True
+
+
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
 async def list_pesi_contenuto(db: AsyncSession):
     from app.models.models import PesoContenuto

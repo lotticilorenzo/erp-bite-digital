@@ -1886,6 +1886,22 @@ class AllocazioneCreate(BaseModel):
     note: Optional[str] = None
 
 
+# ── RATE A MILESTONE progetti (spec v2 §4.4/§4.5) ──
+MilestoneRata = Literal["accordo_siglato", "approvazione_layout", "messa_online", "altro"]
+
+
+class RataCreate(BaseModel):
+    numero: int = Field(..., ge=1)
+    percentuale: Decimal = Field(..., gt=0, le=100)
+    milestone: MilestoneRata
+    milestone_descrizione: Optional[str] = Field(None, max_length=200)
+    note: Optional[str] = None
+
+
+class RaggiungiRataRequest(BaseModel):
+    data_raggiungimento: date
+
+
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
 class PesoContenutoOut(OrmBase):
     tipo: str

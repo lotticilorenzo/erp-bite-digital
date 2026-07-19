@@ -57,6 +57,7 @@ from app.schemas.schemas import (
     ScadenzaCreate, ScadenzaUpdate,
     RicorrenzaCreate, RicorrenzaUpdate, GeneraRicorrenzeRequest,
     AllocazioneCreate,
+    RataCreate, RaggiungiRataRequest,
     PesoContenutoUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
     MovimentoCassaUpdate, RiconciliaRequest, RiconciliazioniCreate,
@@ -83,6 +84,8 @@ from app.services.services import (
     list_ricorrenze, create_ricorrenza, update_ricorrenza, delete_ricorrenza, genera_occorrenze,
     alloca_fattura_commessa, rimuovi_allocazione, list_allocazioni_fattura,
     list_allocazioni_commessa, proposta_allocazione, confronto_fatturazione_commessa,
+    list_rate, verifica_rate, create_rata, seed_rate_default, raggiungi_rata,
+    annulla_raggiungimento_rata, delete_rata,
     list_pesi_contenuto, update_peso_contenuto,
     riconcilia_movimento as svc_riconcilia_movimento, elimina_riconciliazione,
     rimuovi_riconciliazioni_movimento, list_riconciliazioni_movimento, list_riconciliazioni_fattura,
@@ -908,6 +911,78 @@ async def get_confronto_fatturazione(
     if result is None:
         raise HTTPException(status_code=404, detail="Commessa non trovata")
     return result
+
+
+# ── RATE A MILESTONE progetti (spec v2 §4.4/§4.5). Generano scadenze, non toccano i calcoli. ──
+@router.get("/progetti/{progetto_id}/rate", tags=["Rate"])
+async def get_rate(
+    progetto_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return {"rate": await list_rate(db, progetto_id)}
+
+
+@router.get("/progetti/{progetto_id}/rate/verifica", tags=["Rate"])
+async def get_verifica_rate(
+    progetto_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return await verifica_rate(db, progetto_id)
+
+
+@router.post("/progetti/{progetto_id}/rate", tags=["Rate"], status_code=201)
+async def post_rata(
+    progetto_id: uuid.UUID,
+    payload: RataCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return await create_rata(db, progetto_id, payload.model_dump(), current_user.id)
+
+
+@router.post("/progetti/{progetto_id}/rate/default", tags=["Rate"], status_code=201)
+async def post_rate_default(
+    progetto_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return await seed_rate_default(db, progetto_id, current_user.id)
+
+
+@router.post("/progetti/{progetto_id}/rate/{numero}/raggiungi", tags=["Rate"])
+async def post_raggiungi_rata(
+    progetto_id: uuid.UUID,
+    numero: int,
+    payload: RaggiungiRataRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return await raggiungi_rata(db, progetto_id, numero, payload.data_raggiungimento, current_user.id)
+
+
+@router.post("/progetti/{progetto_id}/rate/{numero}/annulla-raggiungimento", tags=["Rate"])
+async def post_annulla_raggiungimento(
+    progetto_id: uuid.UUID,
+    numero: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return await annulla_raggiungimento_rata(db, progetto_id, numero)
+
+
+@router.delete("/progetti/{progetto_id}/rate/{numero}", tags=["Rate"])
+async def delete_rata_endpoint(
+    progetto_id: uuid.UUID,
+    numero: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    ok = await delete_rata(db, progetto_id, numero)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Rata non trovata")
+    return {"deleted": True}
 
 
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
