@@ -386,6 +386,29 @@ class ProgettoTeamCreate(BaseModel):
     ore_previste: float = 0
     note: Optional[str] = None
 
+# ── Asse SERVIZIO progetti (spec v2 §4.4/§4.6) — distinto dal modello di fatturazione `tipo`. ──
+TipoServizio = Literal["social_media", "creazione_sito_web", "gestione_web", "produzione_contenuti", "stand_fieristici"]
+PeriodicitaProgetto = Literal["mensile", "bimestrale", "trimestrale", "semestrale", "annuale", "spot", "una_tantum"]
+IntensitaSocio = Literal["S", "M", "L"]
+
+# Chiavi attese in dettagli_tipo per ciascun tipo_servizio (validazione NON bloccante).
+DETTAGLI_TIPO_ATTESI = {
+    "social_media": {"n_contenuti_previsti", "di_cui_video"},
+    "produzione_contenuti": {"tipo_contenuto"},
+    "stand_fieristici": {"fiera", "data_consegna", "partner"},
+    "creazione_sito_web": set(),
+    "gestione_web": set(),
+}
+
+
+def warnings_dettagli_tipo(tipo_servizio, dettagli) -> List[str]:
+    """Warning (non bloccanti) per chiavi di dettagli_tipo non previste dal tipo_servizio."""
+    if not tipo_servizio or not dettagli:
+        return []
+    attese = DETTAGLI_TIPO_ATTESI.get(tipo_servizio, set())
+    return [f"Chiave '{k}' non prevista per tipo_servizio '{tipo_servizio}'." for k in dettagli if k not in attese]
+
+
 class ProgettoCreate(BaseModel):
     cliente_id: Optional[uuid.UUID] = None
     nome: str
@@ -394,10 +417,21 @@ class ProgettoCreate(BaseModel):
     importo_fisso: Decimal = Decimal("0")
     importo_variabile: Decimal = Decimal("0")
     delivery_attesa: int = 0
+    tipo_servizio: Optional[TipoServizio] = None
+    periodicita: Optional[PeriodicitaProgetto] = None
+    referente_risorsa_id: Optional[uuid.UUID] = None
+    intensita_socio: IntensitaSocio = "M"
+    dettagli_tipo: dict = Field(default_factory=dict)
     note: Optional[str] = None
     data_inizio: Optional[date] = None
     data_fine: Optional[date] = None
     team: Optional[List[ProgettoTeamCreate]] = None
+
+    @model_validator(mode="after")
+    def _check_dettagli_tipo(self):
+        if self.tipo_servizio is None and self.dettagli_tipo:
+            raise ValueError("dettagli_tipo deve essere vuoto quando tipo_servizio è null")
+        return self
 
 class ProgettoTeamOut(OrmBase):
     id: uuid.UUID
@@ -415,6 +449,11 @@ class ProgettoUpdate(BaseModel):
     importo_fisso: Optional[Decimal] = None
     importo_variabile: Optional[Decimal] = None
     delivery_attesa: Optional[int] = None
+    tipo_servizio: Optional[TipoServizio] = None
+    periodicita: Optional[PeriodicitaProgetto] = None
+    referente_risorsa_id: Optional[uuid.UUID] = None
+    intensita_socio: Optional[IntensitaSocio] = None
+    dettagli_tipo: Optional[dict] = None
     note: Optional[str] = None
     data_inizio: Optional[date] = None
     data_fine: Optional[date] = None
@@ -429,6 +468,12 @@ class ProgettoOut(OrmBase):
     importo_fisso: Decimal
     importo_variabile: Decimal
     delivery_attesa: int
+    tipo_servizio: Optional[str] = None
+    periodicita: Optional[str] = None
+    referente_risorsa_id: Optional[uuid.UUID] = None
+    intensita_socio: str = "M"
+    dettagli_tipo: dict = Field(default_factory=dict)
+    warnings_dettagli_tipo: List[str] = Field(default_factory=list)
     note: Optional[str]
     data_inizio: Optional[date] = None
     data_fine: Optional[date] = None

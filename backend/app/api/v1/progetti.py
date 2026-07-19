@@ -19,6 +19,7 @@ from app.schemas.schemas import (
     ProgettoCreate,
     ProgettoOut,
     ProgettoUpdate,
+    warnings_dettagli_tipo,
     ProgettoWithCliente,
     ServizioProgettoCreate,
     ServizioProgettoOut,
@@ -109,7 +110,12 @@ async def patch_progetto(
     p = await update_progetto(db, progetto_id, data, current_user.id)
     if not p:
         raise HTTPException(status_code=404, detail="Progetto non trovato")
-    return await get_progetto_with_servizi(db, p.id)
+    full = await get_progetto_with_servizi(db, p.id)
+    out = ProgettoOut.model_validate(full)
+    # Warning non bloccanti su chiavi dettagli_tipo non previste dal tipo_servizio (spec §4.4).
+    out.warnings_dettagli_tipo = warnings_dettagli_tipo(
+        getattr(full, "tipo_servizio", None), getattr(full, "dettagli_tipo", None) or {})
+    return out
 
 
 @router.delete("/{progetto_id}", status_code=204)
