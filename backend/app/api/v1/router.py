@@ -59,6 +59,7 @@ from app.schemas.schemas import (
     AllocazioneCreate,
     RataCreate, RaggiungiRataRequest,
     RiapriPeriodoRequest,
+    RefreshOvhRequest,
     PesoContenutoUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
     MovimentoCassaCreate, MovimentoCassaUpdate, RiconciliaRequest, RiconciliazioniCreate,
@@ -89,6 +90,7 @@ from app.services.services import (
     annulla_raggiungimento_rata, delete_rata,
     list_periodi, soft_close_periodo, hard_lock_periodo, riapri_periodo, stato_periodo_data,
     periodo_e_bloccato,
+    calcola_coefficiente_ovh, list_coefficienti_ovh_storico, calcola_varianza_assorbimento,
     list_pesi_contenuto, update_peso_contenuto,
     riconcilia_movimento as svc_riconcilia_movimento, elimina_riconciliazione,
     rimuovi_riconciliazioni_movimento, list_riconciliazioni_movimento, list_riconciliazioni_fattura,
@@ -1023,6 +1025,48 @@ async def delete_rata_endpoint(
     if not ok:
         raise HTTPException(status_code=404, detail="Rata non trovata")
     return {"deleted": True}
+
+
+# ── COEFFICIENTE OVH rolling + varianza (spec v2 §4.5, inv. 17). SOLO calcolo/esposizione. ──
+@router.get("/report/coefficiente-ovh", tags=["Report"])
+async def get_coefficiente_ovh(
+    periodo: date = Query(..., description="YYYY-MM-DD (mese di calcolo)"),
+    overhead: Optional[float] = Query(None, description="override what-if"),
+    base: Optional[float] = Query(None, description="override what-if"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return await calcola_coefficiente_ovh(db, periodo, overhead_override=overhead, base_override=base)
+
+
+@router.post("/report/coefficiente-ovh/refresh", tags=["Report"])
+async def post_refresh_coefficiente_ovh(
+    payload: RefreshOvhRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return await calcola_coefficiente_ovh(db, payload.periodo, overhead_override=payload.overhead,
+                                          base_override=payload.base, salva=True, user_id=current_user.id)
+
+
+@router.get("/report/coefficiente-ovh/storico", tags=["Report"])
+async def get_coefficiente_ovh_storico(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return {"storico": await list_coefficienti_ovh_storico(db)}
+
+
+@router.get("/report/varianza-assorbimento", tags=["Report"])
+async def get_varianza_assorbimento(
+    periodo: date = Query(..., description="YYYY-MM-DD"),
+    overhead_reale: Optional[float] = Query(None, description="override what-if"),
+    caricato: Optional[float] = Query(None, description="override what-if"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return await calcola_varianza_assorbimento(db, periodo, overhead_reale_override=overhead_reale,
+                                               caricato_override=caricato)
 
 
 # ── PERIODI CONTABILI / lock competenza (spec v2 §13.6). Chiusura/riapertura = azione admin manuale. ──

@@ -1907,6 +1907,13 @@ class RiapriPeriodoRequest(BaseModel):
     motivo: str = Field(..., min_length=1)
 
 
+# ── COEFFICIENTE OVH (spec v2 §4.5) ──
+class RefreshOvhRequest(BaseModel):
+    periodo: date
+    overhead: Optional[Decimal] = None  # override what-if (test/simulazione)
+    base: Optional[Decimal] = None
+
+
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
 class PesoContenutoOut(OrmBase):
     tipo: str

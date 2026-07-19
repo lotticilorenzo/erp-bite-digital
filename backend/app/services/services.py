@@ -4384,6 +4384,128 @@ async def stato_periodo_data(db: AsyncSession, data):
             "bloccato": bool(row and row.stato == "hard_lock")}
 
 
+# ── COEFFICIENTE OVH ROLLING (v1 deterministica) + VARIANZA (spec §4.5, inv. 17) ──────────
+# SOLO calcolo/esposizione: non aggancia calcola_margine_commessa ne' il P&L.
+# v1: numeratore e denominatore ancorati alle PARTI DETERMINISTICHE (il forecast 12m non esiste
+# ancora, Fase 6). Quando esistera' si sostituira' la FONTE senza cambiare la struttura.
+async def _run_rate_mensile_ricavi(db: AsyncSession) -> Decimal:
+    """Run-rate mensile ricavi ricorrenti = Σ importo_fisso dei progetti RETAINER attivi."""
+    from app.models.models import Progetto, ProjectType, ProjectStatus
+    s = (await db.execute(
+        select(func.coalesce(func.sum(Progetto.importo_fisso), 0)).where(
+            Progetto.tipo == ProjectType.RETAINER,
+            Progetto.is_deleted == False,  # noqa: E712
+            Progetto.stato == ProjectStatus.ATTIVO)
+    )).scalar() or 0
+    return Decimal(str(s))
+
+
+async def _ultimo_coefficiente(db: AsyncSession, periodo, incluso=False):
+    """Ultimo coefficiente salvato con periodo_riferimento < periodo (o <= se incluso)."""
+    from app.models.models import CoefficienteOvh
+    cond = CoefficienteOvh.periodo_riferimento <= periodo if incluso else CoefficienteOvh.periodo_riferimento < periodo
+    row = (await db.execute(
+        select(CoefficienteOvh.coefficiente).where(cond)
+        .order_by(CoefficienteOvh.periodo_riferimento.desc()).limit(1)
+    )).scalar_one_or_none()
+    return Decimal(str(row)) if row is not None else None
+
+
+async def calcola_coefficiente_ovh(db: AsyncSession, periodo, orizzonte_mesi=None,
+                                   overhead_override=None, base_override=None, salva=False, user_id=None):
+    """Coefficiente = overhead 12m / base ricavi 12m (piena precisione). None se base=0.
+    Tetto allo scostamento vs coefficiente precedente (ovh_tetto_scostamento_pct)."""
+    from app.models.models import CoefficienteOvh
+    periodo = periodo.replace(day=1)
+    if orizzonte_mesi is None:
+        par = await get_parametro(db, "orizzonte_coefficiente_mesi", periodo)
+        orizzonte_mesi = int(par["valore"]) if par and par.get("valore") is not None else 12
+    # NUMERATORE deterministico: costi struttura mensili x orizzonte
+    if overhead_override is not None:
+        overhead = Decimal(str(overhead_override))
+    else:
+        fissi_mese, _, _ = await costi_fissi_indivisibili_mese(db, periodo)
+        overhead = Decimal(str(fissi_mese)) * orizzonte_mesi
+    # DENOMINATORE deterministico: run-rate ricavi ricorrenti x orizzonte (base = RICAVI, inv. 17)
+    if base_override is not None:
+        base = Decimal(str(base_override))
+    else:
+        base = await _run_rate_mensile_ricavi(db) * orizzonte_mesi
+    coeff_grezzo = (overhead / base) if base > 0 else None
+    # TETTO
+    tpar = await get_parametro(db, "ovh_tetto_scostamento_pct", periodo)
+    tetto_pct = Decimal(str(tpar["valore"])) if tpar and tpar.get("valore") is not None else Decimal("20")
+    coeff = coeff_grezzo
+    tetto_applicato = False
+    prec = await _ultimo_coefficiente(db, periodo)
+    if coeff_grezzo is not None and prec is not None and prec > 0:
+        lim = tetto_pct / 100
+        cap_max, cap_min = prec * (1 + lim), prec * (1 - lim)
+        if coeff_grezzo > cap_max:
+            coeff, tetto_applicato = cap_max, True
+        elif coeff_grezzo < cap_min:
+            coeff, tetto_applicato = cap_min, True
+    result = {
+        "periodo": str(periodo), "orizzonte_mesi": orizzonte_mesi,
+        "overhead_previsto": float(overhead), "base_ricavi_prevista": float(base),
+        "coefficiente_grezzo": float(round(coeff_grezzo, 6)) if coeff_grezzo is not None else None,
+        "coefficiente": float(round(coeff, 6)) if coeff is not None else None,
+        "tetto_applicato": tetto_applicato, "tetto_scostamento_pct": float(tetto_pct),
+        "fonte": "deterministico",
+    }
+    if salva and coeff is not None:
+        row = (await db.execute(select(CoefficienteOvh).where(CoefficienteOvh.periodo_riferimento == periodo))).scalar_one_or_none()
+        if row:
+            row.overhead_previsto = overhead; row.base_ricavi_prevista = base
+            row.coefficiente = coeff; row.coefficiente_grezzo = coeff_grezzo
+            row.tetto_applicato = tetto_applicato
+        else:
+            db.add(CoefficienteOvh(periodo_riferimento=periodo, overhead_previsto=overhead,
+                                   base_ricavi_prevista=base, coefficiente=coeff,
+                                   coefficiente_grezzo=coeff_grezzo, tetto_applicato=tetto_applicato,
+                                   fonte="deterministico", created_by=user_id))
+        await db.commit()
+        result["salvato"] = True
+    return result
+
+
+async def list_coefficienti_ovh_storico(db: AsyncSession):
+    from app.models.models import CoefficienteOvh
+    rows = (await db.execute(select(CoefficienteOvh).order_by(CoefficienteOvh.periodo_riferimento.desc()))).scalars().all()
+    return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+
+
+async def calcola_varianza_assorbimento(db: AsyncSession, periodo, overhead_reale_override=None, caricato_override=None):
+    """Varianza = overhead reale del periodo - overhead caricato (coeff x ricavi commesse del periodo).
+    VISTA di sola lettura: la varianza resta aziendale, MAI spalmata sulle commesse (inv. 17)."""
+    from app.models.models import Commessa
+    periodo = periodo.replace(day=1)
+    coeff = await _ultimo_coefficiente(db, periodo, incluso=True) or Decimal("0")
+    # overhead caricato = coeff x Σ ricavi commesse con competenza nel periodo
+    if caricato_override is not None:
+        caricato = Decimal(str(caricato_override))
+        ricavi = None
+    else:
+        commesse = (await db.execute(
+            select(Commessa).where(Commessa.mese_competenza == periodo)
+            .options(selectinload(Commessa.righe_progetto))
+        )).scalars().all()
+        ricavi = sum((Decimal(str(c.valore_fatturabile_calc or 0)) for c in commesse), Decimal("0"))
+        caricato = (coeff * ricavi).quantize(Decimal("0.01"))
+    # overhead reale = costi struttura effettivi del periodo
+    if overhead_reale_override is not None:
+        reale = Decimal(str(overhead_reale_override))
+    else:
+        fissi, _, _ = await costi_fissi_indivisibili_mese(db, periodo)
+        reale = Decimal(str(fissi))
+    varianza = reale - caricato
+    tipo = "sotto_assorbimento" if reale > caricato else ("sovra_assorbimento" if reale < caricato else "neutro")
+    return {"periodo": str(periodo), "coefficiente": float(coeff),
+            "ricavi_periodo": float(ricavi) if ricavi is not None else None,
+            "overhead_caricato": float(caricato), "overhead_reale": float(reale),
+            "varianza": float(varianza), "tipo": tipo}
+
+
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
 async def list_pesi_contenuto(db: AsyncSession):
     from app.models.models import PesoContenuto
