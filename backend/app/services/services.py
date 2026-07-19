@@ -5655,18 +5655,25 @@ async def converti_preventivo_in_commessa(db: AsyncSession, preventivo_id: uuid.
     p = await get_preventivo(db, preventivo_id)
     if not p:
         raise HTTPException(status_code=404, detail="Preventivo non trovato")
-    
+
+    # §18.8: accordo_economico = prezzo del preventivo (fallback importo_totale); le righe lavoro
+    # diventano budget-ore pianificato della commessa (per il confronto ex-post con la marginalita reale).
+    from app.models.models import PreventivoVoce
+    accordo = p.prezzo if p.prezzo is not None else p.importo_totale
+    voci_p = (await db.execute(select(PreventivoVoce).where(PreventivoVoce.preventivo_id == p.id))).scalars().all()
+    budget_ore = sum((Decimal(str(v.ore or 0)) for v in voci_p if (v.tipo or "") == "lavoro"), Decimal("0"))
+
     # 1. Trova o Crea Progetto
     proj_res = await db.execute(select(Progetto).where(Progetto.cliente_id == p.cliente_id, Progetto.nome == p.titolo))
     progetto = proj_res.scalar_one_or_none()
-    
+
     if not progetto:
         progetto = Progetto(
             id=uuid.uuid4(),
             cliente_id=p.cliente_id,
             nome=p.titolo,
             tipo=ProjectType.ONE_OFF,
-            importo_fisso=p.importo_totale,
+            importo_fisso=accordo,
             note=f"Creato da preventivo {p.numero}"
         )
         db.add(progetto)
@@ -5684,6 +5691,7 @@ async def converti_preventivo_in_commessa(db: AsyncSession, preventivo_id: uuid.
             cliente_id=p.cliente_id,
             mese_competenza=today,
             stato=CommessaStatus.APERTA,
+            ore_contratto=budget_ore,  # §18.8: budget-ore pianificato dalle righe lavoro
             note=f"Aperta da preventivo {p.numero}",
         )
         db.add(commessa)
