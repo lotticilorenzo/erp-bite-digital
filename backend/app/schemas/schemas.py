@@ -1123,11 +1123,24 @@ class AIEstimateHoursResponse(BaseModel):
     source: str = "history"
 
 # ── PREVENTIVO ────────────────────────────────────────────
+TipoVocePreventivo = Literal["lavoro", "socio", "esterno", "overhead"]
+ModalitaPrezzo = Literal["markup", "margine"]
+
+
 class PreventivoVoceCreate(BaseModel):
     descrizione: str
     quantita: Decimal = Decimal("1")
     prezzo_unitario: Decimal = Decimal("0")
     ordine: int = 0
+    # §18.2 natura riga (opzionali; riga libera resta ammessa)
+    tipo: Optional[TipoVocePreventivo] = None
+    servizio_id: Optional[uuid.UUID] = None
+    risorsa_id: Optional[uuid.UUID] = None
+    ruolo: Optional[str] = None
+    ore: Optional[Decimal] = None
+    tariffa: Optional[Decimal] = None
+    costo: Optional[Decimal] = None
+    ricarico_pct: Optional[Decimal] = None
 
 class PreventivoVoceOut(OrmBase):
     id: uuid.UUID
@@ -1136,6 +1149,13 @@ class PreventivoVoceOut(OrmBase):
     prezzo_unitario: Decimal
     totale: Decimal
     ordine: int
+    tipo: Optional[str] = None
+    ore: Optional[Decimal] = None
+    tariffa: Optional[Decimal] = None
+    costo: Optional[Decimal] = None
+    ricarico_pct: Optional[Decimal] = None
+    prezzo_riga: Optional[Decimal] = None
+    is_stima: bool = False
 
 class PreventivoCreate(BaseModel):
     cliente_id: uuid.UUID
@@ -1144,7 +1164,21 @@ class PreventivoCreate(BaseModel):
     descrizione: Optional[str] = None
     data_scadenza: Optional[date] = None
     note: Optional[str] = None
+    # §18.1 modalita prezzo (opzionali)
+    modalita_prezzo: Optional[ModalitaPrezzo] = None
+    markup_su: Optional[str] = None
+    prezzo: Optional[Decimal] = None
+    margine_pct: Optional[Decimal] = None
+    markup_pct: Optional[Decimal] = None
+    margine_target: Optional[Decimal] = None
+    valido_fino: Optional[date] = None
     voci: List[PreventivoVoceCreate]
+
+
+class SimulaBudgetRequest(BaseModel):
+    budget_interno: Decimal
+    risorse_fisse: List[dict] = Field(default_factory=list)  # [{ore, tariffa}]
+    tariffa_variabile: Decimal
 
 class PreventivoUpdate(BaseModel):
     titolo: Optional[str] = None

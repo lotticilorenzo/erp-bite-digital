@@ -1300,6 +1300,14 @@ class Preventivo(Base):
     data_scadenza: Mapped[Optional[date]] = mapped_column(Date)
     data_accettazione: Mapped[Optional[date]] = mapped_column(Date)
     importo_totale: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    # ── Preventivatore §18: modalita prezzo (additivi) ──
+    modalita_prezzo: Mapped[Optional[str]] = mapped_column(String(20))   # markup|margine
+    markup_su: Mapped[Optional[str]] = mapped_column(String(20), default="costo_pieno")  # solo_lavoro|costo_pieno
+    prezzo: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 2))
+    margine_pct: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 2))
+    markup_pct: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 2))
+    margine_target: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 2))
+    valido_fino: Mapped[Optional[date]] = mapped_column(Date)
     note: Mapped[Optional[str]] = mapped_column(Text)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -1320,8 +1328,40 @@ class PreventivoVoce(Base):
     prezzo_unitario: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     totale: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     ordine: Mapped[int] = mapped_column(Integer, default=0)
+    # ── Preventivatore §18.2: natura della riga (additivi) ──
+    tipo: Mapped[Optional[str]] = mapped_column(String(20))       # lavoro|socio|esterno|overhead
+    servizio_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
+    risorsa_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
+    ruolo: Mapped[Optional[str]] = mapped_column(String(100))
+    ore: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2))
+    tariffa: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    costo: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 2))
+    ricarico_pct: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 2))
+    prezzo_riga: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 2))
+    is_stima: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     preventivo: Mapped["Preventivo"] = relationship(back_populates="voci")
+
+
+class ServizioCatalogo(Base):
+    """Catalogo servizi leggero (spec v2 §18.6): aiuto per comporre i preventivi, righe libere
+    sempre ammesse. `template_effort` (ore-per-ruolo) e `prezzo_base` sono PLACEHOLDER finche' non
+    tarati con dati reali (placeholder=true): nessun effort inventato come se fosse reale."""
+    __tablename__ = "servizi_catalogo"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    nome: Mapped[str] = mapped_column(String(200), nullable=False)
+    tipo_progetto: Mapped[Optional[str]] = mapped_column(String(30))  # uno dei 5 di §4.4
+    template_effort: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+    prezzo_base: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 2))
+    placeholder: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    attivo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        CheckConstraint("tipo_progetto IS NULL OR tipo_progetto IN ('social_media','creazione_sito_web','gestione_web','produzione_contenuti','stand_fieristici')", name="ck_servizi_tipo"),
+    )
 
 
 # ── PIANIFICAZIONE ────────────────────────────────────────
