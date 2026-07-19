@@ -1364,6 +1364,62 @@ class ServizioCatalogo(Base):
     )
 
 
+class BudgetVersione(Base):
+    """Contenitore versionato Budget/Forecast (spec v2 §13). Il BUDGET e' il piano ex-ante congelato
+    (versione 1); i FORECAST sono le ri-previsioni rolling / gli snapshot di atterraggio (§13.4),
+    versionati: una riapertura crea una nuova versione, non sovrascrive l'originale.
+    Una versione 'approvato'/'archiviato' e' IMMUTABILE (le correzioni = nuova versione)."""
+    __tablename__ = "budget_versioni"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    anno: Mapped[int] = mapped_column(Integer, nullable=False)
+    tipo: Mapped[str] = mapped_column(String(20), nullable=False)   # budget|forecast
+    versione: Mapped[int] = mapped_column(Integer, nullable=False)
+    stato: Mapped[str] = mapped_column(String(20), nullable=False, default="bozza")
+    periodo_riferimento: Mapped[Optional[date]] = mapped_column(Date)
+    # TODO(13b, §13.4/§13.6): snapshot automatico del forecast allo hard_lock del periodo.
+    periodo_snapshot: Mapped[Optional[date]] = mapped_column(Date)
+    approvato_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    approvato_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+
+    __table_args__ = (
+        CheckConstraint("tipo IN ('budget','forecast')", name="ck_budget_ver_tipo"),
+        CheckConstraint("stato IN ('bozza','approvato','archiviato')", name="ck_budget_ver_stato"),
+        UniqueConstraint("anno", "tipo", "versione", name="uq_budget_versioni"),
+    )
+
+
+class BudgetRiga(Base):
+    """Valore mensile di budget/forecast (spec v2 §13.3). Spina dorsale = voce x mese.
+    `voce_ce_id`/`centro_costo_id` predisposti (tabelle voci_ce/centri_costo non ancora esistenti).
+    Una riga vive su UN SOLO asse di dettaglio (cliente XOR commessa XOR centro di costo)."""
+    __tablename__ = "budget_righe"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    versione_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("budget_versioni.id", ondelete="CASCADE"), nullable=False)
+    anno: Mapped[int] = mapped_column(Integer, nullable=False)
+    mese: Mapped[int] = mapped_column(Integer, nullable=False)
+    voce_tipo: Mapped[str] = mapped_column(String(20), nullable=False)  # ricavo|costo_diretto|costo_struttura|altro
+    voce_ce_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
+    categoria_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
+    cliente_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("clienti.id", ondelete="SET NULL"))
+    commessa_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("commesse.id", ondelete="SET NULL"))
+    centro_costo_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
+    importo: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint("mese BETWEEN 1 AND 12", name="ck_budget_righe_mese"),
+        CheckConstraint("voce_tipo IN ('ricavo','costo_diretto','costo_struttura','altro')", name="ck_budget_righe_voce"),
+        CheckConstraint("num_nonnulls(cliente_id, commessa_id, centro_costo_id) <= 1", name="ck_budget_righe_un_asse"),
+    )
+
+
 # ── PIANIFICAZIONE ────────────────────────────────────────
 class Pianificazione(Base):
     __tablename__ = "pianificazioni"
