@@ -47,6 +47,11 @@ async def _enrich_commessa(db: AsyncSession, c, coeff_cache: Optional[dict[date,
     d["margine_percentuale"] = m["margine_lordo_pct"]
     d["margine_operativo_euro"] = float(m["margine_operativo_euro"])  # separato, per P&L Fase 3
     d["semaforo"] = m["semaforo"]
+    # OVH -> margine netto (AGGIUNTA, spec §4.5, inv. 17). None se nessun coefficiente per il periodo.
+    d["coefficiente_ovh_applicato"] = float(m["coefficiente_ovh_applicato"]) if m["coefficiente_ovh_applicato"] is not None else None
+    d["ovh_caricato"] = float(m["ovh_caricato"]) if m["ovh_caricato"] is not None else None
+    d["margine_netto"] = float(m["margine_netto"]) if m["margine_netto"] is not None else None
+    d["margine_netto_pct"] = m["margine_netto_pct"]
     # Stima "live" (tutti i timesheet, non solo approvati): campo SEPARATO ed etichettato, non canonico.
     m_live = await calcola_margine_commessa(db, c, coeff_cache=coeff_cache, quota_cache=quota_cache, costo_manodopera_override=costo_manodopera_calc)
     d["margine_lordo_stima_live"] = float(m_live["margine_lordo_euro"])

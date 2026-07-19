@@ -617,6 +617,11 @@ class CommessaOut(OrmBase):
     coefficiente_allocazione: Optional[Decimal] = None
     margine_euro: Optional[Decimal] = None
     margine_percentuale: Optional[float] = None
+    # OVH -> margine netto (additivi, spec §4.5, inv. 17)
+    coefficiente_ovh_applicato: Optional[Decimal] = None
+    ovh_caricato: Optional[Decimal] = None
+    margine_netto: Optional[Decimal] = None
+    margine_netto_pct: Optional[float] = None
     fattura_id: Optional[uuid.UUID] = None
     fattura_numero: Optional[str] = None
     fattura_data: Optional[date] = None

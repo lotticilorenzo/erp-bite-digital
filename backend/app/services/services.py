@@ -154,6 +154,7 @@ async def calcola_margine_commessa(
     *,
     coeff_cache: Optional[dict[date, Decimal]] = None,
     quota_cache: Optional[dict] = None,
+    ovh_cache: Optional[dict] = None,
     costo_manodopera_override: Optional[Decimal] = None,
 ) -> dict:
     """FONTE UNICA del margine commessa (brief §4.2).
@@ -193,6 +194,23 @@ async def calcola_margine_commessa(
     if ricavo and ricavo > 0:
         margine_lordo_pct = round(float((margine_lordo_euro / ricavo) * 100), 1)
 
+    # ── OVH -> MARGINE NETTO (AGGIUNTA, spec §4.5, inv. 17). NON modifica i campi esistenti. ──
+    # Coefficiente OVH effective-dated (riga piu' recente <= periodo commessa; None se assente).
+    # Base = ricavi (inv. 17 v1). Lo scarto vs overhead reale NON si spalma (resta varianza aziendale).
+    from decimal import ROUND_HALF_UP
+    if ovh_cache is not None and mese_norm in ovh_cache:
+        coeff_ovh = ovh_cache[mese_norm]
+    else:
+        coeff_ovh = await _ultimo_coefficiente(db, mese_norm, incluso=True)
+        if ovh_cache is not None:
+            ovh_cache[mese_norm] = coeff_ovh
+    ovh_caricato = margine_netto = margine_netto_pct = None
+    if coeff_ovh is not None:
+        ovh_caricato = (coeff_ovh * ricavo).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        margine_netto = margine_lordo_euro - ovh_caricato
+        if ricavo and ricavo > 0:
+            margine_netto_pct = round(float((margine_netto / ricavo) * 100), 1)
+
     return {
         "ricavo": ricavo,
         "costo_manodopera": costo_manodopera,
@@ -204,6 +222,11 @@ async def calcola_margine_commessa(
         "coefficiente_allocazione": coefficiente,
         "costi_indiretti": costi_indiretti,
         "margine_operativo_euro": margine_operativo_euro,
+        # Nuovi campi OVH (additivi)
+        "coefficiente_ovh_applicato": coeff_ovh,
+        "ovh_caricato": ovh_caricato,
+        "margine_netto": margine_netto,
+        "margine_netto_pct": margine_netto_pct,
     }
 
 
@@ -1094,10 +1117,11 @@ async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None)
     commesse = await list_commesse(db, mese)
     coeff_cache: dict[date, Decimal] = {}
     quota_cache: dict = {}
+    ovh_cache: dict = {}
 
     acc: dict[uuid.UUID, dict] = {}
     for c in commesse:
-        m = await calcola_margine_commessa(db, c, coeff_cache=coeff_cache, quota_cache=quota_cache)
+        m = await calcola_margine_commessa(db, c, coeff_cache=coeff_cache, quota_cache=quota_cache, ovh_cache=ovh_cache)
         agg = acc.get(c.cliente_id)
         if agg is None:
             agg = {
@@ -1110,6 +1134,8 @@ async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None)
                 "quota_luca": Decimal("0"),
                 "margine_euro": Decimal("0"),           # lordo (canonico, al netto quota Luca)
                 "margine_operativo_euro": Decimal("0"),
+                "ovh_caricato": Decimal("0"),           # AGGIUNTA OVH (inv. 17)
+                "_ovh_ok": True,                        # False se una commessa non ha coefficiente
                 "num_commesse": 0,
             }
             acc[c.cliente_id] = agg
@@ -1120,6 +1146,10 @@ async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None)
         agg["quota_luca"] += m["quota_luca"]
         agg["margine_euro"] += m["margine_lordo_euro"]
         agg["margine_operativo_euro"] += m["margine_operativo_euro"]
+        if m["ovh_caricato"] is None:
+            agg["_ovh_ok"] = False
+        else:
+            agg["ovh_caricato"] += m["ovh_caricato"]
         agg["num_commesse"] += 1
 
     result = []
@@ -1139,6 +1169,12 @@ async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None)
             "margine_operativo_euro": float(agg["margine_operativo_euro"]),
             "margine_percentuale": pct,
             "semaforo": semaforo_margine_lordo(pct if fatturato > 0 else None),
+            # AGGIUNTA OVH: netto = lordo - ovh caricato (None se manca il coefficiente per una commessa)
+            "ovh_caricato": float(agg["ovh_caricato"]) if agg["_ovh_ok"] else None,
+            "margine_netto": (margine_euro - float(agg["ovh_caricato"])) if agg["_ovh_ok"] else None,
+            "margine_netto_percentuale": (
+                round((margine_euro - float(agg["ovh_caricato"])) / fatturato * 100, 1)
+                if agg["_ovh_ok"] and fatturato > 0 else None),
             "num_commesse": agg["num_commesse"],
         })
     result.sort(key=lambda x: x["margine_euro"], reverse=True)
