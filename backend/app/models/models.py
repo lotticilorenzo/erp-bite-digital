@@ -8,7 +8,7 @@ from sqlalchemy import (
     JSON, func, event
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
 from app.models.base import Base
 import enum
 
@@ -194,11 +194,23 @@ class Progetto(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     cliente_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("clienti.id"), nullable=True)
     nome: Mapped[str] = mapped_column(String(255))
-    tipo: Mapped[ProjectType] = mapped_column(SAEnum(ProjectType, name="project_type"))
+    tipo: Mapped[ProjectType] = mapped_column(SAEnum(ProjectType, name="project_type"))  # FATTURAZIONE (RETAINER/ONE_OFF): NON toccare, alimenta lo split ricavi P&L
     stato: Mapped[ProjectStatus] = mapped_column(SAEnum(ProjectStatus, name="project_status"), default=ProjectStatus.ATTIVO)
     importo_fisso: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     importo_variabile: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
     delivery_attesa: Mapped[int] = mapped_column(Integer, default=0)
+    # ── Asse SERVIZIO (spec §4.4/§4.6) — distinto dal modello di fatturazione `tipo`. ──
+    tipo_servizio: Mapped[Optional[str]] = mapped_column(String(30))  # social_media|creazione_sito_web|gestione_web|produzione_contenuti|stand_fieristici (null = non compilato)
+    periodicita: Mapped[Optional[str]] = mapped_column(String(20))  # mensile|bimestrale|trimestrale|semestrale|annuale|spot|una_tantum
+    # referente_risorsa_id: unico ruolo referente per il tipo servizio (assorbe videomaker/web_developer/operatore).
+    referente_risorsa_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("risorse.id", ondelete="SET NULL"))
+    intensita_socio: Mapped[str] = mapped_column(String(1), nullable=False, default="M")  # S|M|L, scala riparto quota socio 1:2:4 (§4.6)
+    # dettagli_tipo: campi specifici/rari per tipo_servizio. Chiavi attese:
+    #   social_media       -> {n_contenuti_previsti, di_cui_video}
+    #   produzione_contenuti -> {tipo_contenuto}
+    #   stand_fieristici   -> {fiera, data_consegna, partner}
+    #   creazione_sito_web / gestione_web -> {} (nessun campo extra previsto)
+    dettagli_tipo: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
     note: Mapped[Optional[str]] = mapped_column(Text)
     data_inizio: Mapped[Optional[date]] = mapped_column(Date)
     data_fine: Mapped[Optional[date]] = mapped_column(Date)
