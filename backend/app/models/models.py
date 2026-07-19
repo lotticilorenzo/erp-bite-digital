@@ -5,7 +5,7 @@ from typing import Optional, List
 from sqlalchemy import (
     String, Boolean, Date, DateTime, Numeric, Integer, Float,
     Text, ForeignKey, UniqueConstraint, CheckConstraint, Enum as SAEnum,
-    JSON, func
+    JSON, func, event
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
@@ -769,10 +769,18 @@ class AuditLog(Base):
 
 # ── MOVIMENTI CASSA ───────────────────────────────────────
 class MovimentoCassa(Base):
+    """Movimento di cassa con DOPPIA DATA (spec v2 §5.1, principio 3):
+    - data_valuta E' la data cassa fisica (alimenta la Tesoreria): resta invariata, letta da API/FE.
+    - data_competenza alimenta il Conto Economico gestionale. Backfill = data_valuta per lo storico.
+    Stessa fonte per CE e cassa. `ripartizione_competenza_mesi` (>=1): se >1 il CE riconoscera'
+    importo/N su N mesi (risconto gestionale) mentre la cassa resta un'unica uscita — SOLO il campo
+    in questa fase, la ripartizione nei report arriva col CE gestionale."""
     __tablename__ = "movimenti_cassa"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    data_valuta: Mapped[date] = mapped_column(Date, nullable=False)
+    data_valuta: Mapped[date] = mapped_column(Date, nullable=False)  # = data_cassa fisica (Tesoreria)
+    data_competenza: Mapped[Optional[date]] = mapped_column(Date, index=True)  # Conto Economico (§5.1)
+    ripartizione_competenza_mesi: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     data_contabile: Mapped[Optional[date]] = mapped_column(Date)
     descrizione: Mapped[Optional[str]] = mapped_column(Text)
     categoria: Mapped[Optional[str]] = mapped_column(String(100))
@@ -784,6 +792,24 @@ class MovimentoCassa(Base):
     note: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        CheckConstraint("ripartizione_competenza_mesi >= 1", name="ck_movimenti_ripartizione_mesi_pos"),
+    )
+
+    @property
+    def data_cassa(self) -> date:
+        """Nomenclatura spec §5.1: data_valuta E' la data cassa fisica del movimento (principio 3).
+        Alias di sola lettura per esporre il vocabolario della spec senza rinominare la colonna."""
+        return self.data_valuta
+
+
+@event.listens_for(MovimentoCassa, "before_insert")
+def _default_data_competenza(mapper, connection, target):
+    """Se data_competenza non e' fornita, coincide con la cassa (data_valuta) — spec §5.1.
+    Copre ogni path di creazione (import bancario, seed, sync) senza toccare i chiamanti."""
+    if target.data_competenza is None and target.data_valuta is not None:
+        target.data_competenza = target.data_valuta
 
 
 # ── RICONCILIAZIONI (ponte movimento <-> fattura, M2M + parziali — brief §2.2) ──
