@@ -3767,6 +3767,160 @@ async def delete_scadenza(db: AsyncSession, scadenza_id):
     return True
 
 
+# ── RICORRENZE + MOTORE DI GENERAZIONE (spec v2 §5.3). Genera in `scadenze`, non tocca i calcoli. ──
+import calendar as _calendar
+
+_STEP_MESI = {"mensile": 1, "bimestrale": 2, "trimestrale": 3, "semestrale": 6, "annuale": 12}
+
+
+def _clamp_giorno(year: int, month: int, day: int) -> date:
+    """Giorno calendar-aware: se `day` eccede i giorni del mese, usa l'ultimo giorno valido."""
+    last = _calendar.monthrange(year, month)[1]
+    return date(year, month, min(day, last))
+
+
+def _occorrenze_ricorrenza(ric, fino_a: date) -> list:
+    """Date delle occorrenze in [data_inizio, min(fino_a, data_fine)]. Calendar-aware
+    (mese+1 su un 31 -> ultimo giorno del mese target, mai overflow)."""
+    from dateutil.relativedelta import relativedelta
+    limite = fino_a
+    if ric.data_fine and ric.data_fine < limite:
+        limite = ric.data_fine
+    out = []
+    if ric.periodicita == "settimanale":
+        d = ric.data_inizio
+        while d <= limite:
+            out.append(d)
+            d = d + timedelta(days=7)
+        return out
+    step = _STEP_MESI[ric.periodicita]
+    ref_day = ric.giorno_riferimento or ric.data_inizio.day
+    k = 0
+    while k <= 100000:
+        base = ric.data_inizio + relativedelta(months=step * k)
+        d = _clamp_giorno(base.year, base.month, ref_day)
+        if d > limite:
+            break
+        if d >= ric.data_inizio:  # niente occorrenze prima di data_inizio
+            out.append(d)
+        k += 1
+    return out
+
+
+def _prossima_data_ricorrenza(ric):
+    """Prima occorrenza con data >= oggi (rispettando data_fine). None se esaurita."""
+    from dateutil.relativedelta import relativedelta
+    oggi = date.today()
+    if ric.data_fine and ric.data_fine < oggi:
+        return None
+    if ric.periodicita == "settimanale":
+        d = ric.data_inizio
+        while d < oggi:
+            d = d + timedelta(days=7)
+        return d if not (ric.data_fine and d > ric.data_fine) else None
+    step = _STEP_MESI[ric.periodicita]
+    ref_day = ric.giorno_riferimento or ric.data_inizio.day
+    k = 0
+    while k <= 100000:
+        base = ric.data_inizio + relativedelta(months=step * k)
+        d = _clamp_giorno(base.year, base.month, ref_day)
+        if d >= oggi and d >= ric.data_inizio:
+            return d if not (ric.data_fine and d > ric.data_fine) else None
+        k += 1
+    return None
+
+
+async def genera_occorrenze(db: AsyncSession, ricorrenza_id=None, fino_a: date = None) -> dict:
+    """Motore: crea righe in `scadenze` per ogni occorrenza dovuta fino a `fino_a`.
+    IDEMPOTENTE: salta le occorrenze gia' presenti (ricorrenza_id + data_attesa)."""
+    from app.models.models import Ricorrenza, Scadenza
+    if fino_a is None:
+        fino_a = date.today()
+    q = select(Ricorrenza).where(Ricorrenza.attivo == True)  # noqa: E712 (solo ricorrenze attive)
+    if ricorrenza_id:
+        q = q.where(Ricorrenza.id == ricorrenza_id)
+    ricorrenze = (await db.execute(q)).scalars().all()
+    create = 0
+    for ric in ricorrenze:
+        date_occ = _occorrenze_ricorrenza(ric, fino_a)
+        esistenti = set((await db.execute(
+            select(Scadenza.data_attesa).where(Scadenza.ricorrenza_id == ric.id)
+        )).scalars().all())
+        for d in date_occ:
+            if d in esistenti:
+                continue
+            stato, residuo = _scadenza_stato_residuo(ric.importo, Decimal("0"), d)
+            db.add(Scadenza(
+                tipo=ric.tipo_scadenza, data_attesa=d, importo=ric.importo,
+                stato=stato, importo_incassato=Decimal("0"), importo_residuo=residuo,
+                controparte_tipo=ric.controparte_tipo, controparte_id=ric.controparte_id,
+                categoria_id=ric.categoria_id, documento_rif=ric.descrizione,
+                origine="ricorrenza", impatta_cassa_bite=ric.impatta_cassa_bite,
+                ricorrenza_id=ric.id,
+            ))
+            create += 1
+        ric.prossima_data = _prossima_data_ricorrenza(ric)
+    await db.commit()
+    return {"ricorrenze_processate": len(ricorrenze), "occorrenze_create": create}
+
+
+async def list_ricorrenze(db: AsyncSession, attivo=None, tipo_scadenza=None):
+    from app.models.models import Ricorrenza
+    q = select(Ricorrenza)
+    if attivo is not None:
+        q = q.where(Ricorrenza.attivo == attivo)
+    if tipo_scadenza:
+        q = q.where(Ricorrenza.tipo_scadenza == tipo_scadenza)
+    q = q.order_by(Ricorrenza.data_inizio.asc())
+    rows = (await db.execute(q)).scalars().all()
+    return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+
+
+async def create_ricorrenza(db: AsyncSession, payload: dict, created_by=None):
+    from app.models.models import Ricorrenza
+    data = {k: v for k, v in payload.items() if hasattr(Ricorrenza, k)}
+    if created_by is not None:
+        data["created_by"] = created_by
+    ric = Ricorrenza(**data)
+    ric.prossima_data = _prossima_data_ricorrenza(ric)
+    db.add(ric)
+    await db.commit()
+    await db.refresh(ric)
+    return {c.name: getattr(ric, c.name) for c in ric.__table__.columns}
+
+
+async def update_ricorrenza(db: AsyncSession, ricorrenza_id, payload: dict):
+    from app.models.models import Ricorrenza
+    ric = (await db.execute(select(Ricorrenza).where(Ricorrenza.id == ricorrenza_id))).scalar_one_or_none()
+    if not ric:
+        return None
+    for k, v in payload.items():
+        if hasattr(ric, k):
+            setattr(ric, k, v)
+    ric.prossima_data = _prossima_data_ricorrenza(ric)
+    await db.commit()
+    await db.refresh(ric)
+    return {c.name: getattr(ric, c.name) for c in ric.__table__.columns}
+
+
+async def delete_ricorrenza(db: AsyncSession, ricorrenza_id):
+    """Soft-delete (attivo=false) se ha scadenze generate; hard-delete se non ne ha."""
+    from app.models.models import Ricorrenza, Scadenza
+    ric = (await db.execute(select(Ricorrenza).where(Ricorrenza.id == ricorrenza_id))).scalar_one_or_none()
+    if not ric:
+        return None
+    cnt = (await db.execute(
+        select(func.count()).select_from(Scadenza).where(Scadenza.ricorrenza_id == ricorrenza_id)
+    )).scalar() or 0
+    if cnt > 0:
+        ric.attivo = False
+        await db.commit()
+        return {"soft": True, "attivo": False, "scadenze_collegate": int(cnt)}
+    await db.delete(ric)
+    await db.commit()
+    return {"soft": False, "deleted": True}
+
+
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
 async def list_pesi_contenuto(db: AsyncSession):
     from app.models.models import PesoContenuto

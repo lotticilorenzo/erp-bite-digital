@@ -1761,11 +1761,77 @@ class ScadenzaOut(OrmBase):
     milestone: Optional[str]
     fattura_attiva_id: Optional[uuid.UUID]
     fattura_passiva_id: Optional[uuid.UUID]
+    ricorrenza_id: Optional[uuid.UUID]
     impatta_cassa_bite: bool
     note: Optional[str]
     created_at: datetime
     updated_at: datetime
     created_by: Optional[uuid.UUID]
+
+
+# ── RICORRENZE (template che generano scadenze — spec v2 §5.3) ──
+RicorrenzaPeriodicita = Literal["settimanale", "mensile", "bimestrale", "trimestrale", "semestrale", "annuale"]
+
+
+class RicorrenzaCreate(BaseModel):
+    descrizione: str = Field(..., min_length=1)
+    tipo_scadenza: ScadenzaTipo
+    importo: Decimal = Field(..., gt=0)
+    periodicita: RicorrenzaPeriodicita
+    giorno_riferimento: Optional[int] = Field(None, ge=1, le=31)
+    data_inizio: date
+    data_fine: Optional[date] = None
+    categoria_id: Optional[uuid.UUID] = None
+    conto_id: Optional[uuid.UUID] = None
+    controparte_tipo: Optional[ScadenzaControparte] = None
+    controparte_id: Optional[uuid.UUID] = None
+    impatta_cassa_bite: bool = True
+    attivo: bool = True
+    note: Optional[str] = None
+
+
+class RicorrenzaUpdate(BaseModel):
+    descrizione: Optional[str] = Field(None, min_length=1)
+    tipo_scadenza: Optional[ScadenzaTipo] = None
+    importo: Optional[Decimal] = Field(None, gt=0)
+    periodicita: Optional[RicorrenzaPeriodicita] = None
+    giorno_riferimento: Optional[int] = Field(None, ge=1, le=31)
+    data_inizio: Optional[date] = None
+    data_fine: Optional[date] = None
+    categoria_id: Optional[uuid.UUID] = None
+    conto_id: Optional[uuid.UUID] = None
+    controparte_tipo: Optional[ScadenzaControparte] = None
+    controparte_id: Optional[uuid.UUID] = None
+    impatta_cassa_bite: Optional[bool] = None
+    attivo: Optional[bool] = None
+    note: Optional[str] = None
+
+
+class RicorrenzaOut(OrmBase):
+    id: uuid.UUID
+    descrizione: str
+    tipo_scadenza: str
+    importo: Decimal
+    periodicita: str
+    giorno_riferimento: Optional[int]
+    data_inizio: date
+    data_fine: Optional[date]
+    prossima_data: Optional[date]
+    categoria_id: Optional[uuid.UUID]
+    conto_id: Optional[uuid.UUID]
+    controparte_tipo: Optional[str]
+    controparte_id: Optional[uuid.UUID]
+    impatta_cassa_bite: bool
+    attivo: bool
+    note: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    created_by: Optional[uuid.UUID]
+
+
+class GeneraRicorrenzeRequest(BaseModel):
+    fino_a: date
+    ricorrenza_id: Optional[uuid.UUID] = None
 
 
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──

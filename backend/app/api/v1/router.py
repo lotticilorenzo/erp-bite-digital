@@ -55,6 +55,7 @@ from app.schemas.schemas import (
     CostoVariabileCreate, CostoVariabileUpdate,
     ParametroCreate, ParametroUpdate,
     ScadenzaCreate, ScadenzaUpdate,
+    RicorrenzaCreate, RicorrenzaUpdate, GeneraRicorrenzeRequest,
     PesoContenutoUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
     MovimentoCassaUpdate, RiconciliaRequest, RiconciliazioniCreate,
@@ -78,6 +79,7 @@ from app.services.services import (
     list_costi_variabili, create_costo_variabile, update_costo_variabile, delete_costo_variabile,
     list_parametri, list_parametro_storico, create_parametro, update_parametro,
     list_scadenze, create_scadenza, update_scadenza, delete_scadenza,
+    list_ricorrenze, create_ricorrenza, update_ricorrenza, delete_ricorrenza, genera_occorrenze,
     list_pesi_contenuto, update_peso_contenuto,
     riconcilia_movimento as svc_riconcilia_movimento, elimina_riconciliazione,
     rimuovi_riconciliazioni_movimento, list_riconciliazioni_movimento, list_riconciliazioni_fattura,
@@ -771,6 +773,60 @@ async def delete_scadenza_endpoint(
     if not ok:
         raise HTTPException(status_code=404, detail="Scadenza non trovata")
     return {"deleted": True}
+
+
+# ── RICORRENZE (template -> occorrenze in scadenze — spec v2 §5.3). Non tocca i calcoli. ──
+@router.get("/ricorrenze", tags=["Ricorrenze"])
+async def get_ricorrenze(
+    attivo: Optional[bool] = Query(None),
+    tipo_scadenza: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return {"ricorrenze": await list_ricorrenze(db, attivo=attivo, tipo_scadenza=tipo_scadenza)}
+
+
+@router.post("/ricorrenze", tags=["Ricorrenze"], status_code=201)
+async def post_ricorrenza(
+    payload: RicorrenzaCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return await create_ricorrenza(db, payload.model_dump(), created_by=current_user.id)
+
+
+@router.post("/ricorrenze/genera", tags=["Ricorrenze"])
+async def post_genera_ricorrenze(
+    payload: GeneraRicorrenzeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return await genera_occorrenze(db, ricorrenza_id=payload.ricorrenza_id, fino_a=payload.fino_a)
+
+
+@router.patch("/ricorrenze/{ricorrenza_id}", tags=["Ricorrenze"])
+async def patch_ricorrenza(
+    ricorrenza_id: uuid.UUID,
+    payload: RicorrenzaUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    result = await update_ricorrenza(db, ricorrenza_id, payload.model_dump(exclude_unset=True))
+    if not result:
+        raise HTTPException(status_code=404, detail="Ricorrenza non trovata")
+    return result
+
+
+@router.delete("/ricorrenze/{ricorrenza_id}", tags=["Ricorrenze"])
+async def delete_ricorrenza_endpoint(
+    ricorrenza_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    result = await delete_ricorrenza(db, ricorrenza_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Ricorrenza non trovata")
+    return result
 
 
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
