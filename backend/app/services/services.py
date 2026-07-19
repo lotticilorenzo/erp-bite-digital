@@ -3414,9 +3414,13 @@ async def riconcilia_movimento(db: AsyncSession, movimento_id, righe: list[dict]
         create_payload.append((mov, fa_id, fp_id, importo, riga.get("data") or mov.data_valuta, riga.get("note"), fattura, is_attiva))
 
     for (mov_, fa_id, fp_id, importo, data_ric, note, fattura, is_attiva) in create_payload:
+        # ritardo_gg (spec §5.4): data cassa del movimento - data_scadenza fattura. None se non calcolabile.
+        ritardo_gg = None
+        if mov_.data_valuta and fattura.data_scadenza:
+            ritardo_gg = (mov_.data_valuta - fattura.data_scadenza).days
         db.add(Riconciliazione(
             movimento_id=mov_.id, fattura_attiva_id=fa_id, fattura_passiva_id=fp_id,
-            importo=importo, data=data_ric, note=note,
+            importo=importo, data=data_ric, ritardo_gg=ritardo_gg, note=note,
         ))
         fatture_toccate.append((fattura, is_attiva))
     await db.flush()

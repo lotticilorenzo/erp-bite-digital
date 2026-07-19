@@ -827,6 +827,7 @@ class Riconciliazione(Base):
     fattura_passiva_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("fatture_passive.id", ondelete="CASCADE"), index=True)
     importo: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     data: Mapped[date] = mapped_column(Date, nullable=False)
+    ritardo_gg: Mapped[Optional[int]] = mapped_column(Integer)  # data_valuta mov - data_scadenza fattura (spec §5.4)
     note: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
