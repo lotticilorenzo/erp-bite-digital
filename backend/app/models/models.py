@@ -923,6 +923,7 @@ class Scadenza(Base):
     milestone: Mapped[Optional[str]] = mapped_column(String(100))
     fattura_attiva_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("fatture_attive.id", ondelete="SET NULL"))
     fattura_passiva_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("fatture_passive.id", ondelete="SET NULL"))
+    ricorrenza_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("ricorrenze.id", ondelete="SET NULL"))  # occorrenza generata (spec §5.3)
     impatta_cassa_bite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)  # spec §10.0
     note: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -935,6 +936,41 @@ class Scadenza(Base):
         CheckConstraint("stato IN ('aperta','parziale','chiusa','scaduta')", name="ck_scadenze_stato"),
         CheckConstraint("controparte_tipo IS NULL OR controparte_tipo IN ('cliente','fornitore','erario','inps','banca','altro')", name="ck_scadenze_controparte_tipo"),
         CheckConstraint("origine IN ('fic','manuale','ricorrenza','f24','progetto')", name="ck_scadenze_origine"),
+    )
+
+
+class Ricorrenza(Base):
+    """Template ricorrente (spec v2 §5.3): genera occorrenze in `scadenze` via il motore
+    services.genera_occorrenze. NON e' letta da alcun calcolo; non tocca costi_variabili.
+    Idempotenza: UNIQUE(ricorrenza_id, data_attesa) sulle scadenze generate."""
+    __tablename__ = "ricorrenze"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    descrizione: Mapped[str] = mapped_column(Text, nullable=False)
+    tipo_scadenza: Mapped[str] = mapped_column(String(20), nullable=False)  # tipo delle scadenze generate
+    importo: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    periodicita: Mapped[str] = mapped_column(String(20), nullable=False)  # settimanale|mensile|bimestrale|trimestrale|semestrale|annuale
+    giorno_riferimento: Mapped[Optional[int]] = mapped_column(Integer)  # null = giorno di data_inizio
+    data_inizio: Mapped[date] = mapped_column(Date, nullable=False)
+    data_fine: Mapped[Optional[date]] = mapped_column(Date)  # null = indeterminata
+    prossima_data: Mapped[Optional[date]] = mapped_column(Date)  # aggiornata dal generatore
+    categoria_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
+    conto_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
+    controparte_tipo: Mapped[Optional[str]] = mapped_column(String(20))
+    controparte_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
+    impatta_cassa_bite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    attivo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+
+    __table_args__ = (
+        CheckConstraint("importo > 0", name="ck_ricorrenze_importo_pos"),
+        CheckConstraint("tipo_scadenza IN ('attiva','passiva','fiscale','contributiva','finanziaria')", name="ck_ricorrenze_tipo"),
+        CheckConstraint("periodicita IN ('settimanale','mensile','bimestrale','trimestrale','semestrale','annuale')", name="ck_ricorrenze_periodicita"),
+        CheckConstraint("giorno_riferimento IS NULL OR giorno_riferimento BETWEEN 1 AND 31", name="ck_ricorrenze_giorno"),
+        CheckConstraint("controparte_tipo IS NULL OR controparte_tipo IN ('cliente','fornitore','erario','inps','banca','altro')", name="ck_ricorrenze_controparte_tipo"),
     )
 
 
