@@ -1140,6 +1140,30 @@ class PeriodoContabile(Base):
     )
 
 
+class CoefficienteOvh(Base):
+    """Storico dei refresh del coefficiente overhead rolling (spec v2 §4.5, inv. 17).
+    v1 deterministica: numeratore = costi struttura 12m, denominatore = run-rate ricavi 12m.
+    SOLO calcolato/esposto: non aggancia calcola_margine_commessa ne' il P&L."""
+    __tablename__ = "coefficienti_ovh"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    periodo_riferimento: Mapped[date] = mapped_column(Date, nullable=False)
+    overhead_previsto: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 2))
+    base_ricavi_prevista: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 2))
+    coefficiente: Mapped[Decimal] = mapped_column(Numeric(8, 6), nullable=False)
+    coefficiente_grezzo: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 6))
+    tetto_applicato: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    fonte: Mapped[str] = mapped_column(String(20), nullable=False, default="deterministico")
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+
+    __table_args__ = (
+        CheckConstraint("fonte IN ('deterministico','forecast')", name="ck_ovh_fonte"),
+        UniqueConstraint("periodo_riferimento", name="uq_ovh_periodo"),
+    )
+
+
 # ── IMPUTAZIONI MOVIMENTI CASSA ───────────────────────────
 class MovimentoCassaImputazione(Base):
     __tablename__ = "movimenti_cassa_imputazioni"
