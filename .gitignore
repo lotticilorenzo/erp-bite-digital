@@ -42,3 +42,7 @@ data-studio*
 
 # Artefatti di analisi locali (non versionati)
 .analysis/
+
+# Dump produzione per ripristino locale (DATI REALI, mai committare)
+backup_prod_locale.sql
+*.sql.dump
