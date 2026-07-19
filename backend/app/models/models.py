@@ -1053,6 +1053,26 @@ class FatturaPassivaImputazione(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class FatturaAttivaAllocazione(Base):
+    """Allocazione ricavo fattura attiva -> commessa (Tabella F, spec v2 §7). Simmetrica alle
+    imputazioni passive, con quadratura: Σ importi_allocati <= imponibile (invariante 6).
+    NON agganciata ai calcoli (P&L/margine usano commessa.valore_fatturabile_calc)."""
+    __tablename__ = "fatture_attive_allocazioni"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    fattura_attiva_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("fatture_attive.id", ondelete="CASCADE"), nullable=False)
+    commessa_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("commesse.id", ondelete="CASCADE"), nullable=False)
+    importo_allocato: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+
+    __table_args__ = (
+        CheckConstraint("importo_allocato > 0", name="ck_alloc_importo_pos"),
+        UniqueConstraint("fattura_attiva_id", "commessa_id", name="uq_alloc_fattura_commessa"),
+    )
+
+
 # ── IMPUTAZIONI MOVIMENTI CASSA ───────────────────────────
 class MovimentoCassaImputazione(Base):
     __tablename__ = "movimenti_cassa_imputazioni"
