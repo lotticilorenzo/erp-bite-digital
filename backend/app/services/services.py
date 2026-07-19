@@ -1885,7 +1885,7 @@ async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
 
     Memo §7.6 (cliente dedicato Italfer vs costo collaboratore Paolo G.) IMPLEMENTATO e configurabile
     via config_pl_memo; il costo collaboratore viene dal cedolino (esterno) -> NULL finche' non impostato.
-    TODO(Fase 3): scadenzario fiscale IRPEF/IRES (bloccato sul commercialista),
+    TODO(Fase 3): scadenzario fiscale IRAP + IRPEF soci (bloccato sul commercialista; Bite e' SAS, no IRES),
     split retainer vs one-shot (dato non strutturato a livello commessa).
     """
     from app.models.models import CostoFisso, FatturaAttiva, FatturaPassiva, ProjectType
@@ -2012,7 +2012,7 @@ async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
 # ── SCADENZARIO FISCALE (brief §3.2 + dashboard IVA §5.1, Fase 3) ──────────
 # Importi disponibili SOLO per l'IVA (calcolata dalle fatture). Le altre voci hanno data certa
 # ma importo non disponibile in DB → importo_stimato=None + certezza/flag (mai numeri inventati).
-# TODO(Fase 3): importi F24 contributi/ritenute da cedolino; acconti IRPEF/IRES da commercialista
+# TODO(Fase 3): importi F24 contributi/ritenute da cedolino; acconti IRAP + IRPEF soci da commercialista
 # (metodo storico); aggancio alla proiezione cassa (uscite fiscali certe-per-data).
 def _trimestre_label(d: date) -> str:
     return f"{d.year}-Q{(d.month - 1) // 3 + 1}"
@@ -2093,9 +2093,11 @@ async def calcola_scadenzario_fiscale(db: AsyncSession, da_data: date, a_data: d
                              "note": "Importo da cedolino/da configurare."})
         cur = cur + relativedelta(months=1)
 
-    # Acconti IRPEF/IRES: 30/06 e 30/11 di ogni anno nell'orizzonte
+    # Acconti IRAP (societa) + IRPEF soci: 30/06 e 30/11 di ogni anno nell'orizzonte.
+    # Bite e' una SAS -> trasparenza fiscale: la societa NON paga IRES (spec v2 invariante 12).
+    # Imposte: IRAP a livello societa + IRPEF/addizionali sui soci per trasparenza.
     for anno in range(da_data.year, a_data.year + 1):
-        for (m, etichetta) in [(6, "Acconto IRPEF/IRES (giugno)"), (11, "Acconto IRPEF/IRES (novembre)")]:
+        for (m, etichetta) in [(6, "Acconto IRAP + IRPEF soci (giugno)"), (11, "Acconto IRAP + IRPEF soci (novembre)")]:
             d = _clamp_day(anno, m, 30)
             if da_data <= d <= a_data:
                 scadenze.append({"data": str(d), "voce": etichetta, "importo_stimato": None,
