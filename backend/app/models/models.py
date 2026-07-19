@@ -842,6 +842,37 @@ class CostoVariabile(Base):
     )
 
 
+class Parametro(Base):
+    """Registro parametri centralizzato effective-dated (spec v2 §19).
+    Fonte unica dei parametri di configurazione finanziaria. Piu' righe per `chiave`
+    con `valido_da` diverse; il resolver (services.get_parametro) sceglie la riga con
+    valido_da MASSIMA <= data di riferimento. Le righe storiche NON si cancellano.
+    `valore` e' serializzato in TEXT: `tipo` dice come interpretarlo."""
+    __tablename__ = "parametri"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    chiave: Mapped[str] = mapped_column(String(100), nullable=False)
+    gruppo: Mapped[str] = mapped_column(String(30), nullable=False)  # fiscalita|tesoreria|budget|marginalita|soci_risorse|chiusura|preventivatore|clienti
+    descrizione: Mapped[Optional[str]] = mapped_column(Text)
+    tipo: Mapped[str] = mapped_column(String(20), nullable=False)  # percentuale|euro|intero|booleano|enum|data|testo
+    valore: Mapped[Optional[str]] = mapped_column(Text)
+    valido_da: Mapped[date] = mapped_column(Date, nullable=False)
+    scope: Mapped[str] = mapped_column(String(30), nullable=False, default="globale")  # globale|con_override_entita
+    fonte: Mapped[Optional[str]] = mapped_column(String(30))  # utente|commercialista|direzione
+    nota: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+
+    __table_args__ = (
+        UniqueConstraint("chiave", "valido_da", name="uq_parametri_chiave_valido_da"),
+        CheckConstraint("gruppo IN ('fiscalita','tesoreria','budget','marginalita','soci_risorse','chiusura','preventivatore','clienti')", name="ck_parametri_gruppo"),
+        CheckConstraint("tipo IN ('percentuale','euro','intero','booleano','enum','data','testo')", name="ck_parametri_tipo"),
+        CheckConstraint("scope IN ('globale','con_override_entita')", name="ck_parametri_scope"),
+        CheckConstraint("fonte IS NULL OR fonte IN ('utente','commercialista','direzione')", name="ck_parametri_fonte"),
+    )
+
+
 # ── COSTI FISSI ───────────────────────────────────────────
 class CostoFisso(Base):
     __tablename__ = "costi_fissi"
