@@ -95,7 +95,7 @@ from app.services.services import (
     calcola_liquidazione_iva, list_servizi_catalogo,
     list_budget_versioni, create_budget_versione, update_budget_versione, delete_budget_versione,
     approva_budget_versione, list_budget_righe, create_budget_righe, update_budget_riga,
-    delete_budget_riga, totali_budget_versione,
+    delete_budget_riga, totali_budget_versione, calcola_actual, confronto_budget_actual,
     list_pesi_contenuto, update_peso_contenuto,
     riconcilia_movimento as svc_riconcilia_movimento, elimina_riconciliazione,
     rimuovi_riconciliazioni_movimento, list_riconciliazioni_movimento, list_riconciliazioni_fattura,
@@ -1192,6 +1192,27 @@ async def post_budget_righe(
     db: AsyncSession = Depends(get_db), current_user: User = Depends(require_finance_access),
 ):
     return await create_budget_righe(db, versione_id, [r.model_dump() for r in payload.righe])
+
+
+@router.get("/budget/actual", tags=["Budget"])
+async def get_budget_actual(
+    anno: int = Query(..., ge=2000, le=2100),
+    mese: Optional[int] = Query(None, ge=1, le=12),
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_finance_access),
+):
+    """Consuntivo per voce_tipo (§13). Riusa calcola_pl_gestionale: coerente col P&L per costruzione."""
+    return await calcola_actual(db, anno, mese)
+
+
+@router.get("/budget/versioni/{versione_id}/confronto", tags=["Budget"])
+async def get_budget_confronto(
+    versione_id: uuid.UUID,
+    mese: Optional[int] = Query(None, ge=1, le=12),
+    ytd: bool = Query(False, description="cumula da gennaio al mese richiesto"),
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_finance_access),
+):
+    """Budget vs Actual con scostamenti e segno esplicito (`favorevole`)."""
+    return await confronto_budget_actual(db, versione_id, mese=mese, ytd=ytd)
 
 
 @router.get("/budget/versioni/{versione_id}/totali", tags=["Budget"])

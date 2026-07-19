@@ -4904,6 +4904,87 @@ async def totali_budget_versione(db: AsyncSession, versione_id):
     }
 
 
+# ── ACTUAL + CONFRONTO BUDGET/CONSUNTIVO (spec §13). Sola lettura: non modifica nulla. ──
+# FONTI (Passo 0): l'Actual RIUSA calcola_pl_gestionale -> per costruzione coincide col P&L.
+#   ricavo          -> pl["ricavi"]["totale"]        (fonte unica: commesse del mese)
+#   costo_diretto   -> pl["costi_diretti"]           (manodopera + diretti + quota Luca)
+#   costo_struttura -> pl["costi_fissi_indivisibili"](esclude 'personale', come il P&L)
+#   altro           -> None (nessuna fonte affidabile: mai 0 inventato)
+async def calcola_actual(db: AsyncSession, anno: int, mese: int = None) -> dict:
+    """Consuntivo per voce_tipo. Se `mese` e' None calcola tutti i 12 mesi dell'anno.
+    NB: 0 = zero REALE (nessun ricavo/costo quel mese); None = voce non calcolabile (nessuna fonte)."""
+    mesi = [mese] if mese else list(range(1, 13))
+    out = []
+    for m in mesi:
+        pl = await calcola_pl_gestionale(db, date(anno, m, 1))
+        out.append({
+            "mese": m,
+            "ricavo": pl["ricavi"]["totale"],
+            "costo_diretto": pl["costi_diretti"],
+            "costo_struttura": pl["costi_fissi_indivisibili"],
+            "altro": None,  # nessuna fonte affidabile
+        })
+    tot = {v: (sum(r[v] for r in out) if v != "altro" else None)
+           for v in ("ricavo", "costo_diretto", "costo_struttura", "altro")}
+    return {"anno": anno, "mesi": out, "totale": tot,
+            "fonte": "calcola_pl_gestionale (coerenza garantita col P&L)"}
+
+
+_VOCI_BUDGET = ("ricavo", "costo_diretto", "costo_struttura", "altro")
+
+
+def _favorevole(voce_tipo: str, scostamento):
+    """Segno esplicito: sui RICAVI uno scostamento positivo e' buono, sui COSTI e' cattivo.
+    None se non calcolabile o se lo scostamento e' esattamente zero (neutro)."""
+    if scostamento is None or scostamento == 0:
+        return None
+    return scostamento > 0 if voce_tipo == "ricavo" else scostamento < 0
+
+
+async def confronto_budget_actual(db: AsyncSession, versione_id, mese: int = None, ytd: bool = False):
+    """Confronto Budget vs Actual per voce_tipo. `ytd=True` cumula da gennaio al mese richiesto."""
+    from app.models.models import BudgetRiga
+    v = await _versione_o_404(db, versione_id)
+    anno = v.anno
+    # Perimetro mesi
+    if mese and ytd:
+        mesi = list(range(1, mese + 1)); etichetta = f"YTD gen-{mese:02d}"
+    elif mese:
+        mesi = [mese]; etichetta = f"mese {mese:02d}"
+    else:
+        mesi = list(range(1, 13)); etichetta = "anno"
+    # Budget aggregato per voce sul perimetro
+    rows = (await db.execute(
+        select(BudgetRiga.voce_tipo, func.coalesce(func.sum(BudgetRiga.importo), 0))
+        .where(BudgetRiga.versione_id == versione_id, BudgetRiga.mese.in_(mesi))
+        .group_by(BudgetRiga.voce_tipo)
+    )).all()
+    budget_map = {vt: Decimal(str(t)) for vt, t in rows}
+    # Actual aggregato sullo stesso perimetro
+    act = await calcola_actual(db, anno)
+    act_map = {}
+    for voce in _VOCI_BUDGET:
+        vals = [r[voce] for r in act["mesi"] if r["mese"] in mesi]
+        act_map[voce] = None if any(x is None for x in vals) else sum(vals)
+
+    voci = []
+    for voce in _VOCI_BUDGET:
+        b = budget_map.get(voce)
+        a = act_map.get(voce)
+        sc = (Decimal(str(a)) - b) if (a is not None and b is not None) else None
+        pct = float((sc / b * 100).quantize(Decimal("0.1"))) if (sc is not None and b and b != 0) else None
+        voci.append({
+            "voce_tipo": voce,
+            "budget": float(b) if b is not None else None,
+            "actual": float(a) if a is not None else None,
+            "scostamento": float(sc) if sc is not None else None,
+            "scostamento_pct": pct,
+            "favorevole": _favorevole(voce, sc),
+        })
+    return {"versione_id": str(versione_id), "anno": anno, "tipo": v.tipo, "versione": v.versione,
+            "perimetro": etichetta, "mesi": mesi, "voci": voci}
+
+
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
 async def list_pesi_contenuto(db: AsyncSession):
     from app.models.models import PesoContenuto
