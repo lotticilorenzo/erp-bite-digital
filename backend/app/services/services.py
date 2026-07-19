@@ -1184,13 +1184,18 @@ async def get_marginalita_clienti(db: AsyncSession, mese: Optional[date] = None)
 # ── DASHBOARD LIQUIDITÀ (brief §5.1) — tutto DERIVATO, nessun ricalcolo ──────────
 async def calcola_dashboard_liquidita(
     db: AsyncSession,
-    soglia_uscita: Decimal = Decimal("500"),
+    soglia_uscita: Optional[Decimal] = None,
     orizzonte_giorni: int = 90,
 ) -> dict:
     """KPI liquidità: prossima uscita significativa + fatture scadute per cliente.
     Consuma gli helper di espansione uscite esistenti (NON ricalcola e NON tocca
     calcola_proiezione_cassa, così il suo output resta invariato)."""
     oggi = date.today()
+    # Soglia dal registro effective-dated (data operativa = oggi, §19.4); override esplicito > registro
+    # > costante di fallback (inv. 22: il valore del registro = 500 -> invarianza).
+    if soglia_uscita is None:
+        par = await get_parametro(db, "soglia_uscita", oggi)
+        soglia_uscita = Decimal(str(par["valore"])) if par and par.get("valore") is not None else Decimal("500")
     fine = oggi + timedelta(days=max(int(orizzonte_giorni), 1))
 
     # §5.1a — occorrenze datate delle uscite (costi fissi + variabili PREVISTO + fiscali quantificate)
@@ -1272,14 +1277,22 @@ async def calcola_dashboard_liquidita(
 async def calcola_kpi_clienti(
     db: AsyncSession,
     mese: date,
-    soglia_margine_pct: Decimal = Decimal("20"),
-    soglia_alert_clienti: int = 2,
+    soglia_margine_pct: Optional[Decimal] = None,
+    soglia_alert_clienti: Optional[int] = None,
 ) -> dict:
     """KPI clienti: n. clienti a margine basso (+alert) e ricavo medio/cliente con trend MoM.
     Consuma get_marginalita_clienti (FONTE UNICA del margine) — nessuna formula nuova."""
     from dateutil.relativedelta import relativedelta
 
     mese_norm = mese.replace(day=1)
+    # Soglie dal registro (gruppo marginalita, 1 sola query — no N+1). Data operativa = oggi (§19.4).
+    # Override esplicito > registro > costante di fallback (inv. 22: valori registro = 20/2 -> invarianza).
+    if soglia_margine_pct is None or soglia_alert_clienti is None:
+        g = await get_parametri_gruppo(db, "marginalita", date.today())
+        if soglia_margine_pct is None:
+            soglia_margine_pct = g.get("soglia_margine_pct") if g.get("soglia_margine_pct") is not None else Decimal("20")
+        if soglia_alert_clienti is None:
+            soglia_alert_clienti = g.get("soglia_alert_clienti") if g.get("soglia_alert_clienti") is not None else 2
     soglia = float(soglia_margine_pct)
     correnti = await get_marginalita_clienti(db, mese_norm)
 

@@ -217,7 +217,7 @@ async def dashboard_kpi(
 @router.get("/dashboard/liquidita", tags=["Report"])
 async def dashboard_liquidita(
     response: Response,
-    soglia_uscita: float = Query(500, ge=0, description="Soglia €: uscite oltre questa sono 'significative'"),
+    soglia_uscita: Optional[float] = Query(None, ge=0, description="Soglia €: uscite oltre questa sono 'significative' (default: registro parametri)"),
     orizzonte_giorni: int = Query(90, ge=7, le=365),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_finance_access),
@@ -226,15 +226,16 @@ async def dashboard_liquidita(
     Derivato dagli helper esistenti; non ricalcola margine/proiezione."""
     response.headers["Cache-Control"] = "private, max-age=120"
     from decimal import Decimal
-    return await calcola_dashboard_liquidita(db, Decimal(str(soglia_uscita)), orizzonte_giorni)
+    soglia = Decimal(str(soglia_uscita)) if soglia_uscita is not None else None
+    return await calcola_dashboard_liquidita(db, soglia, orizzonte_giorni)
 
 
 @router.get("/dashboard/kpi-clienti", tags=["Report"])
 async def dashboard_kpi_clienti(
     response: Response,
     mese: Optional[date] = Query(None, description="Mese YYYY-MM-01 (default: mese corrente)"),
-    soglia_margine_pct: float = Query(20, ge=0, le=100, description="Soglia % margine basso"),
-    soglia_alert_clienti: int = Query(2, ge=0, description="Alert se i clienti sotto soglia superano questo numero"),
+    soglia_margine_pct: Optional[float] = Query(None, ge=0, le=100, description="Soglia % margine basso (default: registro)"),
+    soglia_alert_clienti: Optional[int] = Query(None, ge=0, description="Alert se i clienti sotto soglia superano questo numero (default: registro)"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_finance_access),
 ):
@@ -242,7 +243,8 @@ async def dashboard_kpi_clienti(
     con trend mese-su-mese. Consuma get_marginalita_clienti (nessuna formula nuova)."""
     response.headers["Cache-Control"] = "private, max-age=120"
     from decimal import Decimal
-    return await calcola_kpi_clienti(db, mese or date.today(), Decimal(str(soglia_margine_pct)), soglia_alert_clienti)
+    sm = Decimal(str(soglia_margine_pct)) if soglia_margine_pct is not None else None
+    return await calcola_kpi_clienti(db, mese or date.today(), sm, soglia_alert_clienti)
 
 @router.get("/analytics/forecast", tags=["Analytics"])
 async def get_analytics_forecast(
