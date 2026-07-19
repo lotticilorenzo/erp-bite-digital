@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import require_roles
 from app.db.session import get_db
 from app.models.models import PreventivoStatus, User, UserRole
-from app.schemas.schemas import PreventivoCreate, PreventivoOut, PreventivoUpdate
+from app.schemas.schemas import PreventivoCreate, PreventivoOut, PreventivoUpdate, SimulaBudgetRequest
 from app.services.services import (
     converti_preventivo_in_commessa,
     create_preventivo,
@@ -15,6 +15,8 @@ from app.services.services import (
     get_preventivo,
     list_preventivi,
     update_preventivo,
+    calcola_preventivo,
+    simula_budget_interno,
 )
 
 router = APIRouter(prefix="/preventivi", tags=["Preventivi"])
@@ -83,6 +85,31 @@ async def remove_preventivo(
     if not ok:
         raise HTTPException(status_code=404, detail="Preventivo non trovato")
     await db.commit()
+
+
+@router.post("/simula-budget")
+async def simula_budget(
+    payload: SimulaBudgetRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+):
+    """Simulatore frontiera budget interno (§18.3): max ore per una risorsa variabile, date le fisse.
+    Vale SOLO tra risorse a ore (dipendenti); i soci sono capacita', non budget."""
+    return simula_budget_interno(payload.budget_interno, payload.risorse_fisse, payload.tariffa_variabile)
+
+
+@router.get("/{preventivo_id}/calcolo")
+async def get_calcolo_preventivo(
+    preventivo_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+):
+    """Economia del preventivo (§18): costi per natura, prezzo nelle 2 modalita', markup+margine
+    effettivi sempre esposti, budget interno. Non tocca il consuntivo."""
+    res = await calcola_preventivo(db, preventivo_id)
+    if res is None:
+        raise HTTPException(status_code=404, detail="Preventivo non trovato")
+    return res
 
 
 @router.post("/{preventivo_id}/converti-commessa")

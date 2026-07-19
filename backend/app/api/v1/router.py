@@ -91,7 +91,7 @@ from app.services.services import (
     list_periodi, soft_close_periodo, hard_lock_periodo, riapri_periodo, stato_periodo_data,
     periodo_e_bloccato,
     calcola_coefficiente_ovh, list_coefficienti_ovh_storico, calcola_varianza_assorbimento,
-    calcola_liquidazione_iva,
+    calcola_liquidazione_iva, list_servizi_catalogo,
     list_pesi_contenuto, update_peso_contenuto,
     riconcilia_movimento as svc_riconcilia_movimento, elimina_riconciliazione,
     rimuovi_riconciliazioni_movimento, list_riconciliazioni_movimento, list_riconciliazioni_fattura,
@@ -1130,6 +1130,15 @@ async def post_riapri(
     current_user: User = Depends(require_admin),
 ):
     return await riapri_periodo(db, anno, mese, payload.motivo, current_user.id)
+
+
+# ── CATALOGO SERVIZI (preventivatore §18.6) ──
+@router.get("/servizi-catalogo", tags=["Preventivi"])
+async def get_servizi_catalogo(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return {"servizi": await list_servizi_catalogo(db)}
 
 
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──

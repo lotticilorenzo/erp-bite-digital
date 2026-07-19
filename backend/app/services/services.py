@@ -4632,6 +4632,133 @@ async def calcola_liquidazione_iva(db: AsyncSession, data: date = None, dal: dat
     }
 
 
+# ── PREVENTIVATORE (spec §18): gemello ex-ante della marginalita. Non tocca il consuntivo. ──
+def _costo_riga_preventivo(v) -> Decimal:
+    """Costo di una riga per NATURA (§18.2). overhead escluso qui (dipende dal prezzo)."""
+    tipo = (v.get("tipo") or "").lower()
+    if tipo == "lavoro":
+        if v.get("ore") is not None and v.get("tariffa") is not None:
+            return (Decimal(str(v["ore"])) * Decimal(str(v["tariffa"]))).quantize(Decimal("0.01"))
+        return Decimal(str(v.get("costo") or 0))
+    if tipo == "socio":
+        # quota progettuale pesata (§4.6): STIMA, NON guidata dalle ore. Le ore-socio = solo capacita'.
+        return Decimal(str(v.get("costo") or 0))
+    if tipo == "esterno":
+        return Decimal(str(v.get("costo") or 0))
+    return Decimal("0")  # overhead: calcolato a valle sul prezzo
+
+
+def calcola_economia_preventivo(righe: list, *, modalita=None, markup_pct=None, markup_su="costo_pieno",
+                                margine_pct=None, prezzo_dato=None, coeff_ovh=Decimal("0"),
+                                margine_target=None) -> dict:
+    """Economia del preventivo: costi per natura, prezzo nelle 2 modalita', e SEMPRE markup+margine
+    effettivi (markup=prezzo/costo-1, margine=utile/prezzo — §18.1). Budget interno §18.3.
+    L'overhead e' % sul prezzo (§18.2), calcolato a valle (no circolarita')."""
+    from decimal import ROUND_HALF_UP
+    coeff_ovh = Decimal(str(coeff_ovh or 0))
+    costo_lavoro = costo_socio = costo_esterni = Decimal("0")
+    ha_overhead = False
+    per_riga = []
+    for v in righe:
+        tipo = (v.get("tipo") or "").lower()
+        c = _costo_riga_preventivo(v)
+        if tipo == "lavoro":
+            costo_lavoro += c
+        elif tipo == "socio":
+            costo_socio += c
+        elif tipo == "esterno":
+            costo_esterni += c
+        elif tipo == "overhead":
+            ha_overhead = True
+        per_riga.append({"tipo": tipo, "costo": float(c), "is_stima": tipo == "socio"})
+
+    costo_diretto = costo_lavoro + costo_socio + costo_esterni
+
+    # Prezzo secondo la modalita'
+    if modalita == "margine" and prezzo_dato is not None:
+        prezzo = Decimal(str(prezzo_dato))
+    elif modalita == "margine" and margine_pct is not None:
+        m = Decimal(str(margine_pct)) / 100
+        prezzo = (costo_diretto / (1 - m)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if m < 1 else costo_diretto
+    elif modalita == "markup":
+        base = costo_lavoro if markup_su == "solo_lavoro" else costo_diretto
+        mk = Decimal(str(markup_pct or 0)) / 100
+        prezzo = (base * (1 + mk)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    else:
+        prezzo = Decimal(str(prezzo_dato)) if prezzo_dato is not None else costo_diretto
+
+    overhead_cost = (coeff_ovh * prezzo).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if ha_overhead else Decimal("0")
+    costo_totale = costo_diretto + overhead_cost
+
+    markup_eff = float(((prezzo / costo_totale) - 1) * 100) if costo_totale > 0 else None
+    margine_eff = float(((prezzo - costo_totale) / prezzo) * 100) if prezzo > 0 else None
+
+    # Budget interno §18.3: B = prezzo - esterni - soci - OVH - margine_target
+    mt = Decimal(str(margine_target)) if margine_target is not None else Decimal("0")
+    budget_interno = prezzo - costo_esterni - costo_socio - overhead_cost - mt
+
+    # Quadratura (inv. 23): distribuisce il prezzo sulle righe (proporzionale al costo), resto all'ultima.
+    costi = [Decimal(str(r["costo"])) for r in per_riga]
+    base_tot = sum(costi, Decimal("0"))
+    acc = Decimal("0")
+    for i, r in enumerate(per_riga):
+        if i < len(per_riga) - 1:
+            quota = (prezzo * costi[i] / base_tot).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if base_tot > 0 else Decimal("0")
+            acc += quota
+            r["prezzo_riga"] = float(quota)
+        else:
+            r["prezzo_riga"] = float(prezzo - acc)  # resto all'ultima -> Σ == prezzo esatto
+
+    return {
+        "costo_lavoro": float(costo_lavoro), "costo_socio": float(costo_socio),
+        "costo_esterni": float(costo_esterni), "overhead": float(overhead_cost),
+        "coefficiente_ovh": float(coeff_ovh), "costo_totale": float(costo_totale),
+        "prezzo": float(prezzo), "righe": per_riga,
+        "markup_effettivo_pct": round(markup_eff, 2) if markup_eff is not None else None,
+        "margine_effettivo_pct": round(margine_eff, 2) if margine_eff is not None else None,
+        "budget_interno_lavoro": float(budget_interno),
+        "note_socio": "Il costo socio e' una STIMA (quota pesata §4.6), non dipende dalle ore.",
+        "note_overhead": "L'overhead include gia' la quota admin/commerciale dei soci: non rimetterla nei costi diretti.",
+    }
+
+
+async def calcola_preventivo(db: AsyncSession, preventivo_id):
+    """Carica righe + testata e calcola l'economia. coeff_ovh dal rolling corrente (o 0)."""
+    from app.models.models import Preventivo, PreventivoVoce
+    p = (await db.execute(select(Preventivo).where(Preventivo.id == preventivo_id))).scalar_one_or_none()
+    if not p:
+        return None
+    voci = (await db.execute(select(PreventivoVoce).where(PreventivoVoce.preventivo_id == preventivo_id).order_by(PreventivoVoce.ordine))).scalars().all()
+    righe = [{"tipo": v.tipo, "ore": v.ore, "tariffa": v.tariffa, "costo": v.costo, "ricarico_pct": v.ricarico_pct} for v in voci]
+    coeff = await _ultimo_coefficiente(db, date.today(), incluso=True) or Decimal("0")
+    eco = calcola_economia_preventivo(
+        righe, modalita=p.modalita_prezzo, markup_pct=p.markup_pct, markup_su=p.markup_su or "costo_pieno",
+        margine_pct=p.margine_pct, prezzo_dato=p.prezzo, coeff_ovh=coeff, margine_target=p.margine_target)
+    eco["preventivo_id"] = str(preventivo_id)
+    eco["stato_commerciale"] = {"BOZZA": "bozza", "INVIATO": "offerta", "ACCETTATO": "accettato",
+                                 "RIFIUTATO": "perso", "SCADUTO": "perso"}.get(getattr(p.stato, "value", str(p.stato)), None)
+    return eco
+
+
+def simula_budget_interno(budget: Decimal, risorse_fisse: list, tariffa_variabile: Decimal) -> dict:
+    """Frontiera §18.3: fissate le ore di alcune risorse (dipendenti), max ore per una risorsa variabile.
+    h_F <= (B - Σ ore_i*r_i) / r_F. Vale SOLO per risorse a ore; i soci sono capacita', esclusi."""
+    budget = Decimal(str(budget)); tr = Decimal(str(tariffa_variabile))
+    consumato = sum((Decimal(str(r["ore"])) * Decimal(str(r["tariffa"])) for r in risorse_fisse), Decimal("0"))
+    residuo = budget - consumato
+    max_ore = float((residuo / tr)) if tr > 0 else None
+    return {"budget_interno": float(budget), "consumato_fisse": float(consumato),
+            "residuo": float(residuo), "tariffa_variabile": float(tr),
+            "max_ore_variabile": round(max_ore, 2) if max_ore is not None else None,
+            "nota": "Frontiera valida solo tra risorse a ore (dipendenti). I soci sono capacita', non budget."}
+
+
+async def list_servizi_catalogo(db: AsyncSession):
+    from app.models.models import ServizioCatalogo
+    rows = (await db.execute(select(ServizioCatalogo).where(ServizioCatalogo.attivo == True).order_by(ServizioCatalogo.nome))).scalars().all()  # noqa: E712
+    return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+
+
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
 async def list_pesi_contenuto(db: AsyncSession):
     from app.models.models import PesoContenuto
@@ -5447,7 +5574,15 @@ async def create_preventivo(db: AsyncSession, data: PreventivoCreate, user_id: u
         note=data.note,
         importo_totale=importo_totale,
         created_by=user_id,
-        stato=PreventivoStatus.BOZZA
+        stato=PreventivoStatus.BOZZA,
+        # §18.1 modalita prezzo
+        modalita_prezzo=data.modalita_prezzo,
+        markup_su=data.markup_su or "costo_pieno",
+        prezzo=data.prezzo,
+        margine_pct=data.margine_pct,
+        markup_pct=data.markup_pct,
+        margine_target=data.margine_target,
+        valido_fino=data.valido_fino,
     )
     db.add(p)
     await db.flush()
@@ -5461,7 +5596,11 @@ async def create_preventivo(db: AsyncSession, data: PreventivoCreate, user_id: u
             quantita=v.quantita,
             prezzo_unitario=v.prezzo_unitario,
             totale=v.quantita * v.prezzo_unitario,
-            ordine=v.ordine
+            ordine=v.ordine,
+            # §18.2 natura riga
+            tipo=v.tipo, servizio_id=v.servizio_id, risorsa_id=v.risorsa_id, ruolo=v.ruolo,
+            ore=v.ore, tariffa=v.tariffa, costo=v.costo, ricarico_pct=v.ricarico_pct,
+            is_stima=(v.tipo == "socio"),
         )
         voci.append(riga)
     db.add_all(voci)
