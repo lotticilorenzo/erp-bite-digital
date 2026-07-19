@@ -4506,6 +4506,67 @@ async def calcola_varianza_assorbimento(db: AsyncSession, periodo, overhead_real
             "varianza": float(varianza), "tipo": tipo}
 
 
+# ── IVA PER CASSA REALE da movimenti SDI riconciliati (spec §10.1, inv. 13) ──────────
+# ISOLATA: l'IVA non tocca MAI CE ne' margine. Convive con calcola_scadenzario_fiscale (stima per
+# competenza), che resta invariato. Inerte finche' non ci sono movimenti SDI riconciliati (0 onesto).
+async def _periodo_iva(db: AsyncSession, data: date):
+    """Confini periodo IVA dalla data, secondo iva_periodicita (registro, effective-dated)."""
+    from dateutil.relativedelta import relativedelta
+    par = await get_parametro(db, "iva_periodicita", data)
+    periodicita = par["valore"] if par and par.get("valore") else "trimestrale"
+    if periodicita == "mensile":
+        dal = data.replace(day=1)
+        al = (dal + relativedelta(months=1)) - timedelta(days=1)
+        label = dal.strftime("%Y-%m")
+    else:  # trimestrale (default)
+        q = (data.month - 1) // 3
+        dal = date(data.year, q * 3 + 1, 1)
+        al = (dal + relativedelta(months=3)) - timedelta(days=1)
+        label = f"{data.year}-Q{q + 1}"
+    return dal, al, label, periodicita
+
+
+async def calcola_liquidazione_iva(db: AsyncSession, data: date = None, dal: date = None, al: date = None):
+    """IVA per cassa: debito (incassi SDI) - credito (pagamenti SDI x detraibilita). Saldo>0 versamento,
+    saldo<0 credito riportato (NON genera incasso, inv. 13). Fonte: movimento.iva_importo (da FIC)."""
+    periodicita = None
+    if dal is None or al is None:
+        dal, al, label, periodicita = await _periodo_iva(db, data or date.today())
+    else:
+        label = f"{dal} .. {al}"
+    p = {"dal": dal, "al": al}
+    debito_row = (await db.execute(text(
+        "SELECT COALESCE(SUM(m.iva_importo),0) AS iva, COUNT(*) AS n FROM movimenti_cassa m "
+        "WHERE m.data_valuta BETWEEN :dal AND :al AND m.iva_importo IS NOT NULL "
+        "AND EXISTS (SELECT 1 FROM riconciliazioni r JOIN fatture_attive f ON f.id=r.fattura_attiva_id "
+        "WHERE r.movimento_id=m.id AND f.fattura_elettronica=true)"), p)).one()
+    credito_row = (await db.execute(text(
+        "SELECT COALESCE(SUM(m.iva_importo * COALESCE(f.detraibilita_pct,0)/100),0) AS iva, "
+        "COUNT(DISTINCT m.id) AS n FROM movimenti_cassa m "
+        "JOIN riconciliazioni r ON r.movimento_id=m.id "
+        "JOIN fatture_passive f ON f.id=r.fattura_passiva_id "
+        "WHERE m.data_valuta BETWEEN :dal AND :al AND f.fattura_elettronica=true AND m.iva_importo IS NOT NULL"), p)).one()
+    non_sdi = (await db.execute(text(
+        "SELECT COUNT(DISTINCT m.id) FROM movimenti_cassa m JOIN riconciliazioni r ON r.movimento_id=m.id "
+        "LEFT JOIN fatture_attive fa ON fa.id=r.fattura_attiva_id "
+        "LEFT JOIN fatture_passive fp ON fp.id=r.fattura_passiva_id "
+        "WHERE m.data_valuta BETWEEN :dal AND :al "
+        "AND COALESCE(fa.fattura_elettronica, fp.fattura_elettronica, false)=false"), p)).scalar() or 0
+    non_ric = (await db.execute(text(
+        "SELECT COUNT(*) FROM movimenti_cassa m WHERE m.data_valuta BETWEEN :dal AND :al "
+        "AND NOT EXISTS (SELECT 1 FROM riconciliazioni r WHERE r.movimento_id=m.id)"), p)).scalar() or 0
+    debito = Decimal(str(debito_row.iva)).quantize(Decimal("0.01"))
+    credito = Decimal(str(credito_row.iva)).quantize(Decimal("0.01"))
+    saldo = debito - credito
+    esito = "versamento" if saldo > 0 else ("credito_riportato" if saldo < 0 else "neutro")
+    return {
+        "periodo": label, "periodicita": periodicita, "dal": str(dal), "al": str(al),
+        "iva_debito": float(debito), "iva_credito": float(credito), "saldo": float(saldo), "esito": esito,
+        "dettaglio": {"n_incassi_sdi": int(debito_row.n), "n_pagamenti_sdi": int(credito_row.n),
+                      "esclusi_non_sdi": int(non_sdi), "esclusi_non_riconciliati": int(non_ric)},
+    }
+
+
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
 async def list_pesi_contenuto(db: AsyncSession):
     from app.models.models import PesoContenuto

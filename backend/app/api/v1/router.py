@@ -91,6 +91,7 @@ from app.services.services import (
     list_periodi, soft_close_periodo, hard_lock_periodo, riapri_periodo, stato_periodo_data,
     periodo_e_bloccato,
     calcola_coefficiente_ovh, list_coefficienti_ovh_storico, calcola_varianza_assorbimento,
+    calcola_liquidazione_iva,
     list_pesi_contenuto, update_peso_contenuto,
     riconcilia_movimento as svc_riconcilia_movimento, elimina_riconciliazione,
     rimuovi_riconciliazioni_movimento, list_riconciliazioni_movimento, list_riconciliazioni_fattura,
@@ -1055,6 +1056,19 @@ async def get_coefficiente_ovh_storico(
     current_user: User = Depends(require_finance_access),
 ):
     return {"storico": await list_coefficienti_ovh_storico(db)}
+
+
+@router.get("/report/liquidazione-iva", tags=["Report"])
+async def get_liquidazione_iva(
+    periodo: Optional[date] = Query(None, description="data nel periodo (deriva trimestre/mese da iva_periodicita)"),
+    dal: Optional[date] = Query(None, description="override esplicito inizio"),
+    al: Optional[date] = Query(None, description="override esplicito fine"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """IVA per cassa reale (spec §10.1) da movimenti SDI riconciliati. Isolata dal CE/margine (inv. 13).
+    Convive con /report/scadenzario-fiscale (stima per competenza), che resta invariato."""
+    return await calcola_liquidazione_iva(db, data=periodo, dal=dal, al=al)
 
 
 @router.get("/report/varianza-assorbimento", tags=["Report"])
