@@ -69,7 +69,7 @@ import httpx
 from app.services.services import (
     list_tasks, get_task, create_task, update_task, delete_task,
     list_timesheet, create_timesheet, approva_timesheet,
-    get_dashboard_kpi, get_marginalita_clienti, calcola_dso,
+    get_dashboard_kpi, get_marginalita_clienti, calcola_dso, calcola_dso_aziendale,
     calcola_dashboard_liquidita, calcola_kpi_clienti,
     get_config_pl_memo, update_config_pl_memo,
     calcola_proiezione_cassa, get_ultimo_saldo, create_saldo, calcola_pl_gestionale,
@@ -364,6 +364,18 @@ async def report_dso(
     """DSO engine (Fase 2): storico incassi per cliente, scenari incasso sulle fatture aperte,
     rischio concentrazione ricavo. Solo lettura."""
     return await calcola_dso(db, mesi)
+
+
+@router.get("/report/dso-aziendale", tags=["Report"])
+async def report_dso_aziendale(
+    dal: Optional[date] = Query(None, description="inizio periodo (default: al - 90gg)"),
+    al: Optional[date] = Query(None, description="fine periodo (default: oggi)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """DSO AZIENDALE (KPI di bilancio, spec §12): (crediti aperti / fatturato periodo) * giorni.
+    Sibling — e distinto — dal DSO COMPORTAMENTALE per cliente di /report/dso, che resta invariato."""
+    return await calcola_dso_aziendale(db, dal, al)
 
 
 @router.get("/report/pl-gestionale", tags=["Report"])

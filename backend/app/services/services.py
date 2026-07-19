@@ -1371,6 +1371,37 @@ def _dso_cliente(storico: dict, cliente_id) -> dict:
     }
 
 
+async def calcola_dso_aziendale(db: AsyncSession, dal: date = None, al: date = None) -> dict:
+    """DSO AZIENDALE (KPI di bilancio, spec §12): (crediti aperti / fatturato periodo) * giorni.
+    Distinto dal DSO COMPORTAMENTALE per cliente (_dso_storico_per_cliente / /report/dso), che
+    resta invariato. None se fatturato del periodo = 0 (mai divisione per zero, mai 0 come risultato)."""
+    al = al or date.today()
+    dal = dal or (al - timedelta(days=90))
+    giorni = (al - dal).days
+    # crediti aperti alla data di riferimento = Σ residuo delle fatture non ancora incassate.
+    crediti = (await db.execute(text(
+        "SELECT COALESCE(SUM(importo_residuo), 0) FROM fatture_attive "
+        "WHERE importo_residuo > 0 AND data_emissione IS NOT NULL AND data_emissione <= :al"
+    ), {"al": al})).scalar() or 0
+    # fatturato del periodo = Σ imponibile delle fatture emesse in [dal, al].
+    fatturato = (await db.execute(text(
+        "SELECT COALESCE(SUM(importo_netto), 0) FROM fatture_attive "
+        "WHERE data_emissione IS NOT NULL AND data_emissione >= :dal AND data_emissione <= :al"
+    ), {"dal": dal, "al": al})).scalar() or 0
+    crediti = Decimal(str(crediti))
+    fatturato = Decimal(str(fatturato))
+    dso = None
+    if fatturato > 0:
+        dso = float((crediti / fatturato * giorni).quantize(Decimal("0.1")))
+    return {
+        "dso_aziendale_gg": dso,
+        "crediti_aperti": float(crediti),
+        "fatturato_periodo": float(fatturato),
+        "giorni_periodo": giorni,
+        "periodo": {"dal": str(dal), "al": str(al)},
+    }
+
+
 async def calcola_dso(db: AsyncSession, window_mesi: int = 12) -> dict:
     """DSO engine: storico per cliente, scenari incasso sulle fatture aperte, concentrazione ricavo."""
     from app.models.models import Cliente, Commessa, FatturaAttiva
