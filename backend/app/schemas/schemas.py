@@ -1944,6 +1944,18 @@ class RegolaRiconciliazioneUpdate(BaseModel):
 
 
 # ── MOVIMENTI CASSA ───────────────────────────────────────
+class MovimentoCassaCreate(BaseModel):
+    data_valuta: date  # data cassa fisica
+    data_competenza: Optional[date] = None  # default = data_valuta (before_insert); soggetta al lock §13.6
+    ripartizione_competenza_mesi: int = Field(1, ge=1)
+    importo: Decimal
+    descrizione: Optional[str] = None
+    categoria: Optional[str] = Field(None, max_length=100)
+    tipo: Optional[str] = Field(None, max_length=20)
+    data_contabile: Optional[date] = None
+    note: Optional[str] = Field(None, max_length=1000)
+
+
 class MovimentoCassaUpdate(BaseModel):
     categoria: Optional[str] = Field(None, max_length=100)
     descrizione: Optional[str] = None

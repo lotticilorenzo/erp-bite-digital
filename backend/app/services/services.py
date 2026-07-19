@@ -3300,6 +3300,38 @@ async def list_movimenti_cassa(db: AsyncSession, skip: int = 0, limit: int = 200
     return out
 
 
+def _msg_periodo_bloccato(dc) -> str:
+    return f"Periodo {dc.year}-{dc.month:02d} chiuso (hard lock): registra la rettifica nel periodo aperto."
+
+
+async def create_movimento(db: AsyncSession, payload: dict, user_id=None):
+    """Crea un movimento. Enforcement lock competenza (§13.6): la competenza effettiva
+    (data_competenza o, se assente, data_valuta) non deve cadere in un periodo hard_lock."""
+    from app.models.models import MovimentoCassa
+    data = {k: v for k, v in payload.items() if hasattr(MovimentoCassa, k)}
+    dc = data.get("data_competenza") or data.get("data_valuta")
+    if await periodo_e_bloccato(db, dc):
+        raise HTTPException(status_code=400, detail=_msg_periodo_bloccato(dc))
+    m = MovimentoCassa(**data)
+    db.add(m)
+    await db.commit()
+    await db.refresh(m)
+    return {c.name: getattr(m, c.name) for c in m.__table__.columns}
+
+
+async def delete_movimento(db: AsyncSession, movimento_id):
+    """Elimina un movimento. Bloccato se la sua data_competenza e' in periodo hard_lock (§13.6)."""
+    from app.models.models import MovimentoCassa
+    m = (await db.execute(select(MovimentoCassa).where(MovimentoCassa.id == movimento_id))).scalar_one_or_none()
+    if not m:
+        return None
+    if await periodo_e_bloccato(db, m.data_competenza):
+        raise HTTPException(status_code=400, detail=_msg_periodo_bloccato(m.data_competenza))
+    await db.delete(m)
+    await db.commit()
+    return {"deleted": True}
+
+
 # ── RICONCILIAZIONE BANCARIA (M2M + parziali, fonte unica — brief §2.2) ──────────
 # La tabella `riconciliazioni` e' la FONTE UNICA: importo_pagato/residuo/stato/data delle
 # fatture e il flag riconciliato dei movimenti sono SEMPRE derivati da qui (mai scritti a mano,

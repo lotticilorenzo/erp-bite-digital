@@ -61,7 +61,7 @@ from app.schemas.schemas import (
     RiapriPeriodoRequest,
     PesoContenutoUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
-    MovimentoCassaUpdate, RiconciliaRequest, RiconciliazioniCreate,
+    MovimentoCassaCreate, MovimentoCassaUpdate, RiconciliaRequest, RiconciliazioniCreate,
     ImputazioniRequest,
     PianoCreate, PianoUpdate, CollegaCommessaRequest,
     SaldoCassaCreate,
@@ -78,7 +78,7 @@ from app.services.services import (
     calcola_scadenzario_fiscale,
     sync_fic_data, get_last_fic_sync_status, list_fatture_attive, incassa_fattura,
     list_fornitori_full, update_fornitore, list_fatture_passive, update_fattura_passiva, list_fornitori,
-    list_movimenti_cassa, list_costi_fissi, create_costo_fisso, update_costo_fisso, delete_costo_fisso,
+    list_movimenti_cassa, create_movimento, delete_movimento, list_costi_fissi, create_costo_fisso, update_costo_fisso, delete_costo_fisso,
     list_costi_variabili, create_costo_variabile, update_costo_variabile, delete_costo_variabile,
     list_parametri, list_parametro_storico, create_parametro, update_parametro,
     list_scadenze, create_scadenza, update_scadenza, delete_scadenza,
@@ -486,6 +486,30 @@ async def get_movimenti_cassa(
     return {"movimenti_cassa": movimenti}
 
 
+@router.post("/movimenti-cassa", tags=["Cassa"], status_code=201)
+async def post_movimento_cassa(
+    payload: MovimentoCassaCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """Crea un movimento. Enforcement lock competenza (§13.6): la competenza effettiva non deve
+    cadere in un periodo hard_lock."""
+    return await create_movimento(db, payload.model_dump(exclude_unset=True), current_user.id)
+
+
+@router.delete("/movimenti-cassa/{movimento_id}", tags=["Cassa"])
+async def delete_movimento_cassa(
+    movimento_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """Elimina un movimento. Bloccato se la sua data_competenza e' in periodo hard_lock (§13.6)."""
+    result = await delete_movimento(db, movimento_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Movimento non trovato")
+    return result
+
+
 @router.post("/movimenti-cassa/{movimento_id}/riconcilia", tags=["Cassa"])
 async def riconcilia_movimento(
     movimento_id: uuid.UUID,
@@ -523,6 +547,19 @@ async def patch_movimento_cassa(
 
     # Campi scalari non legati alla riconciliazione (la riconciliazione la gestisce il service)
     data = payload.model_dump(exclude_unset=True)
+    # Enforcement lock competenza (§13.6): i campi CASSA/riconciliazione restano SEMPRE aperti;
+    # gli altri (competenza/metadati) sono immutabili se il movimento e' in periodo hard_lock.
+    cassa_fields = {"riconciliato", "fattura_attiva_id", "fattura_passiva_id"}
+    tocca_competenza = bool(set(data.keys()) - cassa_fields)
+    if tocca_competenza:
+        if await periodo_e_bloccato(db, mov.data_competenza):
+            raise HTTPException(status_code=400, detail=(
+                f"Periodo {mov.data_competenza.year}-{mov.data_competenza.month:02d} chiuso: "
+                "modifica non consentita, registra la rettifica nel periodo aperto."))
+        nuova_dc = data.get("data_competenza")
+        if nuova_dc and await periodo_e_bloccato(db, nuova_dc):
+            raise HTTPException(status_code=400, detail=(
+                f"data_competenza {nuova_dc.year}-{nuova_dc.month:02d} in periodo chiuso: non consentito."))
     for k in ("categoria", "descrizione", "note", "fattura_attiva_id", "fattura_passiva_id",
               "data_competenza", "ripartizione_competenza_mesi"):
         if k in data:
