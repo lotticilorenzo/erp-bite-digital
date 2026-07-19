@@ -4264,6 +4264,94 @@ async def delete_rata(db: AsyncSession, progetto_id, numero):
     return True
 
 
+# ── LOCK DI COMPETENZA / CHIUSURA PERIODO (spec §13.6, invariante 18) ──────────
+# Fonte unica del lock. Vale sulla COMPETENZA, non sulla cassa.
+async def periodo_e_bloccato(db: AsyncSession, data_competenza) -> bool:
+    """True SOLO se il mese di `data_competenza` e' in hard_lock. soft_close NON blocca
+    (mese in revisione, modifiche permesse). Periodo assente in tabella = aperto = False."""
+    from app.models.models import PeriodoContabile
+    if data_competenza is None:
+        return False
+    stato = (await db.execute(
+        select(PeriodoContabile.stato).where(
+            PeriodoContabile.anno == data_competenza.year,
+            PeriodoContabile.mese == data_competenza.month)
+    )).scalar_one_or_none()
+    return stato == "hard_lock"
+
+
+async def list_periodi(db: AsyncSession, anno=None):
+    from app.models.models import PeriodoContabile
+    q = select(PeriodoContabile)
+    if anno:
+        q = q.where(PeriodoContabile.anno == anno)
+    q = q.order_by(PeriodoContabile.anno.desc(), PeriodoContabile.mese.desc())
+    rows = (await db.execute(q)).scalars().all()
+    periodi = [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+    # giorno_hard_lock dal registro parametri (promemoria, nessuna automazione).
+    par = await get_parametro(db, "giorno_hard_lock")
+    giorno = int(par["valore"]) if par and par.get("valore") is not None else None
+    return {"periodi": periodi, "giorno_hard_lock": giorno}
+
+
+async def _get_or_create_periodo(db, anno, mese):
+    from app.models.models import PeriodoContabile
+    p = (await db.execute(select(PeriodoContabile).where(
+        PeriodoContabile.anno == anno, PeriodoContabile.mese == mese))).scalar_one_or_none()
+    if not p:
+        p = PeriodoContabile(anno=anno, mese=mese, stato="aperto")
+        db.add(p)
+        await db.flush()
+    return p
+
+
+async def soft_close_periodo(db: AsyncSession, anno, mese, user_id=None):
+    p = await _get_or_create_periodo(db, anno, mese)
+    p.stato = "soft_close"
+    p.soft_closed_at = datetime.now(timezone.utc)
+    p.closed_by = user_id
+    await db.commit()
+    await db.refresh(p)
+    return {c.name: getattr(p, c.name) for c in p.__table__.columns}
+
+
+async def hard_lock_periodo(db: AsyncSession, anno, mese, user_id=None):
+    # TODO(spec §13.6): la routine completa di chiusura (snapshot forecast, ricalcolo coefficiente
+    # OVH, chiusura margini commessa, calcolo Actual) si comporra' quando quei pezzi esisteranno.
+    p = await _get_or_create_periodo(db, anno, mese)
+    p.stato = "hard_lock"
+    p.hard_locked_at = datetime.now(timezone.utc)
+    p.closed_by = user_id
+    await db.commit()
+    await db.refresh(p)
+    return {c.name: getattr(p, c.name) for c in p.__table__.columns}
+
+
+async def riapri_periodo(db: AsyncSession, anno, mese, motivo, user_id=None):
+    from app.models.models import PeriodoContabile
+    p = (await db.execute(select(PeriodoContabile).where(
+        PeriodoContabile.anno == anno, PeriodoContabile.mese == mese))).scalar_one_or_none()
+    if not p:
+        raise HTTPException(status_code=404, detail="Periodo non trovato (mai chiuso)")
+    p.stato = "aperto"
+    p.riaperto_count = (p.riaperto_count or 0) + 1
+    p.ultima_riapertura_at = datetime.now(timezone.utc)
+    p.ultima_riapertura_by = user_id
+    p.motivo_riapertura = motivo
+    await db.commit()
+    await db.refresh(p)
+    return {c.name: getattr(p, c.name) for c in p.__table__.columns}
+
+
+async def stato_periodo_data(db: AsyncSession, data):
+    from app.models.models import PeriodoContabile
+    row = (await db.execute(select(PeriodoContabile).where(
+        PeriodoContabile.anno == data.year, PeriodoContabile.mese == data.month))).scalar_one_or_none()
+    return {"data": str(data), "anno": data.year, "mese": data.month,
+            "stato": row.stato if row else "aperto",
+            "bloccato": bool(row and row.stato == "hard_lock")}
+
+
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
 async def list_pesi_contenuto(db: AsyncSession):
     from app.models.models import PesoContenuto

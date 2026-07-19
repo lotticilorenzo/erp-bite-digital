@@ -58,6 +58,7 @@ from app.schemas.schemas import (
     RicorrenzaCreate, RicorrenzaUpdate, GeneraRicorrenzeRequest,
     AllocazioneCreate,
     RataCreate, RaggiungiRataRequest,
+    RiapriPeriodoRequest,
     PesoContenutoUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
     MovimentoCassaUpdate, RiconciliaRequest, RiconciliazioniCreate,
@@ -86,6 +87,8 @@ from app.services.services import (
     list_allocazioni_commessa, proposta_allocazione, confronto_fatturazione_commessa,
     list_rate, verifica_rate, create_rata, seed_rate_default, raggiungi_rata,
     annulla_raggiungimento_rata, delete_rata,
+    list_periodi, soft_close_periodo, hard_lock_periodo, riapri_periodo, stato_periodo_data,
+    periodo_e_bloccato,
     list_pesi_contenuto, update_peso_contenuto,
     riconcilia_movimento as svc_riconcilia_movimento, elimina_riconciliazione,
     rimuovi_riconciliazioni_movimento, list_riconciliazioni_movimento, list_riconciliazioni_fattura,
@@ -983,6 +986,53 @@ async def delete_rata_endpoint(
     if not ok:
         raise HTTPException(status_code=404, detail="Rata non trovata")
     return {"deleted": True}
+
+
+# ── PERIODI CONTABILI / lock competenza (spec v2 §13.6). Chiusura/riapertura = azione admin manuale. ──
+@router.get("/periodi-contabili", tags=["Periodi"])
+async def get_periodi(
+    anno: Optional[int] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return await list_periodi(db, anno=anno)
+
+
+@router.get("/periodi-contabili/stato", tags=["Periodi"])
+async def get_stato_periodo(
+    data: date = Query(..., description="YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return await stato_periodo_data(db, data)
+
+
+@router.post("/periodi-contabili/{anno}/{mese}/soft-close", tags=["Periodi"])
+async def post_soft_close(
+    anno: int, mese: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    return await soft_close_periodo(db, anno, mese, current_user.id)
+
+
+@router.post("/periodi-contabili/{anno}/{mese}/hard-lock", tags=["Periodi"])
+async def post_hard_lock(
+    anno: int, mese: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    return await hard_lock_periodo(db, anno, mese, current_user.id)
+
+
+@router.post("/periodi-contabili/{anno}/{mese}/riapri", tags=["Periodi"])
+async def post_riapri(
+    anno: int, mese: int,
+    payload: RiapriPeriodoRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    return await riapri_periodo(db, anno, mese, payload.motivo, current_user.id)
 
 
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──

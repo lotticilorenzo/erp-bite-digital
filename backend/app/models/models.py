@@ -1112,6 +1112,34 @@ class ProgettoRata(Base):
     )
 
 
+class PeriodoContabile(Base):
+    """Lock di competenza / chiusura periodo (spec v2 §13.6, invariante 18).
+    Il lock vale sulla data_competenza, NON sulla cassa. `hard_lock` rende immutabili i movimenti
+    del mese (competenza); `soft_close` e' solo 'in revisione' (non blocca). Assenza riga = aperto."""
+    __tablename__ = "periodi_contabili"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    anno: Mapped[int] = mapped_column(Integer, nullable=False)
+    mese: Mapped[int] = mapped_column(Integer, nullable=False)
+    stato: Mapped[str] = mapped_column(String(20), nullable=False, default="aperto")  # aperto|soft_close|hard_lock
+    soft_closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    hard_locked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    closed_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    riaperto_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ultima_riapertura_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    ultima_riapertura_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    motivo_riapertura: Mapped[Optional[str]] = mapped_column(Text)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        CheckConstraint("mese BETWEEN 1 AND 12", name="ck_periodi_mese"),
+        CheckConstraint("stato IN ('aperto','soft_close','hard_lock')", name="ck_periodi_stato"),
+        UniqueConstraint("anno", "mese", name="uq_periodi_anno_mese"),
+    )
+
+
 # ── IMPUTAZIONI MOVIMENTI CASSA ───────────────────────────
 class MovimentoCassaImputazione(Base):
     __tablename__ = "movimenti_cassa_imputazioni"

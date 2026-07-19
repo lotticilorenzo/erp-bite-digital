@@ -1902,6 +1902,11 @@ class RaggiungiRataRequest(BaseModel):
     data_raggiungimento: date
 
 
+# ── PERIODI CONTABILI (lock competenza — spec v2 §13.6) ──
+class RiapriPeriodoRequest(BaseModel):
+    motivo: str = Field(..., min_length=1)
+
+
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
 class PesoContenutoOut(OrmBase):
     tipo: str
