@@ -54,6 +54,7 @@ from app.schemas.schemas import (
     ConfigPlMemoUpdate,
     CostoVariabileCreate, CostoVariabileUpdate,
     ParametroCreate, ParametroUpdate,
+    ScadenzaCreate, ScadenzaUpdate,
     PesoContenutoUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
     MovimentoCassaUpdate, RiconciliaRequest, RiconciliazioniCreate,
@@ -76,6 +77,7 @@ from app.services.services import (
     list_movimenti_cassa, list_costi_fissi, create_costo_fisso, update_costo_fisso, delete_costo_fisso,
     list_costi_variabili, create_costo_variabile, update_costo_variabile, delete_costo_variabile,
     list_parametri, list_parametro_storico, create_parametro, update_parametro,
+    list_scadenze, create_scadenza, update_scadenza, delete_scadenza,
     list_pesi_contenuto, update_peso_contenuto,
     riconcilia_movimento as svc_riconcilia_movimento, elimina_riconciliazione,
     rimuovi_riconciliazioni_movimento, list_riconciliazioni_movimento, list_riconciliazioni_fattura,
@@ -719,6 +721,56 @@ async def patch_parametro(
     if not result:
         raise HTTPException(status_code=404, detail="Parametro non trovato")
     return result
+
+
+# ── SCADENZE (tabella unificata — spec v2 §5.2). SOLO CRUD, nessun aggancio ai calcoli. ──
+@router.get("/scadenze", tags=["Scadenze"])
+async def get_scadenze(
+    tipo: Optional[str] = Query(None),
+    stato: Optional[str] = Query(None),
+    dal: Optional[date] = Query(None, description="data_attesa >= (YYYY-MM-DD)"),
+    al: Optional[date] = Query(None, description="data_attesa <= (YYYY-MM-DD)"),
+    controparte_tipo: Optional[str] = Query(None),
+    controparte_id: Optional[uuid.UUID] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return {"scadenze": await list_scadenze(db, tipo=tipo, stato=stato, dal=dal, al=al,
+                                            controparte_tipo=controparte_tipo, controparte_id=controparte_id)}
+
+
+@router.post("/scadenze", tags=["Scadenze"], status_code=201)
+async def post_scadenza(
+    payload: ScadenzaCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return await create_scadenza(db, payload.model_dump(), created_by=current_user.id)
+
+
+@router.patch("/scadenze/{scadenza_id}", tags=["Scadenze"])
+async def patch_scadenza(
+    scadenza_id: uuid.UUID,
+    payload: ScadenzaUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    result = await update_scadenza(db, scadenza_id, payload.model_dump(exclude_unset=True))
+    if not result:
+        raise HTTPException(status_code=404, detail="Scadenza non trovata")
+    return result
+
+
+@router.delete("/scadenze/{scadenza_id}", tags=["Scadenze"])
+async def delete_scadenza_endpoint(
+    scadenza_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    ok = await delete_scadenza(db, scadenza_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Scadenza non trovata")
+    return {"deleted": True}
 
 
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──

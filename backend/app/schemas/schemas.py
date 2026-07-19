@@ -1698,6 +1698,76 @@ class ParametroOut(OrmBase):
     updated_by: Optional[uuid.UUID]
 
 
+# ── SCADENZE (tabella unificata — spec v2 §5.2) ──
+ScadenzaTipo = Literal["attiva", "passiva", "fiscale", "contributiva", "finanziaria"]
+ScadenzaControparte = Literal["cliente", "fornitore", "erario", "inps", "banca", "altro"]
+ScadenzaOrigine = Literal["fic", "manuale", "ricorrenza", "f24", "progetto"]
+
+
+class ScadenzaCreate(BaseModel):
+    tipo: ScadenzaTipo
+    data_attesa: date
+    importo: Decimal = Field(..., gt=0)
+    importo_incassato: Decimal = Field(0, ge=0)
+    controparte_tipo: Optional[ScadenzaControparte] = None
+    controparte_id: Optional[uuid.UUID] = None
+    progetto_id: Optional[uuid.UUID] = None
+    commessa_id: Optional[uuid.UUID] = None
+    categoria_id: Optional[uuid.UUID] = None
+    documento_rif: Optional[str] = Field(None, max_length=200)
+    origine: ScadenzaOrigine
+    milestone: Optional[str] = Field(None, max_length=100)
+    fattura_attiva_id: Optional[uuid.UUID] = None
+    fattura_passiva_id: Optional[uuid.UUID] = None
+    impatta_cassa_bite: bool = True
+    note: Optional[str] = None
+    # stato e importo_residuo NON accettati: derivati dal service.
+
+
+class ScadenzaUpdate(BaseModel):
+    tipo: Optional[ScadenzaTipo] = None
+    data_attesa: Optional[date] = None
+    importo: Optional[Decimal] = Field(None, gt=0)
+    importo_incassato: Optional[Decimal] = Field(None, ge=0)
+    controparte_tipo: Optional[ScadenzaControparte] = None
+    controparte_id: Optional[uuid.UUID] = None
+    progetto_id: Optional[uuid.UUID] = None
+    commessa_id: Optional[uuid.UUID] = None
+    categoria_id: Optional[uuid.UUID] = None
+    documento_rif: Optional[str] = Field(None, max_length=200)
+    origine: Optional[ScadenzaOrigine] = None
+    milestone: Optional[str] = Field(None, max_length=100)
+    fattura_attiva_id: Optional[uuid.UUID] = None
+    fattura_passiva_id: Optional[uuid.UUID] = None
+    impatta_cassa_bite: Optional[bool] = None
+    note: Optional[str] = None
+
+
+class ScadenzaOut(OrmBase):
+    id: uuid.UUID
+    tipo: str
+    data_attesa: date
+    importo: Decimal
+    stato: str
+    importo_incassato: Decimal
+    importo_residuo: Decimal
+    controparte_tipo: Optional[str]
+    controparte_id: Optional[uuid.UUID]
+    progetto_id: Optional[uuid.UUID]
+    commessa_id: Optional[uuid.UUID]
+    categoria_id: Optional[uuid.UUID]
+    documento_rif: Optional[str]
+    origine: str
+    milestone: Optional[str]
+    fattura_attiva_id: Optional[uuid.UUID]
+    fattura_passiva_id: Optional[uuid.UUID]
+    impatta_cassa_bite: bool
+    note: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    created_by: Optional[uuid.UUID]
+
+
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
 class PesoContenutoOut(OrmBase):
     tipo: str

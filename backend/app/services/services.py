@@ -3688,6 +3688,85 @@ async def update_parametro(db: AsyncSession, parametro_id, payload: dict, update
     return {c.name: getattr(p, c.name) for c in p.__table__.columns}
 
 
+# ── SCADENZE (tabella unificata — spec v2 §5.2). SOLO CRUD: nessun aggancio ai calcoli. ──
+def _scadenza_stato_residuo(importo: Decimal, incassato: Decimal, data_attesa: date):
+    """Deriva (stato, residuo). Regola spec §5.2: 0 incassato->aperta, parziale->parziale,
+    tutto->chiusa; scaduta se data_attesa < oggi e residuo > 0."""
+    importo = Decimal(str(importo or 0))
+    incassato = Decimal(str(incassato or 0))
+    residuo = importo - incassato
+    if residuo <= 0:
+        stato = "chiusa"
+    elif incassato <= 0:
+        stato = "aperta"
+    else:
+        stato = "parziale"
+    if stato in ("aperta", "parziale") and data_attesa < date.today():
+        stato = "scaduta"
+    return stato, residuo
+
+
+async def list_scadenze(db: AsyncSession, tipo=None, stato=None, dal=None, al=None,
+                        controparte_tipo=None, controparte_id=None):
+    from app.models.models import Scadenza
+    q = select(Scadenza)
+    if tipo:
+        q = q.where(Scadenza.tipo == tipo)
+    if stato:
+        q = q.where(Scadenza.stato == stato)
+    if dal:
+        q = q.where(Scadenza.data_attesa >= dal)
+    if al:
+        q = q.where(Scadenza.data_attesa <= al)
+    if controparte_tipo:
+        q = q.where(Scadenza.controparte_tipo == controparte_tipo)
+    if controparte_id:
+        q = q.where(Scadenza.controparte_id == controparte_id)
+    q = q.order_by(Scadenza.data_attesa.asc())
+    rows = (await db.execute(q)).scalars().all()
+    return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+
+
+async def create_scadenza(db: AsyncSession, payload: dict, created_by=None):
+    from app.models.models import Scadenza
+    data = {k: v for k, v in payload.items() if hasattr(Scadenza, k)}
+    stato, residuo = _scadenza_stato_residuo(data.get("importo"), data.get("importo_incassato", 0), data["data_attesa"])
+    data["stato"] = stato
+    data["importo_residuo"] = residuo
+    if created_by is not None:
+        data["created_by"] = created_by
+    s = Scadenza(**data)
+    db.add(s)
+    await db.commit()
+    await db.refresh(s)
+    return {c.name: getattr(s, c.name) for c in s.__table__.columns}
+
+
+async def update_scadenza(db: AsyncSession, scadenza_id, payload: dict):
+    from app.models.models import Scadenza
+    s = (await db.execute(select(Scadenza).where(Scadenza.id == scadenza_id))).scalar_one_or_none()
+    if not s:
+        return None
+    for k, v in payload.items():
+        if hasattr(s, k):
+            setattr(s, k, v)
+    # Ri-deriva stato/residuo dai valori aggiornati.
+    s.stato, s.importo_residuo = _scadenza_stato_residuo(s.importo, s.importo_incassato, s.data_attesa)
+    await db.commit()
+    await db.refresh(s)
+    return {c.name: getattr(s, c.name) for c in s.__table__.columns}
+
+
+async def delete_scadenza(db: AsyncSession, scadenza_id):
+    from app.models.models import Scadenza
+    s = (await db.execute(select(Scadenza).where(Scadenza.id == scadenza_id))).scalar_one_or_none()
+    if not s:
+        return False
+    await db.delete(s)
+    await db.commit()
+    return True
+
+
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──
 async def list_pesi_contenuto(db: AsyncSession):
     from app.models.models import PesoContenuto
