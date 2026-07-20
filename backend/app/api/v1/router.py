@@ -60,7 +60,7 @@ from app.schemas.schemas import (
     RataCreate, RaggiungiRataRequest,
     RiapriPeriodoRequest,
     RefreshOvhRequest,
-    BudgetVersioneCreate, BudgetVersioneUpdate, BudgetRigheBulk, BudgetRigaUpdate,
+    BudgetVersioneCreate, BudgetVersioneUpdate, BudgetRigheBulk, BudgetRigaUpdate, GeneraForecastRequest,
     PesoContenutoUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
     MovimentoCassaCreate, MovimentoCassaUpdate, RiconciliaRequest, RiconciliazioniCreate,
@@ -96,6 +96,7 @@ from app.services.services import (
     list_budget_versioni, create_budget_versione, update_budget_versione, delete_budget_versione,
     approva_budget_versione, list_budget_righe, create_budget_righe, update_budget_riga,
     delete_budget_riga, totali_budget_versione, calcola_actual, confronto_budget_actual,
+    genera_forecast, calcola_forecast_accuracy,
     list_pesi_contenuto, update_peso_contenuto,
     riconcilia_movimento as svc_riconcilia_movimento, elimina_riconciliazione,
     rimuovi_riconciliazioni_movimento, list_riconciliazioni_movimento, list_riconciliazioni_fattura,
@@ -1140,9 +1141,10 @@ async def post_riapri(
 @router.get("/budget/versioni", tags=["Budget"])
 async def get_budget_versioni(
     anno: Optional[int] = Query(None), tipo: Optional[str] = Query(None), stato: Optional[str] = Query(None),
+    snapshot: Optional[bool] = Query(None, description="true = solo snapshot di chiusura (§13.4)"),
     db: AsyncSession = Depends(get_db), current_user: User = Depends(require_finance_access),
 ):
-    return {"versioni": await list_budget_versioni(db, anno=anno, tipo=tipo, stato=stato)}
+    return {"versioni": await list_budget_versioni(db, anno=anno, tipo=tipo, stato=stato, snapshot=snapshot)}
 
 
 @router.post("/budget/versioni", tags=["Budget"], status_code=201)
@@ -1192,6 +1194,26 @@ async def post_budget_righe(
     db: AsyncSession = Depends(get_db), current_user: User = Depends(require_finance_access),
 ):
     return await create_budget_righe(db, versione_id, [r.model_dump() for r in payload.righe])
+
+
+@router.post("/budget/forecast/genera", tags=["Budget"], status_code=201)
+async def post_genera_forecast(
+    payload: GeneraForecastRequest,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_admin),
+):
+    """Forecast rolling (§13): mesi chiusi = Actual reale, mesi aperti = previsione dalla base
+    disponibile (budget approvato > ultimo forecast). Ogni riga porta la sua `origine`."""
+    return await genera_forecast(db, payload.anno, payload.da_mese, current_user.id)
+
+
+@router.get("/budget/forecast/accuracy", tags=["Budget"])
+async def get_forecast_accuracy(
+    anno: int = Query(..., ge=2000, le=2100),
+    mese: int = Query(..., ge=1, le=12, description="mese target consuntivato"),
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_finance_access),
+):
+    """Accuracy (§13.4): quanto gli snapshot avevano previsto per il mese target vs l'actual."""
+    return await calcola_forecast_accuracy(db, anno, mese)
 
 
 @router.get("/budget/actual", tags=["Budget"])
