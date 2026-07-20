@@ -13,15 +13,17 @@ import {
   Calendar, Building2, Hash, Type,
   AlertCircle
 } from "lucide-react";
-import { usePreventivoMutations } from "@/hooks/usePreventivi";
+import { usePreventivoMutations, useCalcoloPreventivo } from "@/hooks/usePreventivi";
+import { useRisorse } from "@/hooks/useRisorse";
 import { useClienti } from "@/hooks/useClienti";
 import { 
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import type { Preventivo } from "@/types/preventivi";
-import { cn } from "@/lib/utils";
+import type { Preventivo, TipoVoce, ModalitaPrezzo } from "@/types/preventivi";
+import { PreventivoEconomia, calcolaEconomiaLocale } from "./PreventivoEconomia";
+import { cn, formatEuro } from "@/lib/utils";
 
 interface Props {
   isOpen: boolean;
@@ -37,6 +39,13 @@ type PreventivoFormData = {
   descrizione: string;
   data_scadenza: string;
   note: string;
+  // §18.1 modalita di prezzo
+  modalita_prezzo: ModalitaPrezzo | "";
+  markup_su: string;
+  markup_pct: number | "";
+  margine_pct: number | "";
+  prezzo: number | "";
+  margine_target: number | "";
 };
 
 type PreventivoVoceForm = {
@@ -44,11 +53,32 @@ type PreventivoVoceForm = {
   quantita: number;
   prezzo_unitario: number;
   ordine: number;
+  // §18.2 natura della riga ("" = servizio a corpo, comportamento storico)
+  tipo: TipoVoce | "";
+  risorsa_id: string;
+  ruolo: string;
+  ore: number | "";
+  tariffa: number | "";
+  costo: number | "";
+  ricarico_pct: number | "";
 };
 
+/** §18.2 — ogni natura ha una UI diversa perche' descrive un costo diverso. */
+const NATURE: { value: TipoVoce | ""; label: string; hint: string }[] = [
+  { value: "", label: "Servizio a corpo", hint: "Prezzo indicato direttamente, senza scomposizione del costo." },
+  { value: "lavoro", label: "Lavoro interno", hint: "Ore x tariffa della risorsa. Alimenta il budget interno." },
+  { value: "socio", label: "Socio", hint: "Costo figurativo, e' una STIMA: i soci sono capacita', non costo contrattuale." },
+  { value: "esterno", label: "Fornitore esterno", hint: "Costo vivo + eventuale ricarico." },
+  { value: "overhead", label: "Overhead", hint: "Quota struttura, calcolata dal coefficiente OVH sul prezzo." },
+];
+
 function createDefaultVoce(): PreventivoVoceForm {
-  return { descrizione: "", quantita: 1, prezzo_unitario: 0, ordine: 0 };
+  return { descrizione: "", quantita: 1, prezzo_unitario: 0, ordine: 0, tipo: "", risorsa_id: "", ruolo: "", ore: "", tariffa: "", costo: "", ricarico_pct: "" };
 }
+
+/** Fallback usato solo finche' il preventivo non e' salvato: a quel punto il coefficiente
+ *  autorevole arriva da GET /preventivi/{id}/calcolo (registro parametri, §5b). */
+const COEFF_OVH_FALLBACK = 0.15;
 
 function createDraftPreventivoNumber() {
   return `PRV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -67,12 +97,25 @@ function getInitialPreventivoState(
         descrizione: preventivo.descrizione || "",
         data_scadenza: preventivo.data_scadenza || "",
         note: preventivo.note || "",
+        modalita_prezzo: (preventivo.modalita_prezzo as ModalitaPrezzo) || "",
+        markup_su: preventivo.markup_su || "costo_totale",
+        markup_pct: preventivo.markup_pct ?? "",
+        margine_pct: preventivo.margine_pct ?? "",
+        prezzo: preventivo.prezzo ?? "",
+        margine_target: preventivo.margine_target ?? "",
       },
       voci: preventivo.voci.map((voce) => ({
         descrizione: voce.descrizione,
         quantita: voce.quantita,
         prezzo_unitario: voce.prezzo_unitario,
         ordine: voce.ordine,
+        tipo: (voce.tipo as TipoVoce) || "",
+        risorsa_id: voce.risorsa_id || "",
+        ruolo: voce.ruolo || "",
+        ore: voce.ore ?? "",
+        tariffa: voce.tariffa ?? "",
+        costo: voce.costo ?? "",
+        ricarico_pct: voce.ricarico_pct ?? "",
       })),
     };
   }
@@ -85,6 +128,12 @@ function getInitialPreventivoState(
       descrizione: "",
       data_scadenza: "",
       note: "",
+      modalita_prezzo: "",
+      markup_su: "costo_totale",
+      markup_pct: "",
+      margine_pct: "",
+      prezzo: "",
+      margine_target: "",
     },
     voci: [createDefaultVoce()],
   };
@@ -115,7 +164,7 @@ const PreventivoModalContent: React.FC<Omit<Props, "isOpen">> = ({ onClose, prev
   const [voci, setVoci] = useState<PreventivoVoceForm[]>(() => initialState.voci);
 
   const addVoce = () => {
-    setVoci([...voci, { descrizione: "", quantita: 1, prezzo_unitario: 0, ordine: voci.length }]);
+    setVoci([...voci, { ...createDefaultVoce(), ordine: voci.length }]);
   };
 
   const removeVoce = (index: number) => {
@@ -134,7 +183,26 @@ const PreventivoModalContent: React.FC<Omit<Props, "isOpen">> = ({ onClose, prev
     setVoci(newVoci);
   };
 
-  const total = useMemo(() => voci.reduce((acc, v) => acc + (v.quantita * v.prezzo_unitario), 0), [voci]);
+  const { data: risorse } = useRisorse();
+  const { data: calcoloServer } = useCalcoloPreventivo(preventivo?.id);
+  const coeffOvh = calcoloServer?.coefficiente_ovh ?? COEFF_OVH_FALLBACK;
+  const hasNature = voci.some((v) => v.tipo !== "");
+
+  const ecoProps = useMemo(() => ({
+    voci: voci.map((v) => ({ tipo: v.tipo || null, ore: Number(v.ore) || 0, tariffa: Number(v.tariffa) || 0, costo: Number(v.costo) || 0, ricarico_pct: Number(v.ricarico_pct) || 0 })),
+    modalita: (formData.modalita_prezzo || null) as ModalitaPrezzo | null,
+    markupPct: formData.markup_pct === "" ? null : Number(formData.markup_pct),
+    markupSu: formData.markup_su,
+    marginePct: formData.margine_pct === "" ? null : Number(formData.margine_pct),
+    prezzoDato: formData.prezzo === "" ? null : Number(formData.prezzo),
+    coeffOvh: coeffOvh,
+    margineTarget: formData.margine_target === "" ? null : Number(formData.margine_target),
+  }), [voci, formData, coeffOvh]);
+  const eco = useMemo(() => calcolaEconomiaLocale(ecoProps), [ecoProps]);
+
+  // Con le nature §18 l'imponibile e' il prezzo calcolato; senza, resta il totale riga per riga (storico).
+  const totalRighe = useMemo(() => voci.reduce((acc, v) => acc + (v.quantita * v.prezzo_unitario), 0), [voci]);
+  const total = formData.modalita_prezzo ? eco.prezzo : totalRighe;
   const iva = total * 0.22;
   const grandTotal = total + iva;
 
@@ -142,7 +210,25 @@ const PreventivoModalContent: React.FC<Omit<Props, "isOpen">> = ({ onClose, prev
     e.preventDefault();
     if (!formData.cliente_id || !formData.titolo) return;
     
-    const payload = { ...formData, voci };
+    const num = (v: number | "") => (v === "" ? null : Number(v));
+    const payload = {
+      ...formData,
+      modalita_prezzo: formData.modalita_prezzo || null,
+      markup_pct: num(formData.markup_pct),
+      margine_pct: num(formData.margine_pct),
+      prezzo: formData.modalita_prezzo ? eco.prezzo : num(formData.prezzo),
+      margine_target: num(formData.margine_target),
+      voci: voci.map((v) => ({
+        ...v,
+        tipo: v.tipo || null,
+        risorsa_id: v.risorsa_id || null,
+        ruolo: v.ruolo || null,
+        ore: num(v.ore),
+        tariffa: num(v.tariffa),
+        costo: num(v.costo),
+        ricarico_pct: num(v.ricarico_pct),
+      })),
+    };
     
     try {
       if (preventivo) {
@@ -241,6 +327,65 @@ const PreventivoModalContent: React.FC<Omit<Props, "isOpen">> = ({ onClose, prev
             </div>
           </div>
 
+          {/* SEZIONE 1b: MODALITA DI PREZZO (§18.1) */}
+          <div className="rounded-2xl border border-border/50 p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs font-black uppercase tracking-[0.2em] text-primary italic">Modalita di prezzo</h3>
+              <Badge variant="outline" className="text-[9px] px-1.5">§18.1</Badge>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Metodo</Label>
+                <Select value={formData.modalita_prezzo || "nessuna"} onValueChange={(v) => setFormData({ ...formData, modalita_prezzo: v === "nessuna" ? "" : (v as ModalitaPrezzo) })}>
+                  <SelectTrigger className="h-11 rounded-xl text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="nessuna">Prezzo a corpo (righe)</SelectItem>
+                    <SelectItem value="markup">Cost-up (markup sui costi)</SelectItem>
+                    <SelectItem value="margine">Margine target (sul prezzo)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {formData.modalita_prezzo === "markup" && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Base markup</Label>
+                    <Select value={formData.markup_su} onValueChange={(v) => setFormData({ ...formData, markup_su: v })}>
+                      <SelectTrigger className="h-11 rounded-xl text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="costo_totale">Tutti i costi diretti</SelectItem>
+                        <SelectItem value="solo_lavoro">Solo lavoro interno</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Markup %</Label>
+                    <Input type="number" step="0.01" className="h-11 rounded-xl text-xs" value={formData.markup_pct}
+                      onChange={(e) => setFormData({ ...formData, markup_pct: e.target.value === "" ? "" : parseFloat(e.target.value) })} />
+                  </div>
+                </>
+              )}
+              {formData.modalita_prezzo === "margine" && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Margine %</Label>
+                    <Input type="number" step="0.01" className="h-11 rounded-xl text-xs" value={formData.margine_pct}
+                      onChange={(e) => setFormData({ ...formData, margine_pct: e.target.value === "" ? "" : parseFloat(e.target.value) })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Prezzo imposto (opz.)</Label>
+                    <Input type="number" step="0.01" className="h-11 rounded-xl text-xs" value={formData.prezzo}
+                      onChange={(e) => setFormData({ ...formData, prezzo: e.target.value === "" ? "" : parseFloat(e.target.value) })} />
+                  </div>
+                </>
+              )}
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Margine target €</Label>
+                <Input type="number" step="0.01" className="h-11 rounded-xl text-xs" value={formData.margine_target}
+                  onChange={(e) => setFormData({ ...formData, margine_target: e.target.value === "" ? "" : parseFloat(e.target.value) })} />
+              </div>
+            </div>
+          </div>
+
           {/* SEZIONE 2: VOCI PREVENTIVO */}
           <div className="space-y-4">
             <div className="flex items-center justify-between px-1">
@@ -255,61 +400,137 @@ const PreventivoModalContent: React.FC<Omit<Props, "isOpen">> = ({ onClose, prev
             </div>
             
             <div className="space-y-3">
-              {voci.map((voce, index) => (
-                <div key={index} className="flex gap-3 items-start animate-in fade-in slide-in-from-top-2 duration-300 group">
-                  <div className="flex-[5] relative">
-                    <Input 
-                      placeholder="Descrizione della prestazione o prodotto..." 
+              {voci.map((voce, index) => {
+                const natura = NATURE.find((nn) => nn.value === voce.tipo)!;
+                const costoRiga =
+                  voce.tipo === "lavoro" || voce.tipo === "socio" ? (Number(voce.ore) || 0) * (Number(voce.tariffa) || 0)
+                  : voce.tipo === "esterno" ? (Number(voce.costo) || 0)
+                  : voce.tipo === "overhead" ? eco.overhead
+                  : voce.quantita * voce.prezzo_unitario;
+                const prezzoEsterno = (Number(voce.costo) || 0) * (1 + (Number(voce.ricarico_pct) || 0) / 100);
+                return (
+                <div key={index} className="rounded-2xl border border-border/50 p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="flex gap-3 items-center">
+                    <div className="w-52 shrink-0">
+                      <Select value={voce.tipo || "corpo"} onValueChange={(v) => updateVoce(index, "tipo", (v === "corpo" ? "" : v) as TipoVoce | "")}>
+                        <SelectTrigger className="h-10 rounded-xl text-xs font-bold"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {NATURE.map((nt) => (
+                            <SelectItem key={nt.value || "corpo"} value={nt.value || "corpo"}>{nt.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Input
+                      placeholder="Descrizione della prestazione..."
                       value={voce.descrizione}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateVoce(index, "descrizione", e.target.value)}
-                      className="bg-[#0f0f10] border-white/5 h-11 rounded-xl text-xs focus:bg-card/5 transition-all"
+                      className="h-10 rounded-xl text-xs flex-1"
                       required
                     />
-                  </div>
-                  <div className="w-24">
-                    <Input 
-                      type="number" 
-                      placeholder="Q.tà" 
-                      value={voce.quantita}
-                      onChange={(e) => updateVoce(index, "quantita", parseFloat(e.target.value) || 0)}
-                      className="bg-[#0f0f10] border-white/5 h-11 rounded-xl text-center text-xs font-bold"
-                      required
-                    />
-                  </div>
-                  <div className="w-40 relative">
-                    <Euro className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                    <Input 
-                      type="number" 
-                      className="bg-[#0f0f10] border-white/5 h-11 rounded-xl pl-9 text-xs font-bold"
-                      placeholder="0.00" 
-                      value={voce.prezzo_unitario}
-                      onChange={(e) => updateVoce(index, "prezzo_unitario", parseFloat(e.target.value) || 0)}
-                      required
-                    />
-                  </div>
-                  <div className="w-44">
-                    <div className="bg-primary/5 border border-primary/10 h-11 rounded-xl flex items-center justify-end px-4">
-                       <span className="text-xs font-black text-white tracking-tighter">
-                         €{(voce.quantita * voce.prezzo_unitario).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                       </span>
-                    </div>
-                  </div>
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    size="icon" 
-                    onClick={() => removeVoce(index)}
-                    className={cn(
-                      "h-11 w-11 rounded-xl text-red-500/50 hover:text-red-500 hover:bg-red-500/10 transition-all shrink-0",
-                      voci.length === 1 && "opacity-0 pointer-events-none"
+                    {voce.tipo === "socio" && (
+                      <Badge variant="outline" className="text-[9px] px-1.5 shrink-0">STIMA</Badge>
                     )}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                    <Button
+                      type="button" variant="ghost" size="icon"
+                      onClick={() => removeVoce(index)}
+                      className={cn("h-10 w-10 rounded-xl text-destructive/60 hover:text-destructive hover:bg-destructive/10 shrink-0",
+                        voci.length === 1 && "opacity-0 pointer-events-none")}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+
+                  {/* UI specifica per natura (18.2): ogni riga chiede solo cio che serve a quel costo */}
+                  {voce.tipo === "" && (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1"><Label className="text-[10px]">Quantita</Label>
+                        <Input type="number" className="h-10 rounded-xl text-xs" value={voce.quantita}
+                          onChange={(e) => updateVoce(index, "quantita", parseFloat(e.target.value) || 0)} /></div>
+                      <div className="space-y-1"><Label className="text-[10px]">Prezzo unitario</Label>
+                        <Input type="number" step="0.01" className="h-10 rounded-xl text-xs" value={voce.prezzo_unitario}
+                          onChange={(e) => updateVoce(index, "prezzo_unitario", parseFloat(e.target.value) || 0)} /></div>
+                      <div className="space-y-1"><Label className="text-[10px]">Totale riga</Label>
+                        <div className="h-10 rounded-xl bg-muted/40 flex items-center justify-end px-3 font-mono text-xs font-bold">{formatEuro(costoRiga)}</div></div>
+                    </div>
+                  )}
+
+                  {voce.tipo === "lavoro" && (
+                    <div className="grid grid-cols-4 gap-3">
+                      <div className="space-y-1"><Label className="text-[10px]">Risorsa</Label>
+                        <Select value={voce.risorsa_id || "nessuna"} onValueChange={(v) => {
+                          const r: any = (risorse || []).find((x: any) => x.id === v);
+                          updateVoce(index, "risorsa_id", v === "nessuna" ? "" : v);
+                          if (r?.costo_orario_effettivo != null) updateVoce(index, "tariffa", Number(r.costo_orario_effettivo));
+                        }}>
+                          <SelectTrigger className="h-10 rounded-xl text-xs"><SelectValue placeholder="-" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="nessuna">Generica (per ruolo)</SelectItem>
+                            {(risorse || []).map((r: any) => (
+                              <SelectItem key={r.id} value={r.id}>{r.nome} {r.cognome ?? ""}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select></div>
+                      <div className="space-y-1"><Label className="text-[10px]">Ruolo</Label>
+                        <Input className="h-10 rounded-xl text-xs" value={voce.ruolo}
+                          onChange={(e) => updateVoce(index, "ruolo", e.target.value)} /></div>
+                      <div className="space-y-1"><Label className="text-[10px]">Ore</Label>
+                        <Input type="number" step="0.25" className="h-10 rounded-xl text-xs" value={voce.ore}
+                          onChange={(e) => updateVoce(index, "ore", e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                      <div className="space-y-1"><Label className="text-[10px]">Tariffa oraria</Label>
+                        <Input type="number" step="0.01" className="h-10 rounded-xl text-xs" value={voce.tariffa}
+                          onChange={(e) => updateVoce(index, "tariffa", e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                    </div>
+                  )}
+
+                  {voce.tipo === "socio" && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-1"><Label className="text-[10px]">Ore stimate</Label>
+                          <Input type="number" step="0.25" className="h-10 rounded-xl text-xs" value={voce.ore}
+                            onChange={(e) => updateVoce(index, "ore", e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                        <div className="space-y-1"><Label className="text-[10px]">Tariffa figurativa</Label>
+                          <Input type="number" step="0.01" className="h-10 rounded-xl text-xs" value={voce.tariffa}
+                            onChange={(e) => updateVoce(index, "tariffa", e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                        <div className="space-y-1"><Label className="text-[10px]">Costo figurativo</Label>
+                          <div className="h-10 rounded-xl bg-muted/40 flex items-center justify-end px-3 font-mono text-xs font-bold">{formatEuro(costoRiga)}</div></div>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground italic">{natura.hint} Non entra nel budget interno ne nel simulatore ore.</p>
+                    </div>
+                  )}
+
+                  {voce.tipo === "esterno" && (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1"><Label className="text-[10px]">Costo vivo</Label>
+                        <Input type="number" step="0.01" className="h-10 rounded-xl text-xs" value={voce.costo}
+                          onChange={(e) => updateVoce(index, "costo", e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                      <div className="space-y-1"><Label className="text-[10px]">Ricarico %</Label>
+                        <Input type="number" step="0.01" className="h-10 rounded-xl text-xs" value={voce.ricarico_pct}
+                          onChange={(e) => updateVoce(index, "ricarico_pct", e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                      <div className="space-y-1"><Label className="text-[10px]">Prezzo al cliente</Label>
+                        <div className="h-10 rounded-xl bg-muted/40 flex items-center justify-end px-3 font-mono text-xs font-bold">{formatEuro(prezzoEsterno)}</div></div>
+                    </div>
+                  )}
+
+                  {voce.tipo === "overhead" && (
+                    <div className="grid grid-cols-3 gap-3 items-end">
+                      <div className="space-y-1"><Label className="text-[10px]">Coefficiente OVH</Label>
+                        <div className="h-10 rounded-xl bg-muted/40 flex items-center justify-end px-3 font-mono text-xs font-bold">{(coeffOvh * 100).toFixed(2)}%</div></div>
+                      <div className="space-y-1"><Label className="text-[10px]">Quota struttura</Label>
+                        <div className="h-10 rounded-xl bg-muted/40 flex items-center justify-end px-3 font-mono text-xs font-bold">{formatEuro(eco.overhead)}</div></div>
+                      <p className="text-[10px] text-muted-foreground italic">Calcolata sul prezzo, dal registro parametri. Include gia la quota admin dei soci.</p>
+                    </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
+
+          {/* SEZIONE 2b: ECONOMIA + SIMULATORE (18.1 / 18.3) */}
+          {(hasNature || formData.modalita_prezzo) && (
+            <PreventivoEconomia {...ecoProps} />
+          )}
 
           {/* SEZIONE 3: RIEPILOGO FINANZIARIO */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
