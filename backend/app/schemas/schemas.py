@@ -1999,6 +1999,11 @@ class BudgetRigheBulk(BaseModel):
     righe: List[BudgetRigaCreate] = Field(..., min_length=1)
 
 
+class GeneraForecastRequest(BaseModel):
+    anno: int = Field(..., ge=2000, le=2100)
+    da_mese: int = Field(..., ge=1, le=12)
+
+
 class BudgetRigaUpdate(BaseModel):
     importo: Optional[Decimal] = None
     voce_tipo: Optional[BudgetVoceTipo] = None

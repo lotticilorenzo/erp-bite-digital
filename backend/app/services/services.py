@@ -4413,15 +4413,24 @@ async def soft_close_periodo(db: AsyncSession, anno, mese, user_id=None):
 
 
 async def hard_lock_periodo(db: AsyncSession, anno, mese, user_id=None):
-    # TODO(spec §13.6): la routine completa di chiusura (snapshot forecast, ricalcolo coefficiente
-    # OVH, chiusura margini commessa, calcolo Actual) si comporra' quando quei pezzi esisteranno.
+    # Routine §13.6: congela competenza -> SNAPSHOT FORECAST (fatto qui) -> ricalcolo coefficiente OVH
+    # + varianza -> chiusura margini commessa -> Actual -> rebase forecast.
+    # TODO(fase successiva): ricalcolo OVH dal forecast e rebase (cambiano i margini).
     p = await _get_or_create_periodo(db, anno, mese)
     p.stato = "hard_lock"
     p.hard_locked_at = datetime.now(timezone.utc)
     p.closed_by = user_id
+    # Snapshot forecast: NON deve mai impedire la chiusura (se manca o fallisce, si chiude comunque).
+    snapshot = None
+    try:
+        snapshot = await _snapshot_forecast(db, anno, mese, user_id)
+    except Exception as exc:  # noqa: BLE001 - la chiusura ha priorita' sullo snapshot
+        logger.warning("Snapshot forecast %s-%02d non riuscito (chiusura procede): %s", anno, mese, exc)
     await db.commit()
     await db.refresh(p)
-    return {c.name: getattr(p, c.name) for c in p.__table__.columns}
+    out = {c.name: getattr(p, c.name) for c in p.__table__.columns}
+    out["snapshot_forecast"] = snapshot
+    return out
 
 
 async def riapri_periodo(db: AsyncSession, anno, mese, motivo, user_id=None):
@@ -4777,7 +4786,7 @@ def _assert_modificabile(v):
             "Crea una nuova versione forecast per registrare la correzione."))
 
 
-async def list_budget_versioni(db: AsyncSession, anno=None, tipo=None, stato=None):
+async def list_budget_versioni(db: AsyncSession, anno=None, tipo=None, stato=None, snapshot=None):
     from app.models.models import BudgetVersione
     q = select(BudgetVersione)
     if anno:
@@ -4786,6 +4795,10 @@ async def list_budget_versioni(db: AsyncSession, anno=None, tipo=None, stato=Non
         q = q.where(BudgetVersione.tipo == tipo)
     if stato:
         q = q.where(BudgetVersione.stato == stato)
+    if snapshot is True:
+        q = q.where(BudgetVersione.periodo_snapshot.isnot(None))
+    elif snapshot is False:
+        q = q.where(BudgetVersione.periodo_snapshot.is_(None))
     q = q.order_by(BudgetVersione.anno.desc(), BudgetVersione.tipo, BudgetVersione.versione.desc())
     rows = (await db.execute(q)).scalars().all()
     return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
@@ -4983,6 +4996,127 @@ async def confronto_budget_actual(db: AsyncSession, versione_id, mese: int = Non
         })
     return {"versione_id": str(versione_id), "anno": anno, "tipo": v.tipo, "versione": v.versione,
             "perimetro": etichetta, "mesi": mesi, "voci": voci}
+
+
+# ── FORECAST ROLLING + SNAPSHOT + ACCURACY (spec §13, §13.6) ──────────
+# NB: la previsione dei mesi aperti usa la catena budget approvato -> ultimo forecast -> None.
+# NON e' il motore driver-based di §13.2 (ricorrenti x fattore_stabilita, siti lineari, spot, pipeline):
+# quello resta da implementare. Qui nessuna proiezione statistica inventata.
+async def _base_previsione(db: AsyncSession, anno: int, escludi_versione=None):
+    """(mappa {(mese,voce): importo}, origine) dalla base di previsione: budget approvato, altrimenti
+    ultimo forecast, altrimenti (None, None)."""
+    from app.models.models import BudgetVersione, BudgetRiga
+    q = select(BudgetVersione).where(BudgetVersione.anno == anno, BudgetVersione.tipo == "budget",
+                                     BudgetVersione.stato == "approvato").order_by(BudgetVersione.versione.desc()).limit(1)
+    base = (await db.execute(q)).scalar_one_or_none()
+    origine = "budget"
+    if not base:
+        q2 = select(BudgetVersione).where(BudgetVersione.anno == anno, BudgetVersione.tipo == "forecast")
+        if escludi_versione:
+            q2 = q2.where(BudgetVersione.id != escludi_versione)
+        base = (await db.execute(q2.order_by(BudgetVersione.versione.desc()).limit(1))).scalar_one_or_none()
+        origine = "forecast_precedente"
+    if not base:
+        return None, None
+    rows = (await db.execute(
+        select(BudgetRiga.mese, BudgetRiga.voce_tipo, func.coalesce(func.sum(BudgetRiga.importo), 0))
+        .where(BudgetRiga.versione_id == base.id).group_by(BudgetRiga.mese, BudgetRiga.voce_tipo)
+    )).all()
+    return {(m, v): Decimal(str(t)) for m, v, t in rows}, origine
+
+
+async def genera_forecast(db: AsyncSession, anno: int, da_mese: int, user_id=None) -> dict:
+    """Forecast rolling (§13.0/13.2): mesi < da_mese = ACTUAL reale; mesi >= da_mese = previsione
+    dalla base disponibile. Ogni riga porta la sua `origine`."""
+    from app.models.models import BudgetRiga
+    v = await create_budget_versione(db, {
+        "anno": anno, "tipo": "forecast", "periodo_riferimento": date(anno, da_mese, 1),
+        "note": f"Forecast rolling da {anno}-{da_mese:02d}",
+    }, user_id)
+    versione_id = v["id"]
+    base, origine_base = await _base_previsione(db, anno, escludi_versione=versione_id)
+    act = await calcola_actual(db, anno)
+    act_map = {r["mese"]: r for r in act["mesi"]}
+    righe, note = [], []
+    for m in range(1, 13):
+        if m < da_mese:  # mese chiuso -> ACTUAL
+            a = act_map[m]
+            for voce in ("ricavo", "costo_diretto", "costo_struttura"):
+                if a[voce] is not None:
+                    righe.append(BudgetRiga(versione_id=versione_id, anno=anno, mese=m, voce_tipo=voce,
+                                            importo=Decimal(str(a[voce])), origine="actual"))
+        else:            # mese aperto -> PREVISIONE
+            if base is None:
+                continue
+            for (mm, voce), imp in base.items():
+                if mm == m:
+                    righe.append(BudgetRiga(versione_id=versione_id, anno=anno, mese=m, voce_tipo=voce,
+                                            importo=imp, origine=origine_base))
+    if base is None:
+        note.append("Nessuna base di previsione (nessun budget approvato ne' forecast precedente): mesi aperti vuoti.")
+    db.add_all(righe)
+    await db.commit()
+    return {"versione_id": versione_id, "versione": v["versione"], "anno": anno, "da_mese": da_mese,
+            "righe_create": len(righe), "origine_previsione": origine_base, "note": note}
+
+
+async def _snapshot_forecast(db: AsyncSession, anno: int, mese: int, user_id=None):
+    """§13.4/13.6: congela il forecast corrente come snapshot immutabile del periodo chiuso.
+    Non deve MAI impedire la chiusura: se non c'e' forecast da fotografare, ritorna None."""
+    from app.models.models import BudgetVersione
+    v = (await db.execute(
+        select(BudgetVersione).where(BudgetVersione.anno == anno, BudgetVersione.tipo == "forecast",
+                                     BudgetVersione.stato.in_(["bozza", "approvato"]))
+        .order_by(BudgetVersione.versione.desc()).limit(1)
+    )).scalar_one_or_none()
+    if not v:
+        return None
+    v.periodo_snapshot = date(anno, mese, 1)
+    v.stato = "archiviato"          # immutabile da qui in poi
+    await db.flush()
+    return {"versione_id": str(v.id), "versione": v.versione, "periodo_snapshot": str(v.periodo_snapshot)}
+
+
+async def calcola_forecast_accuracy(db: AsyncSession, anno: int, mese_target: int) -> dict:
+    """Confronta cio' che gli snapshot PREVEDEVANO per `mese_target` con l'ACTUAL effettivo.
+    Formula NON specificata in §13 -> proposta: errore = actual - previsto; errore_pct = errore/previsto*100;
+    aggregato = errore assoluto medio per orizzonte (mesi di distanza dello snapshot dal target)."""
+    from app.models.models import BudgetVersione, BudgetRiga
+    snaps = (await db.execute(
+        select(BudgetVersione).where(BudgetVersione.anno == anno, BudgetVersione.tipo == "forecast",
+                                     BudgetVersione.periodo_snapshot.isnot(None))
+        .order_by(BudgetVersione.periodo_snapshot)
+    )).scalars().all()
+    act = await calcola_actual(db, anno, mese_target)
+    a_row = act["mesi"][0]
+    risultati, per_orizzonte = [], {}
+    for s in snaps:
+        mese_snap = s.periodo_snapshot.month
+        orizzonte = mese_target - mese_snap
+        if orizzonte <= 0:
+            continue  # lo snapshot e' successivo al target: non e' una previsione
+        rows = (await db.execute(
+            select(BudgetRiga.voce_tipo, func.coalesce(func.sum(BudgetRiga.importo), 0))
+            .where(BudgetRiga.versione_id == s.id, BudgetRiga.mese == mese_target)
+            .group_by(BudgetRiga.voce_tipo)
+        )).all()
+        prev = {vt: Decimal(str(t)) for vt, t in rows}
+        voci = []
+        for voce in ("ricavo", "costo_diretto", "costo_struttura"):
+            p, a = prev.get(voce), a_row.get(voce)
+            err = (Decimal(str(a)) - p) if (p is not None and a is not None) else None
+            pct = float((err / p * 100).quantize(Decimal("0.1"))) if (err is not None and p and p != 0) else None
+            voci.append({"voce_tipo": voce, "previsto": float(p) if p is not None else None,
+                         "actual": a, "errore": float(err) if err is not None else None, "errore_pct": pct})
+            if voce == "ricavo" and pct is not None:
+                per_orizzonte.setdefault(orizzonte, []).append(abs(pct))
+        risultati.append({"previsto_da": str(s.periodo_snapshot), "versione": s.versione,
+                          "orizzonte_mesi": orizzonte, "voci": voci})
+    aggregato = [{"orizzonte_mesi": k, "errore_assoluto_medio_pct": round(sum(v) / len(v), 1), "n": len(v)}
+                 for k, v in sorted(per_orizzonte.items())]
+    note = [] if risultati else ["Nessuno snapshot disponibile per questo target: accuracy non misurabile."]
+    return {"anno": anno, "mese_target": mese_target, "snapshot": risultati,
+            "aggregato_per_orizzonte_su_ricavo": aggregato, "note": note}
 
 
 # ── PESI CONTENUTO (configurabile, driver quota Luca — brief §7.5) ──

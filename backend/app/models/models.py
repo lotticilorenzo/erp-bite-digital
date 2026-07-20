@@ -1410,6 +1410,7 @@ class BudgetRiga(Base):
     commessa_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("commesse.id", ondelete="SET NULL"))
     centro_costo_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
     importo: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    origine: Mapped[Optional[str]] = mapped_column(String(24))  # actual|budget|forecast_precedente|manuale
     note: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
