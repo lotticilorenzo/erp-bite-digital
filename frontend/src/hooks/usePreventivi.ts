@@ -32,6 +32,7 @@ export const useCalcoloPreventivo = (id?: string) => {
       return data;
     },
     enabled: !!id,
+    retry: false, // 403 per i ruoli non-finance: e' una risposta attesa, non un errore da ritentare
   });
 };
 

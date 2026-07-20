@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { usePreventivoMutations, useCalcoloPreventivo } from "@/hooks/usePreventivi";
 import { useRisorse } from "@/hooks/useRisorse";
+import { useAuth } from "@/hooks/useAuth";
+import { hasFinanceAccess, normalizeRole } from "@/lib/access";
 import { useClienti } from "@/hooks/useClienti";
 import { 
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
@@ -184,7 +186,10 @@ const PreventivoModalContent: React.FC<Omit<Props, "isOpen">> = ({ onClose, prev
   };
 
   const { data: risorse } = useRisorse();
-  const { data: calcoloServer } = useCalcoloPreventivo(preventivo?.id);
+  // Gate finance: la rotta resta ERP (i PM non perdono l'accesso), ma costi e margini no.
+  const { user } = useAuth();
+  const isFinance = hasFinanceAccess(normalizeRole(user?.ruolo));
+  const { data: calcoloServer } = useCalcoloPreventivo(isFinance ? preventivo?.id : undefined);
   const coeffOvh = calcoloServer?.coefficiente_ovh ?? COEFF_OVH_FALLBACK;
   const hasNature = voci.some((v) => v.tipo !== "");
 
@@ -202,7 +207,7 @@ const PreventivoModalContent: React.FC<Omit<Props, "isOpen">> = ({ onClose, prev
 
   // Con le nature §18 l'imponibile e' il prezzo calcolato; senza, resta il totale riga per riga (storico).
   const totalRighe = useMemo(() => voci.reduce((acc, v) => acc + (v.quantita * v.prezzo_unitario), 0), [voci]);
-  const total = formData.modalita_prezzo ? eco.prezzo : totalRighe;
+  const total = isFinance && formData.modalita_prezzo ? eco.prezzo : (preventivo?.importo_totale ?? totalRighe);
   const iva = total * 0.22;
   const grandTotal = total + iva;
 
@@ -216,7 +221,7 @@ const PreventivoModalContent: React.FC<Omit<Props, "isOpen">> = ({ onClose, prev
       modalita_prezzo: formData.modalita_prezzo || null,
       markup_pct: num(formData.markup_pct),
       margine_pct: num(formData.margine_pct),
-      prezzo: formData.modalita_prezzo ? eco.prezzo : num(formData.prezzo),
+      prezzo: isFinance && formData.modalita_prezzo ? eco.prezzo : num(formData.prezzo),
       margine_target: num(formData.margine_target),
       voci: voci.map((v) => ({
         ...v,
@@ -327,7 +332,8 @@ const PreventivoModalContent: React.FC<Omit<Props, "isOpen">> = ({ onClose, prev
             </div>
           </div>
 
-          {/* SEZIONE 1b: MODALITA DI PREZZO (§18.1) */}
+          {/* SEZIONE 1b: MODALITA DI PREZZO (§18.1) — markup/margine sono dati finance */}
+          {isFinance && (
           <div className="rounded-2xl border border-border/50 p-5 space-y-4">
             <div className="flex items-center gap-2">
               <h3 className="text-xs font-black uppercase tracking-[0.2em] text-primary italic">Modalita di prezzo</h3>
@@ -385,6 +391,7 @@ const PreventivoModalContent: React.FC<Omit<Props, "isOpen">> = ({ onClose, prev
               </div>
             </div>
           </div>
+          )}
 
           {/* SEZIONE 2: VOCI PREVENTIVO */}
           <div className="space-y-4">
@@ -456,7 +463,7 @@ const PreventivoModalContent: React.FC<Omit<Props, "isOpen">> = ({ onClose, prev
                   )}
 
                   {voce.tipo === "lavoro" && (
-                    <div className="grid grid-cols-4 gap-3">
+                    <div className={cn("grid gap-3", isFinance ? "grid-cols-4" : "grid-cols-3")}>
                       <div className="space-y-1"><Label className="text-[10px]">Risorsa</Label>
                         <Select value={voce.risorsa_id || "nessuna"} onValueChange={(v) => {
                           const r: any = (risorse || []).find((x: any) => x.id === v);
@@ -477,42 +484,52 @@ const PreventivoModalContent: React.FC<Omit<Props, "isOpen">> = ({ onClose, prev
                       <div className="space-y-1"><Label className="text-[10px]">Ore</Label>
                         <Input type="number" step="0.25" className="h-10 rounded-xl text-xs" value={voce.ore}
                           onChange={(e) => updateVoce(index, "ore", e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
-                      <div className="space-y-1"><Label className="text-[10px]">Tariffa oraria</Label>
-                        <Input type="number" step="0.01" className="h-10 rounded-xl text-xs" value={voce.tariffa}
-                          onChange={(e) => updateVoce(index, "tariffa", e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                      {isFinance && (
+                        <div className="space-y-1"><Label className="text-[10px]">Tariffa oraria</Label>
+                          <Input type="number" step="0.01" className="h-10 rounded-xl text-xs" value={voce.tariffa}
+                            onChange={(e) => updateVoce(index, "tariffa", e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                      )}
                     </div>
                   )}
 
                   {voce.tipo === "socio" && (
                     <div className="space-y-2">
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className={cn("grid gap-3", isFinance ? "grid-cols-3" : "grid-cols-1")}>
                         <div className="space-y-1"><Label className="text-[10px]">Ore stimate</Label>
                           <Input type="number" step="0.25" className="h-10 rounded-xl text-xs" value={voce.ore}
                             onChange={(e) => updateVoce(index, "ore", e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
-                        <div className="space-y-1"><Label className="text-[10px]">Tariffa figurativa</Label>
-                          <Input type="number" step="0.01" className="h-10 rounded-xl text-xs" value={voce.tariffa}
-                            onChange={(e) => updateVoce(index, "tariffa", e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
-                        <div className="space-y-1"><Label className="text-[10px]">Costo figurativo</Label>
-                          <div className="h-10 rounded-xl bg-muted/40 flex items-center justify-end px-3 font-mono text-xs font-bold">{formatEuro(costoRiga)}</div></div>
+                        {isFinance && (
+                          <>
+                            <div className="space-y-1"><Label className="text-[10px]">Tariffa figurativa</Label>
+                              <Input type="number" step="0.01" className="h-10 rounded-xl text-xs" value={voce.tariffa}
+                                onChange={(e) => updateVoce(index, "tariffa", e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                            <div className="space-y-1"><Label className="text-[10px]">Costo figurativo</Label>
+                              <div className="h-10 rounded-xl bg-muted/40 flex items-center justify-end px-3 font-mono text-xs font-bold">{formatEuro(costoRiga)}</div></div>
+                          </>
+                        )}
                       </div>
                       <p className="text-[10px] text-muted-foreground italic">{natura.hint} Non entra nel budget interno ne nel simulatore ore.</p>
                     </div>
                   )}
 
                   {voce.tipo === "esterno" && (
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="space-y-1"><Label className="text-[10px]">Costo vivo</Label>
-                        <Input type="number" step="0.01" className="h-10 rounded-xl text-xs" value={voce.costo}
-                          onChange={(e) => updateVoce(index, "costo", e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
-                      <div className="space-y-1"><Label className="text-[10px]">Ricarico %</Label>
-                        <Input type="number" step="0.01" className="h-10 rounded-xl text-xs" value={voce.ricarico_pct}
-                          onChange={(e) => updateVoce(index, "ricarico_pct", e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                    <div className={cn("grid gap-3", isFinance ? "grid-cols-3" : "grid-cols-1")}>
+                      {isFinance && (
+                        <>
+                          <div className="space-y-1"><Label className="text-[10px]">Costo vivo</Label>
+                            <Input type="number" step="0.01" className="h-10 rounded-xl text-xs" value={voce.costo}
+                              onChange={(e) => updateVoce(index, "costo", e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                          <div className="space-y-1"><Label className="text-[10px]">Ricarico %</Label>
+                            <Input type="number" step="0.01" className="h-10 rounded-xl text-xs" value={voce.ricarico_pct}
+                              onChange={(e) => updateVoce(index, "ricarico_pct", e.target.value === "" ? "" : parseFloat(e.target.value))} /></div>
+                        </>
+                      )}
                       <div className="space-y-1"><Label className="text-[10px]">Prezzo al cliente</Label>
                         <div className="h-10 rounded-xl bg-muted/40 flex items-center justify-end px-3 font-mono text-xs font-bold">{formatEuro(prezzoEsterno)}</div></div>
                     </div>
                   )}
 
-                  {voce.tipo === "overhead" && (
+                  {voce.tipo === "overhead" && isFinance && (
                     <div className="grid grid-cols-3 gap-3 items-end">
                       <div className="space-y-1"><Label className="text-[10px]">Coefficiente OVH</Label>
                         <div className="h-10 rounded-xl bg-muted/40 flex items-center justify-end px-3 font-mono text-xs font-bold">{(coeffOvh * 100).toFixed(2)}%</div></div>
@@ -528,7 +545,7 @@ const PreventivoModalContent: React.FC<Omit<Props, "isOpen">> = ({ onClose, prev
           </div>
 
           {/* SEZIONE 2b: ECONOMIA + SIMULATORE (18.1 / 18.3) */}
-          {(hasNature || formData.modalita_prezzo) && (
+          {isFinance && (hasNature || formData.modalita_prezzo) && (
             <PreventivoEconomia {...ecoProps} />
           )}
 
