@@ -4,7 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import require_roles
+from app.core.security import require_finance_access, require_roles
 from app.db.session import get_db
 from app.models.models import PreventivoStatus, User, UserRole
 from app.schemas.schemas import PreventivoCreate, PreventivoOut, PreventivoUpdate, SimulaBudgetRequest
@@ -91,7 +91,7 @@ async def remove_preventivo(
 async def simula_budget(
     payload: SimulaBudgetRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_finance_access),
 ):
     """Simulatore frontiera budget interno (§18.3): max ore per una risorsa variabile, date le fisse.
     Vale SOLO tra risorse a ore (dipendenti); i soci sono capacita', non budget."""
@@ -102,7 +102,7 @@ async def simula_budget(
 async def get_calcolo_preventivo(
     preventivo_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.DEVELOPER, UserRole.PM)),
+    current_user: User = Depends(require_finance_access),
 ):
     """Economia del preventivo (§18): costi per natura, prezzo nelle 2 modalita', markup+margine
     effettivi sempre esposti, budget interno. Non tocca il consuntivo."""
