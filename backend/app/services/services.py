@@ -1699,7 +1699,7 @@ async def calcola_proiezione_cassa(
     TODO(Fase 3): saldo da estratto conto/riconciliazione; importi F24/ritenute/IRPEF
     (oggi non quantificati) quando disponibili da cedolino/commercialista.
     """
-    from app.models.models import CostoFisso
+    from app.models.models import CostoFisso, Scadenza
 
     warning: list[str] = []
     giorni = max(int(giorni), 1)
@@ -1734,8 +1734,44 @@ async def calcola_proiezione_cassa(
             if idx <= giorni - 1:
                 entrate[s][idx] += residuo
 
+    # Scadenze (tabella unificata, spec §5.2): aperta/parziale nell'orizzonte -> flusso,
+    # entrata se tipo=attiva altrimenti uscita, per importo_residuo. Chiuse escluse.
+    # ANTI-DOPPIO-CONTEGGIO: verificato che le fatture aperte (DSO) e il registro costi
+    # variabili sono fonti indipendenti da questa tabella (nessun writer imposta oggi
+    # fattura_attiva_id/fattura_passiva_id su una scadenza) -> nessuna sovrapposizione.
+    # Guardia difensiva per quando quel link iniziera' a essere popolato: una scadenza gia'
+    # agganciata a una fattura e' la STESSA cassa gia' contata via fatture/DSO -> esclusa qui.
+    res_scad = await db.execute(select(Scadenza).where(
+        Scadenza.stato.in_(("aperta", "parziale")),
+        Scadenza.data_attesa >= start, Scadenza.data_attesa <= end,
+        Scadenza.fattura_attiva_id.is_(None), Scadenza.fattura_passiva_id.is_(None),
+    ))
+    scadenze_rows = res_scad.scalars().all()
+    scadenze_incluse: list[dict] = []
+    for sc in scadenze_rows:
+        residuo = Decimal(str(sc.importo_residuo or 0))
+        if residuo <= 0:
+            continue
+        idx = max((sc.data_attesa - start).days, 0)
+        if idx > giorni - 1:
+            continue
+        if sc.tipo == "attiva":
+            for s in scenari:
+                entrate[s][idx] += residuo
+        scadenze_incluse.append({"data": str(sc.data_attesa), "tipo": sc.tipo, "origine": sc.origine, "importo": float(residuo)})
+
     # Uscite (identiche nei 3 scenari)
     uscite = [Decimal("0")] * giorni
+    for sc in scadenze_rows:
+        if sc.tipo == "attiva":
+            continue
+        residuo = Decimal(str(sc.importo_residuo or 0))
+        if residuo <= 0:
+            continue
+        idx = max((sc.data_attesa - start).days, 0)
+        if idx > giorni - 1:
+            continue
+        uscite[idx] += residuo
     for (d, imp, _desc) in await _espandi_costi_fissi(db, start, end, uscite_var):
         idx = (d - start).days
         if 0 <= idx <= giorni - 1:
@@ -1849,6 +1885,7 @@ async def calcola_proiezione_cassa(
         "vista_giornaliera": vista_giornaliera,
         "vista_settimanale": vista_settimanale,
         "vista_mensile": vista_mensile,
+        "scadenze_incluse": scadenze_incluse,
         "scadenze_fiscali_incluse": scadenze_fiscali_incluse,
         "scadenze_fiscali_non_quantificate": scadenze_fiscali_non_quantificate,
         "uscite_variabili_registro": Q(uscite_var_registro),
