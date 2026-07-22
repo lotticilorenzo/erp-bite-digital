@@ -11,7 +11,7 @@ from PIL import Image
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import ADMIN_EQUIVALENT_ROLES, get_current_user, require_admin
+from app.core.security import ADMIN_EQUIVALENT_ROLES, get_current_user, require_admin, require_manutentore
 from app.db.session import get_db
 from app.services import audit
 from app.models.models import Progetto, ProgettoTeam, Risorsa, Task, TaskStatus, Timesheet, User, UserRole
@@ -46,7 +46,7 @@ async def get_users(
 async def add_user(
     data: UserCreate,
     db: AsyncSession = Depends(get_db),
-    actor: User = Depends(require_admin),
+    actor: User = Depends(require_manutentore),
 ):
     existing = await get_user_by_email(db, data.email)
     if existing:
@@ -71,7 +71,7 @@ async def patch_user(
     current_user: User = Depends(get_current_user),
 ):
     payload = data.model_dump(exclude_unset=True)
-    is_admin = current_user.ruolo == UserRole.ADMIN
+    is_admin = current_user.ruolo in ADMIN_EQUIVALENT_ROLES  # ADMIN, DEVELOPER, MANUTENTORE
     is_self = current_user.id == user_id
 
     if not is_admin and not is_self:
@@ -83,6 +83,10 @@ async def patch_user(
         blocked = [k for k in payload.keys() if k not in allowed_fields]
         if blocked:
             raise HTTPException(status_code=403, detail="Solo ADMIN può modificare ruolo/costi/stato")
+
+    # Cambio ruolo (rischio escalation): riservato al MANUTENTORE, anche se l'attore e' ADMIN.
+    if "ruolo" in payload and current_user.ruolo != UserRole.MANUTENTORE:
+        raise HTTPException(status_code=403, detail="Il cambio ruolo è consentito solo al manutentore di sistema")
 
     user = await update_user(db, user_id, data, current_user.id)
     if not user:

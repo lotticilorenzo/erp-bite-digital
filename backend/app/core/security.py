@@ -25,11 +25,16 @@ STUDIO_ONLY_ROLES = frozenset({
 
 # Ruoli con accesso ERP e Finance.
 # DEVELOPER equivale ad ADMIN per accesso funzionale (account sviluppo gestionale).
-ERP_ACCESS_ROLES = frozenset({UserRole.ADMIN, UserRole.DEVELOPER})
+# MANUTENTORE (Fase M, super-admin) e' un superset di ADMIN: non deve mai perdere un accesso.
+ERP_ACCESS_ROLES = frozenset({UserRole.ADMIN, UserRole.DEVELOPER, UserRole.MANUTENTORE})
 FINANCE_ACCESS_ROLES = ERP_ACCESS_ROLES
 
 # Ruoli admin-equivalenti: possono creare utenti, accedere a HR, etc.
-ADMIN_EQUIVALENT_ROLES = frozenset({UserRole.ADMIN, UserRole.DEVELOPER})
+ADMIN_EQUIVALENT_ROLES = frozenset({UserRole.ADMIN, UserRole.DEVELOPER, UserRole.MANUTENTORE})
+
+# Solo il super-admin (Fase M): gestione utenti (creazione account, cambio ruolo) e
+# impostazioni di sistema. Riservato — non equivale ad ADMIN, e' sopra.
+MANUTENTORE_ROLES = frozenset({UserRole.MANUTENTORE})
 ACCESS_TOKEN_SCOPE = "access"
 CHAT_WS_TOKEN_SCOPE = "chat_ws"
 CHAT_WS_TICKET_TTL = timedelta(seconds=60)
@@ -198,5 +203,17 @@ async def require_admin(current_user=Depends(get_current_user)):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Operazione consentita solo agli amministratori",
+        )
+    return current_user
+
+
+async def require_manutentore(current_user=Depends(get_current_user)):
+    """Guard per il super-admin (Fase M): creazione utenti, cambio ruolo, impostazioni sistema.
+    Piu' stretto di require_admin — un ADMIN normale non basta."""
+    role = _normalize_role(getattr(current_user, "ruolo", None))
+    if role not in MANUTENTORE_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operazione consentita solo al manutentore di sistema",
         )
     return current_user

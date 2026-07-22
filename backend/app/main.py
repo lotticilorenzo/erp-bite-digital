@@ -345,12 +345,12 @@ async def bootstrap_admin_on_startup():
                     cognome=settings.BOOTSTRAP_ADMIN_COGNOME.strip() or "Bite",
                     email=email,
                     password_hash=hash_password(password),
-                    ruolo=UserRole.ADMIN,
+                    ruolo=UserRole.MANUTENTORE,  # Fase M: il primo utente (Lorenzo) è il super-admin
                     attivo=True,
                 )
                 db.add(admin)
                 await db.commit()
-                logger.info(f"Bootstrap Admin creato: {email}")
+                logger.info(f"Bootstrap Manutentore creato: {email}")
         except Exception as e:
             logger.error(f"Errore bootstrap admin: {e}")
 

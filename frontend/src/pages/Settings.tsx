@@ -47,7 +47,7 @@ const sidebarItems = [
     icon: History,
     href: "/settings/audit",
     description: "Storico modifiche e diff delle entità critiche.",
-    roles: ["ADMIN", "DEVELOPER"],
+    roles: ["ADMIN", "DEVELOPER", "MANUTENTORE"],
   },
 ];
 

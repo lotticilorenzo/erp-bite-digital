@@ -60,7 +60,7 @@ import { Link, useLocation } from "react-router-dom";
 import { StudioSidebar } from "@/components/studio/StudioSidebar";
 import { hasErpAccess, normalizeRole } from "@/lib/access";
 
-const ERP_ROLES = ["ADMIN", "DEVELOPER"];
+const ERP_ROLES = ["ADMIN", "DEVELOPER", "MANUTENTORE"];
 const STUDIO_SIDEBAR_WIDTH_KEY = "studio_os_sidebar_width";
 const STUDIO_SIDEBAR_DEFAULT_WIDTH = 320;
 const STUDIO_SIDEBAR_MIN_WIDTH = 280;

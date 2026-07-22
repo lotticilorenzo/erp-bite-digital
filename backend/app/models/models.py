@@ -16,6 +16,7 @@ import enum
 # ── ENUMS ─────────────────────────────────────────────────
 class UserRole(str, enum.Enum):
     # ── RUOLI ATTIVI ──────────────────────────────────────────
+    MANUTENTORE = "MANUTENTORE"  # Super-admin (Fase M): come ADMIN + gestione utenti/impostazioni sistema
     ADMIN = "ADMIN"           # Accesso totale: Finance + Operations + Gestione Utenti
     DEVELOPER = "DEVELOPER"   # Accesso totale: come ADMIN (per sviluppatori del gestionale)
     COLLABORATORE = "COLLABORATORE"  # Solo Studio OS (partner esterni / freelance)
