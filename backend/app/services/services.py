@@ -322,6 +322,24 @@ async def calcola_margine_commessa(
             coeff_cache[mese_norm] = coefficiente
 
     ricavo = commessa.valore_fatturabile_calc  # include righe_progetto + aggiustamenti
+    # ── FASE C (spec §4.5/§7, Tabella F): a commessa CHIUSA il ricavo del margine e' il
+    # FATTURATO ALLOCATO (Σ fatture_attive_allocazioni), non piu' l'accordo. Fallback esplicito
+    # all'accordo se non esiste alcuna allocazione (allocazione mai fatta: non si azzera il
+    # ricavo storico, lo scarto atteso-vs-fatturato resta esposto come segnale).
+    ricavo_fonte = "accordo"
+    scarto_fatturazione = None
+    stato_val = getattr(commessa.stato, "value", str(commessa.stato))
+    if stato_val in ("CHIUSA", "FATTURATA", "INCASSATA"):
+        from app.models.models import FatturaAttivaAllocazione
+        alloc = (await db.execute(
+            select(func.coalesce(func.sum(FatturaAttivaAllocazione.importo_allocato), 0))
+            .where(FatturaAttivaAllocazione.commessa_id == commessa.id)
+        )).scalar() or 0
+        alloc = Decimal(str(alloc))
+        if alloc > 0:
+            scarto_fatturazione = ricavo - alloc  # >0 = sotto-fatturato rispetto all'accordo
+            ricavo = alloc
+            ricavo_fonte = "fatturato_allocato"
     if costo_manodopera_override is not None:
         costo_manodopera = costo_manodopera_override
     else:
@@ -377,6 +395,9 @@ async def calcola_margine_commessa(
         "ovh_caricato": ovh_caricato,
         "margine_netto": margine_netto,
         "margine_netto_pct": margine_netto_pct,
+        # Fase C (Tabella F §7): fonte del ricavo + scarto atteso-vs-fatturato (commesse chiuse)
+        "ricavo_fonte": ricavo_fonte,
+        "scarto_fatturazione": scarto_fatturazione,
     }
 
 
