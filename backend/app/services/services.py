@@ -235,12 +235,20 @@ async def calcola_quota_socio(db: AsyncSession, socio_id: uuid.UUID, periodo: da
 
 
 async def stima_costo_socio_preventivo(db: AsyncSession, socio_id: uuid.UUID, intensita: str = "M",
-                                       periodo: Optional[date] = None) -> Decimal:
+                                       periodo: Optional[date] = None, pool_cache: Optional[dict] = None) -> Decimal:
     """Costo-socio per una riga di preventivo (§18.4): il nuovo progetto entra come n_progetti+1
     coi pesi esistenti del socio, col proprio peso da `intensita` (S/M/L). STIMA esplicita:
-    dipende dal portafoglio del socio al momento del preventivo (diluizione residua v1)."""
+    dipende dal portafoglio del socio al momento del preventivo (diluizione residua v1).
+    `pool_cache` {(socio_id,periodo): (pool,pesi)} evita di rifare le query se piu' righe
+    referenziano lo stesso socio (perf preventivi multi-riga-socio)."""
     periodo = (periodo or date.today()).replace(day=1)
-    pool, pesi = await _pool_e_pesi_socio(db, socio_id, periodo)
+    ck = (socio_id, periodo)
+    if pool_cache is not None and ck in pool_cache:
+        pool, pesi = pool_cache[ck]
+    else:
+        pool, pesi = await _pool_e_pesi_socio(db, socio_id, periodo)
+        if pool_cache is not None:
+            pool_cache[ck] = (pool, pesi)
     if pool == 0:
         return Decimal("0")
     peso_nuovo = _INTENSITA_PESO.get((intensita or "M").upper(), Decimal("2"))
@@ -268,7 +276,13 @@ async def calcola_quota_soci_commessa(db: AsyncSession, commessa, mese: date, *,
     if not progetti_ids:
         return Decimal("0")
 
-    soci_ids = [r[0] for r in (await db.execute(select(Risorsa.id).where(Risorsa.tipologia == "socio", Risorsa.attivo == True))).all()]  # noqa: E712
+    # Lista soci attivi: invariante per la stessa chiamata multi-commessa -> cache (perf).
+    if quota_cache is not None and "_soci_ids" in quota_cache:
+        soci_ids = quota_cache["_soci_ids"]
+    else:
+        soci_ids = [r[0] for r in (await db.execute(select(Risorsa.id).where(Risorsa.tipologia == "socio", Risorsa.attivo == True))).all()]  # noqa: E712
+        if quota_cache is not None:
+            quota_cache["_soci_ids"] = soci_ids
     totale = Decimal("0")
     for socio_id in soci_ids:
         if cache_mese is not None and socio_id in cache_mese:
@@ -2475,10 +2489,12 @@ async def _vpn_approssimato_anno(db: AsyncSession, anno: int) -> tuple[Decimal, 
     return totale, dettaglio
 
 
-async def calcola_irap(db: AsyncSession, anno: int) -> dict:
+async def calcola_irap(db: AsyncSession, anno: int, vpn: Optional[Decimal] = None) -> dict:
     """IRAP stimata (§10.3): VPN approssimato x aliquota (registro parametri). None se l'aliquota
-    non e' in registro (nessuna invenzione, invariante 14)."""
-    vpn, dettaglio = await _vpn_approssimato_anno(db, anno)
+    non e' in registro (nessuna invenzione, invariante 14). `vpn` precalcolato evita di rifare
+    i 12 mesi di P&L (perf, es. genera_f24 che calcola IRAP+IRPEF sullo stesso VPN)."""
+    if vpn is None:
+        vpn, _ = await _vpn_approssimato_anno(db, anno)
     par = await get_parametro(db, "aliquota_irap", date(anno, 12, 31))
     aliquota = Decimal(str(par["valore"])) if par and par.get("valore") is not None else None
     if aliquota is None:
@@ -2492,14 +2508,16 @@ async def calcola_irap(db: AsyncSession, anno: int) -> dict:
             "nota_approssimazione": "VPN approssimato con il margine operativo gestionale (nessuna rettifica IRAP modellata; verificare con commercialista)."}
 
 
-async def calcola_irpef_soci(db: AsyncSession, anno: int) -> dict:
+async def calcola_irpef_soci(db: AsyncSession, anno: int, vpn: Optional[Decimal] = None) -> dict:
     """IRPEF soci per trasparenza (§10.4, invariante 19): reddito_fiscale (approssimato dal VPN,
     stessa nota di calcola_irap) x quota_pct per socio. Due valori: minimo (scaglioni progressivi —
-    NON seedati, resta None) e prudente (aliquota_irpef_prudente dal registro, sempre calcolabile)."""
+    NON seedati, resta None) e prudente (aliquota_irpef_prudente dal registro, sempre calcolabile).
+    `vpn` precalcolato evita di rifare i 12 mesi di P&L (perf)."""
     from app.models.models import Risorsa
 
-    reddito_fiscale, _ = await _vpn_approssimato_anno(db, anno)
-    reddito_fiscale = max(reddito_fiscale, Decimal("0"))
+    if vpn is None:
+        vpn, _ = await _vpn_approssimato_anno(db, anno)
+    reddito_fiscale = max(vpn, Decimal("0"))
     par_prudente = await get_parametro(db, "aliquota_irpef_prudente", date(anno, 12, 31))
     aliquota_prudente = Decimal(str(par_prudente["valore"])) if par_prudente and par_prudente.get("valore") is not None else None
 
@@ -2560,7 +2578,9 @@ async def genera_f24(db: AsyncSession, periodo: date, data_versamento: date, use
                            "importo_a_debito": Decimal("0"), "importo_a_credito": abs(saldo_iva)})
 
     if periodo.month in (6, 11):
-        irap = await calcola_irap(db, anno)
+        # VPN calcolato UNA volta (12 mesi di P&L) e condiviso da IRAP e IRPEF (perf).
+        vpn_anno, _ = await _vpn_approssimato_anno(db, anno)
+        irap = await calcola_irap(db, anno, vpn=vpn_anno)
         if irap["imposta"] is not None and irap["imposta"] > 0:
             righe_data.append({"tributo": "IRAP (importo annuale stimato)", "codice_tributo": "3800",
                                "importo_a_debito": Decimal(str(irap["imposta"])), "importo_a_credito": Decimal("0"),
@@ -2571,7 +2591,7 @@ async def genera_f24(db: AsyncSession, periodo: date, data_versamento: date, use
         par_finanzia = await get_parametro(db, "bite_finanzia_tasse_soci", periodo)
         finanzia = bool(par_finanzia and par_finanzia.get("valore") in (True, "true", "True", "1"))
         if finanzia:
-            irpef = await calcola_irpef_soci(db, anno)
+            irpef = await calcola_irpef_soci(db, anno, vpn=vpn_anno)
             tot_prudente = sum((r["irpef_prudente_cassa"] or 0) for r in irpef["soci"])
             if tot_prudente > 0:
                 righe_data.append({"tributo": "IRPEF soci (stima prudente cassa)", "codice_tributo": "4001",
@@ -5186,11 +5206,12 @@ async def calcola_preventivo(db: AsyncSession, preventivo_id):
         return None
     voci = (await db.execute(select(PreventivoVoce).where(PreventivoVoce.preventivo_id == preventivo_id).order_by(PreventivoVoce.ordine))).scalars().all()
     righe = []
+    pool_cache: dict = {}  # memoizza pool/pesi per socio se piu' righe lo referenziano (perf)
     for v in voci:
         costo = v.costo
         if v.tipo == "socio" and v.risorsa_id is not None:
             # Aggancio §4.6: cascata pool*peso/Sigma-pesi (n_progetti+1) al posto dell'input manuale.
-            costo = await stima_costo_socio_preventivo(db, v.risorsa_id, v.intensita_socio or "M")
+            costo = await stima_costo_socio_preventivo(db, v.risorsa_id, v.intensita_socio or "M", pool_cache=pool_cache)
         righe.append({"tipo": v.tipo, "ore": v.ore, "tariffa": v.tariffa, "costo": costo, "ricarico_pct": v.ricarico_pct})
     coeff = await _ultimo_coefficiente(db, date.today(), incluso=True) or Decimal("0")
     eco = calcola_economia_preventivo(
@@ -5205,8 +5226,9 @@ async def calcola_preventivo(db: AsyncSession, preventivo_id):
 def simula_budget_interno(budget: Decimal, risorse_fisse: list, tariffa_variabile: Decimal) -> dict:
     """Frontiera §18.3: fissate le ore di alcune risorse (dipendenti), max ore per una risorsa variabile.
     h_F <= (B - Σ ore_i*r_i) / r_F. Vale SOLO per risorse a ore; i soci sono capacita', esclusi."""
-    budget = Decimal(str(budget)); tr = Decimal(str(tariffa_variabile))
-    consumato = sum((Decimal(str(r["ore"])) * Decimal(str(r["tariffa"])) for r in risorse_fisse), Decimal("0"))
+    budget = Decimal(str(budget or 0)); tr = Decimal(str(tariffa_variabile or 0))
+    # Guardia None: una riga con ore/tariffa mancanti conta 0, non fa crashare Decimal(str(None)).
+    consumato = sum((Decimal(str(r.get("ore") or 0)) * Decimal(str(r.get("tariffa") or 0)) for r in risorse_fisse), Decimal("0"))
     residuo = budget - consumato
     max_ore = float((residuo / tr)) if tr > 0 else None
     return {"budget_interno": float(budget), "consumato_fisse": float(consumato),
@@ -5376,10 +5398,12 @@ async def totali_budget_versione(db: AsyncSession, versione_id):
 #   costo_diretto   -> pl["costi_diretti"]           (manodopera + diretti + quota Luca)
 #   costo_struttura -> pl["costi_fissi_indivisibili"](esclude 'personale', come il P&L)
 #   altro           -> None (nessuna fonte affidabile: mai 0 inventato)
-async def calcola_actual(db: AsyncSession, anno: int, mese: int = None) -> dict:
-    """Consuntivo per voce_tipo. Se `mese` e' None calcola tutti i 12 mesi dell'anno.
+async def calcola_actual(db: AsyncSession, anno: int, mese: int = None, mesi: Optional[list] = None) -> dict:
+    """Consuntivo per voce_tipo. Perimetro: `mesi` (subset esplicito) > `mese` singolo > tutti i 12.
+    Il param `mesi` evita di calcolare 12 mesi di P&L quando il chiamante ne usa solo alcuni (perf).
     NB: 0 = zero REALE (nessun ricavo/costo quel mese); None = voce non calcolabile (nessuna fonte)."""
-    mesi = [mese] if mese else list(range(1, 13))
+    if mesi is None:
+        mesi = [mese] if mese else list(range(1, 13))
     out = []
     for m in mesi:
         pl = await calcola_pl_gestionale(db, date(anno, m, 1))
@@ -5426,8 +5450,8 @@ async def confronto_budget_actual(db: AsyncSession, versione_id, mese: int = Non
         .group_by(BudgetRiga.voce_tipo)
     )).all()
     budget_map = {vt: Decimal(str(t)) for vt, t in rows}
-    # Actual aggregato sullo stesso perimetro
-    act = await calcola_actual(db, anno)
+    # Actual aggregato sullo STESSO perimetro (solo i mesi richiesti, non 12 — perf).
+    act = await calcola_actual(db, anno, mesi=mesi)
     act_map = {}
     for voce in _VOCI_BUDGET:
         vals = [r[voce] for r in act["mesi"] if r["mese"] in mesi]
@@ -5488,7 +5512,8 @@ async def genera_forecast(db: AsyncSession, anno: int, da_mese: int, user_id=Non
     }, user_id)
     versione_id = v["id"]
     base, origine_base = await _base_previsione(db, anno, escludi_versione=versione_id)
-    act = await calcola_actual(db, anno)
+    # Solo i mesi chiusi (< da_mese) sono letti come actual -> calcola solo quelli (perf).
+    act = await calcola_actual(db, anno, mesi=list(range(1, da_mese)))
     act_map = {r["mese"]: r for r in act["mesi"]}
     righe, note = [], []
     for m in range(1, 13):
