@@ -724,7 +724,16 @@ async def get_client_health_score(db: AsyncSession, cliente_id: uuid.UUID) -> di
             Progetto.cliente_id == cliente_id, Progetto.tipo == ProjectType.RETAINER,
             Progetto.stato == ProjectStatus.ATTIVO, Progetto.is_deleted == False)  # noqa: E712
     )).scalar() or 0
-    fattore_map = {5: 1.0, 4: 0.9, 3: 0.75, 2: 0.5, 1: 0.25}  # foglio 5
+    # Mappa dal registro parametri (fattore_stabilita_map, Fase H) — inv. 22: niente hardcoding.
+    # Fallback = valori spec foglio 5 se il parametro manca/e' malformato.
+    fattore_map = {5: 1.0, 4: 0.9, 3: 0.75, 2: 0.5, 1: 0.25}
+    par_map = await get_parametro(db, "fattore_stabilita_map", date.today())
+    if par_map and par_map.get("valore"):
+        try:
+            import json as _json
+            fattore_map = {int(k): float(v) for k, v in _json.loads(par_map["valore"]).items()}
+        except (ValueError, TypeError):
+            pass  # parametro malformato: resta il fallback spec
     proiezione_12m = float(run_rate) * 12 * fattore_map.get(rating, 0.75)
 
     # --- DSO ULTIME 3 FATTURE (spec §11.1): trend recente vs il medio.
