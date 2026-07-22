@@ -1638,6 +1638,7 @@ class CostoFissoCreate(BaseModel):
     descrizione: str = Field(..., min_length=1, max_length=200)
     importo: Decimal = Field(..., gt=0)
     categoria: Optional[str] = Field(None, max_length=50)
+    categoria_id: Optional[uuid.UUID] = None  # §4.8: piano dei conti governato
     periodicita: Optional[str] = Field("mensile", max_length=20)
     attivo: bool = True
     data_inizio: Optional[date] = None
@@ -1649,6 +1650,7 @@ class CostoFissoUpdate(BaseModel):
     descrizione: Optional[str] = Field(None, min_length=1, max_length=200)
     importo: Optional[Decimal] = Field(None, gt=0)
     categoria: Optional[str] = Field(None, max_length=50)
+    categoria_id: Optional[uuid.UUID] = None
     periodicita: Optional[str] = Field(None, max_length=20)
     attivo: Optional[bool] = None
     data_inizio: Optional[date] = None

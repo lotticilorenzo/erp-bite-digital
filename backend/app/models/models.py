@@ -803,7 +803,8 @@ class MovimentoCassa(Base):
     iva_importo: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 2))  # IVA per cassa del movimento (da FIC)
     data_contabile: Mapped[Optional[date]] = mapped_column(Date)
     descrizione: Mapped[Optional[str]] = mapped_column(Text)
-    categoria: Mapped[Optional[str]] = mapped_column(String(100))
+    categoria: Mapped[Optional[str]] = mapped_column(String(100))  # legacy: stringa libera, mantenuta per compatibilita'
+    categoria_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("categorie.id", ondelete="SET NULL"))
     importo: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     tipo: Mapped[Optional[str]] = mapped_column(String(20))
     fattura_attiva_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("fatture_attive.id", ondelete="SET NULL"))
@@ -995,6 +996,33 @@ class Ricorrenza(Base):
     )
 
 
+# ── CATEGORIE (piano dei conti gestionale, spec v2 §4.8) ──
+class Categoria(Base):
+    """Dimensione governata (foglio 1/9): sostituisce le stringhe libere `categoria` sparse nei
+    fatti (costi_fissi, movimenti_cassa). `natura` abilita il BEP (§12); `relazione_commessa`
+    costruisce il margine (diretto/indiretto). Le due dimensioni sono ortogonali (§4.8)."""
+    __tablename__ = "categorie"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    codice: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    nome: Mapped[str] = mapped_column(String(200), nullable=False)
+    categoria_padre_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("categorie.id", ondelete="SET NULL"))
+    tipo_flusso: Mapped[str] = mapped_column(String(10), nullable=False)  # ricavo|costo
+    natura: Mapped[str] = mapped_column(String(10), nullable=False)  # fisso|variabile
+    relazione_commessa: Mapped[str] = mapped_column(String(10), nullable=False)  # diretto|indiretto
+    voce_ce: Mapped[Optional[str]] = mapped_column(String(100))  # etichetta riga del CE a scalare (foglio 9A)
+    detraibilita_iva_pct: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2))  # solo fallback (§4.8)
+    deducibilita_pct: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2))  # solo fallback (§4.8)
+    attiva: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint("tipo_flusso IN ('ricavo','costo')", name="ck_categorie_tipo_flusso"),
+        CheckConstraint("natura IN ('fisso','variabile')", name="ck_categorie_natura"),
+        CheckConstraint("relazione_commessa IN ('diretto','indiretto')", name="ck_categorie_relazione"),
+    )
+
+
 # ── COSTI FISSI ───────────────────────────────────────────
 class CostoFisso(Base):
     __tablename__ = "costi_fissi"
@@ -1002,7 +1030,8 @@ class CostoFisso(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     descrizione: Mapped[str] = mapped_column(String(200), nullable=False)
     importo: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    categoria: Mapped[Optional[str]] = mapped_column(String(50), default='ALTRO')
+    categoria: Mapped[Optional[str]] = mapped_column(String(50), default='ALTRO')  # legacy: stringa libera, mantenuta per compatibilita'
+    categoria_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("categorie.id", ondelete="SET NULL"))
     periodicita: Mapped[Optional[str]] = mapped_column(String(20), default='mensile')
     attivo: Mapped[bool] = mapped_column(Boolean, default=True)
     data_inizio: Mapped[Optional[date]] = mapped_column(Date)

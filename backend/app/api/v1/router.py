@@ -76,7 +76,7 @@ from app.services.services import (
     get_dashboard_kpi, get_marginalita_clienti, calcola_dso, calcola_dso_aziendale,
     calcola_dashboard_liquidita, calcola_kpi_clienti,
     get_config_pl_memo, update_config_pl_memo,
-    calcola_proiezione_cassa, get_ultimo_saldo, create_saldo, calcola_pl_gestionale,
+    calcola_proiezione_cassa, get_ultimo_saldo, create_saldo, calcola_pl_gestionale, calcola_bep,
     calcola_scadenzario_fiscale,
     sync_fic_data, get_last_fic_sync_status, list_fatture_attive, incassa_fattura,
     list_fornitori_full, update_fornitore, list_fatture_passive, update_fattura_passiva, list_fornitori,
@@ -405,6 +405,17 @@ async def report_pl_gestionale(
     return await calcola_pl_gestionale(db, mese or date.today())
 
 
+@router.get("/report/bep", tags=["Report"])
+async def report_bep(
+    mese: Optional[date] = Query(None, description="Mese YYYY-MM-01 (default: mese corrente)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """Break-Even Point (spec v2 §12): costi fissi / (1 - costi variabili% su ricavi).
+    Richiede la dimensione Categorie (natura fisso/variabile, §4.8)."""
+    return await calcola_bep(db, mese or date.today())
+
+
 # ── CONFIG MEMO CLIENTE/COLLABORATORE DEDICATO (P&L §7.6) ──
 @router.get("/config-pl-memo", tags=["Report"])
 async def get_config_pl_memo_endpoint(
@@ -660,6 +671,17 @@ async def get_riconciliazioni_fattura_passiva(
     current_user: User = Depends(require_finance_access),
 ):
     return {"riconciliazioni": await list_riconciliazioni_fattura(db, fattura_id, False)}
+
+
+@router.get("/categorie", tags=["Categorie"])
+async def get_categorie(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """Piano dei conti gestionale (spec v2 §4.8): dimensione governata, sola lettura per ora."""
+    from app.models.models import Categoria
+    rows = (await db.execute(select(Categoria).where(Categoria.attiva == True).order_by(Categoria.codice))).scalars().all()  # noqa: E712
+    return {"categorie": [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]}
 
 
 @router.get("/costi-fissi", tags=["CostiFissi"])

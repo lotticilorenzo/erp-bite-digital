@@ -2080,6 +2080,74 @@ async def costi_fissi_indivisibili_mese(db: AsyncSession, mese: date) -> tuple[D
     return totale, incluse, escluse
 
 
+async def calcola_bep(db: AsyncSession, periodo: date) -> dict:
+    """Break-Even Point (spec v2 §12, foglio 3): costi_fissi_totali / (1 - costi_variabili% su ricavi).
+    Richiede la dimensione Categorie (natura fisso/variabile, §4.8): prima impossibile (categoria
+    era stringa libera), ora possibile via costi_fissi.categoria_id / movimenti_cassa.categoria_id.
+    Costi fissi = TUTTI i CostoFisso attivi con categoria.natura='fisso' (nessuna esclusione
+    personale: e' una definizione di break-even, non l'anti-doppio-conteggio del P&L)."""
+    from app.models.models import CostoFisso, Categoria, MovimentoCassa
+    from dateutil.relativedelta import relativedelta
+
+    mese_norm = periodo.replace(day=1)
+    fine_mese = (mese_norm + relativedelta(months=1)) - timedelta(days=1)
+    warning: list[str] = []
+
+    # Costi fissi mensili (natura='fisso' dalla categoria).
+    res_cf = await db.execute(
+        select(CostoFisso, Categoria.natura).join(Categoria, Categoria.id == CostoFisso.categoria_id, isouter=True)
+        .where(CostoFisso.attivo == True)  # noqa: E712
+    )
+    costi_fissi_totali = Decimal("0")
+    senza_categoria = 0
+    for cf, natura in res_cf.all():
+        if cf.data_inizio and cf.data_inizio > fine_mese:
+            continue
+        if cf.data_fine and cf.data_fine < mese_norm:
+            continue
+        if natura is None:
+            senza_categoria += 1
+            continue
+        if natura != "fisso":
+            continue
+        div = _PERIODO_DIVISORE.get((cf.periodicita or "mensile").lower(), Decimal("1"))
+        costi_fissi_totali += ((cf.importo or Decimal("0")) / div).quantize(Decimal("0.01"))
+    if senza_categoria:
+        warning.append(f"{senza_categoria} costi fissi senza categoria_id: esclusi dal calcolo BEP.")
+
+    # Ricavi del periodo: FONTE UNICA (P&L gestionale).
+    pl = await calcola_pl_gestionale(db, mese_norm)
+    ricavi = Decimal(str(pl["ricavi"]["totale"] or 0))
+
+    # Costi variabili del periodo: movimenti di costo con categoria.natura='variabile', per competenza.
+    row = (await db.execute(
+        select(func.coalesce(func.sum(MovimentoCassa.importo), 0))
+        .join(Categoria, Categoria.id == MovimentoCassa.categoria_id)
+        .where(Categoria.natura == "variabile", Categoria.tipo_flusso == "costo",
+               MovimentoCassa.data_competenza >= mese_norm, MovimentoCassa.data_competenza <= fine_mese,
+               MovimentoCassa.importo < 0)
+    )).scalar() or 0
+    costi_variabili = abs(Decimal(str(row)))
+
+    if ricavi <= 0:
+        return {"periodo": str(mese_norm), "costi_fissi_totali": float(costi_fissi_totali),
+                "costi_variabili": float(costi_variabili), "ricavi": float(ricavi),
+                "mdc_pct": None, "bep": None,
+                "warning": warning + ["Nessun ricavo nel periodo: MdC% e BEP non calcolabili."]}
+
+    mdc_pct = 1 - (costi_variabili / ricavi)
+    if mdc_pct <= 0:
+        return {"periodo": str(mese_norm), "costi_fissi_totali": float(costi_fissi_totali),
+                "costi_variabili": float(costi_variabili), "ricavi": float(ricavi),
+                "mdc_pct": float(mdc_pct), "bep": None,
+                "warning": warning + ["Margine di contribuzione %% <= 0: BEP non definito (costi variabili >= ricavi)."]}
+
+    bep = (costi_fissi_totali / mdc_pct).quantize(Decimal("0.01"))
+    return {"periodo": str(mese_norm), "costi_fissi_totali": float(costi_fissi_totali),
+            "costi_variabili": float(costi_variabili), "ricavi": float(ricavi),
+            "mdc_pct": float(round(mdc_pct * 100, 2)), "bep": float(bep), "warning": warning}
+
+
 async def calcola_tasso_overhead(db: AsyncSession, mese: date) -> dict:
     """Tasso overhead di struttura in EUR/ora produttiva (brief §3.3):
 
