@@ -996,6 +996,26 @@ class Ricorrenza(Base):
     )
 
 
+# ── FORECAST ASSUNZIONI (spec v2 §13.2/13.C): parametri del motore driver-based. ──
+class ForecastAssunzione(Base):
+    """Driver del forecast ricavi ricorrenti: fattore_stabilita x (1-churn). Una riga con
+    tipo_servizio NULL = default globale; righe per tipo_servizio = override. I driver completi
+    di §13.2 (pipeline pesata, stagionalita, spot) restano gap dichiarato."""
+    __tablename__ = "forecast_assunzioni"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tipo_servizio: Mapped[Optional[str]] = mapped_column(String(30), unique=True)  # NULL = default globale
+    fattore_stabilita: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False, default=1)  # 0..1
+    churn_atteso_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=0)
+    nota: Mapped[Optional[str]] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        CheckConstraint("fattore_stabilita > 0 AND fattore_stabilita <= 1", name="ck_fa_fattore"),
+        CheckConstraint("churn_atteso_pct >= 0 AND churn_atteso_pct < 100", name="ck_fa_churn"),
+    )
+
+
 # ── FINANZIAMENTI / LINEE DI CREDITO (spec v2 §4.9): le RATE entrano in cassa come scadenze
 # tipo=finanziaria via il motore ricorrenze; ammortamento contabile fuori scope. debito_residuo
 # (ERP, aggiornato a mano) alimenta la PFN. ──

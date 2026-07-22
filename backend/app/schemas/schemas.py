@@ -2364,3 +2364,11 @@ class FinanziamentoUpdate(BaseModel):
     rata_mensile: Optional[Decimal] = Field(None, gt=0)
     attivo: Optional[bool] = None
     note: Optional[str] = None
+
+
+# ── FORECAST ASSUNZIONI (spec v2 §13.2) ──
+class ForecastAssunzioneUpsert(BaseModel):
+    tipo_servizio: Optional[str] = Field(None, max_length=30)  # None = default globale
+    fattore_stabilita: Decimal = Field(..., gt=0, le=1)
+    churn_atteso_pct: Decimal = Field(Decimal("0"), ge=0, lt=100)
+    nota: Optional[str] = None

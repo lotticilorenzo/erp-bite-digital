@@ -63,6 +63,7 @@ from app.schemas.schemas import (
     GeneraF24Request,
     CentroCostoCreate, CentroCostoUpdate, CentroCostoOut,
     FinanziamentoCreate, FinanziamentoUpdate,
+    ForecastAssunzioneUpsert,
     BudgetVersioneCreate, BudgetVersioneUpdate, BudgetRigheBulk, BudgetRigaUpdate, GeneraForecastRequest,
     PesoContenutoUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
@@ -1389,6 +1390,37 @@ async def post_genera_forecast(
     """Forecast rolling (§13): mesi chiusi = Actual reale, mesi aperti = previsione dalla base
     disponibile (budget approvato > ultimo forecast). Ogni riga porta la sua `origine`."""
     return await genera_forecast(db, payload.anno, payload.da_mese, current_user.id)
+
+
+@router.get("/budget/forecast/assunzioni", tags=["Budget"])
+async def get_forecast_assunzioni(
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_finance_access),
+):
+    from app.models.models import ForecastAssunzione
+    rows = (await db.execute(select(ForecastAssunzione).order_by(ForecastAssunzione.tipo_servizio.nullsfirst()))).scalars().all()
+    return {"assunzioni": [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]}
+
+
+@router.put("/budget/forecast/assunzioni", tags=["Budget"])
+async def put_forecast_assunzione(
+    payload: ForecastAssunzioneUpsert,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_finance_access),
+):
+    """Upsert per tipo_servizio (None = default globale)."""
+    from app.models.models import ForecastAssunzione
+    row = (await db.execute(select(ForecastAssunzione).where(
+        ForecastAssunzione.tipo_servizio == payload.tipo_servizio if payload.tipo_servizio is not None
+        else ForecastAssunzione.tipo_servizio.is_(None)))).scalar_one_or_none()
+    if row:
+        row.fattore_stabilita = payload.fattore_stabilita
+        row.churn_atteso_pct = payload.churn_atteso_pct
+        row.nota = payload.nota
+    else:
+        row = ForecastAssunzione(**payload.model_dump())
+        db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return {c.name: getattr(row, c.name) for c in row.__table__.columns}
 
 
 @router.get("/budget/forecast/accuracy", tags=["Budget"])

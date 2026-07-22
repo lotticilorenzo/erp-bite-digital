@@ -5594,9 +5594,48 @@ async def _base_previsione(db: AsyncSession, anno: int, escludi_versione=None):
     return {(m, v): Decimal(str(t)) for m, v, t in rows}, origine
 
 
+async def _ricavo_driver_mensile(db: AsyncSession):
+    """(ricavo_mensile_driver, dettaglio) per i mesi aperti (spec §13.2, versione MINIMA):
+    run-rate ricorrenti attivi per tipo_servizio x fattore_stabilita x (1 - churn).
+    None se non esiste ALCUNA riga in forecast_assunzioni -> il chiamante fa carry-forward
+    (fallback esplicito, comportamento pre-Fase-D). I driver §13.2 completi (pipeline pesata,
+    stagionalita, spot, Siti lineari) restano GAP dichiarato: servono dati non presenti."""
+    from app.models.models import ForecastAssunzione, Progetto, ProjectType, ProjectStatus
+
+    assunzioni = (await db.execute(select(ForecastAssunzione))).scalars().all()
+    if not assunzioni:
+        return None, []
+    globale = next((x for x in assunzioni if x.tipo_servizio is None), None)
+    per_tipo = {x.tipo_servizio: x for x in assunzioni if x.tipo_servizio is not None}
+
+    rows = (await db.execute(
+        select(Progetto.tipo_servizio, func.coalesce(func.sum(Progetto.importo_fisso), 0))
+        .where(Progetto.tipo == ProjectType.RETAINER, Progetto.stato == ProjectStatus.ATTIVO,
+               Progetto.is_deleted == False)  # noqa: E712
+        .group_by(Progetto.tipo_servizio)
+    )).all()
+    totale = Decimal("0")
+    dettaglio = []
+    for ts, run_rate in rows:
+        run_rate = Decimal(str(run_rate))
+        assun = per_tipo.get(ts) or globale
+        if assun is None:
+            fattore, churn, fonte = Decimal("1"), Decimal("0"), "nessuna assunzione per il tipo (run-rate pieno)"
+        else:
+            fattore, churn = Decimal(str(assun.fattore_stabilita)), Decimal(str(assun.churn_atteso_pct))
+            fonte = f"assunzione {'globale' if assun.tipo_servizio is None else assun.tipo_servizio}"
+        val = (run_rate * fattore * (1 - churn / 100)).quantize(Decimal("0.01"))
+        totale += val
+        dettaglio.append({"tipo_servizio": ts, "run_rate": float(run_rate), "fattore_stabilita": float(fattore),
+                          "churn_pct": float(churn), "ricavo_previsto": float(val), "fonte": fonte})
+    return totale, dettaglio
+
+
 async def genera_forecast(db: AsyncSession, anno: int, da_mese: int, user_id=None) -> dict:
-    """Forecast rolling (§13.0/13.2): mesi < da_mese = ACTUAL reale; mesi >= da_mese = previsione
-    dalla base disponibile. Ogni riga porta la sua `origine`."""
+    """Forecast rolling (§13.0/13.2): mesi < da_mese = ACTUAL reale; mesi >= da_mese = previsione.
+    RICAVO: driver minimo (ricorrenti x fattore_stabilita x (1-churn)) se forecast_assunzioni
+    e' popolata, altrimenti carry-forward dalla base (fallback esplicito con nota).
+    COSTI: sempre carry-forward dalla base (driver costi = gap dichiarato)."""
     from app.models.models import BudgetRiga
     v = await create_budget_versione(db, {
         "anno": anno, "tipo": "forecast", "periodo_riferimento": date(anno, da_mese, 1),
@@ -5607,6 +5646,7 @@ async def genera_forecast(db: AsyncSession, anno: int, da_mese: int, user_id=Non
     # Solo i mesi chiusi (< da_mese) sono letti come actual -> calcola solo quelli (perf).
     act = await calcola_actual(db, anno, mesi=list(range(1, da_mese)))
     act_map = {r["mese"]: r for r in act["mesi"]}
+    ricavo_driver, driver_dettaglio = await _ricavo_driver_mensile(db)
     righe, note = [], []
     for m in range(1, 13):
         if m < da_mese:  # mese chiuso -> ACTUAL
@@ -5616,18 +5656,28 @@ async def genera_forecast(db: AsyncSession, anno: int, da_mese: int, user_id=Non
                     righe.append(BudgetRiga(versione_id=versione_id, anno=anno, mese=m, voce_tipo=voce,
                                             importo=Decimal(str(a[voce])), origine="actual"))
         else:            # mese aperto -> PREVISIONE
-            if base is None:
-                continue
-            for (mm, voce), imp in base.items():
-                if mm == m:
-                    righe.append(BudgetRiga(versione_id=versione_id, anno=anno, mese=m, voce_tipo=voce,
-                                            importo=imp, origine=origine_base))
+            if ricavo_driver is not None:
+                righe.append(BudgetRiga(versione_id=versione_id, anno=anno, mese=m, voce_tipo="ricavo",
+                                        importo=ricavo_driver, origine="driver_ricorrenti"))
+            if base is not None:
+                for (mm, voce), imp in base.items():
+                    if mm == m and not (voce == "ricavo" and ricavo_driver is not None):
+                        righe.append(BudgetRiga(versione_id=versione_id, anno=anno, mese=m, voce_tipo=voce,
+                                                importo=imp, origine=origine_base))
+    if ricavo_driver is None:
+        note.append("forecast_assunzioni vuota: ricavo in carry-forward dalla base (fallback, nessun driver applicato).")
+    else:
+        note.append("Ricavo mesi aperti = run-rate ricorrenti x fattore_stabilita x (1-churn) (driver minimo §13.2). "
+                    "Driver NON implementati (gap): pipeline pesata, stagionalita, spot, Siti lineari, driver costi.")
     if base is None:
-        note.append("Nessuna base di previsione (nessun budget approvato ne' forecast precedente): mesi aperti vuoti.")
+        note.append("Nessuna base di previsione (nessun budget approvato ne' forecast precedente): mesi aperti vuoti"
+                    + (" salvo il ricavo driver." if ricavo_driver is not None else "."))
     db.add_all(righe)
     await db.commit()
     return {"versione_id": versione_id, "versione": v["versione"], "anno": anno, "da_mese": da_mese,
-            "righe_create": len(righe), "origine_previsione": origine_base, "note": note}
+            "righe_create": len(righe), "origine_previsione": origine_base,
+            "driver_ricavo_mensile": float(ricavo_driver) if ricavo_driver is not None else None,
+            "driver_dettaglio": driver_dettaglio, "note": note}
 
 
 async def _snapshot_forecast(db: AsyncSession, anno: int, mese: int, user_id=None):
