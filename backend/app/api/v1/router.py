@@ -82,7 +82,7 @@ from app.services.services import (
     get_config_pl_memo, update_config_pl_memo,
     calcola_proiezione_cassa, get_ultimo_saldo, create_saldo, calcola_pl_gestionale, calcola_bep,
     calcola_irap, calcola_irpef_soci, calcola_inps_soci, genera_f24, get_f24, list_f24,
-    create_finanziamento, list_finanziamenti, update_finanziamento, calcola_pfn,
+    create_finanziamento, list_finanziamenti, update_finanziamento, calcola_pfn, calcola_kpi_cassa,
     calcola_scadenzario_fiscale,
     sync_fic_data, get_last_fic_sync_status, list_fatture_attive, incassa_fattura,
     list_fornitori_full, update_fornitore, list_fatture_passive, update_fattura_passiva, list_fornitori,
@@ -782,6 +782,16 @@ async def patch_finanziamento(
     if res is None:
         raise HTTPException(status_code=404, detail="Finanziamento non trovato")
     return res
+
+
+@router.get("/report/kpi-cassa", tags=["Report"])
+async def report_kpi_cassa(
+    giorni: int = Query(90, ge=30, le=365),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """KPI di cassa (spec v2 §12): DPO, burn rate mensile, runway, PFN."""
+    return await calcola_kpi_cassa(db, giorni)
 
 
 @router.get("/report/pfn", tags=["Report"])

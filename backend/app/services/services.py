@@ -2792,6 +2792,72 @@ async def calcola_pfn(db: AsyncSession) -> dict:
             "data_saldo": str(saldo_rec.data), "warning": warning}
 
 
+# ── KPI CASSA: DPO / BURN RATE / RUNWAY (spec v2 §12, Fase F) ─────────────
+async def calcola_kpi_cassa(db: AsyncSession, giorni_periodo: int = 90) -> dict:
+    """DPO aziendale = (debiti aperti / acquisti periodo) x giorni (foglio 3, simmetrico al DSO).
+    Burn rate = media mensile (uscite - entrate) di cassa, finestra 3 mesi (positivo = brucia).
+    Runway = saldo attuale / burn (solo se in burn). PFN inclusa (Fase B).
+    Nessun numero inventato: fonte assente -> None + nota."""
+    from app.models.models import FatturaPassiva, MovimentoCassa
+
+    warning: list[str] = []
+    oggi = date.today()
+    dal = oggi - timedelta(days=giorni_periodo)
+
+    # DPO
+    debiti_aperti = Decimal(str((await db.execute(
+        select(func.coalesce(func.sum(FatturaPassiva.importo_residuo), 0)).where(FatturaPassiva.importo_residuo > 0)
+    )).scalar() or 0))
+    acquisti = Decimal(str((await db.execute(
+        select(func.coalesce(func.sum(FatturaPassiva.importo_totale), 0)).where(
+            FatturaPassiva.data_emissione >= dal, FatturaPassiva.data_emissione <= oggi)
+    )).scalar() or 0))
+    dpo = float((debiti_aperti / acquisti * giorni_periodo).quantize(Decimal("0.1"))) if acquisti > 0 else None
+    if dpo is None:
+        warning.append(f"Nessun acquisto (fatture passive) negli ultimi {giorni_periodo}gg: DPO non calcolabile.")
+
+    # BURN RATE: 3 mesi di movimenti cassa
+    dal_burn = oggi - timedelta(days=90)
+    entrate = Decimal(str((await db.execute(
+        select(func.coalesce(func.sum(MovimentoCassa.importo), 0)).where(
+            MovimentoCassa.data_valuta >= dal_burn, MovimentoCassa.importo > 0)
+    )).scalar() or 0))
+    uscite = Decimal(str((await db.execute(
+        select(func.coalesce(func.sum(MovimentoCassa.importo), 0)).where(
+            MovimentoCassa.data_valuta >= dal_burn, MovimentoCassa.importo < 0)
+    )).scalar() or 0))
+    n_mov = (await db.execute(select(func.count(MovimentoCassa.id)).where(MovimentoCassa.data_valuta >= dal_burn))).scalar() or 0
+    if n_mov == 0:
+        burn_mensile = None
+        warning.append("Nessun movimento di cassa negli ultimi 90gg: burn rate non calcolabile.")
+    else:
+        burn_mensile = float(((abs(uscite) - entrate) / 3).quantize(Decimal("0.01")))  # positivo = brucia
+
+    # RUNWAY
+    saldo_rec = await get_ultimo_saldo(db)
+    runway_mesi = None
+    if saldo_rec is None:
+        warning.append("Saldo cassa non impostato: runway non calcolabile.")
+    elif burn_mensile is None:
+        warning.append("Burn rate non disponibile: runway non calcolabile.")
+    elif burn_mensile <= 0:
+        warning.append("Cassa in generazione (burn <= 0): runway non applicabile.")
+    else:
+        runway_mesi = round(float(saldo_rec.saldo) / burn_mensile, 1)
+
+    pfn = await calcola_pfn(db)
+    return {
+        "periodo_giorni": giorni_periodo,
+        "dpo_gg": dpo, "debiti_aperti": float(debiti_aperti), "acquisti_periodo": float(acquisti),
+        "burn_rate_mensile": burn_mensile,
+        "entrate_90gg": float(entrate), "uscite_90gg": float(abs(uscite)),
+        "runway_mesi": runway_mesi,
+        "saldo_attuale": float(saldo_rec.saldo) if saldo_rec else None,
+        "pfn": pfn,
+        "warning": warning,
+    }
+
+
 # ── TASK SERVICE ──────────────────────────────────────────
 async def list_tasks(
     db: AsyncSession,
