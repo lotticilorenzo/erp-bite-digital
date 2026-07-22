@@ -170,9 +170,19 @@ async def get_current_user(
 
 
 def require_roles(*roles):
-    """Decorator per limitare l'accesso per ruolo."""
+    """Decorator per limitare l'accesso per ruolo.
+
+    FIX CENTRALE (Fase M): dove e' ammesso ADMIN sono ammessi TUTTI gli admin-equivalenti
+    (ADMIN_EQUIVALENT_ROLES: ADMIN, DEVELOPER, MANUTENTORE). Le firme storiche scrivevano gli
+    enum a mano (es. require_roles(ADMIN, PM)) e ogni nuovo ruolo admin-equivalente prendeva
+    403 a caso; risolvere qui copre ogni occorrenza presente e futura, senza allargare nulla
+    dove ADMIN non e' gia' ammesso."""
     async def role_checker(current_user=Depends(get_current_user)):
-        if current_user.ruolo not in roles:
+        role = _normalize_role(getattr(current_user, "ruolo", None))
+        allowed = set(roles)
+        if UserRole.ADMIN in allowed:
+            allowed |= ADMIN_EQUIVALENT_ROLES
+        if role not in allowed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Ruolo {current_user.ruolo} non autorizzato per questa operazione"
