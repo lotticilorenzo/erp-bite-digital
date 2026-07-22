@@ -592,13 +592,12 @@ async def delete_cliente(db: AsyncSession, cliente_id: uuid.UUID, by_user_id: uu
     return True
 
 async def get_client_health_score(db: AsyncSession, cliente_id: uuid.UUID) -> dict:
-    """
-    Calcola un punteggio di salute (0-100) basato su 4 fattori:
-    1. Margine (40%): Media ultimi 3 mesi. Target 50% = 100pt.
-    2. Pagamenti (30%): Puntualità ultimi 12 mesi.
-    3. Revisioni (20%): Scope creep ultimi 12 mesi.
-    4. Longevità (10%): Anzianità rapporto (>1 anno = 100pt).
-    """
+    """Client Health Score conforme spec v2 §11.1 (pesi riallineati Fase E):
+    Puntualita' pagamenti 30% + Marginalita' media 25% + Trend fatturato 20% +
+    Stabilita' (rating manuale 1-5, None=3 neutro documentato) 15% + Anzianita' 10%.
+    Lo scope-creep (fuori spec) resta calcolato/esposto ma NON pesa piu' nel totale.
+    Espone anche LTV (margine lordo storico reale), proiezione fatturato 12m
+    (run-rate ricorrenti x fattore_stabilita) e DSO ultime 3 fatture."""
     cliente = await get_cliente(db, cliente_id)
     if not cliente:
         return {"score": 0, "factors": {}}
@@ -635,7 +634,15 @@ async def get_client_health_score(db: AsyncSession, cliente_id: uuid.UUID) -> di
     
     total_f = len(fatture)
     paid_f = len([f for f in fatture if f.stato_pagamento == "INCASSATA"])
-    payment_score = (paid_f / total_f * 100) if total_f > 0 else 100 # Se no fatture, assumiamo buono
+    # PUNTUALITA' (spec §11.1): ritardo medio incasso vs scadenza (fallback emissione+30gg).
+    # 0 gg (o anticipo) = 100pt; -2pt per giorno di ritardo (30gg tardi = 40pt, 50gg = 0).
+    ritardi = []
+    for f in fatture:
+        if f.stato_pagamento == "INCASSATA" and f.data_ultimo_incasso and f.data_emissione:
+            rif = f.data_scadenza or (f.data_emissione + timedelta(days=30))
+            ritardi.append((f.data_ultimo_incasso - rif).days)
+    ritardo_medio = (sum(ritardi) / len(ritardi)) if ritardi else None
+    payment_score = 100 if ritardo_medio is None else max(0, min(100, 100 - max(0, ritardo_medio) * 2))
 
     # --- 3. REVISIONI / SCOPE CREEP (20%) ---
     # Ore reali vs ore contratto ultimi 12 mesi
@@ -675,27 +682,79 @@ async def get_client_health_score(db: AsyncSession, cliente_id: uuid.UUID) -> di
     days_old = (date.today() - cliente.created_at.date()).days if cliente.created_at else 0
     longevity_score = min(100, (days_old / 365 * 100))
 
+    # --- TREND FATTURATO 20% (spec §11.1): ultimi 6m vs 6m precedenti (importo_netto emesso).
+    six_ago = date.today() - timedelta(days=182)
+    twelve_ago = date.today() - timedelta(days=365)
+    recente = sum(float(f.importo_netto or 0) for f in fatture if f.data_emissione and f.data_emissione >= six_ago)
+    precedente = sum(float(f.importo_netto or 0) for f in fatture if f.data_emissione and twelve_ago <= f.data_emissione < six_ago)
+    if precedente > 0:
+        growth = (recente - precedente) / precedente
+        trend_score = max(0, min(100, 50 + growth * 100))  # stabile=50, +50%=100, -50%=0
+    elif recente > 0:
+        trend_score = 100.0
+    else:
+        trend_score = 50.0  # nessun dato: neutro
+
+    # --- STABILITA' 15% (spec §11.1): rating manuale 1-5; None = 3 neutro (documentato).
+    rating = cliente.rating_stabilita if cliente.rating_stabilita is not None else 3
+    stability_score = (rating - 1) / 4 * 100
+
     total_score = round(
-        (margin_score * 0.4) + 
-        (payment_score * 0.3) + 
-        (revisions_score * 0.2) + 
-        (longevity_score * 0.1)
+        (payment_score * 0.30) +
+        (margin_score * 0.25) +
+        (trend_score * 0.20) +
+        (stability_score * 0.15) +
+        (longevity_score * 0.10)
     )
+
+    # --- LTV (spec §11.1): margine lordo cumulato STORICO reale (tutte le commesse del cliente).
+    ltv = 0.0
+    ltv_cache_c, ltv_cache_q, ltv_cache_o = {}, {}, {}
+    all_c = (await db.execute(
+        select(Commessa).where(Commessa.cliente_id == cliente_id).options(selectinload(Commessa.righe_progetto))
+    )).scalars().all()
+    for c in all_c:
+        m = await calcola_margine_commessa(db, c, coeff_cache=ltv_cache_c, quota_cache=ltv_cache_q, ovh_cache=ltv_cache_o)
+        ltv += float(m["margine_lordo_euro"])
+
+    # --- PROIEZIONE FATTURATO 12M (spec §11.1): run-rate ricorrenti attivi x 12 x fattore_stabilita.
+    from app.models.models import Progetto, ProjectType, ProjectStatus
+    run_rate = (await db.execute(
+        select(func.coalesce(func.sum(Progetto.importo_fisso), 0)).where(
+            Progetto.cliente_id == cliente_id, Progetto.tipo == ProjectType.RETAINER,
+            Progetto.stato == ProjectStatus.ATTIVO, Progetto.is_deleted == False)  # noqa: E712
+    )).scalar() or 0
+    fattore_map = {5: 1.0, 4: 0.9, 3: 0.75, 2: 0.5, 1: 0.25}  # foglio 5
+    proiezione_12m = float(run_rate) * 12 * fattore_map.get(rating, 0.75)
+
+    # --- DSO ULTIME 3 FATTURE (spec §11.1): trend recente vs il medio.
+    incassate = sorted(
+        [f for f in fatture if f.stato_pagamento == "INCASSATA" and f.data_ultimo_incasso and f.data_emissione],
+        key=lambda f: f.data_emissione, reverse=True)[:3]
+    dso_ultime_3 = round(sum((f.data_ultimo_incasso - f.data_emissione).days for f in incassate) / len(incassate), 1) if incassate else None
 
     return {
         "score": total_score,
         "factors": {
-            "margine": round(margin_score),
             "pagamenti": round(payment_score),
-            "revisioni": round(revisions_score),
-            "longevita": round(longevity_score)
+            "margine": round(margin_score),
+            "trend_fatturato": round(trend_score),
+            "stabilita": round(stability_score),
+            "longevita": round(longevity_score),
+            "revisioni": round(revisions_score),  # fuori peso (non in spec), esposto per il FE
         },
         "details": {
             "avg_margin_pct": round(avg_margin, 1),
             "invoices_paid": f"{paid_f}/{total_f}",
             "avg_scope_creep": f"{avg_creep_ratio:.2f}x",
-            "days_with_us": days_old
-        }
+            "days_with_us": days_old,
+            "ritardo_medio_gg": round(ritardo_medio, 1) if ritardo_medio is not None else None,
+            "rating_stabilita": cliente.rating_stabilita,  # None = default neutro 3 applicato
+            "fatturato_6m": round(recente, 2), "fatturato_6m_prec": round(precedente, 2),
+        },
+        "ltv": round(ltv, 2),
+        "proiezione_fatturato_12m": round(proiezione_12m, 2),
+        "dso_ultime_3": dso_ultime_3,
     }
 
 # ── PROGETTO SERVICE ──────────────────────────────────────

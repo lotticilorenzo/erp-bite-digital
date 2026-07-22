@@ -160,6 +160,7 @@ class Cliente(Base):
     sito_web: Mapped[Optional[str]] = mapped_column(String(255))
     settore: Mapped[Optional[str]] = mapped_column(String(100))
     categoria: Mapped[Optional[str]] = mapped_column(String(20))
+    rating_stabilita: Mapped[Optional[int]] = mapped_column(Integer)  # §11.1: churn-risk manuale 1-5 (None = neutro 3, documentato)
     referente: Mapped[Optional[str]] = mapped_column(String(100))
     note: Mapped[Optional[str]] = mapped_column(String(1000))
     note_indirizzo: Mapped[Optional[str]] = mapped_column(String(500))

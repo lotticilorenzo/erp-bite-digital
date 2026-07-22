@@ -259,6 +259,7 @@ class ClienteCreate(BaseModel):
     sito_web: Optional[str] = Field(None, max_length=500)
     settore: Optional[str] = Field(None, max_length=100)
     categoria: Optional[str] = Field(None, max_length=100)
+    rating_stabilita: Optional[int] = Field(None, ge=1, le=5)  # §11.1 churn-risk 1-5
     indirizzo: Optional[str] = Field(None, max_length=500)
     comune: Optional[str] = Field(None, max_length=100)
     cap: Optional[str] = Field(None, max_length=10)
@@ -290,6 +291,7 @@ class ClienteUpdate(BaseModel):
     sito_web: Optional[str] = None
     settore: Optional[str] = None
     categoria: Optional[str] = None
+    rating_stabilita: Optional[int] = Field(None, ge=1, le=5)
     indirizzo: Optional[str] = None
     comune: Optional[str] = None
     cap: Optional[str] = None
@@ -322,6 +324,7 @@ class ClienteOut(OrmBase):
     sito_web: Optional[str] = None
     settore: Optional[str] = None
     categoria: Optional[str] = None
+    rating_stabilita: Optional[int] = None
     indirizzo: Optional[str] = None
     comune: Optional[str] = None
     cap: Optional[str] = None
