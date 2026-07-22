@@ -4130,10 +4130,13 @@ async def _recompute_fattura(db: AsyncSession, fattura, is_attiva: bool):
 
 
 async def _recompute_movimento(db: AsyncSession, mov) -> dict:
-    """riconciliato = (Σ importi riconciliazioni == |importo movimento|). Espone il residuo."""
+    """riconciliato = (Σ importi riconciliazioni == |importo movimento|). Espone il residuo.
+    Fase G: sincronizza anche `stato` (4 valori §5.1) col bool — fonte unica, mai divergenti:
+    pieno -> 'riconciliato'; parziale/zero -> 'regolato' (il movimento ha data_valuta = cassa avvenuta)."""
     somma = await _sum_riconciliazioni_movimento(db, mov.id)
     mov_abs = abs(mov.importo or Decimal("0"))
     mov.riconciliato = bool(somma > 0 and somma == mov_abs)
+    mov.stato = "riconciliato" if mov.riconciliato else "regolato"
     return {"importo_movimento": mov_abs, "riconciliato_importo": somma, "residuo_movimento": mov_abs - somma}
 
 

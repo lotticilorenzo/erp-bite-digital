@@ -644,6 +644,9 @@ async def patch_movimento_cassa(
     # Invariante 1 (§5.1): la descrizione grezza bancaria non si modifica MAI una volta scritta.
     if "descrizione_grezza" in data and mov.descrizione_grezza is not None:
         raise HTTPException(status_code=400, detail="descrizione_grezza e' immutabile (invariante 1): non modificabile una volta scritta.")
+    # Fase G: 'riconciliato' come stato e' DERIVATO dalle riconciliazioni (fonte unica), mai settato a mano.
+    if data.get("stato") == "riconciliato":
+        raise HTTPException(status_code=400, detail="stato='riconciliato' e' derivato dalle riconciliazioni: usa gli endpoint di riconciliazione.")
     # Enforcement lock competenza (§13.6): i campi CASSA/riconciliazione restano SEMPRE aperti;
     # gli altri (competenza/metadati) sono immutabili se il movimento e' in periodo hard_lock.
     cassa_fields = {"riconciliato", "fattura_attiva_id", "fattura_passiva_id"}
