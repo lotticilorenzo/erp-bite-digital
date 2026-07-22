@@ -5,7 +5,7 @@ from typing import Optional, List
 from sqlalchemy import (
     String, Boolean, Date, DateTime, Numeric, Integer, Float,
     Text, ForeignKey, UniqueConstraint, CheckConstraint, Enum as SAEnum,
-    JSON, func, event
+    JSON, func, event, Index, text
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
@@ -822,6 +822,9 @@ class MovimentoCassa(Base):
 
     __table_args__ = (
         CheckConstraint("ripartizione_competenza_mesi >= 1", name="ck_movimenti_ripartizione_mesi_pos"),
+        # L8: allineati alla migration 20260723e (senza, un create_all da zero li perderebbe)
+        CheckConstraint("stato IS NULL OR stato IN ('previsto','contabilizzato','regolato','riconciliato')", name="ck_movimenti_stato"),
+        Index("uq_movimenti_impronta", "impronta_dedup", unique=True, postgresql_where=text("impronta_dedup IS NOT NULL")),
     )
 
     @property
