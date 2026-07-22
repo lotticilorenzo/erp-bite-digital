@@ -27,6 +27,7 @@ import {
   GripVertical,
   Clapperboard,
   ShieldCheck,
+  Landmark,
 } from "lucide-react";
 
 // ... (other imports)
@@ -115,6 +116,7 @@ const navItems = [
       { title: "Fatture", url: "/fatture", icon: FileText },
       { title: "Fornitori", url: "/fornitori", icon: ShoppingCart },
       { title: "Cassa", url: "/cassa", icon: Wallet },
+      { title: "Tesoreria", url: "/tesoreria", icon: Landmark },
       { title: "Regole Matching", url: "/cassa/regole", icon: ShieldCheck },
       { title: "Budget", url: "/budget", icon: Target },
     ],
