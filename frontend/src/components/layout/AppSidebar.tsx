@@ -28,6 +28,7 @@ import {
   Clapperboard,
   ShieldCheck,
   Landmark,
+  TrendingUp,
 } from "lucide-react";
 
 // ... (other imports)
@@ -119,6 +120,7 @@ const navItems = [
       { title: "Tesoreria", url: "/tesoreria", icon: Landmark },
       { title: "Regole Matching", url: "/cassa/regole", icon: ShieldCheck },
       { title: "Budget", url: "/budget", icon: Target },
+      { title: "Budget & Forecast", url: "/budget-forecast", icon: TrendingUp },
     ],
   },
   {

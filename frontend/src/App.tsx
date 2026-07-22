@@ -32,6 +32,7 @@ const ReportsPage = React.lazy(() => import("./pages/Reports"));
 const PlanningPage = React.lazy(() => import("./pages/Planning"));
 const CollaboratoriPage = React.lazy(() => import("./pages/Collaboratori"));
 const BudgetPage = React.lazy(() => import("./components/budget/BudgetPage"));
+const BudgetForecastPage = React.lazy(() => import("./pages/BudgetForecastPage"));
 const WikiPage = React.lazy(() => import("./components/wiki/WikiPage"));
 const CRMPage = React.lazy(() => import("./pages/CRM"));
 const LeadDetailPage = React.lazy(() => import("./pages/LeadDetail"));
@@ -167,6 +168,7 @@ function App() {
                   <Route path="/fornitori" element={renderFinanceOnly(<Fornitori />)} />
                   <Route path="/fornitori/:id" element={renderFinanceOnly(<Fornitori />)} />
                   <Route path="/budget" element={renderFinanceOnly(<BudgetPage />)} />
+                  <Route path="/budget-forecast" element={renderFinanceOnly(<BudgetForecastPage />)} />
                   <Route path="/admin/categorie-fornitori" element={renderFinanceOnly(<SupplierCategoryManager />)} />
                 </Route>
 
