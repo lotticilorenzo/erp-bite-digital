@@ -1201,6 +1201,45 @@ class CoefficienteOvh(Base):
     )
 
 
+class F24(Base):
+    """F24 aggregatore con compensazione (spec v2 §10.7): testata + righe per tributo.
+    La stima genera le righe previste; l'utente inserisce/conferma l'F24 reale (sovrascrive,
+    invariante 14). saldo = Sigma debiti - Sigma crediti compensati (NON la somma lorda)."""
+    __tablename__ = "f24"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    periodo: Mapped[date] = mapped_column(Date, nullable=False)  # mese di riferimento, normalizzato al giorno 1
+    data_versamento: Mapped[date] = mapped_column(Date, nullable=False)
+    stato: Mapped[str] = mapped_column(String(20), nullable=False, default="stimato")  # stimato|confermato
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+
+    righe: Mapped[List["F24Riga"]] = relationship(back_populates="f24", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        CheckConstraint("stato IN ('stimato','confermato')", name="ck_f24_stato"),
+    )
+
+
+class F24Riga(Base):
+    __tablename__ = "f24_righe"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    f24_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("f24.id", ondelete="CASCADE"), nullable=False)
+    tributo: Mapped[str] = mapped_column(String(100), nullable=False)  # es. "IRAP acconto", "IVA trimestrale"
+    codice_tributo: Mapped[Optional[str]] = mapped_column(String(10))  # codice F24 (es. 3800), se noto
+    importo_a_debito: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    importo_a_credito: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+
+    f24: Mapped["F24"] = relationship(back_populates="righe")
+
+    __table_args__ = (
+        CheckConstraint("importo_a_debito >= 0 AND importo_a_credito >= 0", name="ck_f24_righe_importi_pos"),
+    )
+
+
 # ── IMPUTAZIONI MOVIMENTI CASSA ───────────────────────────
 class MovimentoCassaImputazione(Base):
     __tablename__ = "movimenti_cassa_imputazioni"
@@ -1230,6 +1269,7 @@ class Risorsa(Base):
     # ── §4.6: tipologia polimorfica (socio/dipendente/collaboratore). Additivo: default
     # 'dipendente' per retrocompatibilita'; i soci vanno marcati esplicitamente. ──
     tipologia: Mapped[str] = mapped_column(String(20), nullable=False, default="dipendente")
+    quota_pct: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2))  # §4.6/§10.4: quota societaria (socio), per attribuzione IRPEF per trasparenza
     data_inizio: Mapped[Optional[date]] = mapped_column(Date)
     data_fine: Mapped[Optional[date]] = mapped_column(Date)
     ore_settimanali: Mapped[Decimal] = mapped_column(Numeric(4, 1), default=40)

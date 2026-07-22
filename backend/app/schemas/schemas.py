@@ -1957,6 +1957,11 @@ class RefreshOvhRequest(BaseModel):
     base: Optional[Decimal] = None
 
 
+class GeneraF24Request(BaseModel):
+    periodo: date
+    data_versamento: date
+
+
 # ── BUDGET & FORECAST (spec v2 §13) ──
 BudgetTipo = Literal["budget", "forecast"]
 BudgetStato = Literal["bozza", "approvato", "archiviato"]
@@ -2184,6 +2189,7 @@ class RisorsaCreate(BaseModel):
     attivo: bool = True
     quota_proforma_mensile: Optional[Decimal] = None  # Quota Luca pro-forma/mese (Prompt 4)
     tipologia: str = Field("dipendente", pattern="^(socio|dipendente|collaboratore)$")  # §4.6
+    quota_pct: Optional[Decimal] = Field(None, ge=0, le=100)  # §10.4: quota societaria per IRPEF
 
 
 class RisorsaUpdate(BaseModel):
@@ -2216,6 +2222,7 @@ class RisorsaUpdate(BaseModel):
     quota_proforma_mensile: Optional[Decimal] = None  # Quota Luca pro-forma/mese (Prompt 4)
     costo_orario_calcolato: Optional[Decimal] = None
     tipologia: Optional[str] = Field(None, pattern="^(socio|dipendente|collaboratore)$")  # §4.6
+    quota_pct: Optional[Decimal] = Field(None, ge=0, le=100)  # §10.4
 
 
 # ── PRICING FLOOR (Prompt 5, stateless) ───────────────────

@@ -60,6 +60,7 @@ from app.schemas.schemas import (
     RataCreate, RaggiungiRataRequest,
     RiapriPeriodoRequest,
     RefreshOvhRequest,
+    GeneraF24Request,
     BudgetVersioneCreate, BudgetVersioneUpdate, BudgetRigheBulk, BudgetRigaUpdate, GeneraForecastRequest,
     PesoContenutoUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
@@ -77,6 +78,7 @@ from app.services.services import (
     calcola_dashboard_liquidita, calcola_kpi_clienti,
     get_config_pl_memo, update_config_pl_memo,
     calcola_proiezione_cassa, get_ultimo_saldo, create_saldo, calcola_pl_gestionale, calcola_bep,
+    calcola_irap, calcola_irpef_soci, calcola_inps_soci, genera_f24, get_f24, list_f24,
     calcola_scadenzario_fiscale,
     sync_fic_data, get_last_fic_sync_status, list_fatture_attive, incassa_fattura,
     list_fornitori_full, update_fornitore, list_fatture_passive, update_fattura_passiva, list_fornitori,
@@ -414,6 +416,68 @@ async def report_bep(
     """Break-Even Point (spec v2 §12): costi fissi / (1 - costi variabili% su ricavi).
     Richiede la dimensione Categorie (natura fisso/variabile, §4.8)."""
     return await calcola_bep(db, mese or date.today())
+
+
+@router.get("/report/irap", tags=["Report"])
+async def report_irap(
+    anno: int = Query(..., ge=2000, le=2100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """IRAP stimata (spec v2 §10.3). VPN approssimato dal margine operativo gestionale."""
+    return await calcola_irap(db, anno)
+
+
+@router.get("/report/irpef-soci", tags=["Report"])
+async def report_irpef_soci(
+    anno: int = Query(..., ge=2000, le=2100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """IRPEF soci per trasparenza (spec v2 §10.4, invariante 19): stima prudente per la cassa."""
+    return await calcola_irpef_soci(db, anno)
+
+
+@router.get("/report/inps-soci", tags=["Report"])
+async def report_inps_soci(
+    anno: int = Query(..., ge=2000, le=2100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """INPS gestione commercianti soci (spec v2 §10.4): richiede parametro non ancora seedato."""
+    return await calcola_inps_soci(db, anno)
+
+
+@router.get("/f24", tags=["Fiscalita"])
+async def get_f24_list(
+    anno: Optional[int] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return {"f24": await list_f24(db, anno)}
+
+
+@router.get("/f24/{f24_id}", tags=["Fiscalita"])
+async def get_f24_detail(
+    f24_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    res = await get_f24(db, f24_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="F24 non trovato")
+    return res
+
+
+@router.post("/f24/genera", tags=["Fiscalita"], status_code=201)
+async def post_genera_f24(
+    payload: GeneraF24Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """Genera un F24 con le righe quantificabili (IVA reale + IRAP/IRPEF se le aliquote esistono
+    in registro), con compensazione (spec v2 §10.7)."""
+    return await genera_f24(db, payload.periodo, payload.data_versamento, current_user.id)
 
 
 # ── CONFIG MEMO CLIENTE/COLLABORATORE DEDICATO (P&L §7.6) ──

@@ -2455,6 +2455,172 @@ async def calcola_scadenzario_fiscale(db: AsyncSession, da_data: date, a_data: d
     }
 
 
+# ── CALCOLO FISCALE REALE (spec v2 §10.3/§10.4/§10.7) ─────────────────────
+# APPROSSIMAZIONE DICHIARATA: il VPN (base IRAP) andrebbe dal CE con rettifiche fiscali parametriche
+# (indeducibilita' compensi autonomi, deduzione dipendenti TI, interessi passivi indeducibili — §10.3).
+# Queste rettifiche NON sono modellate (nessuna tabella "irap_rettifiche_vpn" seedata): si approssima
+# VPN con il MARGINE OPERATIVO (EBIT gestionale) del P&L, che e' la base disponibile piu' vicina.
+# Stessa approssimazione per il "reddito fiscale societa'" dell'IRPEF soci (§10.4): il reddito fiscale
+# differisce dall'utile gestionale per le stesse variazioni fiscali, non modellate qui.
+async def _vpn_approssimato_anno(db: AsyncSession, anno: int) -> tuple[Decimal, list]:
+    """Somma il margine operativo gestionale sui 12 mesi dell'anno (fonte disponibile piu' vicina
+    al VPN). Ritorna (totale, dettaglio_mensile). None nei mesi senza P&L calcolabile -> trattati 0."""
+    totale = Decimal("0")
+    dettaglio = []
+    for m in range(1, 13):
+        pl = await calcola_pl_gestionale(db, date(anno, m, 1))
+        mo = Decimal(str(pl.get("risultato_operativo_gestionale") or 0))
+        totale += mo
+        dettaglio.append({"mese": m, "risultato_operativo_gestionale": float(mo)})
+    return totale, dettaglio
+
+
+async def calcola_irap(db: AsyncSession, anno: int) -> dict:
+    """IRAP stimata (§10.3): VPN approssimato x aliquota (registro parametri). None se l'aliquota
+    non e' in registro (nessuna invenzione, invariante 14)."""
+    vpn, dettaglio = await _vpn_approssimato_anno(db, anno)
+    par = await get_parametro(db, "aliquota_irap", date(anno, 12, 31))
+    aliquota = Decimal(str(par["valore"])) if par and par.get("valore") is not None else None
+    if aliquota is None:
+        return {"anno": anno, "vpn_approssimato": float(vpn), "aliquota_irap_pct": None, "imposta": None,
+                "warning": ["aliquota_irap mancante dal registro parametri: imposta non calcolata."],
+                "nota_approssimazione": "VPN approssimato con il margine operativo gestionale (nessuna rettifica IRAP modellata)."}
+    base = max(vpn, Decimal("0"))
+    imposta = (base * aliquota / 100).quantize(Decimal("0.01"))
+    return {"anno": anno, "vpn_approssimato": float(vpn), "aliquota_irap_pct": float(aliquota),
+            "imposta": float(imposta), "warning": [] if vpn > 0 else ["VPN approssimato <= 0: imposta stimata a 0."],
+            "nota_approssimazione": "VPN approssimato con il margine operativo gestionale (nessuna rettifica IRAP modellata; verificare con commercialista)."}
+
+
+async def calcola_irpef_soci(db: AsyncSession, anno: int) -> dict:
+    """IRPEF soci per trasparenza (§10.4, invariante 19): reddito_fiscale (approssimato dal VPN,
+    stessa nota di calcola_irap) x quota_pct per socio. Due valori: minimo (scaglioni progressivi —
+    NON seedati, resta None) e prudente (aliquota_irpef_prudente dal registro, sempre calcolabile)."""
+    from app.models.models import Risorsa
+
+    reddito_fiscale, _ = await _vpn_approssimato_anno(db, anno)
+    reddito_fiscale = max(reddito_fiscale, Decimal("0"))
+    par_prudente = await get_parametro(db, "aliquota_irpef_prudente", date(anno, 12, 31))
+    aliquota_prudente = Decimal(str(par_prudente["valore"])) if par_prudente and par_prudente.get("valore") is not None else None
+
+    soci = (await db.execute(select(Risorsa).where(Risorsa.tipologia == "socio", Risorsa.attivo == True))).scalars().all()  # noqa: E712
+    righe = []
+    warning = []
+    if aliquota_prudente is None:
+        warning.append("aliquota_irpef_prudente mancante dal registro parametri: stima prudente non calcolata.")
+    for s in soci:
+        if s.quota_pct is None:
+            warning.append(f"Socio {s.nome} {s.cognome}: quota_pct non impostata, escluso dal calcolo.")
+            continue
+        reddito_socio = (reddito_fiscale * Decimal(str(s.quota_pct)) / 100).quantize(Decimal("0.01"))
+        prudente = (reddito_socio * aliquota_prudente / 100).quantize(Decimal("0.01")) if aliquota_prudente is not None else None
+        righe.append({
+            "risorsa_id": str(s.id), "nome": f"{s.nome} {s.cognome}", "quota_pct": float(s.quota_pct),
+            "reddito_socio": float(reddito_socio),
+            "irpef_minimo": None,  # scaglioni progressivi non seedati (nota sotto)
+            "irpef_prudente_cassa": float(prudente) if prudente is not None else None,
+        })
+    warning.append("irpef_scaglioni (stima minima/reporting) non e' nel registro parametri: solo la stima prudente per la cassa e' calcolata (invariante 19: mai il minimo per la cassa).")
+    return {"anno": anno, "reddito_fiscale_approssimato": float(reddito_fiscale),
+            "aliquota_irpef_prudente_pct": float(aliquota_prudente) if aliquota_prudente is not None else None,
+            "soci": righe, "warning": warning,
+            "nota_approssimazione": "Reddito fiscale approssimato dal margine operativo gestionale (nessuna variazione fiscale modellata)."}
+
+
+async def calcola_inps_soci(db: AsyncSession, anno: int) -> dict:
+    """INPS gestione commercianti soci (§10.4): richiede minimale+aliquota dal registro parametri.
+    Nessuna delle due e' seedata -> non si inventa un valore (invariante 14)."""
+    par = await get_parametro(db, "inps_commercianti", date(anno, 12, 31))
+    if not par or par.get("valore") is None:
+        return {"anno": anno, "importo": None,
+                "warning": ["inps_commercianti (minimale+aliquota) mancante dal registro parametri: aliquota da commercialista, non calcolata."]}
+    return {"anno": anno, "importo": None,
+            "warning": ["Parametro inps_commercianti presente ma il motore di calcolo (fissi+variabile su eccedenza) non e' implementato in questa fase."]}
+
+
+# ── F24 AGGREGATORE CON COMPENSAZIONE (spec v2 §10.7) ─────────────────────
+async def genera_f24(db: AsyncSession, periodo: date, data_versamento: date, user_id=None) -> dict:
+    """Genera un F24 con le righe quantificabili (IVA reale, IRAP/IRPEF stimati se le aliquote
+    esistono in registro). Nessuna riga per i tributi non quantificabili (nota esplicita invece).
+    saldo = Sigma debiti - Sigma crediti (invariante: mai la somma lorda, §10.7)."""
+    from app.models.models import F24, F24Riga
+
+    periodo = periodo.replace(day=1)
+    anno = periodo.year
+    righe_data = []
+    note_escluse = []
+
+    iva = await calcola_liquidazione_iva(db, data=periodo)
+    saldo_iva = Decimal(str(iva.get("saldo", 0)))
+    if saldo_iva > 0:
+        righe_data.append({"tributo": "IVA trimestrale", "codice_tributo": "6031",
+                           "importo_a_debito": saldo_iva, "importo_a_credito": Decimal("0")})
+    elif saldo_iva < 0:
+        righe_data.append({"tributo": "IVA a credito (riportato)", "codice_tributo": "6031",
+                           "importo_a_debito": Decimal("0"), "importo_a_credito": abs(saldo_iva)})
+
+    if periodo.month in (6, 11):
+        irap = await calcola_irap(db, anno)
+        if irap["imposta"] is not None and irap["imposta"] > 0:
+            righe_data.append({"tributo": "IRAP (importo annuale stimato)", "codice_tributo": "3800",
+                               "importo_a_debito": Decimal(str(irap["imposta"])), "importo_a_credito": Decimal("0"),
+                               "note": "Split acconti 40/60 non applicato (metodo non confermato): verificare col commercialista."})
+        else:
+            note_escluse.append("IRAP non inclusa: " + "; ".join(irap["warning"]))
+
+        par_finanzia = await get_parametro(db, "bite_finanzia_tasse_soci", periodo)
+        finanzia = bool(par_finanzia and par_finanzia.get("valore") in (True, "true", "True", "1"))
+        if finanzia:
+            irpef = await calcola_irpef_soci(db, anno)
+            tot_prudente = sum((r["irpef_prudente_cassa"] or 0) for r in irpef["soci"])
+            if tot_prudente > 0:
+                righe_data.append({"tributo": "IRPEF soci (stima prudente cassa)", "codice_tributo": "4001",
+                                   "importo_a_debito": Decimal(str(tot_prudente)), "importo_a_credito": Decimal("0"),
+                                   "note": "bite_finanzia_tasse_soci=true: incluso per prudenza di cassa."})
+        else:
+            note_escluse.append("IRPEF soci non inclusa: bite_finanzia_tasse_soci=false (carico informativo dei soci, fuori dalla cassa Bite).")
+
+    f24 = F24(periodo=periodo, data_versamento=data_versamento, stato="stimato",
+              note="; ".join(note_escluse) or None, created_by=user_id)
+    db.add(f24)
+    await db.flush()
+    for r in righe_data:
+        db.add(F24Riga(f24_id=f24.id, tributo=r["tributo"], codice_tributo=r.get("codice_tributo"),
+                       importo_a_debito=r["importo_a_debito"], importo_a_credito=r["importo_a_credito"],
+                       note=r.get("note")))
+    await db.commit()
+    return await get_f24(db, f24.id)
+
+
+async def get_f24(db: AsyncSession, f24_id) -> Optional[dict]:
+    from app.models.models import F24, F24Riga
+    f = (await db.execute(select(F24).where(F24.id == f24_id))).scalar_one_or_none()
+    if not f:
+        return None
+    righe = (await db.execute(select(F24Riga).where(F24Riga.f24_id == f24_id))).scalars().all()
+    debiti = sum((r.importo_a_debito for r in righe), Decimal("0"))
+    crediti = sum((r.importo_a_credito for r in righe), Decimal("0"))
+    saldo = (debiti - crediti).quantize(Decimal("0.01"))
+    return {
+        "id": str(f.id), "periodo": str(f.periodo), "data_versamento": str(f.data_versamento),
+        "stato": f.stato, "note": f.note,
+        "righe": [{"id": str(r.id), "tributo": r.tributo, "codice_tributo": r.codice_tributo,
+                   "importo_a_debito": float(r.importo_a_debito), "importo_a_credito": float(r.importo_a_credito),
+                   "note": r.note} for r in righe],
+        "totale_debiti": float(debiti), "totale_crediti_compensati": float(crediti),
+        "saldo_versamento": float(saldo),
+    }
+
+
+async def list_f24(db: AsyncSession, anno: Optional[int] = None) -> list:
+    from app.models.models import F24
+    q = select(F24.id).order_by(F24.periodo.desc())
+    if anno:
+        q = q.where(func.extract("year", F24.periodo) == anno)
+    ids = [r[0] for r in (await db.execute(q)).all()]
+    return [await get_f24(db, i) for i in ids]
+
+
 # ── TASK SERVICE ──────────────────────────────────────────
 async def list_tasks(
     db: AsyncSession,
