@@ -996,6 +996,23 @@ class Ricorrenza(Base):
     )
 
 
+# ── CENTRI DI COSTO (spec v2 §4.7): aree funzionali, set minimo. NO un centro per cliente. ──
+class CentroCosto(Base):
+    __tablename__ = "centri_costo"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    codice: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    nome: Mapped[str] = mapped_column(String(200), nullable=False)
+    tipo: Mapped[str] = mapped_column(String(15), nullable=False, default="struttura")  # produttivo (allocabile a commessa) | struttura (overhead)
+    responsabile_risorsa_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("risorse.id", ondelete="SET NULL"))
+    attivo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint("tipo IN ('produttivo','struttura')", name="ck_centri_costo_tipo"),
+    )
+
+
 # ── CATEGORIE (piano dei conti gestionale, spec v2 §4.8) ──
 class Categoria(Base):
     """Dimensione governata (foglio 1/9): sostituisce le stringhe libere `categoria` sparse nei
@@ -1032,6 +1049,7 @@ class CostoFisso(Base):
     importo: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     categoria: Mapped[Optional[str]] = mapped_column(String(50), default='ALTRO')  # legacy: stringa libera, mantenuta per compatibilita'
     categoria_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("categorie.id", ondelete="SET NULL"))
+    centro_costo_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("centri_costo.id", ondelete="SET NULL"))  # area funzionale (§4.7)
     periodicita: Mapped[Optional[str]] = mapped_column(String(20), default='mensile')
     attivo: Mapped[bool] = mapped_column(Boolean, default=True)
     data_inizio: Mapped[Optional[date]] = mapped_column(Date)
@@ -1519,7 +1537,7 @@ class BudgetRiga(Base):
     categoria_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
     cliente_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("clienti.id", ondelete="SET NULL"))
     commessa_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("commesse.id", ondelete="SET NULL"))
-    centro_costo_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
+    centro_costo_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("centri_costo.id", ondelete="SET NULL"))  # FK reale (Fase A §4.7)
     importo: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     origine: Mapped[Optional[str]] = mapped_column(String(24))  # actual|budget|forecast_precedente|manuale
     note: Mapped[Optional[str]] = mapped_column(Text)

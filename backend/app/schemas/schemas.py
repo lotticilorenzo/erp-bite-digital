@@ -1639,6 +1639,7 @@ class CostoFissoCreate(BaseModel):
     importo: Decimal = Field(..., gt=0)
     categoria: Optional[str] = Field(None, max_length=50)
     categoria_id: Optional[uuid.UUID] = None  # §4.8: piano dei conti governato
+    centro_costo_id: Optional[uuid.UUID] = None  # §4.7: area funzionale
     periodicita: Optional[str] = Field("mensile", max_length=20)
     attivo: bool = True
     data_inizio: Optional[date] = None
@@ -1651,6 +1652,7 @@ class CostoFissoUpdate(BaseModel):
     importo: Optional[Decimal] = Field(None, gt=0)
     categoria: Optional[str] = Field(None, max_length=50)
     categoria_id: Optional[uuid.UUID] = None
+    centro_costo_id: Optional[uuid.UUID] = None
     periodicita: Optional[str] = Field(None, max_length=20)
     attivo: Optional[bool] = None
     data_inizio: Optional[date] = None
@@ -2313,3 +2315,29 @@ class RisorsaProgettoPeriodoOut(OrmBase):
     periodo: date
     attivo: bool
     override_pct: Optional[Decimal] = None
+
+
+# ── CENTRI DI COSTO (spec v2 §4.7) ──
+class CentroCostoCreate(BaseModel):
+    codice: str = Field(..., min_length=1, max_length=20)
+    nome: str = Field(..., min_length=1, max_length=200)
+    tipo: str = Field("struttura", pattern="^(produttivo|struttura)$")
+    responsabile_risorsa_id: Optional[uuid.UUID] = None
+    attivo: bool = True
+
+
+class CentroCostoUpdate(BaseModel):
+    codice: Optional[str] = Field(None, min_length=1, max_length=20)
+    nome: Optional[str] = Field(None, min_length=1, max_length=200)
+    tipo: Optional[str] = Field(None, pattern="^(produttivo|struttura)$")
+    responsabile_risorsa_id: Optional[uuid.UUID] = None
+    attivo: Optional[bool] = None
+
+
+class CentroCostoOut(OrmBase):
+    id: uuid.UUID
+    codice: str
+    nome: str
+    tipo: str
+    responsabile_risorsa_id: Optional[uuid.UUID] = None
+    attivo: bool

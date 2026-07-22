@@ -61,6 +61,7 @@ from app.schemas.schemas import (
     RiapriPeriodoRequest,
     RefreshOvhRequest,
     GeneraF24Request,
+    CentroCostoCreate, CentroCostoUpdate, CentroCostoOut,
     BudgetVersioneCreate, BudgetVersioneUpdate, BudgetRigheBulk, BudgetRigaUpdate, GeneraForecastRequest,
     PesoContenutoUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
@@ -746,6 +747,57 @@ async def get_categorie(
     from app.models.models import Categoria
     rows = (await db.execute(select(Categoria).where(Categoria.attiva == True).order_by(Categoria.codice))).scalars().all()  # noqa: E712
     return {"categorie": [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]}
+
+
+@router.get("/centri-costo", tags=["CentriCosto"])
+async def get_centri_costo(
+    includi_inattivi: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """Centri di costo (spec v2 §4.7): aree funzionali, set minimo."""
+    from app.models.models import CentroCosto
+    q = select(CentroCosto).order_by(CentroCosto.codice)
+    if not includi_inattivi:
+        q = q.where(CentroCosto.attivo == True)  # noqa: E712
+    rows = (await db.execute(q)).scalars().all()
+    return {"centri_costo": [CentroCostoOut.model_validate(r) for r in rows]}
+
+
+@router.post("/centri-costo", tags=["CentriCosto"], status_code=201, response_model=CentroCostoOut)
+async def post_centro_costo(
+    payload: CentroCostoCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    from app.models.models import CentroCosto
+    cc = CentroCosto(**payload.model_dump())
+    db.add(cc)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Codice centro di costo gia' esistente")
+    await db.refresh(cc)
+    return cc
+
+
+@router.patch("/centri-costo/{centro_id}", tags=["CentriCosto"], response_model=CentroCostoOut)
+async def patch_centro_costo(
+    centro_id: uuid.UUID,
+    payload: CentroCostoUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    from app.models.models import CentroCosto
+    cc = (await db.execute(select(CentroCosto).where(CentroCosto.id == centro_id))).scalar_one_or_none()
+    if not cc:
+        raise HTTPException(status_code=404, detail="Centro di costo non trovato")
+    for k, v in payload.model_dump(exclude_unset=True).items():
+        setattr(cc, k, v)
+    await db.commit()
+    await db.refresh(cc)
+    return cc
 
 
 @router.get("/costi-fissi", tags=["CostiFissi"])
