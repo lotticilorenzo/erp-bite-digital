@@ -304,6 +304,7 @@ async def calcola_margine_commessa(
     quota_cache: Optional[dict] = None,
     ovh_cache: Optional[dict] = None,
     costo_manodopera_override: Optional[Decimal] = None,
+    alloc_cache: Optional[dict] = None,
 ) -> dict:
     """FONTE UNICA del margine commessa (brief §4.2).
 
@@ -330,12 +331,17 @@ async def calcola_margine_commessa(
     scarto_fatturazione = None
     stato_val = getattr(commessa.stato, "value", str(commessa.stato))
     if stato_val in ("CHIUSA", "FATTURATA", "INCASSATA"):
-        from app.models.models import FatturaAttivaAllocazione
-        alloc = (await db.execute(
-            select(func.coalesce(func.sum(FatturaAttivaAllocazione.importo_allocato), 0))
-            .where(FatturaAttivaAllocazione.commessa_id == commessa.id)
-        )).scalar() or 0
-        alloc = Decimal(str(alloc))
+        if alloc_cache is not None and commessa.id in alloc_cache:
+            alloc = alloc_cache[commessa.id]  # prefetch batch del chiamante (M3, anti N+1)
+        else:
+            from app.models.models import FatturaAttivaAllocazione
+            alloc = (await db.execute(
+                select(func.coalesce(func.sum(FatturaAttivaAllocazione.importo_allocato), 0))
+                .where(FatturaAttivaAllocazione.commessa_id == commessa.id)
+            )).scalar() or 0
+            alloc = Decimal(str(alloc))
+            if alloc_cache is not None:
+                alloc_cache[commessa.id] = alloc
         if alloc > 0:
             scarto_fatturazione = ricavo - alloc  # >0 = sotto-fatturato rispetto all'accordo
             ricavo = alloc
@@ -605,7 +611,7 @@ async def get_client_health_score(db: AsyncSession, cliente_id: uuid.UUID) -> di
     one_year_ago = date.today() - timedelta(days=365)
     three_months_ago = date.today() - timedelta(days=90)
 
-    # --- 1. MARGINE (40%) ---
+    # --- MARGINE (25%, spec §11.1) ---
     # Media marginalità sulle commesse ultimi 3 mesi
     m_stmt = select(Commessa).where(
         Commessa.cliente_id == cliente_id, 
@@ -626,7 +632,7 @@ async def get_client_health_score(db: AsyncSession, cliente_id: uuid.UUID) -> di
     # Score: 50% margine = 100pt
     margin_score = min(100, avg_margin * 2) if avg_margin > 0 else 0
 
-    # --- 2. PAGAMENTI (30%) ---
+    # --- PUNTUALITA' PAGAMENTI (30%, spec §11.1) ---
     # Rapporto fatture pagate vs totali ultimi 12 mesi
     f_stmt = select(FatturaAttiva).where(FatturaAttiva.cliente_id == cliente_id, FatturaAttiva.data_emissione >= one_year_ago)
     f_res = await db.execute(f_stmt)
@@ -644,7 +650,7 @@ async def get_client_health_score(db: AsyncSession, cliente_id: uuid.UUID) -> di
     ritardo_medio = (sum(ritardi) / len(ritardi)) if ritardi else None
     payment_score = 100 if ritardo_medio is None else max(0, min(100, 100 - max(0, ritardo_medio) * 2))
 
-    # --- 3. REVISIONI / SCOPE CREEP (20%) ---
+    # --- REVISIONI / SCOPE CREEP (fuori peso: non in spec, solo esposto) ---
     # Ore reali vs ore contratto ultimi 12 mesi
     r_stmt = select(Commessa).where(
         Commessa.cliente_id == cliente_id, 
@@ -677,7 +683,7 @@ async def get_client_health_score(db: AsyncSession, cliente_id: uuid.UUID) -> di
     # Se ratio = 1.0 -> 100pt. Se ratio = 1.5 -> 0pt.
     revisions_score = max(0, 100 - (max(0, avg_creep_ratio - 1.0) * 200))
 
-    # --- 4. LONGEVITA (10%) ---
+    # --- LONGEVITA (10%, spec §11.1) ---
     # Anno di creazione
     days_old = (date.today() - cliente.created_at.date()).days if cliente.created_at else 0
     longevity_score = min(100, (days_old / 365 * 100))
@@ -709,12 +715,12 @@ async def get_client_health_score(db: AsyncSession, cliente_id: uuid.UUID) -> di
 
     # --- LTV (spec §11.1): margine lordo cumulato STORICO reale (tutte le commesse del cliente).
     ltv = 0.0
-    ltv_cache_c, ltv_cache_q, ltv_cache_o = {}, {}, {}
+    ltv_cache_c, ltv_cache_q, ltv_cache_o, ltv_cache_a = {}, {}, {}, {}
     all_c = (await db.execute(
         select(Commessa).where(Commessa.cliente_id == cliente_id).options(selectinload(Commessa.righe_progetto))
     )).scalars().all()
     for c in all_c:
-        m = await calcola_margine_commessa(db, c, coeff_cache=ltv_cache_c, quota_cache=ltv_cache_q, ovh_cache=ltv_cache_o)
+        m = await calcola_margine_commessa(db, c, coeff_cache=ltv_cache_c, quota_cache=ltv_cache_q, ovh_cache=ltv_cache_o, alloc_cache=ltv_cache_a)
         ltv += float(m["margine_lordo_euro"])
 
     # --- PROIEZIONE FATTURATO 12M (spec §11.1): run-rate ricorrenti attivi x 12 x fattore_stabilita.
@@ -2339,6 +2345,15 @@ async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
     commesse = await list_commesse(db, mese_norm)
     coeff_cache: dict = {}
     quota_cache: dict = {}
+    # M3: prefetch allocazioni Tabella F in UNA query aggregata (anti N+1 sulle commesse chiuse)
+    from app.models.models import FatturaAttivaAllocazione as _FAA
+    alloc_cache: dict = {cid: Decimal("0") for cid in [c.id for c in commesse]}
+    if commesse:
+        for cid, tot in (await db.execute(
+            select(_FAA.commessa_id, func.coalesce(func.sum(_FAA.importo_allocato), 0))
+            .where(_FAA.commessa_id.in_(list(alloc_cache.keys()))).group_by(_FAA.commessa_id)
+        )).all():
+            alloc_cache[cid] = Decimal(str(tot))
     # §7.6: "cliente dedicato" (Italfer) ora da config (id), non piu' match stringa hardcoded.
     cfg_memo = await get_config_pl_memo(db)
     cliente_dedicato_id = cfg_memo.cliente_dedicato_id if cfg_memo else None
@@ -2348,7 +2363,7 @@ async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
     costi_diretti = Decimal("0")
     margine_lordo = Decimal("0")
     for c in commesse:
-        m = await calcola_margine_commessa(db, c, coeff_cache=coeff_cache, quota_cache=quota_cache)
+        m = await calcola_margine_commessa(db, c, coeff_cache=coeff_cache, quota_cache=quota_cache, alloc_cache=alloc_cache)
         ricavi_totale += m["ricavo"]
         costi_diretti += m["costo_manodopera"] + m["costi_diretti_totali"] + m["quota_luca"]
         margine_lordo += m["margine_lordo_euro"]
@@ -2744,17 +2759,7 @@ async def create_finanziamento(db: AsyncSession, payload: dict) -> dict:
         f.debito_residuo = f.importo_erogato  # default: appena erogato, residuo = erogato
     db.add(f)
     await db.flush()
-    if f.rata_mensile and f.data_inizio_rate and f.durata_mesi:
-        ric = Ricorrenza(
-            descrizione=f"Rata {f.tipo} {f.ente}",
-            tipo_scadenza="finanziaria", importo=f.rata_mensile, periodicita="mensile",
-            giorno_riferimento=f.data_inizio_rate.day, data_inizio=f.data_inizio_rate,
-            data_fine=f.data_inizio_rate + relativedelta(months=f.durata_mesi - 1),
-            controparte_tipo="banca", attivo=True,
-        )
-        db.add(ric)
-        await db.flush()
-        f.ricorrenza_id = ric.id
+    await _sync_ricorrenza_finanziamento(db, f)  # crea la ricorrenza rate se i campi sono completi
     await db.commit()
     await db.refresh(f)
     return {c.name: getattr(f, c.name) for c in f.__table__.columns}
@@ -2769,6 +2774,36 @@ async def list_finanziamenti(db: AsyncSession, includi_inattivi: bool = False) -
     return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
 
 
+async def _sync_ricorrenza_finanziamento(db: AsyncSession, f) -> None:
+    """Tiene la Ricorrenza delle rate allineata al finanziamento (M4): importo=rata, attivo=attivo,
+    finestra ricalcolata; la crea se i 3 campi rate sono completi e non esiste ancora (L5)."""
+    from app.models.models import Ricorrenza
+    from dateutil.relativedelta import relativedelta
+
+    ric = None
+    if f.ricorrenza_id:
+        ric = (await db.execute(select(Ricorrenza).where(Ricorrenza.id == f.ricorrenza_id))).scalar_one_or_none()
+    if f.rata_mensile and f.data_inizio_rate and f.durata_mesi:
+        if ric is None:
+            ric = Ricorrenza(descrizione=f"Rata {f.tipo} {f.ente}", tipo_scadenza="finanziaria",
+                             importo=f.rata_mensile, periodicita="mensile",
+                             giorno_riferimento=f.data_inizio_rate.day, data_inizio=f.data_inizio_rate,
+                             data_fine=f.data_inizio_rate + relativedelta(months=f.durata_mesi - 1),
+                             controparte_tipo="banca", attivo=f.attivo)
+            db.add(ric)
+            await db.flush()
+            f.ricorrenza_id = ric.id
+        else:
+            ric.importo = f.rata_mensile
+            ric.data_inizio = f.data_inizio_rate
+            ric.giorno_riferimento = f.data_inizio_rate.day
+            ric.data_fine = f.data_inizio_rate + relativedelta(months=f.durata_mesi - 1)
+            ric.attivo = f.attivo
+            ric.descrizione = f"Rata {f.tipo} {f.ente}"
+    elif ric is not None:
+        ric.attivo = f.attivo  # dati rate incompleti: almeno lo stato segue il finanziamento
+
+
 async def update_finanziamento(db: AsyncSession, finanziamento_id, payload: dict):
     from app.models.models import Finanziamento
     f = (await db.execute(select(Finanziamento).where(Finanziamento.id == finanziamento_id))).scalar_one_or_none()
@@ -2777,6 +2812,7 @@ async def update_finanziamento(db: AsyncSession, finanziamento_id, payload: dict
     for k, v in payload.items():
         if hasattr(f, k) and k not in ("id", "created_at"):
             setattr(f, k, v)
+    await _sync_ricorrenza_finanziamento(db, f)  # M4: rate/attivo propagati alla ricorrenza
     await db.commit()
     await db.refresh(f)
     return {c.name: getattr(f, c.name) for c in f.__table__.columns}
