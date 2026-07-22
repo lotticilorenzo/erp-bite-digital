@@ -36,4 +36,4 @@ RUN mkdir -p /app/private_uploads /app/app/uploads/task_attachments /app/static/
 USER appuser
 
 # Init schema + migrazioni versionate prima dell'avvio API.
-CMD ["sh", "-c", "python scripts/init_db.py && python scripts/run_db_migrations.py && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WORKERS:-2}"]
+CMD ["sh", "-c", "python scripts/init_db.py && python scripts/create_orm_tables.py && python scripts/run_db_migrations.py && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WORKERS:-2}"]
