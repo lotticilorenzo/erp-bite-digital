@@ -91,7 +91,7 @@ from app.services.services import (
     annulla_raggiungimento_rata, delete_rata,
     list_periodi, soft_close_periodo, hard_lock_periodo, riapri_periodo, stato_periodo_data,
     periodo_e_bloccato,
-    calcola_coefficiente_ovh, list_coefficienti_ovh_storico, calcola_varianza_assorbimento,
+    calcola_coefficiente_ovh, calcola_coefficiente_ovh_auto, list_coefficienti_ovh_storico, calcola_varianza_assorbimento,
     calcola_liquidazione_iva, list_servizi_catalogo,
     list_budget_versioni, create_budget_versione, update_budget_versione, delete_budget_versione,
     approva_budget_versione, list_budget_righe, create_budget_righe, update_budget_riga,
@@ -1044,7 +1044,9 @@ async def get_coefficiente_ovh(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_finance_access),
 ):
-    return await calcola_coefficiente_ovh(db, periodo, overhead_override=overhead, base_override=base)
+    if overhead is not None or base is not None:  # what-if manuale: vince sempre, nessun auto-detect forecast
+        return await calcola_coefficiente_ovh(db, periodo, overhead_override=overhead, base_override=base)
+    return await calcola_coefficiente_ovh_auto(db, periodo)
 
 
 @router.post("/report/coefficiente-ovh/refresh", tags=["Report"])
@@ -1053,8 +1055,10 @@ async def post_refresh_coefficiente_ovh(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_finance_access),
 ):
-    return await calcola_coefficiente_ovh(db, payload.periodo, overhead_override=payload.overhead,
-                                          base_override=payload.base, salva=True, user_id=current_user.id)
+    if payload.overhead is not None or payload.base is not None:  # what-if manuale: vince sempre
+        return await calcola_coefficiente_ovh(db, payload.periodo, overhead_override=payload.overhead,
+                                              base_override=payload.base, salva=True, user_id=current_user.id)
+    return await calcola_coefficiente_ovh_auto(db, payload.periodo, salva=True, user_id=current_user.id)
 
 
 @router.get("/report/coefficiente-ovh/storico", tags=["Report"])

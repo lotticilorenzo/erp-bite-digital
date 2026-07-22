@@ -4523,7 +4523,8 @@ async def _ultimo_coefficiente(db: AsyncSession, periodo, incluso=False):
 
 
 async def calcola_coefficiente_ovh(db: AsyncSession, periodo, orizzonte_mesi=None,
-                                   overhead_override=None, base_override=None, salva=False, user_id=None):
+                                   overhead_override=None, base_override=None, salva=False, user_id=None,
+                                   fonte="deterministico"):
     """Coefficiente = overhead 12m / base ricavi 12m (piena precisione). None se base=0.
     Tetto allo scostamento vs coefficiente precedente (ovh_tetto_scostamento_pct)."""
     from app.models.models import CoefficienteOvh
@@ -4562,21 +4563,60 @@ async def calcola_coefficiente_ovh(db: AsyncSession, periodo, orizzonte_mesi=Non
         "coefficiente_grezzo": float(round(coeff_grezzo, 6)) if coeff_grezzo is not None else None,
         "coefficiente": float(round(coeff, 6)) if coeff is not None else None,
         "tetto_applicato": tetto_applicato, "tetto_scostamento_pct": float(tetto_pct),
-        "fonte": "deterministico",
+        "fonte": fonte,
     }
     if salva and coeff is not None:
         row = (await db.execute(select(CoefficienteOvh).where(CoefficienteOvh.periodo_riferimento == periodo))).scalar_one_or_none()
         if row:
             row.overhead_previsto = overhead; row.base_ricavi_prevista = base
             row.coefficiente = coeff; row.coefficiente_grezzo = coeff_grezzo
-            row.tetto_applicato = tetto_applicato
+            row.tetto_applicato = tetto_applicato; row.fonte = fonte
         else:
             db.add(CoefficienteOvh(periodo_riferimento=periodo, overhead_previsto=overhead,
                                    base_ricavi_prevista=base, coefficiente=coeff,
                                    coefficiente_grezzo=coeff_grezzo, tetto_applicato=tetto_applicato,
-                                   fonte="deterministico", created_by=user_id))
+                                   fonte=fonte, created_by=user_id))
         await db.commit()
         result["salvato"] = True
+    return result
+
+
+async def _base_overhead_da_forecast(db: AsyncSession, anno: int):
+    """Base forecast per il coefficiente OVH: se esiste un forecast attivo (bozza/approvato,
+    non ancora archiviato/snapshot) per l'anno, usa costo_struttura/ricavo dell'anno intero
+    come numeratore/denominatore al posto della stima deterministica. None se non esiste."""
+    from app.models.models import BudgetVersione, BudgetRiga
+    v = (await db.execute(
+        select(BudgetVersione).where(BudgetVersione.anno == anno, BudgetVersione.tipo == "forecast",
+                                     BudgetVersione.stato.in_(("bozza", "approvato")))
+        .order_by(BudgetVersione.versione.desc()).limit(1)
+    )).scalar_one_or_none()
+    if not v:
+        return None
+    rows = (await db.execute(
+        select(BudgetRiga.voce_tipo, func.coalesce(func.sum(BudgetRiga.importo), 0))
+        .where(BudgetRiga.versione_id == v.id).group_by(BudgetRiga.voce_tipo)
+    )).all()
+    tot = {vt: Decimal(str(t)) for vt, t in rows}
+    overhead, base = tot.get("costo_struttura"), tot.get("ricavo")
+    if overhead is None or base is None:
+        return None
+    return {"overhead": overhead, "base": base, "versione_id": str(v.id), "versione": v.versione, "stato": v.stato}
+
+
+async def calcola_coefficiente_ovh_auto(db: AsyncSession, periodo, salva=False, user_id=None):
+    """Sceglie la fonte del coefficiente OVH: se esiste un forecast attivo per l'anno lo usa
+    (numeratore/denominatore da forecast, orizzonte = anno intero), altrimenti fallback al
+    metodo deterministico invariato (costi struttura 12m / run-rate ricorrenti)."""
+    periodo = periodo.replace(day=1)
+    fc = await _base_overhead_da_forecast(db, periodo.year)
+    if fc is None:
+        return await calcola_coefficiente_ovh(db, periodo, salva=salva, user_id=user_id)
+    result = await calcola_coefficiente_ovh(
+        db, periodo, orizzonte_mesi=12, overhead_override=fc["overhead"], base_override=fc["base"],
+        salva=salva, user_id=user_id, fonte="forecast",
+    )
+    result["forecast_versione"] = {"id": fc["versione_id"], "versione": fc["versione"], "stato": fc["stato"]}
     return result
 
 
