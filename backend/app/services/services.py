@@ -125,11 +125,10 @@ async def calcola_quota_luca(
     *,
     quota_cache: Optional[dict] = None,
 ) -> Decimal:
-    """Quota pro-forma allocata a un cliente nel mese = proforma × (contenuti_cliente / contenuti_totali).
-
-    Robustezza: se nessun contenuto allocabile nel mese (totale==0) o nessun pro-forma
-    configurato → 0 (niente divisione per zero). Cliente con 0 contenuti → 0.
-    """
+    """@deprecated: ad-hoc pre-§4.6, ripartiva per CLIENTE in base al volume di contenuti (asse
+    diverso dalla ripartizione socio per PROGETTO/peso della spec). Sostituita in
+    calcola_margine_commessa da calcola_quota_soci_commessa; tenuta per compatibilita' storica
+    e per il confronto di validazione. Quota pro-forma = proforma x (contenuti_cliente/totali)."""
     mese_norm = mese.replace(day=1)
     entry = quota_cache.get(mese_norm) if quota_cache is not None else None
     if entry is None:
@@ -146,6 +145,141 @@ async def calcola_quota_luca(
     if n == 0:
         return Decimal("0")
     return (entry["proforma"] * Decimal(n) / Decimal(entry["totale"])).quantize(Decimal("0.01"))
+
+
+_INTENSITA_PESO = {"S": Decimal("1"), "M": Decimal("2"), "L": Decimal("4")}
+
+
+def _quadratura_quote(pesi: dict, pool: Decimal) -> dict:
+    """quota_i = pool * w_i / Sigma w (invariante 16); arrotondamento half-up 2 decimali con il
+    resto di quadratura sull'ULTIMA quota in ordine deterministico (invariante 23, es. numerici)."""
+    from decimal import ROUND_HALF_UP
+    tot_w = sum(pesi.values(), Decimal("0"))
+    if tot_w <= 0 or pool == 0:
+        return {k: Decimal("0.00") for k in pesi}
+    ordinati = sorted(pesi.keys(), key=str)
+    quote = {}
+    assegnato = Decimal("0")
+    for i, k in enumerate(ordinati):
+        if i == len(ordinati) - 1:
+            quote[k] = (pool - assegnato).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        else:
+            q = (pool * pesi[k] / tot_w).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            quote[k] = q
+            assegnato += q
+    return quote
+
+
+async def _pool_e_pesi_socio(db: AsyncSession, socio_id: uuid.UUID, periodo: date):
+    """(pool, {progetto_id: peso}) del socio nel periodo, PRIMA della quadratura — condiviso da
+    calcola_quota_socio e dal preventivatore (che aggiunge un progetto virtuale n+1, §18.4)."""
+    from app.models.models import RipartizioneSocio, RisorsaProgettoPeriodo, Progetto, ProgettoTeam, ProjectStatus, Risorsa
+
+    periodo = periodo.replace(day=1)
+    socio = (await db.execute(select(Risorsa).where(Risorsa.id == socio_id))).scalar_one_or_none()
+    if socio is None or socio.tipologia != "socio":
+        return Decimal("0"), {}
+    rip = (await db.execute(select(RipartizioneSocio).where(RipartizioneSocio.risorsa_id == socio_id))).scalar_one_or_none()
+    if rip is None:
+        return Decimal("0"), {}
+    pool = (Decimal(str(socio.compenso_fisso_mensile or 0)) * rip.progettuale_pct / 100).quantize(Decimal("0.01"))
+    if pool == 0:
+        return pool, {}
+
+    # Progetti assegnati al socio (vista inversa risorse_assegnate, §4.6): via ProgettoTeam.user_id.
+    assegnati = set()
+    if socio.user_id:
+        rows = await db.execute(
+            select(ProgettoTeam.progetto_id).join(Progetto, Progetto.id == ProgettoTeam.progetto_id)
+            .where(ProgettoTeam.user_id == socio.user_id, Progetto.stato == ProjectStatus.ATTIVO)
+        )
+        assegnati = {r[0] for r in rows.all()}
+    if not assegnati:
+        return pool, {}
+
+    override_rows = (await db.execute(
+        select(RisorsaProgettoPeriodo).where(RisorsaProgettoPeriodo.risorsa_id == socio_id,
+                                             RisorsaProgettoPeriodo.periodo == periodo)
+    )).scalars().all()
+    per_progetto = {r.progetto_id: r for r in override_rows}
+
+    attivi = [p for p in assegnati if not (p in per_progetto and not per_progetto[p].attivo)]
+    if not attivi:
+        return pool, {}
+
+    ha_override = any(per_progetto.get(p) and per_progetto[p].override_pct is not None for p in attivi)
+    pesi = {}
+    if ha_override:
+        for p in attivi:
+            r = per_progetto.get(p)
+            pesi[p] = Decimal(str(r.override_pct)) if (r and r.override_pct is not None) else Decimal("0")
+    else:
+        intensita_rows = (await db.execute(select(Progetto.id, Progetto.intensita_socio).where(Progetto.id.in_(attivi)))).all()
+        intensita = {pid: i for pid, i in intensita_rows}
+        for p in attivi:
+            pesi[p] = _INTENSITA_PESO.get((intensita.get(p) or "M").upper(), Decimal("2"))
+    return pool, pesi
+
+
+async def calcola_quota_socio(db: AsyncSession, socio_id: uuid.UUID, periodo: date) -> dict:
+    """Quota progettuale del socio ripartita per peso sui progetti attivi nel periodo (spec v2 §4.6,
+    invariante 16): pool = compenso_fisso_mensile x progettuale_pct; quota_i = pool x w_i / Sigma w.
+    Peso a cascata: 1) override_pct mensile (se dichiarato per QUALSIASI progetto del socio nel
+    periodo, Sigma=100 per costruzione) 2) intensita_socio del progetto (S=1/M=2/L=4, default M).
+    Progetti fermi (attivo=False su risorsa_progetto_periodo) sono esclusi dal denominatore.
+    Ritorna {progetto_id: quota_decimal}; {} se il socio non ha ripartizione o pool=0."""
+    pool, pesi = await _pool_e_pesi_socio(db, socio_id, periodo)
+    if pool == 0 or not pesi:
+        return {}
+    return _quadratura_quote(pesi, pool)
+
+
+async def stima_costo_socio_preventivo(db: AsyncSession, socio_id: uuid.UUID, intensita: str = "M",
+                                       periodo: Optional[date] = None) -> Decimal:
+    """Costo-socio per una riga di preventivo (§18.4): il nuovo progetto entra come n_progetti+1
+    coi pesi esistenti del socio, col proprio peso da `intensita` (S/M/L). STIMA esplicita:
+    dipende dal portafoglio del socio al momento del preventivo (diluizione residua v1)."""
+    periodo = (periodo or date.today()).replace(day=1)
+    pool, pesi = await _pool_e_pesi_socio(db, socio_id, periodo)
+    if pool == 0:
+        return Decimal("0")
+    peso_nuovo = _INTENSITA_PESO.get((intensita or "M").upper(), Decimal("2"))
+    tot_w = sum(pesi.values(), Decimal("0")) + peso_nuovo
+    if tot_w <= 0:
+        return Decimal("0")
+    from decimal import ROUND_HALF_UP
+    return (pool * peso_nuovo / tot_w).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+async def calcola_quota_soci_commessa(db: AsyncSession, commessa, mese: date, *, quota_cache: Optional[dict] = None) -> Decimal:
+    """Somma, per la commessa, la quota progettuale di TUTTI i soci sui progetti inclusi
+    (spec v2 §4.6/§4.5). Sostituisce calcola_quota_luca (asse cliente/contenuti) con l'asse
+    progetto/peso della spec. Cache per mese: {socio_id: {progetto_id: quota}}."""
+    from app.models.models import CommessaProgetto, Risorsa
+
+    mese_norm = mese.replace(day=1)
+    cache_mese = None
+    if quota_cache is not None:
+        cache_mese = quota_cache.setdefault(mese_norm, {})
+
+    progetti_ids = {r[0] for r in (await db.execute(
+        select(CommessaProgetto.progetto_id).where(CommessaProgetto.commessa_id == commessa.id)
+    )).all()}
+    if not progetti_ids:
+        return Decimal("0")
+
+    soci_ids = [r[0] for r in (await db.execute(select(Risorsa.id).where(Risorsa.tipologia == "socio", Risorsa.attivo == True))).all()]  # noqa: E712
+    totale = Decimal("0")
+    for socio_id in soci_ids:
+        if cache_mese is not None and socio_id in cache_mese:
+            quote = cache_mese[socio_id]
+        else:
+            quote = await calcola_quota_socio(db, socio_id, mese_norm)
+            if cache_mese is not None:
+                cache_mese[socio_id] = quote
+        for pid in progetti_ids:
+            totale += quote.get(pid, Decimal("0"))
+    return totale.quantize(Decimal("0.01"))
 
 
 async def calcola_margine_commessa(
@@ -180,8 +314,10 @@ async def calcola_margine_commessa(
         costo_manodopera = commessa.costo_manodopera or Decimal("0")  # snapshot approvati (Decisione 2)
     costi_diretti_totali = commessa.costi_diretti_totali  # manuali + imputati (R3)
 
-    # Quota Luca pro-forma allocata per output (Prompt 4): voce di costo nel margine lordo.
-    quota_luca = await calcola_quota_luca(db, commessa.cliente_id, mese_norm, quota_cache=quota_cache)
+    # Quota progettuale soci (spec v2 §4.6, invariante 16): pool*peso/Sigma-pesi sui progetti
+    # inclusi nella commessa. Sostituisce calcola_quota_luca (asse cliente/contenuti superato).
+    # Il nome del campo (quota_luca) resta per compatibilita' con i consumatori API esistenti.
+    quota_luca = await calcola_quota_soci_commessa(db, commessa, mese_norm, quota_cache=quota_cache)
 
     # MARGINE LORDO canonico — NON include gli indiretti (Decisione 1, brief §4.2)
     margine_lordo_euro = ricavo - costo_manodopera - costi_diretti_totali - quota_luca
@@ -4815,7 +4951,13 @@ async def calcola_preventivo(db: AsyncSession, preventivo_id):
     if not p:
         return None
     voci = (await db.execute(select(PreventivoVoce).where(PreventivoVoce.preventivo_id == preventivo_id).order_by(PreventivoVoce.ordine))).scalars().all()
-    righe = [{"tipo": v.tipo, "ore": v.ore, "tariffa": v.tariffa, "costo": v.costo, "ricarico_pct": v.ricarico_pct} for v in voci]
+    righe = []
+    for v in voci:
+        costo = v.costo
+        if v.tipo == "socio" and v.risorsa_id is not None:
+            # Aggancio §4.6: cascata pool*peso/Sigma-pesi (n_progetti+1) al posto dell'input manuale.
+            costo = await stima_costo_socio_preventivo(db, v.risorsa_id, v.intensita_socio or "M")
+        righe.append({"tipo": v.tipo, "ore": v.ore, "tariffa": v.tariffa, "costo": costo, "ricarico_pct": v.ricarico_pct})
     coeff = await _ultimo_coefficiente(db, date.today(), incluso=True) or Decimal("0")
     eco = calcola_economia_preventivo(
         righe, modalita=p.modalita_prezzo, markup_pct=p.markup_pct, markup_su=p.markup_su or "costo_pieno",
@@ -6037,7 +6179,7 @@ async def create_preventivo(db: AsyncSession, data: PreventivoCreate, user_id: u
             # §18.2 natura riga
             tipo=v.tipo, servizio_id=v.servizio_id, risorsa_id=v.risorsa_id, ruolo=v.ruolo,
             ore=v.ore, tariffa=v.tariffa, costo=v.costo, ricarico_pct=v.ricarico_pct,
-            is_stima=(v.tipo == "socio"),
+            is_stima=(v.tipo == "socio"), intensita_socio=v.intensita_socio,
         )
         voci.append(riga)
     db.add_all(voci)

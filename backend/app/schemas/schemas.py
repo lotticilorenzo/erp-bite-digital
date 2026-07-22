@@ -184,6 +184,7 @@ class RisorsaBase(BaseModel):
     banca: Optional[str] = None
     bic_swift: Optional[str] = None
     note: Optional[str] = None
+    tipologia: str = "dipendente"
 
 class RisorsaCreate(RisorsaBase):
     pass
@@ -1141,6 +1142,7 @@ class PreventivoVoceCreate(BaseModel):
     tariffa: Optional[Decimal] = None
     costo: Optional[Decimal] = None
     ricarico_pct: Optional[Decimal] = None
+    intensita_socio: Optional[str] = None  # S|M|L, se tipo=socio (§18.4)
 
 class PreventivoVoceOut(OrmBase):
     id: uuid.UUID
@@ -2179,6 +2181,7 @@ class RisorsaCreate(BaseModel):
     user_id: Optional[uuid.UUID] = None
     attivo: bool = True
     quota_proforma_mensile: Optional[Decimal] = None  # Quota Luca pro-forma/mese (Prompt 4)
+    tipologia: str = Field("dipendente", pattern="^(socio|dipendente|collaboratore)$")  # §4.6
 
 
 class RisorsaUpdate(BaseModel):
@@ -2210,6 +2213,7 @@ class RisorsaUpdate(BaseModel):
     attivo: Optional[bool] = None
     quota_proforma_mensile: Optional[Decimal] = None  # Quota Luca pro-forma/mese (Prompt 4)
     costo_orario_calcolato: Optional[Decimal] = None
+    tipologia: Optional[str] = Field(None, pattern="^(socio|dipendente|collaboratore)$")  # §4.6
 
 
 # ── PRICING FLOOR (Prompt 5, stateless) ───────────────────
@@ -2262,3 +2266,41 @@ class ProgettoTemplateOut(BaseModel):
     milestones: List[ProgettoTemplateMilestoneOut]
     class Config: from_attributes = True
 
+
+
+# ── RIPARTIZIONE SOCIO (spec v2 §4.6, invariante 16) ──
+class RipartizioneSocioUpsert(BaseModel):
+    amministrativa_pct: Decimal = Field(..., ge=0, le=100)
+    commerciale_pct: Decimal = Field(..., ge=0, le=100)
+    progettuale_pct: Decimal = Field(..., ge=0, le=100)
+
+    @model_validator(mode="after")
+    def _somma_100(self):
+        tot = self.amministrativa_pct + self.commerciale_pct + self.progettuale_pct
+        if tot != 100:
+            raise ValueError(f"amministrativa+commerciale+progettuale deve sommare 100 (attuale: {tot})")
+        return self
+
+
+class RipartizioneSocioOut(OrmBase):
+    id: uuid.UUID
+    risorsa_id: uuid.UUID
+    amministrativa_pct: Decimal
+    commerciale_pct: Decimal
+    progettuale_pct: Decimal
+
+
+class RisorsaProgettoPeriodoUpsert(BaseModel):
+    progetto_id: uuid.UUID
+    periodo: date
+    attivo: bool = True
+    override_pct: Optional[Decimal] = Field(None, ge=0, le=100)
+
+
+class RisorsaProgettoPeriodoOut(OrmBase):
+    id: uuid.UUID
+    risorsa_id: uuid.UUID
+    progetto_id: uuid.UUID
+    periodo: date
+    attivo: bool
+    override_pct: Optional[Decimal] = None

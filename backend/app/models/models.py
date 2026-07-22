@@ -1198,6 +1198,9 @@ class Risorsa(Base):
     cognome: Mapped[str] = mapped_column(String(100), nullable=False)
     ruolo: Mapped[Optional[str]] = mapped_column(String(150))
     tipo_contratto: Mapped[str] = mapped_column(String(30), default="DIPENDENTE")
+    # ── §4.6: tipologia polimorfica (socio/dipendente/collaboratore). Additivo: default
+    # 'dipendente' per retrocompatibilita'; i soci vanno marcati esplicitamente. ──
+    tipologia: Mapped[str] = mapped_column(String(20), nullable=False, default="dipendente")
     data_inizio: Mapped[Optional[date]] = mapped_column(Date)
     data_fine: Mapped[Optional[date]] = mapped_column(Date)
     ore_settimanali: Mapped[Decimal] = mapped_column(Numeric(4, 1), default=40)
@@ -1236,6 +1239,43 @@ class Risorsa(Base):
         """Costo orario effettivo: override se presente, altrimenti calcolato, altrimenti 0.
         Esposto da RisorsaOut e consumato dal FE (PricingFloor, CollaboratorCostCalculator)."""
         return self.costo_orario_override or self.costo_orario_calcolato or Decimal("0")
+
+
+class RipartizioneSocio(Base):
+    """Ripartizione attivita' del socio (spec v2 §4.6): amministrativa+commerciale -> overhead;
+    progettuale -> pool ripartito per peso sui progetti attivi. Invariante 10: Sigma = 100."""
+    __tablename__ = "ripartizione_soci"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    risorsa_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("risorse.id", ondelete="CASCADE"), unique=True, nullable=False)
+    amministrativa_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=0)
+    commerciale_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=0)
+    progettuale_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        CheckConstraint("amministrativa_pct + commerciale_pct + progettuale_pct = 100", name="ck_ripartizione_socio_100"),
+    )
+
+
+class RisorsaProgettoPeriodo(Base):
+    """Cascata di peso del socio sul progetto, per mese (spec v2 §4.6): combina in un'unica riga
+    `attivo_nel_periodo[]` (i progetti fermi non diluiscono) e `ripartizione_progettuale_override[]`
+    (override % mensile, opzionale, off di default). Assenza di riga = progetto attivo, peso da
+    intensita_socio (fallback S/M/L)."""
+    __tablename__ = "risorsa_progetto_periodo"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    risorsa_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("risorse.id", ondelete="CASCADE"), nullable=False)
+    progetto_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("progetti.id", ondelete="CASCADE"), nullable=False)
+    periodo: Mapped[date] = mapped_column(Date, nullable=False)  # normalizzato al giorno 1 del mese
+    attivo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    override_pct: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2))  # priorita' in cascata se valorizzato
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("risorsa_id", "progetto_id", "periodo", name="uq_risorsa_progetto_periodo"),
+    )
 
 
 class RisorsaServizio(Base):
@@ -1340,6 +1380,7 @@ class PreventivoVoce(Base):
     ricarico_pct: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 2))
     prezzo_riga: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 2))
     is_stima: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    intensita_socio: Mapped[Optional[str]] = mapped_column(String(1))  # S|M|L, solo se tipo=socio (§18.4, n_progetti+1)
 
     preventivo: Mapped["Preventivo"] = relationship(back_populates="voci")
 

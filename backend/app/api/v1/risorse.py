@@ -5,10 +5,17 @@ from sqlalchemy.orm import selectinload
 from typing import List
 import uuid
 
+from datetime import date
+
 from app.db.session import get_db
-from app.core.security import get_current_user, require_roles, has_finance_access
-from app.models.models import User, UserRole, Risorsa
-from app.schemas.schemas import RisorsaCreate, RisorsaUpdate, RisorsaOut, RisorsaPublicOut
+from app.core.security import get_current_user, require_roles, require_finance_access, has_finance_access
+from app.models.models import User, UserRole, Risorsa, RipartizioneSocio, RisorsaProgettoPeriodo
+from app.schemas.schemas import (
+    RisorsaCreate, RisorsaUpdate, RisorsaOut, RisorsaPublicOut,
+    RipartizioneSocioUpsert, RipartizioneSocioOut,
+    RisorsaProgettoPeriodoUpsert, RisorsaProgettoPeriodoOut,
+)
+from app.services.services import calcola_quota_socio
 
 router = APIRouter(prefix="/risorse", tags=["Collaboratori"])
 
@@ -116,3 +123,66 @@ async def delete_risorsa(
     risorsa.attivo = False
     await db.commit()
     return None
+
+
+# ── RIPARTIZIONE SOCIO (spec v2 §4.6, invariante 16) ──
+@router.put("/{risorsa_id}/ripartizione-socio", response_model=RipartizioneSocioOut)
+async def upsert_ripartizione_socio(
+    risorsa_id: uuid.UUID,
+    data: RipartizioneSocioUpsert,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    risorsa = (await db.execute(select(Risorsa).where(Risorsa.id == risorsa_id))).scalar_one_or_none()
+    if not risorsa:
+        raise HTTPException(status_code=404, detail="Risorsa non trovata")
+    if risorsa.tipologia != "socio":
+        raise HTTPException(status_code=400, detail="La ripartizione si applica solo a risorse tipologia=socio")
+    rip = (await db.execute(select(RipartizioneSocio).where(RipartizioneSocio.risorsa_id == risorsa_id))).scalar_one_or_none()
+    if rip:
+        rip.amministrativa_pct = data.amministrativa_pct
+        rip.commerciale_pct = data.commerciale_pct
+        rip.progettuale_pct = data.progettuale_pct
+    else:
+        rip = RipartizioneSocio(risorsa_id=risorsa_id, **data.model_dump())
+        db.add(rip)
+    await db.commit()
+    await db.refresh(rip)
+    return rip
+
+
+@router.post("/{risorsa_id}/progetti-periodo", response_model=RisorsaProgettoPeriodoOut, status_code=status.HTTP_201_CREATED)
+async def upsert_progetto_periodo(
+    risorsa_id: uuid.UUID,
+    data: RisorsaProgettoPeriodoUpsert,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    periodo = data.periodo.replace(day=1)
+    row = (await db.execute(select(RisorsaProgettoPeriodo).where(
+        RisorsaProgettoPeriodo.risorsa_id == risorsa_id, RisorsaProgettoPeriodo.progetto_id == data.progetto_id,
+        RisorsaProgettoPeriodo.periodo == periodo,
+    ))).scalar_one_or_none()
+    if row:
+        row.attivo = data.attivo
+        row.override_pct = data.override_pct
+    else:
+        row = RisorsaProgettoPeriodo(risorsa_id=risorsa_id, progetto_id=data.progetto_id, periodo=periodo,
+                                     attivo=data.attivo, override_pct=data.override_pct)
+        db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+@router.get("/{risorsa_id}/quota-socio", tags=["Collaboratori"])
+async def get_quota_socio(
+    risorsa_id: uuid.UUID,
+    periodo: date = Query(..., description="YYYY-MM-DD (mese)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """Quota progettuale del socio per progetto nel periodo (spec v2 §4.6)."""
+    quote = await calcola_quota_socio(db, risorsa_id, periodo)
+    return {"risorsa_id": str(risorsa_id), "periodo": str(periodo.replace(day=1)),
+            "quote": {str(k): float(v) for k, v in quote.items()}, "totale": float(sum(quote.values()))}
