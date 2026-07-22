@@ -584,11 +584,16 @@ async def post_movimento_cassa(
 ):
     """Crea un movimento. Enforcement lock competenza (§13.6): la competenza effettiva non deve
     cadere in un periodo hard_lock. Impronta duplicata -> 409 (idempotenza import, inv. 3)."""
+    data = payload.model_dump(exclude_unset=True)
+    if data.get("stato") is None:
+        data.pop("stato", None)  # None esplicito non deve bypassare il default NOT NULL 'regolato'
     try:
-        return await create_movimento(db, payload.model_dump(exclude_unset=True), current_user.id)
-    except IntegrityError:
+        return await create_movimento(db, data, current_user.id)
+    except IntegrityError as e:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="Movimento gia' presente (impronta_dedup duplicata, invariante 3).")
+        if "uq_movimenti_impronta" in str(e.orig):
+            raise HTTPException(status_code=409, detail="Movimento gia' presente (impronta_dedup duplicata, invariante 3).")
+        raise HTTPException(status_code=400, detail="Vincolo di integrita' violato sulla creazione del movimento.")
 
 
 @router.delete("/movimenti-cassa/{movimento_id}", tags=["Cassa"])
@@ -841,9 +846,11 @@ async def post_centro_costo(
     db.add(cc)
     try:
         await db.commit()
-    except Exception:
+    except IntegrityError as e:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="Codice centro di costo gia' esistente")
+        if "centri_costo_codice" in str(e.orig):
+            raise HTTPException(status_code=409, detail="Codice centro di costo gia' esistente")
+        raise HTTPException(status_code=400, detail="Vincolo di integrita' violato (FK/CHECK) sul centro di costo.")
     await db.refresh(cc)
     return cc
 
