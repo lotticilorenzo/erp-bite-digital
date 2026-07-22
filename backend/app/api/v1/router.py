@@ -62,6 +62,7 @@ from app.schemas.schemas import (
     RefreshOvhRequest,
     GeneraF24Request,
     CentroCostoCreate, CentroCostoUpdate, CentroCostoOut,
+    FinanziamentoCreate, FinanziamentoUpdate,
     BudgetVersioneCreate, BudgetVersioneUpdate, BudgetRigheBulk, BudgetRigaUpdate, GeneraForecastRequest,
     PesoContenutoUpdate,
     RegolaRiconciliazioneCreate, RegolaRiconciliazioneUpdate,
@@ -80,6 +81,7 @@ from app.services.services import (
     get_config_pl_memo, update_config_pl_memo,
     calcola_proiezione_cassa, get_ultimo_saldo, create_saldo, calcola_pl_gestionale, calcola_bep,
     calcola_irap, calcola_irpef_soci, calcola_inps_soci, genera_f24, get_f24, list_f24,
+    create_finanziamento, list_finanziamenti, update_finanziamento, calcola_pfn,
     calcola_scadenzario_fiscale,
     sync_fic_data, get_last_fic_sync_status, list_fatture_attive, incassa_fattura,
     list_fornitori_full, update_fornitore, list_fatture_passive, update_fattura_passiva, list_fornitori,
@@ -747,6 +749,47 @@ async def get_categorie(
     from app.models.models import Categoria
     rows = (await db.execute(select(Categoria).where(Categoria.attiva == True).order_by(Categoria.codice))).scalars().all()  # noqa: E712
     return {"categorie": [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]}
+
+
+@router.get("/finanziamenti", tags=["Finanziamenti"])
+async def get_finanziamenti(
+    includi_inattivi: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    return {"finanziamenti": await list_finanziamenti(db, includi_inattivi)}
+
+
+@router.post("/finanziamenti", tags=["Finanziamenti"], status_code=201)
+async def post_finanziamento(
+    payload: FinanziamentoCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """Crea finanziamento; se rata+inizio+durata noti genera la ricorrenza collegata (rate -> scadenze finanziarie)."""
+    return await create_finanziamento(db, payload.model_dump())
+
+
+@router.patch("/finanziamenti/{finanziamento_id}", tags=["Finanziamenti"])
+async def patch_finanziamento(
+    finanziamento_id: uuid.UUID,
+    payload: FinanziamentoUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    res = await update_finanziamento(db, finanziamento_id, payload.model_dump(exclude_unset=True))
+    if res is None:
+        raise HTTPException(status_code=404, detail="Finanziamento non trovato")
+    return res
+
+
+@router.get("/report/pfn", tags=["Report"])
+async def report_pfn(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_finance_access),
+):
+    """PFN (spec v2 §12): debiti finanziari - liquidita disponibile."""
+    return await calcola_pfn(db)
 
 
 @router.get("/centri-costo", tags=["CentriCosto"])

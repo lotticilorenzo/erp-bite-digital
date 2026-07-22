@@ -2641,6 +2641,77 @@ async def list_f24(db: AsyncSession, anno: Optional[int] = None) -> list:
     return [await get_f24(db, i) for i in ids]
 
 
+# ── FINANZIAMENTI + PFN (spec v2 §4.9) ────────────────────────────────────
+async def create_finanziamento(db: AsyncSession, payload: dict) -> dict:
+    """Crea il finanziamento e, se rata/data/durata sono noti, la Ricorrenza collegata
+    (tipo_scadenza=finanziaria): le rate diventano scadenze via il motore esistente
+    genera_occorrenze — nessun registro parallelo (principio 2)."""
+    from app.models.models import Finanziamento, Ricorrenza
+    from dateutil.relativedelta import relativedelta
+
+    f = Finanziamento(**{k: v for k, v in payload.items() if hasattr(Finanziamento, k)})
+    if f.debito_residuo is None:
+        f.debito_residuo = f.importo_erogato  # default: appena erogato, residuo = erogato
+    db.add(f)
+    await db.flush()
+    if f.rata_mensile and f.data_inizio_rate and f.durata_mesi:
+        ric = Ricorrenza(
+            descrizione=f"Rata {f.tipo} {f.ente}",
+            tipo_scadenza="finanziaria", importo=f.rata_mensile, periodicita="mensile",
+            giorno_riferimento=f.data_inizio_rate.day, data_inizio=f.data_inizio_rate,
+            data_fine=f.data_inizio_rate + relativedelta(months=f.durata_mesi - 1),
+            controparte_tipo="banca", attivo=True,
+        )
+        db.add(ric)
+        await db.flush()
+        f.ricorrenza_id = ric.id
+    await db.commit()
+    await db.refresh(f)
+    return {c.name: getattr(f, c.name) for c in f.__table__.columns}
+
+
+async def list_finanziamenti(db: AsyncSession, includi_inattivi: bool = False) -> list:
+    from app.models.models import Finanziamento
+    q = select(Finanziamento).order_by(Finanziamento.created_at)
+    if not includi_inattivi:
+        q = q.where(Finanziamento.attivo == True)  # noqa: E712
+    rows = (await db.execute(q)).scalars().all()
+    return [{c.name: getattr(r, c.name) for c in r.__table__.columns} for r in rows]
+
+
+async def update_finanziamento(db: AsyncSession, finanziamento_id, payload: dict):
+    from app.models.models import Finanziamento
+    f = (await db.execute(select(Finanziamento).where(Finanziamento.id == finanziamento_id))).scalar_one_or_none()
+    if not f:
+        return None
+    for k, v in payload.items():
+        if hasattr(f, k) and k not in ("id", "created_at"):
+            setattr(f, k, v)
+    await db.commit()
+    await db.refresh(f)
+    return {c.name: getattr(f, c.name) for c in f.__table__.columns}
+
+
+async def calcola_pfn(db: AsyncSession) -> dict:
+    """PFN (spec §12) = debiti finanziari (Σ debito_residuo finanziamenti attivi) − liquidità
+    (ultimo saldo cassa manuale). Nessun numero inventato: se il saldo non è impostato → None+nota."""
+    from app.models.models import Finanziamento
+    debiti = (await db.execute(
+        select(func.coalesce(func.sum(Finanziamento.debito_residuo), 0)).where(Finanziamento.attivo == True)  # noqa: E712
+    )).scalar() or 0
+    debiti = Decimal(str(debiti))
+    saldo_rec = await get_ultimo_saldo(db)
+    warning = []
+    if saldo_rec is None:
+        warning.append("Saldo cassa non impostato (POST /saldo-cassa): PFN non calcolabile.")
+        return {"debiti_finanziari": float(debiti), "liquidita": None, "pfn": None,
+                "data_saldo": None, "warning": warning}
+    liq = Decimal(str(saldo_rec.saldo or 0))
+    return {"debiti_finanziari": float(debiti), "liquidita": float(liq),
+            "pfn": float((debiti - liq).quantize(Decimal("0.01"))),
+            "data_saldo": str(saldo_rec.data), "warning": warning}
+
+
 # ── TASK SERVICE ──────────────────────────────────────────
 async def list_tasks(
     db: AsyncSession,

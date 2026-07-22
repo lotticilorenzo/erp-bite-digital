@@ -996,6 +996,33 @@ class Ricorrenza(Base):
     )
 
 
+# ── FINANZIAMENTI / LINEE DI CREDITO (spec v2 §4.9): le RATE entrano in cassa come scadenze
+# tipo=finanziaria via il motore ricorrenze; ammortamento contabile fuori scope. debito_residuo
+# (ERP, aggiornato a mano) alimenta la PFN. ──
+class Finanziamento(Base):
+    __tablename__ = "finanziamenti"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    ente: Mapped[str] = mapped_column(String(200), nullable=False)  # istituto erogante
+    tipo: Mapped[str] = mapped_column(String(20), nullable=False, default="prestito")  # fido|mutuo|leasing|prestito
+    importo_erogato: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    data_erogazione: Mapped[Optional[date]] = mapped_column(Date)
+    tasso_pct: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 3))
+    durata_mesi: Mapped[Optional[int]] = mapped_column(Integer)
+    rata_mensile: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    data_inizio_rate: Mapped[Optional[date]] = mapped_column(Date)
+    debito_residuo: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 2))  # -> PFN (§4.9)
+    ricorrenza_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("ricorrenze.id", ondelete="SET NULL"))  # rate -> scadenze finanziarie
+    attivo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint("tipo IN ('fido','mutuo','leasing','prestito')", name="ck_finanziamenti_tipo"),
+        CheckConstraint("importo_erogato > 0", name="ck_finanziamenti_importo_pos"),
+    )
+
+
 # ── CENTRI DI COSTO (spec v2 §4.7): aree funzionali, set minimo. NO un centro per cliente. ──
 class CentroCosto(Base):
     __tablename__ = "centri_costo"

@@ -2341,3 +2341,26 @@ class CentroCostoOut(OrmBase):
     tipo: str
     responsabile_risorsa_id: Optional[uuid.UUID] = None
     attivo: bool
+
+
+# ── FINANZIAMENTI (spec v2 §4.9) ──
+class FinanziamentoCreate(BaseModel):
+    ente: str = Field(..., min_length=1, max_length=200)
+    tipo: str = Field("prestito", pattern="^(fido|mutuo|leasing|prestito)$")
+    importo_erogato: Decimal = Field(..., gt=0)
+    data_erogazione: Optional[date] = None
+    tasso_pct: Optional[Decimal] = Field(None, ge=0)
+    durata_mesi: Optional[int] = Field(None, ge=1)
+    rata_mensile: Optional[Decimal] = Field(None, gt=0)
+    data_inizio_rate: Optional[date] = None
+    debito_residuo: Optional[Decimal] = Field(None, ge=0)
+    note: Optional[str] = None
+
+
+class FinanziamentoUpdate(BaseModel):
+    ente: Optional[str] = Field(None, min_length=1, max_length=200)
+    tipo: Optional[str] = Field(None, pattern="^(fido|mutuo|leasing|prestito)$")
+    debito_residuo: Optional[Decimal] = Field(None, ge=0)
+    rata_mensile: Optional[Decimal] = Field(None, gt=0)
+    attivo: Optional[bool] = None
+    note: Optional[str] = None
