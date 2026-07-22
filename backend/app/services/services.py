@@ -2219,7 +2219,8 @@ async def calcola_bep(db: AsyncSession, periodo: date) -> dict:
         .join(Categoria, Categoria.id == MovimentoCassa.categoria_id)
         .where(Categoria.natura == "variabile", Categoria.tipo_flusso == "costo",
                MovimentoCassa.data_competenza >= mese_norm, MovimentoCassa.data_competenza <= fine_mese,
-               MovimentoCassa.importo < 0)
+               MovimentoCassa.importo < 0,
+               MovimentoCassa.flag_esclusione == False)  # noqa: E712 — inv.4: esclusioni fuori dai margini
     )).scalar() or 0
     costi_variabili = abs(Decimal(str(row)))
 
@@ -2820,11 +2821,13 @@ async def calcola_kpi_cassa(db: AsyncSession, giorni_periodo: int = 90) -> dict:
     dal_burn = oggi - timedelta(days=90)
     entrate = Decimal(str((await db.execute(
         select(func.coalesce(func.sum(MovimentoCassa.importo), 0)).where(
-            MovimentoCassa.data_valuta >= dal_burn, MovimentoCassa.importo > 0)
+            MovimentoCassa.data_valuta >= dal_burn, MovimentoCassa.importo > 0,
+            MovimentoCassa.flag_esclusione == False)  # noqa: E712 — inv.4
     )).scalar() or 0))
     uscite = Decimal(str((await db.execute(
         select(func.coalesce(func.sum(MovimentoCassa.importo), 0)).where(
-            MovimentoCassa.data_valuta >= dal_burn, MovimentoCassa.importo < 0)
+            MovimentoCassa.data_valuta >= dal_burn, MovimentoCassa.importo < 0,
+            MovimentoCassa.flag_esclusione == False)  # noqa: E712 — inv.4
     )).scalar() or 0))
     n_mov = (await db.execute(select(func.count(MovimentoCassa.id)).where(MovimentoCassa.data_valuta >= dal_burn))).scalar() or 0
     if n_mov == 0:

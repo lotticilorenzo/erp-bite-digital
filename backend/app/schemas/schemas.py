@@ -2071,6 +2071,11 @@ class MovimentoCassaCreate(BaseModel):
     tipo: Optional[str] = Field(None, max_length=20)
     data_contabile: Optional[date] = None
     note: Optional[str] = Field(None, max_length=1000)
+    # Fase G (§5.1): campi import-ready
+    descrizione_grezza: Optional[str] = None  # inv.1: immutabile dopo la scrittura
+    impronta_dedup: Optional[str] = Field(None, max_length=64)
+    flag_esclusione: bool = False  # inv.4
+    stato: Optional[str] = Field(None, pattern="^(previsto|contabilizzato|regolato|riconciliato)$")
 
 
 class MovimentoCassaUpdate(BaseModel):
@@ -2082,6 +2087,9 @@ class MovimentoCassaUpdate(BaseModel):
     note: Optional[str] = Field(None, max_length=1000)
     data_competenza: Optional[date] = None  # spec §5.1: se assente resta = data_valuta
     ripartizione_competenza_mesi: Optional[int] = Field(None, ge=1)  # risconto gestionale (>=1)
+    descrizione_grezza: Optional[str] = None  # accettata SOLO se non gia' valorizzata (inv.1)
+    flag_esclusione: Optional[bool] = None
+    stato: Optional[str] = Field(None, pattern="^(previsto|contabilizzato|regolato|riconciliato)$")
 
 
 class RiconciliaRequest(BaseModel):

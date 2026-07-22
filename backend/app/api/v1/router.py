@@ -8,6 +8,7 @@ import time
 
 logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, Query, Body, File, UploadFile
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, select, func, and_, or_
 
@@ -582,8 +583,12 @@ async def post_movimento_cassa(
     current_user: User = Depends(require_finance_access),
 ):
     """Crea un movimento. Enforcement lock competenza (§13.6): la competenza effettiva non deve
-    cadere in un periodo hard_lock."""
-    return await create_movimento(db, payload.model_dump(exclude_unset=True), current_user.id)
+    cadere in un periodo hard_lock. Impronta duplicata -> 409 (idempotenza import, inv. 3)."""
+    try:
+        return await create_movimento(db, payload.model_dump(exclude_unset=True), current_user.id)
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Movimento gia' presente (impronta_dedup duplicata, invariante 3).")
 
 
 @router.delete("/movimenti-cassa/{movimento_id}", tags=["Cassa"])
@@ -636,6 +641,9 @@ async def patch_movimento_cassa(
 
     # Campi scalari non legati alla riconciliazione (la riconciliazione la gestisce il service)
     data = payload.model_dump(exclude_unset=True)
+    # Invariante 1 (§5.1): la descrizione grezza bancaria non si modifica MAI una volta scritta.
+    if "descrizione_grezza" in data and mov.descrizione_grezza is not None:
+        raise HTTPException(status_code=400, detail="descrizione_grezza e' immutabile (invariante 1): non modificabile una volta scritta.")
     # Enforcement lock competenza (§13.6): i campi CASSA/riconciliazione restano SEMPRE aperti;
     # gli altri (competenza/metadati) sono immutabili se il movimento e' in periodo hard_lock.
     cassa_fields = {"riconciliato", "fattura_attiva_id", "fattura_passiva_id"}
@@ -650,7 +658,8 @@ async def patch_movimento_cassa(
             raise HTTPException(status_code=400, detail=(
                 f"data_competenza {nuova_dc.year}-{nuova_dc.month:02d} in periodo chiuso: non consentito."))
     for k in ("categoria", "descrizione", "note", "fattura_attiva_id", "fattura_passiva_id",
-              "data_competenza", "ripartizione_competenza_mesi"):
+              "data_competenza", "ripartizione_competenza_mesi",
+              "descrizione_grezza", "flag_esclusione", "stato"):  # Fase G (grezza solo se prima NULL, check sopra)
         if k in data:
             setattr(mov, k, data[k])
     # spec §5.1: la competenza non si azzera mai — se svuotata, ricade sulla cassa (data_valuta)

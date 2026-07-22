@@ -804,6 +804,11 @@ class MovimentoCassa(Base):
     iva_importo: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 2))  # IVA per cassa del movimento (da FIC)
     data_contabile: Mapped[Optional[date]] = mapped_column(Date)
     descrizione: Mapped[Optional[str]] = mapped_column(Text)
+    # ── Fase G (spec §5.1, invarianti 1/3/4): struttura pronta per l'import e/c (parser fuori scope). ──
+    descrizione_grezza: Mapped[Optional[str]] = mapped_column(Text)  # inv.1: immutabile una volta scritta (enforcement service)
+    impronta_dedup: Mapped[Optional[str]] = mapped_column(String(64))  # inv.3: hash conto+data+importo+descrizione (dedup import futuro)
+    flag_esclusione: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)  # inv.4: fuori da saldi/margini
+    stato: Mapped[str] = mapped_column(String(20), nullable=False, default="regolato")  # previsto|contabilizzato|regolato|riconciliato (§5.1)
     categoria: Mapped[Optional[str]] = mapped_column(String(100))  # legacy: stringa libera, mantenuta per compatibilita'
     categoria_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("categorie.id", ondelete="SET NULL"))
     importo: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
