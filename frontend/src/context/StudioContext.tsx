@@ -115,19 +115,30 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
   // Tab Actions
   const openTab = useCallback((item: Omit<TabItem, "id"> & { id?: string }) => {
+    if (item.type === "TASK") {
+      setNav(prev => ({ ...prev, selectedTaskId: item.linkedId || null }));
+      return;
+    }
     const tabId = item.id || `${item.type}-${item.linkedId}`;
     setNav(prev => {
       const exists = prev.openTabs.find(t => t.id === tabId);
-      const newTabs = exists ? prev.openTabs : [...prev.openTabs, { ...item, id: tabId, view: item.view || (item.type === "PROJECT" ? "list" : "dash") }];
+      const defaultView = item.type === "PROJECT"
+        ? (item.subtype === "lista" ? "list" : "overview")
+        : "dash";
+      const newTabs = exists ? prev.openTabs : [...prev.openTabs, { ...item, id: tabId, view: item.view || defaultView }];
       const currentTab = newTabs.find(t => t.id === tabId);
+      let view = currentTab?.view || defaultView;
+      if (item.subtype === "lista" && view === "overview") {
+        view = "list";
+      }
 
       return {
         ...prev,
         openTabs: newTabs,
         activeTabId: tabId,
-        view: currentTab?.view || (item.type === "PROJECT" ? "list" : prev.view),
+        view,
         selectedListId: item.type === "PROJECT" ? item.linkedId || null : prev.selectedListId,
-        selectedTaskId: item.type === "TASK" ? item.linkedId || null : prev.selectedTaskId,
+        selectedTaskId: prev.selectedTaskId,
       };
     });
   }, []);
@@ -156,10 +167,17 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     setNav(prev => {
       const tab = prev.openTabs.find(t => t.id === id);
       if (!tab) return prev;
+      const defaultView = tab.type === "PROJECT"
+        ? (tab.subtype === "lista" ? "list" : "overview")
+        : prev.view;
+      let view = tab.view || defaultView;
+      if (tab.subtype === "lista" && view === "overview") {
+        view = "list";
+      }
       return {
         ...prev,
         activeTabId: id,
-        view: tab.view || (tab.type === "PROJECT" ? "list" : prev.view),
+        view,
         selectedListId: tab.type === "PROJECT" ? tab.linkedId || null : prev.selectedListId,
         selectedTaskId: tab.type === "TASK" ? tab.linkedId || null : prev.selectedTaskId,
       };
@@ -185,6 +203,10 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   // Actions
   const setView = useCallback((view: StudioView) => {
     setNav((prev) => {
+      const activeTab = prev.openTabs.find(t => t.id === prev.activeTabId);
+      if (activeTab?.subtype === "lista" && view === "overview") {
+        return prev;
+      }
       const newTabs = prev.openTabs.map(t => 
         t.id === prev.activeTabId ? { ...t, view } : t
       );
@@ -213,13 +235,17 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const selectList = useCallback((id: string | null, folderId?: string | null) => {
-    setNav((prev) => ({ 
-      ...prev, 
-      selectedListId: id, 
-      selectedFolderId: folderId ?? prev.selectedFolderId,
-      selectedTaskId: null, 
-      view: id ? "overview" : "dash" 
-    }));
+    setNav((prev) => {
+      const activeTab = prev.openTabs.find(t => t.linkedId === id || t.id === prev.activeTabId);
+      const isLista = activeTab?.subtype === "lista";
+      return { 
+        ...prev, 
+        selectedListId: id, 
+        selectedFolderId: folderId ?? prev.selectedFolderId,
+        selectedTaskId: null, 
+        view: id ? (isLista ? "list" : "overview") : "dash" 
+      };
+    });
   }, []);
 
   const selectTask = useCallback((id: string | null) => {

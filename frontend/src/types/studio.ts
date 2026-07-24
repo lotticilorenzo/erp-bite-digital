@@ -1,4 +1,4 @@
-﻿import type { Cliente } from "./index";
+import type { Cliente } from "./index";
 
 export type StudioView = "home" | "dash" | "list" | "kanban" | "cal" | "gantt" | "team" | "carico-lavoro" | "overview" | "chat";
 
@@ -8,6 +8,7 @@ export interface TabItem {
   title: string;
   linkedId?: string;
   view?: StudioView;
+  subtype?: "project" | "lista";
 }
 
 export interface StudioState {
@@ -134,10 +135,12 @@ export function getTaskState(stateId: string): StudioStatus {
 }
 
 export const DEFAULT_STATES: StudioStatus[] = [
-  { id: "DA_FARE",    name: "Da Fare",    color: "#64748b", order: 0 },
-  { id: "IN_CORSO",   name: "In Corso",   color: "#7c3aed", order: 1 },
-  { id: "REVISIONE",  name: "Revisione",  color: "#f59e0b", order: 2 },
-  { id: "COMPLETATO", name: "Completato", color: "#10b981", order: 3 },
+  { id: "DA_FARE",       name: "Da Fare",       color: "#ef4444", order: 0 },
+  { id: "BOZZE_IDEE",    name: "Bozze / Idee",  color: "#eab308", order: 1 },
+  { id: "DA_CORREGGERE", name: "Da Correggere", color: "#f97316", order: 2 },
+  { id: "IN_REVIEW",     name: "In Review",     color: "#d946ef", order: 3 },
+  { id: "PRONTO",        name: "Pronto",        color: "#3b82f6", order: 4 },
+  { id: "PUBBLICATO",    name: "Pubblicato",    color: "#22c55e", order: 5 },
 ];
 
 export const PRIORITIES: { id: string; label: string; color: string; bg: string }[] = [

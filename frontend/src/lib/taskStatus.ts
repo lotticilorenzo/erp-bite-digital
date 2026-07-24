@@ -1,4 +1,4 @@
-﻿import type { TaskStatus } from "@/types";
+import type { TaskStatus } from "@/types";
 
 /**
  * Fonte di verità UNICA per gli stati dei task di Studio OS.
@@ -15,13 +15,12 @@ export interface TaskStatusDef {
 }
 
 export const TASK_STATUSES: TaskStatusDef[] = [
-  { value: "DA_FARE", label: "Da Fare", color: "#64748b", accent: "border-border/40", bg: "bg-muted/5" },
-  { value: "BOZZE_IDEE", label: "Bozze / Idee", color: "#8b5cf6", accent: "border-violet-500/40", bg: "bg-violet-500/5" },
-  { value: "DA_CORREGGERE", label: "Da Correggere", color: "#f43f5e", accent: "border-rose-500/40", bg: "bg-rose-500/5" },
-  { value: "IN_REVIEW", label: "In Review", color: "#f59e0b", accent: "border-amber-500/40", bg: "bg-amber-500/5" },
+  { value: "DA_FARE", label: "Da Fare", color: "#ef4444", accent: "border-red-500/40", bg: "bg-red-500/5" },
+  { value: "BOZZE_IDEE", label: "Bozze / Idee", color: "#eab308", accent: "border-yellow-500/40", bg: "bg-yellow-500/5" },
+  { value: "DA_CORREGGERE", label: "Da Correggere", color: "#f97316", accent: "border-orange-500/40", bg: "bg-orange-500/5" },
+  { value: "IN_REVIEW", label: "In Review", color: "#d946ef", accent: "border-fuchsia-500/40", bg: "bg-fuchsia-500/5" },
   { value: "PRONTO", label: "Pronto", color: "#3b82f6", accent: "border-blue-500/40", bg: "bg-blue-500/5" },
-  { value: "PROGRAMMATO", label: "Programmato", color: "#06b6d4", accent: "border-cyan-500/40", bg: "bg-cyan-500/5" },
-  { value: "PUBBLICATO", label: "Pubblicato", color: "#10b981", accent: "border-emerald-500/40", bg: "bg-emerald-500/5" },
+  { value: "PUBBLICATO", label: "Pubblicato", color: "#22c55e", accent: "border-green-500/40", bg: "bg-green-500/5" },
 ];
 
 export const TASK_STATUS_BY_VALUE: Record<string, TaskStatusDef> = Object.fromEntries(

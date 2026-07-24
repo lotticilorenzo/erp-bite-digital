@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   BarChart,
   Bar,
@@ -102,11 +102,28 @@ export default function CaricoLavoroPage() {
     }
   }, [period]);
 
-  const { data: tasks, isLoading: loadingTasks } = useTasks({
-    start_date: format(dateRange.start, "yyyy-MM-dd"),
-    end_date: format(dateRange.end, "yyyy-MM-dd"),
+  const { data: allTasks, isLoading: loadingTasks } = useTasks({
     parent_only: false
   });
+
+  const tasks = useMemo(() => {
+    if (!allTasks) return [];
+    return allTasks.filter(t => {
+      if (!t.due_date) return false;
+      const d = parseISO(t.due_date);
+      return d >= dateRange.start && d <= dateRange.end;
+    });
+  }, [allTasks, dateRange]);
+
+  const overdueTasks = useMemo(() => {
+    if (!allTasks) return [];
+    const today = startOfDay(new Date());
+    return allTasks.filter(t =>
+      !isTaskDone(t.state_id) &&
+      t.due_date &&
+      isBefore(parseISO(t.due_date), today)
+    );
+  }, [allTasks]);
 
   // Tasks filtered to selected user (or all)
   const displayTasks = useMemo(
@@ -120,11 +137,7 @@ export default function CaricoLavoroPage() {
     const count = displayTasks.length;
     const uniqueUsersTasks = new Set(displayTasks.map(t => t.assegnatario_id).filter(Boolean)).size;
     const hours = Math.round(displayTasks.reduce((sum, t) => sum + (t.stima_minuti || 0), 0) / 60);
-    const overdue = displayTasks.filter(t =>
-      !isTaskDone(t.state_id) &&
-      t.due_date &&
-      isBefore(parseISO(t.due_date), startOfDay(new Date()))
-    ).length;
+    const overdue = overdueTasks.filter(t => !selectedUserId || t.assegnatario_id === selectedUserId).length;
     return {
       count,
       hours,
@@ -132,7 +145,7 @@ export default function CaricoLavoroPage() {
       overdue,
       involvedUsers: uniqueUsersTasks
     };
-  }, [displayTasks, users, selectedUserId]);
+  }, [displayTasks, users, selectedUserId, overdueTasks]);
 
   // Full chartData for all users (for Performance Membri list)
   const chartData = useMemo(() => {
@@ -299,7 +312,7 @@ export default function CaricoLavoroPage() {
             />
             <KpiCard
               title="Persone coinvolte"
-              value={kpis.users}
+              value={kpis.involvedUsers}
               icon={Users}
               color="text-sky-500"
               bgColor="bg-sky-500/10"
@@ -434,9 +447,14 @@ export default function CaricoLavoroPage() {
             <Card className="lg:col-span-4 h-full bg-card/30 border-border/50 shadow-2xl rounded-[40px] overflow-hidden backdrop-blur-xl border">
               <CardHeader className="p-8 border-b border-border/30">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-xl font-black uppercase tracking-tight text-foreground flex items-center gap-3">
-                    <Activity className="w-5 h-5 text-primary" />
-                    Completamento Periodo
+                  <CardTitle className="text-xl font-black uppercase tracking-tight text-foreground flex flex-col gap-1">
+                    <div className="flex items-center gap-3">
+                      <Activity className="w-5 h-5 text-primary" />
+                      Completamento Task
+                    </div>
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest normal-case pl-8">
+                      Periodo selezionato: {period}
+                    </span>
                   </CardTitle>
                   {selectedUser && (
                     <button
@@ -490,6 +508,9 @@ export default function CaricoLavoroPage() {
                     <div className="space-y-7">
                       {chartData.map((u) => {
                         const isSelected = selectedUserId === u.id;
+                        const assignedCount = u.tasks.length;
+                        const completedCount = u.tasks.filter(t => isTaskDone(t.state_id)).length;
+                        const completionPerc = assignedCount > 0 ? (completedCount / assignedCount) * 100 : 0;
                         return (
                           <div
                             key={u.id}
@@ -523,19 +544,15 @@ export default function CaricoLavoroPage() {
                                 )}
                               </div>
                               <span className="text-[10px] font-bold text-muted-foreground tabular-nums">
-                                {u.actualTotal.toFixed(1)}h <span className="text-muted/30">/</span> {u.total.toFixed(1)}h
+                                {completedCount} <span className="text-muted/30">/</span> {assignedCount} task
                               </span>
                             </div>
                             <div className="relative h-2 w-full bg-muted/20 rounded-full overflow-hidden">
                               <motion.div
                                 initial={{ width: 0 }}
-                                animate={{ width: `${Math.min(100, u.perc)}%` }}
+                                animate={{ width: `${Math.min(100, completionPerc)}%` }}
                                 transition={{ duration: 1.5, delay: 0.2 }}
-                                className={cn(
-                                  "h-full rounded-full transition-colors",
-                                  u.perc > 100 ? 'bg-destructive shadow-[0_0_10px_rgba(244,63,94,0.4)]' :
-                                  u.perc > 90 ? 'bg-amber-500' : 'bg-primary'
-                                )}
+                                className="h-full rounded-full bg-primary"
                               />
                             </div>
                           </div>
@@ -752,8 +769,8 @@ export default function CaricoLavoroPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {displayTasks
-                      .filter(t => !isTaskDone(t.state_id) && t.due_date && isBefore(parseISO(t.due_date), startOfDay(new Date())))
+                    {overdueTasks
+                      .filter(t => !selectedUserId || t.assegnatario_id === selectedUserId)
                       .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''))
                       .map((t, idx) => {
                         const user = users?.find(u => u.id === t.assegnatario_id);

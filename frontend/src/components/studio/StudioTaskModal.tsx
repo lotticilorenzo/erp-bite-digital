@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus,
   Play,
@@ -23,6 +23,8 @@ import {
 } from "@/components/ui/dialog";
 import { useStudio } from "@/hooks/useStudio";
 import { useTasks, useTaskMutations } from "@/hooks/useTasks";
+import { useClienti } from "@/hooks/useClienti";
+import { useProgetti } from "@/hooks/useProgetti";
 import { useCommesse } from "@/hooks/useCommesse";
 import { useTimerSessions, useSaveTimerToTimesheet } from "@/hooks/useTimer";
 import { useUsers } from "@/hooks/useUsers";
@@ -114,6 +116,11 @@ export function StudioTaskModal() {
   const { data: utenti } = useUsers();
   const { createTask, updateTask, deleteTask } = useTaskMutations();
 
+  const { data: clienti = [] } = useClienti();
+  const { data: progetti = [] } = useProgetti();
+  const [selectedClienteId, setSelectedClienteId] = useState<string>("none");
+  const [selectedProgettoId, setSelectedProgettoId] = useState<string>("none");
+
   const isNew = nav.selectedTaskId === "new";
 
   const task = useMemo(() => {
@@ -155,6 +162,8 @@ export function StudioTaskModal() {
       setNewSubtaskTitle("");
       setTagInput("");
       setAssegnatariOpen(false);
+      setSelectedClienteId("none");
+      setSelectedProgettoId("none");
     }
   }, [nav.selectedTaskId]);
 
@@ -213,6 +222,11 @@ export function StudioTaskModal() {
       }
     }
 
+    const targetProgettoId = nav.selectedListId || (selectedProgettoId !== "none" ? selectedProgettoId : null);
+    if (isNew && !targetProgettoId) {
+      return toast.error("Seleziona una lista/progetto valida per creare il task");
+    }
+
     const primaryAssegnatario = formData.assegnatari[0] ?? null;
     const payload = {
       ...formData,
@@ -220,7 +234,7 @@ export function StudioTaskModal() {
       assegnatario_id: primaryAssegnatario,
       assegnatari: formData.assegnatari.length > 0 ? formData.assegnatari : undefined,
       tags: formData.tags,
-      progetto_id: nav.selectedListId,
+      progetto_id: targetProgettoId,
     };
 
     const cleanPayload = {
@@ -398,9 +412,12 @@ export function StudioTaskModal() {
                           >
                             {isTaskDone(sub.stateId) && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
                           </button>
-                          <span className={`text-sm font-bold transition-colors flex-1 ${
-                            isTaskDone(sub.stateId) ? "text-muted-foreground line-through decoration-emerald-500/50" : "text-muted-foreground group-hover:text-white"
-                          }`}>
+                          <span 
+                            onClick={() => selectTask(sub.id)}
+                            className={`text-sm font-bold transition-colors flex-1 cursor-pointer hover:text-primary hover:underline ${
+                              isTaskDone(sub.stateId) ? "text-muted-foreground line-through decoration-emerald-500/50" : "text-muted-foreground group-hover:text-white"
+                            }`}
+                          >
                             {sub.title}
                           </span>
                           <Button 
@@ -485,6 +502,49 @@ export function StudioTaskModal() {
 
           <div className="w-80 bg-card/20 shrink-0 p-6 space-y-8 overflow-y-auto">
             <div className="space-y-6">
+              {isNew && !nav.selectedListId && (
+                <>
+                  <div className="space-y-2">
+                     <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Cliente / Cartella</span>
+                     <Select 
+                       value={selectedClienteId} 
+                       onValueChange={(val) => {
+                         setSelectedClienteId(val);
+                         setSelectedProgettoId("none");
+                       }}
+                     >
+                       <SelectTrigger className="w-full bg-muted/30 border-border hover:bg-muted/50 h-10 rounded-xl px-4 text-xs font-bold">
+                         <SelectValue placeholder="Seleziona Cliente" />
+                       </SelectTrigger>
+                       <SelectContent className="bg-card border-border text-white">
+                          {clienti.filter(c => c.attivo).map(c => (
+                            <SelectItem key={c.id} value={c.id}>{c.ragione_sociale.toUpperCase()}</SelectItem>
+                          ))}
+                       </SelectContent>
+                     </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                     <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Lista / Progetto</span>
+                     <Select 
+                       value={selectedProgettoId} 
+                       onValueChange={setSelectedProgettoId}
+                       disabled={selectedClienteId === "none"}
+                     >
+                       <SelectTrigger className="w-full bg-muted/30 border-border hover:bg-muted/50 h-10 rounded-xl px-4 text-xs font-bold">
+                         <SelectValue placeholder="Seleziona Progetto" />
+                       </SelectTrigger>
+                       <SelectContent className="bg-card border-border text-white">
+                          <SelectItem value="none">Seleziona...</SelectItem>
+                          {progetti.filter(p => p.cliente_id === selectedClienteId).map(p => (
+                            <SelectItem key={p.id} value={p.id}>{p.nome.toUpperCase()}</SelectItem>
+                          ))}
+                       </SelectContent>
+                     </Select>
+                  </div>
+                </>
+              )}
+
               <div className="space-y-2">
                  <span className="text-[10px] font-black text-[#475569] uppercase tracking-[0.2em]">Stato</span>
                  <Select 

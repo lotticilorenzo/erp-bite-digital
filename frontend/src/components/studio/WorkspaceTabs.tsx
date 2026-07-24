@@ -1,4 +1,4 @@
-﻿import { X, Hash, ListTodo, LayoutDashboard, Columns2, ExternalLink } from "lucide-react";
+import { X, List, ListTodo, LayoutDashboard, Columns2, ExternalLink } from "lucide-react";
 import { useStudio } from "@/hooks/useStudio";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -129,7 +129,7 @@ function TabIcon({ type, isActive }: { type: string; isActive: boolean }) {
   const color = isActive ? "text-primary" : "text-[#475569]";
   switch (type) {
     case "PROJECT":
-      return <Hash className={`h-3.5 w-3.5 ${color}`} />;
+      return <List className={`h-3.5 w-3.5 ${color}`} />;
     case "TASK":
       return <ListTodo className={`h-3.5 w-3.5 ${color}`} />;
     case "DASHBOARD":

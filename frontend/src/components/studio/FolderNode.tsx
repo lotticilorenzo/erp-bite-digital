@@ -117,6 +117,7 @@ export function FolderNode({
         tipo: "folder",
         parent_id: node.id,
         order: node.children.length,
+        linked_progetto_id: projectIdContext ?? undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["studio-hierarchy"] });
@@ -135,6 +136,7 @@ export function FolderNode({
         tipo,
         parent_id: node.id,
         order: node.children.length,
+        linked_progetto_id: projectIdContext ?? undefined,
       }),
     onSuccess: (_, { tipo }) => {
       queryClient.invalidateQueries({ queryKey: ["studio-hierarchy"] });
@@ -594,7 +596,7 @@ function NodeIcon({ type, isOpen }: { type: string; isOpen?: boolean }) {
         ? <FolderOpen className="h-3.5 w-3.5 text-primary/70 shrink-0" />
         : <Folder className="h-3.5 w-3.5 text-primary/70 shrink-0" />;
     case "project":
-      return <Hash className="h-3.5 w-3.5 text-blue-400 shrink-0" />;
+      return <List className="h-3.5 w-3.5 text-blue-400 shrink-0" />;
     case "task":
       return <ListTodo className="h-3.5 w-3.5 text-emerald-400 shrink-0" />;
     case "client":

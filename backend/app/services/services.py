@@ -2335,7 +2335,7 @@ async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
     TODO(Fase 3): scadenzario fiscale IRAP + IRPEF soci (bloccato sul commercialista; Bite e' SAS, no IRES),
     split retainer vs one-shot (dato non strutturato a livello commessa).
     """
-    from app.models.models import CostoFisso, FatturaAttiva, FatturaPassiva, ProjectType
+    from app.models.models import CostoFisso, FatturaAttiva, FatturaPassiva, ProjectType, Cliente
     from dateutil.relativedelta import relativedelta
 
     mese_norm = mese.replace(day=1)
@@ -2385,8 +2385,10 @@ async def calcola_pl_gestionale(db: AsyncSession, mese: date) -> dict:
         # righe_sum == 0 (soli aggiustamenti / 0 righe) -> retainer_part 0: il ricavo cade nel residuo one_shot.
     # §5.2: one_shot come RESIDUO -> retainer + one_shot + cliente_dedicato == totale ESATTO (al centesimo).
     ricavi_one_shot = (ricavi_totale - ricavi_italfer) - ricavi_retainer
-    if ricavi_italfer == 0:
-        warning.append("Cliente 'Italfer' non presente: riga ricavo Italfer = 0.")
+    if cliente_dedicato_id and ricavi_italfer == 0:
+        cliente_dedicato = await db.get(Cliente, cliente_dedicato_id)
+        nome_cliente = cliente_dedicato.ragione_sociale if cliente_dedicato else "dedicato"
+        warning.append(f"Cliente '{nome_cliente}' non presente nel mese: riga ricavo {nome_cliente} = 0.")
 
     # 2) Costi fissi indivisibili = solo gruppo (b), normalizzati EUR/mese, attivi nel mese.
     # FONTE UNICA condivisa col tasso overhead del pricing floor (no doppio conteggio).
@@ -3064,6 +3066,10 @@ async def create_task(db: AsyncSession, data: Any, current_user: User) -> Task: 
     data_dict = data.model_dump()
     assegnatari_ids = data_dict.pop("assegnatari", None) or []
     t = Task(**data_dict)
+    if t.parent_id:
+        parent_task = await db.get(Task, t.parent_id)
+        if parent_task:
+            t.commessa_id = parent_task.commessa_id
     db.add(t)
     await db.flush()
     if assegnatari_ids:
@@ -3094,6 +3100,16 @@ async def update_task(
         for user_id in assegnatari_ids:
             db.add(TaskAssegnatario(task_id=task_id, user_id=user_id))
         t.assegnatario_id = assegnatari_ids[0] if assegnatari_ids else None
+    
+    # Propagate commessa_id to subtasks
+    if "commessa_id" in data_dict:
+        from sqlalchemy import update
+        await db.execute(
+            update(Task)
+            .where(Task.parent_id == t.id)
+            .values(commessa_id=t.commessa_id)
+        )
+
     await write_audit(db, by_user_id, "tasks", task_id, "UPDATE", prima)
     await db.flush()
     if assegnatari_ids is not None:

@@ -223,6 +223,21 @@ async def ensure_schema_tables_on_startup():
                 await conn.execute(text("ALTER TABLE clienti ADD COLUMN IF NOT EXISTS affidabilita VARCHAR(10) DEFAULT 'MEDIA'"))
                 await conn.execute(text("ALTER TABLE clienti ADD COLUMN IF NOT EXISTS start_day_type client_start_day_type DEFAULT 'STANDARD_1'"))
                 await conn.execute(text("ALTER TABLE clienti ADD COLUMN IF NOT EXISTS google_drive_url VARCHAR(500)"))
+                await conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS data_inizio DATE"))
+
+                # Safe enum additions outside transaction (autocommit)
+                try:
+                    await conn.execution_options(isolate_level="AUTOCOMMIT").execute(text(
+                        "ALTER TYPE studio_node_type ADD VALUE 'lista'"
+                    ))
+                except Exception:
+                    pass
+                try:
+                    await conn.execution_options(isolate_level="AUTOCOMMIT").execute(text(
+                        "ALTER TYPE studio_node_type ADD VALUE 'documento'"
+                    ))
+                except Exception:
+                    pass
 
                 # 4. Critical missing tables
                 await conn.execute(text("""

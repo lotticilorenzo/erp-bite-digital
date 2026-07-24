@@ -500,7 +500,7 @@ function DragPreviewIcon({ type }: { type: StudioNode["tipo"] }) {
     case "folder":
       return <FolderOpen className="h-3.5 w-3.5 shrink-0 text-primary" />;
     case "project":
-      return <Hash className="h-3.5 w-3.5 shrink-0 text-blue-400" />;
+      return <List className="h-3.5 w-3.5 shrink-0 text-blue-400" />;
     case "task":
       return <ListTodo className="h-3.5 w-3.5 shrink-0 text-emerald-400" />;
     case "lista":

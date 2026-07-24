@@ -63,6 +63,8 @@ function useTimerDisplay() {
 export function StudioTopbar() {
   const { nav, setView, currentFolder, currentList, selectList } = useStudio();
   const timerInfo = useTimerDisplay();
+  const activeTab = nav.openTabs.find(t => t.id === nav.activeTabId);
+  const isListaTab = activeTab?.subtype === "lista";
 
   return (
     <div className="h-14 border-b border-border/30 bg-background/80 backdrop-blur-md flex items-center justify-between px-6 sticky top-0 z-30">
@@ -132,17 +134,19 @@ export function StudioTopbar() {
         <div className="h-4 w-[1px] bg-muted" />
 
         <div className="flex items-center bg-card/80 p-1 rounded-xl border border-border/50 shadow-inner">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setView("overview")}
-            className={`h-7 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-300 ${
-              nav.view === "overview" ? "bg-primary text-white shadow-lg" : "text-muted-foreground/60 hover:text-muted-foreground"
-            }`}
-          >
-            <LayoutDashboard className="h-3.5 w-3.5 mr-1.5" />
-            Overview
-          </Button>
+          {!isListaTab && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setView("overview")}
+              className={`h-7 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-300 ${
+                nav.view === "overview" ? "bg-primary text-white shadow-lg" : "text-muted-foreground/60 hover:text-muted-foreground"
+              }`}
+            >
+              <LayoutDashboard className="h-3.5 w-3.5 mr-1.5" />
+              Overview
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"

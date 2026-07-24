@@ -168,15 +168,42 @@ export function StudioListView() {
   };
 
   // Appiattisce le righe visibili (task top-level + subtask delle righe espanse)
-  // in un'unica lista: così il virtualizer può posizionare OGNI riga in modo
-  // assoluto. In precedenza le subtask espanse erano renderizzate fuori dal flusso
-  // virtualizzato e si sovrapponevano alle righe sottostanti.
-  const visibleRows = useMemo<{ task: TaskSO | SubtaskSO; depth: number }[]>(() => {
-    const rows: { task: TaskSO | SubtaskSO; depth: number }[] = [];
+  // raggruppate per stato ordinato
+  const visibleRows = useMemo<(
+    | { type: "header"; statusValue: string; label: string; color: string }
+    | { type: "task"; task: TaskSO | SubtaskSO; depth: number }
+  )[]>(() => {
+    const rows: (
+      | { type: "header"; statusValue: string; label: string; color: string }
+      | { type: "task"; task: TaskSO | SubtaskSO; depth: number }
+    )[] = [];
+
+    // Group tasks by status
+    const tasksByStatus: Record<string, TaskSO[]> = {};
     for (const t of tasks) {
-      rows.push({ task: t, depth: 0 });
-      if (expandedIds.has(t.id) && t.subtasks?.length) {
-        for (const sub of t.subtasks) rows.push({ task: sub, depth: 1 });
+      const status = t.state_id || "DA_FARE";
+      if (!tasksByStatus[status]) tasksByStatus[status] = [];
+      tasksByStatus[status].push(t);
+    }
+
+    // Go through statuses in order
+    for (const statusDef of DEFAULT_STATES) {
+      const statusTasks = tasksByStatus[statusDef.id] || [];
+      if (statusTasks.length > 0) {
+        rows.push({
+          type: "header",
+          statusValue: statusDef.id,
+          label: statusDef.name,
+          color: statusDef.color
+        });
+        for (const t of statusTasks) {
+          rows.push({ type: "task", task: t, depth: 0 });
+          if (expandedIds.has(t.id) && t.subtasks?.length) {
+            for (const sub of t.subtasks) {
+              rows.push({ type: "task", task: sub, depth: 1 });
+            }
+          }
+        }
       }
     }
     return rows;
@@ -191,7 +218,8 @@ export function StudioListView() {
     estimateSize: () => 48, // Estimated height of a row
     getItemKey: (index) => {
       const row = visibleRows[index];
-      return row ? `${row.task.id}-${row.depth}` : index;
+      if (!row) return index;
+      return row.type === "header" ? `header-${row.statusValue}` : `${row.task.id}-${row.depth}`;
     },
     overscan: 10,
   });
@@ -360,7 +388,6 @@ export function StudioListView() {
         <Table className="border-collapse">
           <TableHeader className="sticky top-0 bg-background/95 backdrop-blur-md z-10 border-b border-border/10">
             <TableRow className="hover:bg-transparent border-none h-10">
-              <TableHead className="w-10 h-10 px-4" />
               <TableHead className="h-10 px-0">
                 <button
                   onClick={() => toggleSort("title")}
@@ -402,7 +429,7 @@ export function StudioListView() {
           <TableBody style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
             {visibleRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-48 text-center">
+                <TableCell colSpan={6} className="h-48 text-center">
                   <p className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/30 italic">
                     Nessuna task trovata
                   </p>
@@ -411,6 +438,35 @@ export function StudioListView() {
             ) : (
               virtualizer.getVirtualItems().map((virtualRow) => {
                 const row = visibleRows[virtualRow.index];
+                if (!row) return null;
+                if (row.type === "header") {
+                  return (
+                    <tr
+                      key={`header-${row.statusValue}`}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: `${virtualRow.size}px`,
+                        transform: `translateY(${virtualRow.start}px)`,
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                      className="bg-card/20 border-b border-border/5 px-4 select-none"
+                    >
+                      <td colSpan={6} className="w-full flex items-center gap-2 py-2">
+                        <span 
+                          className="h-2 w-2 rounded-full" 
+                          style={{ backgroundColor: row.color }} 
+                        />
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: row.color }}>
+                          {row.label}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                }
                 return (
                   <TaskRow
                     key={row.task.id}
