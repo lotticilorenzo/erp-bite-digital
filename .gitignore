@@ -31,6 +31,39 @@ tmp/
 output/
 
 # Playwright CLI (artefatti debug)
+# Variabili d'ambiente
+.env
+.env.*
+!.env.example
+
+# Dipendenze Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Dipendenze Node
+node_modules/
+
+# Build frontend
+dist/
+build/
+
+# File inutili sul server
+.DS_Store
+*.zip
+*.docx
+*.db
+
+# Log e output temporanei
+*.log
+backend/*.txt
+backend/tmp/
+scratch/
+tmp/
+output/
+
+# Playwright CLI (artefatti debug)
 .playwright-cli/
 
 # File con nome strano (artefatti editor)
@@ -38,7 +71,7 @@ el.getAttribute*
 data-studio*
 
 # Claude settings locali
-.claude/settings.local.json
+.claude/
 
 # Artefatti di analisi locali (non versionati)
 .analysis/
