@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { 
   ChevronLeft, 
@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCRM } from "@/hooks/useCRM";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { formatEuro } from "@/lib/utils";
 
 export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -284,7 +285,7 @@ export default function LeadDetailPage() {
                  />
                  <SidebarEditableItem 
                     label="Valore" 
-                    value={`€${Number(lead.valore_stimato).toLocaleString()}`} 
+                    value={formatEuro(lead.valore_stimato || 0)} 
                     isEditing={isEditing}
                     editValue={formData?.valore_stimato}
                     onChange={(v: string) => setFormData({ ...formData, valore_stimato: Number(v) })}

@@ -1,6 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { marginColorClass } from "@/lib/utils";
+import { marginColorClass, formatEuro } from "@/lib/utils";
 import {
   ChevronLeft,
   ChevronRight,
@@ -354,7 +354,7 @@ export default function ClienteDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
           title="Lifetime Value (LTV)"
-          value={`€${clientStats.ltv.toLocaleString()}`}
+          value={formatEuro(clientStats.ltv)}
           detail="Fatturato totale storico"
           icon={<Euro className="w-4 h-4 text-emerald-400" />}
         />
@@ -415,6 +415,7 @@ export default function ClienteDetailPage() {
                   contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "16px", fontSize: "12px", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)" }}
                   itemStyle={{ fontWeight: "black", color: "hsl(var(--primary))" }}
                   cursor={{ fill: "hsl(var(--primary)/0.05)" }}
+                  formatter={(value: any) => [formatEuro(Number(value)), 'Fatturato']}
                 />
                 <Bar dataKey="projected" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} barSize={24} />
               </BarChart>
@@ -492,9 +493,9 @@ export default function ClienteDetailPage() {
                                  </div>
                                </div>
                             </td>
-                            <td className="px-6 py-4 text-right">
-                              <span className="text-sm font-black text-white">€{c.valore_fatturabile?.toLocaleString()}</span>
-                            </td>
+                             <td className="px-6 py-4 text-right">
+                               <span className="text-sm font-black text-white">{formatEuro(c.valore_fatturabile ?? 0)}</span>
+                             </td>
                           </tr>
                         );
                      })}
@@ -565,9 +566,9 @@ export default function ClienteDetailPage() {
                             <td className="px-6 py-3 text-xs text-muted-foreground">
                               {f.data_emissione ? format(new Date(f.data_emissione), "dd/MM/yyyy") : "—"}
                             </td>
-                            <td className="px-6 py-3 text-right text-sm font-black text-white tabular-nums">
-                              €{Number(f.importo_totale).toLocaleString("it-IT", { minimumFractionDigits: 2 })}
-                            </td>
+                             <td className="px-6 py-3 text-right text-sm font-black text-white tabular-nums">
+                               {formatEuro(Number(f.importo_totale))}
+                             </td>
                             <td className="px-6 py-3 text-center">
                               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                                 isPaid

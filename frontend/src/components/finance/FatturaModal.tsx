@@ -189,6 +189,11 @@ function FatturaModalForm({ onOpenChange, type, fattura }: Omit<FatturaModalProp
         importo_totale: Number(formData.importo_totale),
         importo_netto: Number(formData.importo_netto),
         importo_iva: Number(formData.importo_iva),
+        // Converti stringhe vuote in null per i campi data opzionali
+        data_scadenza: formData.data_scadenza || null,
+        data_emissione: formData.data_emissione || null,
+        cliente_id: formData.cliente_id || null,
+        fornitore_id: formData.fornitore_id || null,
       };
 
       if (isEdit) {

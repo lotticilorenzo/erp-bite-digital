@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { 
   DndContext, 
   DragOverlay, 
@@ -44,6 +44,7 @@ import { GanttChart } from '@/components/gantt/GanttChart';
 import { useTasks, useTaskMutations } from '@/hooks/useTasks';
 import { useUsers } from '@/hooks/useUsers';
 import { useProgetti } from '@/hooks/useProgetti';
+import { formatEuro } from '@/lib/utils';
 
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -810,9 +811,9 @@ const DraggableTask: React.FC<{
                  </Badge>
                )}
                {cost && (
-                 <Badge variant="outline" className={`h-4 text-[8px] font-black bg-emerald-500/10 border-emerald-500/20 text-emerald-500 py-0 px-1.5 uppercase ${isMini ? 'scale-75 origin-right' : ''}`}>
-                   €{Number(cost.estimated_cost).toFixed(0)}
-                 </Badge>
+                  <Badge variant="outline" className={`h-4 text-[8px] font-black bg-emerald-500/10 border-emerald-500/20 text-emerald-500 py-0 px-1.5 uppercase ${isMini ? 'scale-75 origin-right' : ''}`}>
+                    {formatEuro(Number(cost.estimated_cost))}
+                  </Badge>
                )}
              </div>
           )}

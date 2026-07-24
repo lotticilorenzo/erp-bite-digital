@@ -36,6 +36,7 @@ import {
 } from "@/hooks/useRegoleRiconciliazione";
 import { useFornitori } from "@/hooks/useFornitori";
 import { useFatturePassive } from "@/hooks/useFatture";
+import { formatEuro } from "@/lib/utils";
 
 const EMPTY_REGOLA: Omit<RegolaRiconciliazione, "id" | "contatore_match"> = {
   nome: "",
@@ -378,7 +379,7 @@ export default function RegoleRiconciliazione() {
                     <SelectItem value="none">Nessuna</SelectItem>
                     {filteredFatture.map((f: any) => (
                       <SelectItem key={f.id} value={f.id}>
-                        {f.numero || "Senza Numero"} del {f.data ? new Date(f.data).toLocaleDateString() : "-"} (€{f.importo_totale})
+                        {f.numero || "Senza Numero"} del {f.data ? new Date(f.data).toLocaleDateString() : "-"} ({formatEuro(f.importo_totale)})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -444,7 +445,7 @@ export default function RegoleRiconciliazione() {
                     </Badge>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span className="font-mono font-bold">€{item.movimento_importo?.toFixed(2)}</span>
+                    <span className="font-mono font-bold">{formatEuro(item.movimento_importo ?? 0)}</span>
                     <span>→ Regola: <strong className="text-foreground">{item.regola_nome}</strong></span>
                     {item.categoria_prevista && (
                       <Badge variant="outline" className="text-[10px] font-black">{item.categoria_prevista}</Badge>

@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { 
   Users, 
@@ -41,6 +41,7 @@ import {
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
+import { formatEuro } from '@/lib/utils';
 import { CollaboratorForm } from '@/components/collaboratori/CollaboratorForm';
 import { PageTransition } from '@/components/common/PageTransition';
 
@@ -202,7 +203,7 @@ const CollaboratoriPage: React.FC = () => {
             return [
               { label: 'Totale Team', value: risorse.length, icon: Users, color: 'text-blue-400' },
               { label: 'Capacità Sett.', value: `${attivi.reduce((acc, r) => acc + Number(r.ore_settimanali), 0)}h`, icon: Activity, color: 'text-emerald-400' },
-              { label: 'Costo Medio', value: costoMedio != null ? `€${costoMedio}/h` : '—', icon: Euro, color: 'text-purple-400' },
+              { label: 'Costo Medio', value: costoMedio != null ? `${formatEuro(costoMedio)}/h` : '—', icon: Euro, color: 'text-purple-400' },
               { label: 'Attivi Ora', value: attivi.length, icon: TrendingUp, color: 'text-amber-400' },
             ];
           })().map((stat, i) => (
@@ -440,7 +441,7 @@ const CollaboratorCard: React.FC<{
                     <div>
                       <p className="text-xs font-black text-white">{service.nome_servizio}</p>
                       <p className="text-[10px] font-bold text-muted-foreground uppercase">
-                        {service.costo_orario ? `€${service.costo_orario}/h` : `€${service.costo_fisso} fisso`}
+                        {service.costo_orario ? `${formatEuro(service.costo_orario)}/h` : `${formatEuro(service.costo_fisso)} fisso`}
                       </p>
                     </div>
                   </div>

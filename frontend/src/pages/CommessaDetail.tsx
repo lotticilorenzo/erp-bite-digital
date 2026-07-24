@@ -72,7 +72,7 @@ import { ContenutoDialog } from "@/components/contenuti/ContenutoDialog";
 import { AuditLogTable } from "@/components/audit/AuditLogTable";
 import { AITaskGeneratorDialog } from "@/components/ai/AITaskGeneratorDialog";
 import { toast } from "sonner";
-import { cn, semaforoMargine } from "@/lib/utils";
+import { cn, semaforoMargine, formatEuro } from "@/lib/utils";
 
 export default function CommessaDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -552,22 +552,22 @@ export default function CommessaDetailPage() {
               <div className="grid grid-cols-3 gap-4 pt-2 border-t border-border/50">
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">Fatturabile</p>
-                  <p className="text-sm font-black text-foreground">€{profitability.valore_fatturabile.toLocaleString("it-IT", { minimumFractionDigits: 0 })}</p>
+                  <p className="text-sm font-black text-foreground">{formatEuro(profitability.valore_fatturabile)}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">Costo Manodopera</p>
-                  <p className="text-sm font-black text-foreground">€{profitability.costo_manodopera.toLocaleString("it-IT", { minimumFractionDigits: 0 })}</p>
+                  <p className="text-sm font-black text-foreground">{formatEuro(profitability.costo_manodopera)}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">Margine €</p>
                   <p className={`text-sm font-black ${profitability.margine_euro >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                    €{profitability.margine_euro.toLocaleString("it-IT", { minimumFractionDigits: 0 })}
+                    {formatEuro(profitability.margine_euro)}
                   </p>
                 </div>
               </div>
               {(profitability.quota_luca ?? 0) > 0 && (
                 <p className="text-[10px] text-muted-foreground pt-1">
-                  Quota Luca (pro-forma): <span className="font-black text-amber-400">−€{(profitability.quota_luca ?? 0).toLocaleString("it-IT", { minimumFractionDigits: 0 })}</span> già detratta dal margine
+                  Quota Luca (pro-forma): <span className="font-black text-amber-400">−{formatEuro(profitability.quota_luca ?? 0)}</span> già detratta dal margine
                 </p>
               )}
             </div>
@@ -578,26 +578,26 @@ export default function CommessaDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <KPICard
           title="Valore Fatturabile"
-          value={`€${commessa.valore_fatturabile?.toLocaleString() || "0"}`} 
+          value={formatEuro(commessa.valore_fatturabile ?? 0)} 
           icon={<Euro className="w-5 h-5 text-purple-400" />}
           trend="Totale Entrate"
         />
         <KPICard 
           title="Costo Manodopera" 
-          value={`€${commessa.costo_manodopera?.toLocaleString() || "0"}`} 
+          value={formatEuro(commessa.costo_manodopera ?? 0)} 
           icon={<Users className="w-5 h-5 text-blue-400" />}
           trend={`ROI: ${ROI}%`}
           trendPositive={Number(ROI) > 50}
         />
         <KPICard 
           title="Costi Diretti" 
-          value={`€${commessa.costi_diretti?.toLocaleString() || "0"}`} 
+          value={formatEuro(commessa.costi_diretti ?? 0)} 
           icon={<Briefcase className="w-5 h-5 text-amber-400" />}
           trend="Servizi esterni"
         />
         <KPICard 
           title="Margine Lordo" 
-          value={`€${commessa.margine_euro?.toLocaleString() || "0"}`} 
+          value={formatEuro(commessa.margine_euro ?? 0)} 
           icon={["verde", "giallo"].includes(commessa.semaforo ?? semaforoMargine(commessa.margine_percentuale)) ? <TrendingUp className="w-5 h-5 text-emerald-400" /> : <TrendingDown className="w-5 h-5 text-red-400" />}
           trend={`${commessa.margine_percentuale}% su fatturato`}
           trendPositive={["verde", "giallo"].includes(commessa.semaforo ?? semaforoMargine(commessa.margine_percentuale))}
@@ -799,8 +799,8 @@ export default function CommessaDetailPage() {
                         </div>
                         <div className="text-[10px] text-[#475569] uppercase tracking-widest font-black">{riga.progetto?.tipo}</div>
                       </TableCell>
-                      <TableCell className="text-right text-foreground font-black tabular-nums">€{Number(riga.importo_fisso).toLocaleString()}</TableCell>
-                      <TableCell className="text-right text-foreground font-medium tabular-nums text-[#475569]">€{Number(riga.importo_variabile).toLocaleString()}</TableCell>
+                      <TableCell className="text-right text-foreground font-black tabular-nums">{formatEuro(Number(riga.importo_fisso))}</TableCell>
+                      <TableCell className="text-right text-foreground font-medium tabular-nums text-[#475569]">{formatEuro(Number(riga.importo_variabile))}</TableCell>
                       <TableCell className="text-right text-purple-400 font-black tabular-nums">{riga.delivery_consuntiva} / {riga.delivery_attesa}h</TableCell>
                       <TableCell className="pr-6 text-right">
                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -884,7 +884,7 @@ export default function CommessaDetailPage() {
                 <ChecklistItem 
                   label="Costi Diretti" 
                   checked={(commessa.costi_diretti || 0) > 0} 
-                  subtext={(commessa.costi_diretti || 0) > 0 ? `€${commessa.costi_diretti} inseriti` : "Mancano costi software/ads"}
+                  subtext={(commessa.costi_diretti || 0) > 0 ? `${formatEuro(commessa.costi_diretti || 0)} inseriti` : "Mancano costi software/ads"}
                 />
                 <ChecklistItem 
                   label="Team Assegnato" 
@@ -928,7 +928,7 @@ export default function CommessaDetailPage() {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-muted-foreground">Importo</span>
-                    <span className="text-sm text-emerald-400 font-bold">€{commessa.fattura_importo?.toLocaleString()}</span>
+                    <span className="text-sm text-emerald-400 font-bold">{formatEuro(commessa.fattura_importo ?? 0)}</span>
                   </div>
                   <div className="pt-2 border-t border-blue-500/10">
                     <Badge className="w-full justify-center bg-blue-500/20 text-blue-400 hover:bg-blue-500/30">
@@ -1429,9 +1429,6 @@ function CostiDettaglioCard({ commessaId }: { commessaId: string }) {
     },
     enabled: !!commessaId,
   });
-
-  const formatEur = (n: number) =>
-    new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(n ?? 0);
 
   if (isLoading) return null;
   if (!data || data.costi_diretti_totale === 0) return null;

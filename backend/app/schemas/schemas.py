@@ -1179,6 +1179,14 @@ class PreventivoCreate(BaseModel):
     valido_fino: Optional[date] = None
     voci: List[PreventivoVoceCreate]
 
+    @field_validator("data_scadenza", "valido_fino", mode="before")
+    @classmethod
+    def coerce_empty_date(cls, v: object) -> object:
+        """Converte stringa vuota in None per campi data opzionali."""
+        if v == "":
+            return None
+        return v
+
 
 class SimulaBudgetRequest(BaseModel):
     budget_interno: Decimal
@@ -1194,6 +1202,14 @@ class PreventivoUpdate(BaseModel):
     data_accettazione: Optional[date] = None
     note: Optional[str] = None
     voci: Optional[List[PreventivoVoceCreate]] = None
+
+    @field_validator("data_scadenza", "data_accettazione", mode="before")
+    @classmethod
+    def coerce_empty_date(cls, v: object) -> object:
+        """Converte stringa vuota in None per campi data opzionali."""
+        if v == "":
+            return None
+        return v
 
 class PreventivoOut(OrmBase):
     id: uuid.UUID

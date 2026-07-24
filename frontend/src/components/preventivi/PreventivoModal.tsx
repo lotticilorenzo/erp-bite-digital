@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
   DialogDescription
@@ -218,6 +218,9 @@ const PreventivoModalContent: React.FC<Omit<Props, "isOpen">> = ({ onClose, prev
     const num = (v: number | "") => (v === "" ? null : Number(v));
     const payload = {
       ...formData,
+      data_scadenza: formData.data_scadenza || null,
+      descrizione: formData.descrizione || null,
+      note: formData.note || null,
       modalita_prezzo: formData.modalita_prezzo || null,
       markup_pct: num(formData.markup_pct),
       margine_pct: num(formData.margine_pct),

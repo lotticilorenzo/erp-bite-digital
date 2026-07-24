@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ChevronLeft,
@@ -33,6 +33,7 @@ import { GanttChart } from "@/components/gantt/GanttChart";
 import ChatProgetto from "@/components/chat/ChatProgetto";
 import { useCommesse, useUpdateCommessa, useCreateCommessa } from "@/hooks/useCommesse";
 import { toast } from "sonner";
+import { formatEuro } from "@/lib/utils";
 import { CommessaSelectionDialog } from "@/components/progetti/CommessaSelectionDialog";
 import { TemplateSelectionDialog } from "@/components/progetti/TemplateSelectionDialog";
 import { ProgettoDialog } from "@/components/progetti/ProgettoDialog";
@@ -201,12 +202,12 @@ export default function ProgettoDetailPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatSmallCard 
                   label="Valore Fisso" 
-                  value={`€${progetto.importo_fisso.toLocaleString()}`} 
+                  value={formatEuro(progetto.importo_fisso)} 
                   icon={<Euro className="w-4 h-4 text-emerald-400" />} 
                 />
                 <StatSmallCard 
                   label="Valore Var." 
-                  value={`€${progetto.importo_variabile.toLocaleString()}`} 
+                  value={formatEuro(progetto.importo_variabile)} 
                   icon={<Target className="w-4 h-4 text-blue-400" />} 
                 />
                 <StatSmallCard 
@@ -369,7 +370,7 @@ export default function ProgettoDetailPage() {
                             <span className="text-[10px] font-black uppercase tracking-widest text-primary">
                               {format(new Date(c.mese_competenza), "MMMM yyyy", { locale: it })}
                             </span>
-                            <p className="text-sm font-black text-white mt-1">€{(c.valore_fatturabile || 0).toLocaleString()}</p>
+                            <p className="text-sm font-black text-white mt-1">{formatEuro(c.valore_fatturabile || 0)}</p>
                           </div>
                           <Badge className={c.stato === "CHIUSA" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[9px] font-black" : "bg-amber-500/10 text-amber-400 border-amber-500/20 text-[9px] font-black"}>
                             {c.stato}
@@ -427,13 +428,13 @@ export default function ProgettoDetailPage() {
                     <div className="flex justify-between items-end">
                       <div>
                         <p className="text-2xl font-black text-white tracking-tighter">
-                          €{(progetto.team?.reduce((acc, m) => acc + (m.ore_previste * (m.user?.costo_orario || 0)), 0) || 0).toLocaleString()}
+                          {formatEuro(progetto.team?.reduce((acc, m) => acc + (m.ore_previste * (m.user?.costo_orario || 0)), 0) || 0)}
                         </p>
                         <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Costo Manodopera Previsto</p>
                       </div>
                       <div className="text-right">
                         <p className="text-lg font-black text-emerald-400 tracking-tighter">
-                          €{(progetto.importo_fisso + progetto.importo_variabile).toLocaleString()}
+                          {formatEuro(progetto.importo_fisso + progetto.importo_variabile)}
                         </p>
                         <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Valore Progetto</p>
                       </div>

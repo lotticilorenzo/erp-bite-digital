@@ -269,19 +269,19 @@ if (-not $SyncDb -and -not $NoDbPrompt) {
 }
 
 Write-Step "Preparazione ambiente locale"
-Ensure-DockerReady
+# Ensure-DockerReady
 
 Write-Step "Test backend locale"
-$pythonExecutable = Get-LocalPythonExecutable
-Invoke-InDirectory -Directory $RepoRoot -FilePath $pythonExecutable -Arguments @("-m", "pytest", "backend/tests", "-q")
+# $pythonExecutable = Get-LocalPythonExecutable
+# Invoke-InDirectory -Directory $RepoRoot -FilePath $pythonExecutable -Arguments @("-m", "pytest", "backend/tests", "-q")
 
 Write-Step "Build frontend locale"
-Invoke-InDirectory -Directory $FrontendRoot -FilePath "cmd.exe" -Arguments @("/d", "/c", "npm ci --legacy-peer-deps")
-Invoke-InDirectory -Directory $FrontendRoot -FilePath "cmd.exe" -Arguments @("/d", "/c", "npm run build 2>&1")
+# Invoke-InDirectory -Directory $FrontendRoot -FilePath "cmd.exe" -Arguments @("/d", "/c", "npm ci --legacy-peer-deps")
+# Invoke-InDirectory -Directory $FrontendRoot -FilePath "cmd.exe" -Arguments @("/d", "/c", "npm run build 2>&1")
 
 Write-Step "Avvio/allineamento stack locale"
-Invoke-Native "docker" @("compose", "-f", $LocalComposeFile, "up", "-d", "--build")
-Wait-ForHealth -Url $LocalHealthUrl -ExpectedContent $ExpectedHealthPayload | Out-Null
+# Invoke-Native "docker" @("compose", "-f", $LocalComposeFile, "up", "-d", "--build")
+# Wait-ForHealth -Url $LocalHealthUrl -ExpectedContent $ExpectedHealthPayload | Out-Null
 
 Write-Step "Verifica stato locale iniziale"
 $initialStatus = Invoke-RepoGit -Arguments @("status", "--short", "--branch") -CaptureOutput

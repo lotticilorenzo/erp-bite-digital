@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -k -s -b /tmp/cj_D.txt -X PATCH https://localhost/api/v1/risorse/9725f1a8-9764-4c14-b48a-437afed11608 -H 'Content-Type: application/json' -d '{\"note\":\"audit\"}' -w 'HTTP=%{http_code}\\\\n' -o /tmp/p.txt)",
+      "Bash(curl -k -s -b /tmp/cj_D.txt -X DELETE https://localhost/api/v1/risorse/9725f1a8-9764-4c14-b48a-437afed11608 -w 'HTTP=%{http_code}\\\\n')",
+      "Bash(python3 -c \"import glob; print\\(glob.glob\\('/tmp/out_*.json'\\)\\)\")",
+      "Bash(perl -0777 -ne 'while\\(/\\\\@router\\\\.\\(get|post|put|patch|delete\\)\\\\\\(\\\\s*[\"'\"'\"']\\([^\"'\"'\"']+\\)[\"'\"'\"']/g\\){print uc\\($1\\),\" \",$2,\"\\\\n\"}' backend/app/api/v1/router.py)",
+      "Bash(curl -k -s -o /dev/null -w '%{http_code}' -X DELETE -H 'Authorization: Bearer __TRACKED_VAR__' https://localhost/api/v1/piani/00000000-0000-0000-0000-000000000000)",
+      "Bash(curl -k -s -b /tmp/cj_D.txt \"https://localhost/api/v1/planning/tasks\" -w \"HTTP=%{http_code}\\\\n\" -o /tmp/pt.txt)",
+      "Bash(curl -k -s -b /tmp/cj_D.txt \"https://localhost/api/v1/assenze/team\" -w \"HTTP=%{http_code}\\\\n\" -o /tmp/at.txt)",
+      "Bash(curl -k -s -b /tmp/cj_D.txt \"https://localhost/api/v1/assenze/availability?start_date=2026-06-01&end_date=2026-06-07\" -w \"HTTP=%{http_code}\\\\n\" -o /tmp/av.txt)",
+      "Bash(curl -k -s -b /tmp/cj_D.txt \"https://localhost/api/v1/pianificazioni?stato=BOZZA\" -w \"HTTP=%{http_code}\\\\n\" -o /tmp/pf.txt)",
+      "Bash(curl -k -s -b /tmp/cj_D.txt -X POST \"https://localhost/api/v1/timesheet/manuale\" -H \"Content-Type: application/json\" -d '{}' -w \"HTTP=%{http_code}\\\\n\" -o /tmp/tm.txt)",
+      "Bash(curl -k -s -o /dev/null -w '%{http_code}' -b /tmp/cj_G.txt https://localhost/api/v1/__TRACKED_VAR__)",
+      "Bash(curl -k -s -b /tmp/cj_G.txt \"https://localhost/api/v1/planning/tasks\" -o ./_pt.json)",
+      "Bash(python -c \"import json; d=json.load\\(open\\('./_pt.json'\\)\\); print\\('rows',len\\(d\\)\\); print\\('with date:', sum\\(1 for t in d if t.get\\('data_inizio'\\) and t.get\\('due_date'\\)\\)\\) if d else None; print\\(json.dumps\\(d[0],default=str\\)[:400]\\) if d else None\")",
+      "Bash(curl -sk -b /tmp/cj_E.txt \"https://localhost/api/v1/report/proiezione-cassa?giorni=90\" -o /tmp/pc.json)",
+      "Bash(curl -k -s -b /tmp/cj_F.txt -X POST https://localhost/api/v1/chat/ws-ticket)",
+      "Bash(python3 -c \"import json;print\\(json.load\\(open\\('/tmp/login_A.json'\\)\\)['access_token']\\)\")",
+      "Bash(curl -k -s -b /tmp/cj_A.txt -X POST https://localhost/api/v1/auth/logout -o /dev/null -w \"logout: %{http_code}\\\\n\")",
+      "Bash(curl -k -s -o /dev/null -w '%{http_code}' -H 'Authorization: Bearer __TRACKED_VAR__' https://localhost/api/v1/auth/me)",
+      "Bash(curl -k -s -b /tmp/cj_G.txt \"https://localhost/api/v1/tasks\" -w \"\\\\nHTTP %{http_code}\\\\n\")",
+      "Bash(curl -k -s -b /tmp/cj_C.txt -X POST \"https://localhost/api/v1/contenuti\" -H \"Content-Type: application/json\" -d '{\"titolo\":\"AUDIT-C-CONT\"}' -w \"\\\\nHTTP:%{http_code}\\\\n\")",
+      "Bash(curl -k -s -b /tmp/cj_C.txt \"https://localhost/api/v1/contenuti\" -w \"\\\\nHTTP:%{http_code}\\\\n\")",
+      "Bash(perl -0777 -ne 'my @l=split/\\\\n/; for my $i \\(0..$#l\\){ if\\($l[$i]=~/^\\\\s*for .+ in .+:/\\){ my $ind=\\($l[$i]=~/^\\(\\\\s*\\)/\\)[0]; for my $j \\($i+1..$i+15\\){ last unless defined $l[$j]; last if\\($l[$j]=~/^\\\\s*\\\\S/ && length\\(\\($l[$j]=~/^\\(\\\\s*\\)/\\)[0]\\)<=length\\($ind\\) && $l[$j]!~/^\\\\s*$/\\); if\\($l[$j]=~/await \\(db|self\\\\.db|session\\)\\\\.\\(execute|scalar|get|flush|commit\\)/\\){ printf\\(\"L%d: %s  >> L%d: %s\\\\n\",$i+1,$l[$i]=~s/^\\\\s+//r,$j+1,$l[$j]=~s/^\\\\s+//r\\);} } } }' backend/app/services/services.py)",
+      "Bash(curl -k -s -b /tmp/cj_G.txt \"https://localhost/api/v1/tasks?limit=5\" -w \"\\\\nHTTP %{http_code}\\\\n\")",
+      "Bash(curl -k -s -b /tmp/cj_G.txt \"https://localhost/api/v1/tasks?parent_only=true&limit=5\")",
+      "Bash(curl -k -s -b /tmp/cj_G.txt \"https://localhost/api/v1/auth/me\")",
+      "Bash(curl -k -s -b /tmp/cj_C.txt -X DELETE \"https://localhost/api/v1/contenuti/a2c39ce9-2d92-40f9-99dd-6fc1e064aef6\" -w \"cleanup contenuto: %{http_code}\\\\n\" -o /dev/null)",
+      "Bash(curl -s http://localhost:8000/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"lorenzo@biteagency.com\",\"password\":\"BiteAgency-155B3984!\"}')",
+      "Bash(python -m py_compile backend/app/services/services.py backend/app/api/v1/pricing_floor.py backend/app/schemas/schemas.py)",
+      "Bash(python -m py_compile backend/app/services/services.py backend/app/api/v1/router.py backend/app/models/models.py backend/app/schemas/schemas.py)",
+      "Bash(sed -n '/^export {/,/}/p' command.tsx)",
+      "Bash(sed -n '/^export {/,/}/p' sheet.tsx)",
+      "PowerShell($exe = \"$env:ProgramFiles\\\\Docker\\\\Docker\\\\Docker Desktop.exe\"; if \\(Test-Path $exe\\) { Start-Process $exe; \"Docker Desktop avviato\" } else { \"NON trovato\" })",
+      "Bash(docker info *)",
+      "PowerShell($exe = \"$env:ProgramFiles\\\\Docker\\\\Docker\\\\Docker Desktop.exe\"; if \\(Test-Path $exe\\) { Start-Process $exe; \"Docker Desktop avviato\" } else { \"NON trovato: $exe\" })",
+      "Bash(python -m py_compile backend/app/models/models.py backend/app/schemas/schemas.py backend/app/services/services.py backend/app/api/v1/router.py)"
+    ]
+  }
+}

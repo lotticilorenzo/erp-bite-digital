@@ -25,6 +25,7 @@ function useChartSize(height: number): [React.RefObject<HTMLDivElement>, number,
 }
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Wallet, ArrowUpRight, ArrowDownLeft } from "lucide-react";
+import { formatEuro } from "@/lib/utils";
 
 interface CassaDashboardProps {
   movimenti: any[];
@@ -137,6 +138,7 @@ export function CassaDashboard({ movimenti }: CassaDashboardProps) {
                 <Tooltip
                   contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
                   itemStyle={{ color: '#fff', fontSize: '10px', fontWeight: 'bold' }}
+                  formatter={(value: any) => [formatEuro(Number(value)), 'Saldo']}
                 />
                 <Area type="monotone" dataKey="balance" stroke="#7c3aed" strokeWidth={3} fillOpacity={1} fill="url(#colorBalance)" />
               </AreaChart>
@@ -160,7 +162,7 @@ export function CassaDashboard({ movimenti }: CassaDashboardProps) {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip formatter={(value: any) => [formatEuro(Number(value)), 'Totale']} />
               </PieChart>
             )}
           </div>

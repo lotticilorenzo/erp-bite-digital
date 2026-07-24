@@ -55,7 +55,7 @@ import {
 import { it } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { cn, formatEuro, semaforoMargine, marginColorClass, type Semaforo } from "@/lib/utils";
+import { cn, formatEuro, formatPercent, semaforoMargine, marginColorClass, type Semaforo } from "@/lib/utils";
 import { ClientAvatar } from "@/components/common/ClientAvatar";
 import { ForecastWidget } from "@/components/analytics/ForecastWidget";
 import {
@@ -918,7 +918,7 @@ export default function Analytics() {
                     </TableCell>
                     <TableCell className="py-5 text-right font-black text-foreground tabular-nums">{formatEuro(c.valore_fatturabile || 0)}</TableCell>
                     <TableCell className={`py-5 text-right font-black tabular-nums ${marginColorClass((c as any).semaforo ?? c.margine_percentuale)}`}>
-                      {c.margine_percentuale}%
+                      {formatPercent(c.margine_percentuale)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1051,7 +1051,7 @@ export default function Analytics() {
                     }))}>
                       <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={10} fontWeight="black" />
                       <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} fontWeight="black" unit="%" />
-                      <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: "12px", color: "hsl(var(--foreground))" }} />
+                      <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: "12px", color: "hsl(var(--foreground))" }} formatter={(value: any) => [formatPercent(Number(value)), 'Margine']} />
                       <Line type="monotone" dataKey="margin" stroke="hsl(var(--primary))" strokeWidth={3} dot={{ r: 4, fill: "hsl(var(--primary))" }} />
                   </LineChart>
                 )}
@@ -1359,6 +1359,7 @@ export default function Analytics() {
                     contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: "12px", color: "hsl(var(--foreground))" }}
                     itemStyle={{ fontWeight: "bold" }}
                     cursor={{ fill: "hsl(var(--primary)/0.05)" }}
+                    formatter={(value: any) => [formatEuro(Number(value)), 'Ricavo']}
                   />
                   <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} barSize={24} cursor="pointer" />
                 </BarChart>
@@ -1415,6 +1416,7 @@ export default function Analytics() {
                   />
                   <Tooltip
                     contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: "12px", color: "hsl(var(--foreground))" }}
+                    formatter={(value: any) => [formatPercent(Number(value)), 'Margine']}
                   />
                   <Line
                     type="monotone"
@@ -1632,6 +1634,11 @@ export default function Analytics() {
                       borderRadius: "12px",
                       fontSize: "12px",
                       color: "hsl(var(--foreground))"
+                    }}
+                    formatter={(value: any, name: any) => {
+                      if (name === "Ore") return [`${Number(value).toFixed(1)} h`, "Ore"];
+                      if (name === "Fatturato") return [formatEuro(Number(value)), "Fatturato"];
+                      return [value, name];
                     }}
                   />
                   <Scatter

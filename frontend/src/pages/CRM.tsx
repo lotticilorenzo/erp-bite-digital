@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { 
@@ -22,6 +22,7 @@ import {
   Settings2
 } from "lucide-react";
 import { useCRM } from "@/hooks/useCRM";
+import { formatEuro } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -203,7 +204,7 @@ export default function CRM() {
                     </Badge>
                   </td>
                   <td className="px-8 py-5 text-sm font-black text-white tabular-nums">
-                    €{Number(lead.valore_stimato).toLocaleString()}
+                    {formatEuro(lead.valore_stimato || 0)}
                   </td>
                   <td className="px-8 py-5">
                     <div className="flex items-center gap-3">

@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Scale, AlertTriangle, ChevronDown } from "lucide-react";
 import { formatEuro } from "@/lib/utils";
 import { usePLGestionale } from "@/hooks/usePLGestionale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
@@ -30,6 +32,7 @@ function Riga({ label, valore, segno, subtotale, colorato }: {
 }
 
 export default function PLGestionale() {
+  const navigate = useNavigate();
   const [mese, setMese] = useState<string>(lastClosedMonth());
   const { data: pl, isLoading } = usePLGestionale(mese);
   const [openDett, setOpenDett] = useState(false);
@@ -56,8 +59,21 @@ export default function PLGestionale() {
       </div>
 
       {(pl?.warning ?? []).map((w, i) => (
-        <div key={i} className="flex items-center gap-2 text-sm text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2.5">
-          <AlertTriangle className="w-4 h-4 shrink-0" /> {w}
+        <div key={i} className="flex items-center justify-between gap-3 text-sm text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl px-5 py-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{w}</span>
+          </div>
+          {w.toLowerCase().includes("non presente") && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-amber-400 hover:text-amber-300 border-amber-500/30 hover:bg-amber-500/10 font-bold uppercase text-[10px] tracking-widest h-8 px-3 rounded-lg bg-transparent"
+              onClick={() => navigate("/impostazioni-finanza")}
+            >
+              Configura
+            </Button>
+          )}
         </div>
       ))}
 

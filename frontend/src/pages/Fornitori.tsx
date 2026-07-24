@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { formatEuro } from "@/lib/utils";
 
 export default function Fornitori() {
   const queryClient = useQueryClient();
@@ -269,7 +270,7 @@ export default function Fornitori() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex flex-col items-end">
-                      <span className="font-semibold text-sm">€{(f.spesa_totale || 0).toLocaleString("it-IT", { minimumFractionDigits: 2 })}</span>
+                      <span className="font-semibold text-sm">{formatEuro(f.spesa_totale || 0)}</span>
                       <span className="text-[10px] text-muted-foreground">{f.num_fatture} fatture</span>
                     </div>
                   </TableCell>

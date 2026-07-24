@@ -33,6 +33,7 @@ import { PDFDownloadLink } from "@react-pdf/renderer";
 import { format, startOfMonth, subMonths, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 import type { Timesheet } from "@/types";
+import { formatEuro } from "@/lib/utils";
 
 export default function TimesheetPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -138,7 +139,7 @@ export default function TimesheetPage() {
             </div>
             <div>
               <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Valore Lordo</p>
-              <h3 className="text-2xl font-black text-foreground">€ {totalCosto.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</h3>
+              <h3 className="text-2xl font-black text-foreground">{formatEuro(totalCosto)}</h3>
             </div>
           </div>
         </div>
