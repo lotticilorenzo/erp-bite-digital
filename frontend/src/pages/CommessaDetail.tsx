@@ -1445,24 +1445,24 @@ function CostiDettaglioCard({ commessaId }: { commessaId: string }) {
       <CardContent className="space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">Totale</span>
-          <span className="text-sm font-black text-amber-400">{formatEur(data.costi_diretti_totale)}</span>
+          <span className="text-sm font-black text-amber-400">{formatEuro(data.costi_diretti_totale)}</span>
         </div>
         {data.breakdown?.da_fatture_passive > 0 && (
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-muted-foreground uppercase tracking-widest">Fatture passive</span>
-            <span className="text-xs font-bold text-foreground">{formatEur(data.breakdown.da_fatture_passive)}</span>
+            <span className="text-xs font-bold text-foreground">{formatEuro(data.breakdown.da_fatture_passive)}</span>
           </div>
         )}
         {data.breakdown?.da_movimenti_cassa > 0 && (
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-muted-foreground uppercase tracking-widest">Movimenti cassa</span>
-            <span className="text-xs font-bold text-foreground">{formatEur(data.breakdown.da_movimenti_cassa)}</span>
+            <span className="text-xs font-bold text-foreground">{formatEuro(data.breakdown.da_movimenti_cassa)}</span>
           </div>
         )}
         {data.breakdown?.manuali > 0 && (
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-muted-foreground uppercase tracking-widest">Costi manuali</span>
-            <span className="text-xs font-bold text-foreground">{formatEur(data.breakdown.manuali)}</span>
+            <span className="text-xs font-bold text-foreground">{formatEuro(data.breakdown.manuali)}</span>
           </div>
         )}
         {(data.imputazioni_fatture?.length > 0 || data.imputazioni_movimenti?.length > 0) && (
@@ -1470,7 +1470,7 @@ function CostiDettaglioCard({ commessaId }: { commessaId: string }) {
             {[...(data.imputazioni_fatture ?? []), ...(data.imputazioni_movimenti ?? [])].map((imp: any, i: number) => (
               <div key={i} className="flex items-center justify-between text-[10px]">
                 <span className="text-muted-foreground truncate max-w-[160px]">{imp.source_label ?? imp.tipo}</span>
-                <span className="font-mono text-foreground">{formatEur(imp.importo)}</span>
+                <span className="font-mono text-foreground">{formatEuro(imp.importo)}</span>
               </div>
             ))}
           </div>
